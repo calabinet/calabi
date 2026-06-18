@@ -63,5 +63,5 @@ release:
   prerelease: auto
   footer: |
     ---
-    Self-host the edge + client. The managed control plane (accounts, orgs,
-    billing, the global edge fleet) is a separate hosted product.
+    Self-hosted tunneling — run the edge + client on your own infrastructure.
+    See the README to get started.

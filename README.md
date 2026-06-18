@@ -1,10 +1,10 @@
 # Calabi — Community Edition
 
-Standalone **tunnel data plane**: an edge (`calabi-edge`) that accepts public
-traffic and a `calabi` client that forwards it to your local services — TLS +
-yamux, no account, no phone-home. This is the open-source data plane; the managed
-control plane (accounts, orgs, billing, the global edge fleet) is a separate
-hosted product and is **not** in this repository.
+Calabi is a self-hostable tunneling tool: run an edge (`calabi-edge`) on a host
+with a public IP, and the `calabi` client forwards that public traffic to
+services on your laptop or LAN — over a single outbound TLS + yamux connection,
+with no account and no phone-home. Everything you need to run it yourself is in
+this repository.
 
 ```
 ┌─────────────┐        TLS + yamux        ┌──────────────┐      your app
@@ -13,6 +13,29 @@ hosted product and is **not** in this repository.
 └─────────────┘                           └──────────────┘
    your laptop                            public IP / DNS        visitors ──┘
 ```
+
+## Features
+
+- **HTTP, HTTPS, TCP, and UDP tunnels** — expose web apps, SSH, databases, game
+  servers, or anything else that speaks TCP/UDP.
+- **One multiplexed connection** — the client keeps a single outbound TLS + yamux
+  session to the edge, so there are no inbound ports to open on your machine.
+- **Custom domains + HTTPS** — map a tunnel to `app.example.com` by pointing DNS
+  at your edge, which can also terminate HTTPS.
+- **Per-tunnel access control** — IP allow/deny lists on any tunnel, and HTTP
+  Basic auth on web tunnels (passwords are bcrypt-hashed locally before they ever
+  leave your machine).
+- **Supervisor daemon** — run all your tunnels from one YAML file in a single
+  process with automatic reconnect, and install it as a boot-start OS service
+  (Windows service / systemd / launchd) that restarts on crash.
+- **Built-in web console** (`http://127.0.0.1:7400`) — a live tunnel list with
+  traffic counters, a request inspector with one-click replay, daemon logs, and
+  create / edit / delete tunnels straight from the browser. Available in 10
+  languages.
+- **Self-contained** — no account, no callbacks, no telemetry; it runs entirely
+  on infrastructure you own.
+- **Two small static binaries** — `calabi` and `calabi-edge`, pure Go with no
+  runtime dependencies; drop them on a VPS, a container, or a Raspberry Pi.
 
 ## The local console
 
@@ -76,7 +99,7 @@ export CALABI_INSECURE=1                       # dev: self-signed edge
 curl http://127.0.0.1:8080/ -H 'Host: app.localtest.me'
 ```
 
-For multiple tunnels with auto-reconnect and a local web console, run the
+For multiple tunnels with auto-reconnect and the local web console, run the
 supervisor daemon:
 
 ```bash
@@ -84,27 +107,23 @@ supervisor daemon:
 ```
 
 **Full guide** — edge config, per-tunnel security policy (IP allow/deny + HTTP
-Basic auth), the local supervisor daemon, OS-service install, the `:7400`
-writable console, and HTTPS options:
+Basic auth), the supervisor daemon, OS-service install, the `:7400` writable
+console, and HTTPS options:
 see **[docs/community-edition.md](docs/community-edition.md)**.
 
-## What's in / out
+## Common uses
 
-| | |
-|---|---|
-| ✅ edge (HTTP / HTTPS / TCP / UDP), client, per-tunnel security (IP allow/deny + Basic auth) | |
-| ✅ local supervisor daemon + read/write web console (`:7400`) | |
-| ❌ rate limiting, header rewrite, OAuth login wall | (advanced access control — hosted product) |
-| ❌ accounts / orgs / billing, managed multi-region edge fleet, the hosted web console | (control plane — hosted product) |
-
-The control-plane commands (`calabi login / org / certs / domains / clients`)
-print a "platform-only" notice in this edition.
+- Test webhooks and OAuth/redirect callbacks against a service on your laptop.
+- Share a work-in-progress dev server with a teammate or a client.
+- Reach a homelab, NAS, or Raspberry Pi that sits behind NAT / CGNAT.
+- Give a quick public demo without deploying anything.
+- Open SSH or a database to a remote machine over a TCP tunnel.
 
 ## Contributing
 
-Issues and patches to the edge core, client core, and the local console are
-welcome. We use a **DCO** (Developer Certificate of Origin), not a CLA — every
-commit just needs a sign-off:
+Issues and patches to the edge, the client, and the local console are welcome.
+We use a **DCO** (Developer Certificate of Origin), not a CLA — every commit just
+needs a sign-off:
 
 ```bash
 git commit -s -m "your message"
