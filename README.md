@@ -14,6 +14,30 @@ hosted product and is **not** in this repository.
    your laptop                            public IP / DNS        visitors ──┘
 ```
 
+## The local console
+
+`calabi daemon` serves a built-in web console at `http://127.0.0.1:7400` — watch
+your tunnels, live throughput, and per-request detail locally, with no external
+dashboard and no account. The UI ships in 10 languages.
+
+<p align="center">
+  <img src="docs/images/overview.png" width="820"
+       alt="Overview — active tunnels, 7-day traffic, and live throughput"><br>
+  <em>Overview — active tunnels, 7-day traffic, and live throughput</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/tunnels.png" width="820"
+       alt="Tunnels — HTTP/HTTPS/TCP/UDP tunnels with their public and local addresses"><br>
+  <em>Tunnels — public/local address, type, and traffic per tunnel</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/inspector.png" width="820"
+       alt="Request inspector — captured HTTP requests with one-click replay"><br>
+  <em>Request inspector — inspect and replay captured HTTP requests</em>
+</p>
+
 ## Build
 
 Requires Go 1.25+.
