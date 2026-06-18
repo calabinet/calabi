@@ -1,0 +1,58 @@
+# Example config for the Calabi LOCAL supervisor daemon (standalone):
+#
+#   calabi daemon --config tunnels.yaml
+#
+# One process establishes every tunnel below against YOUR edge, applies each
+# tunnel's security policy locally (passwords are bcrypt-hashed before they
+# leave this machine), and auto-reconnects on drop. No account / control plane
+# is involved — this is the open-source, standalone runner.
+#
+# The `security:` blocks are enforced by your edge for each tunnel: IP allow/deny
+# and HTTP Basic auth. (Rate limiting, header rewrite, and the OAuth login wall
+# are platform-only — ignored by the Community Edition.) Passwords are
+# bcrypt-hashed on this machine before they're sent.
+
+# Your edge control endpoint (host:port). Falls back to CALABI_SERVER.
+server: edge.example.com:7443
+
+# Bearer token the edge accepts (one of its `accepted_tokens`). Put it inline,
+# or write ${ENV_VAR} to read it from the environment and keep the secret out of
+# the file:
+token: ${CALABI_TOKEN}
+# token: tk_xxx           # or just paste the literal token here
+
+# Skip TLS verification of the edge control cert. Use for a self-signed /
+# dev standalone edge; OR'd with CALABI_INSECURE. Omit it entirely to verify.
+# insecure: true
+# ca_file: /etc/calabi/edge-ca.pem   # verify the edge cert against this CA
+
+# `tunnels:` may be empty (`tunnels: []`) or omitted entirely — the daemon still
+# connects to the edge and serves the local console at http://127.0.0.1:7400,
+# where you can create / delete tunnels and edit their security live (changes are
+# written back to this file). The entries below are optional examples.
+tunnels:
+  # HTTP tunnel with a login wall (Basic auth) + an IP allowlist.
+  - name: app
+    type: http
+    local: 127.0.0.1:8080        # bare port also works: `local: 8080`
+    domain: app.example.com
+    security:
+      ip_allow: ["10.0.0.0/8", "203.0.113.4"]
+      basic_auth: ["admin:s3cret", "ops:hunter2"]   # bcrypt-hashed locally
+      # Rate limiting, header rewrite, and the OAuth login wall are platform-only
+      # and ignored by the Community Edition — IP allow/deny + Basic auth apply.
+
+  # Raw TCP tunnel (e.g. SSH) on a fixed edge port. L4 tunnels accept IP rules
+  # only — basic_auth is HTTP-only and rejected here.
+  - name: ssh
+    type: tcp
+    local: 127.0.0.1:22
+    remote_port: 2222
+    security:
+      ip_deny: ["192.0.2.0/24"]
+
+  # UDP tunnel.
+  - name: dns
+    type: udp
+    local: 127.0.0.1:53
+    remote_port: 5353

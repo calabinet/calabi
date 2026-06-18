@@ -1,0 +1,495 @@
+// service.go — `calabi daemon {install|uninstall|start|stop|restart|status}`.
+//
+// We wrap kardianos/service so a single calabi binary can install itself
+// as a Windows Service, a systemd unit (system OR user), or a launchd
+// agent on macOS, with the same UX everywhere:
+//
+//	calabi daemon install      # one-time setup; needs admin on win+linux
+//	calabi daemon start        # ask the OS service manager to start us
+//	calabi daemon stop         # ditto, stop
+//	calabi daemon restart      # graceful: stop then start
+//	calabi daemon status       # query the service manager
+//	calabi daemon uninstall    # remove the service entry; safe to repeat
+//
+// When the OS service manager actually executes us (boot, manual start,
+// crash-restart), the binary is invoked as `calabi daemon` (without
+// install). kardianos detects the service context and dispatches into
+// our serviceProgram.Run() which is just the regular runDaemon body
+// minus the install/uninstall routing.
+//
+// Privilege model: install/uninstall need admin on Windows + Linux
+// (writing to the registry / /etc/systemd/system). We don't sudo for
+// the user — they get a clear error message and re-run with elevated
+// shell. macOS launchd accepts user-level agents which is more sensible
+// for a desktop daemon; the package picks UserService when available.
+package main
+
+import (
+	"errors"
+	"fmt"
+	"net"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/calabi/calabi/apps/client/internal/creds"
+	cruntime "github.com/calabi/calabi/apps/client/internal/runtime"
+	"github.com/kardianos/service"
+)
+
+// serviceInstalled reports whether the OS service is registered (running OR
+// stopped). Any query error degrades to false, so callers fall back to the
+// transient-daemon path rather than wrongly suppressing it.
+func serviceInstalled() bool {
+	svc, err := buildService(nil, nil)
+	if err != nil {
+		return false
+	}
+	if _, err := svc.Status(); err != nil {
+		return false // ErrNotInstalled / ErrServiceNotFound (or unqueryable)
+	}
+	return true
+}
+
+// killDaemonOnStatusPort terminates the calabi daemon LISTENING on the status
+// port (:7400), unless its pid is exceptPID. Returns true if it killed
+// something.
+//
+// This is the single, robust mechanism for "make sure the port is free for the
+// service": it targets whoever ACTUALLY owns the port — found via the OS, not a
+// per-user pid file — so it works across the account/config-dir split between a
+// login-spawned user daemon and an invisible SYSTEM service (the per-user flock
+// is blind to the latter, which was why earlier attempts didn't close it).
+//
+// Safety: we only act when /healthz on :7400 answers (so the owner is a calabi
+// daemon, not some unrelated process), and we never kill exceptPID (the service
+// we're about to start) or ourselves.
+func killDaemonOnStatusPort(exceptPID int) bool {
+	addr := envOr("CALABI_STATUS_ADDR", defaultStatusAddr)
+	if !daemonAlreadyRunning(addr) {
+		return false // nothing calabi-shaped on :7400
+	}
+	pid, ok := pidOnPort(statusPort(addr)) // Windows: netstat (account-agnostic)
+	if !ok {
+		pid, ok = cruntime.ReadDaemonPID() // fallback (same-account; non-Windows)
+	}
+	if !ok || pid <= 0 || pid == os.Getpid() || (exceptPID > 0 && pid == exceptPID) {
+		return false
+	}
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	fmt.Printf("  stopping the daemon on :7400 (pid %d) so the service can own it…\n", pid)
+	_ = proc.Kill()
+	for i := 0; i < 25 && daemonAlreadyRunning(addr); i++ {
+		time.Sleep(100 * time.Millisecond)
+	}
+	return true
+}
+
+// stopTransientDaemon frees :7400 for the service by stopping whatever daemon
+// holds it — EXCEPT the service itself (so a re-run while the service is up is a
+// no-op). Called from install/start.
+func stopTransientDaemon() {
+	except := 0
+	if pid, ok := serviceProcessPID("calabi"); ok {
+		except = pid
+	}
+	killDaemonOnStatusPort(except)
+}
+
+// statusPort parses the port out of a "host:port" status address; 7400 if it
+// can't (the default).
+func statusPort(addr string) int {
+	if _, p, err := net.SplitHostPort(addr); err == nil {
+		if n, err := strconv.Atoi(p); err == nil {
+			return n
+		}
+	}
+	return 7400
+}
+
+// serviceStop is closed by serviceProgram.Stop when the OS service manager asks
+// us to shut down. The daemon body's withSignalContext (main.go) also cancels on
+// this, so a graceful stop works even on Windows — where a session-0 service has
+// no console and os.Interrupt can't be delivered to ourselves.
+var (
+	serviceStop     = make(chan struct{})
+	serviceStopOnce sync.Once
+)
+
+// runDaemonService routes to install/uninstall/start/stop/etc. Called
+// from runDaemon before flag parsing so `calabi daemon start` doesn't
+// race the flag set.
+func runDaemonService(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "calabi daemon: missing subcommand")
+		return 2
+	}
+	sub := args[0]
+
+	// On install, provision a credential the service can use. The service runs
+	// in a DIFFERENT OS account than your interactive shell (LocalSystem on
+	// Windows, root under systemd), so it can't see the login you saved in your
+	// own profile. serviceInstallEnv resolves/mints a long-lived API key (and
+	// carries your region/affinity) and we bake it into the service env so it
+	// connects on boot without any manual step. Only install needs this — the
+	// other subcommands operate on the already-registered service.
+	var extraEnv map[string]string
+	if sub == "install" {
+		e, perr := serviceInstallEnv(args[1:])
+		if perr != nil {
+			fmt.Fprintln(os.Stderr, "calabi daemon install:", perr)
+			return 1
+		}
+		extraEnv = e
+	}
+
+	svc, err := buildService(args[1:], extraEnv)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "calabi daemon:", err)
+		return 1
+	}
+	switch sub {
+	case "install":
+		if err := svc.Install(); err != nil {
+			fmt.Fprintln(os.Stderr, "install:", explainInstallErr(err))
+			return 1
+		}
+		// The service is now the canonical daemon — retire the login-spawned
+		// one so it doesn't keep :7400 and this account's tunnel claims when the
+		// service starts.
+		stopTransientDaemon()
+		fmt.Println("  installed. start with:  calabi daemon start")
+		return 0
+	case "uninstall":
+		// Try to stop first — uninstall on a running service fails on
+		// systemd ("unit is loaded") and Windows ("MarkedForDeletion").
+		_ = svc.Stop()
+		if err := svc.Uninstall(); err != nil {
+			fmt.Fprintln(os.Stderr, "uninstall:", err)
+			return 1
+		}
+		// Reap any daemon that survived on :7400 — e.g. an older registered
+		// binary whose Stop was a no-op, now an invisible SYSTEM orphan. The
+		// service entry is gone, so no recovery action resurrects it. (0 = no
+		// pid to spare; kill whoever still holds the port.)
+		killDaemonOnStatusPort(0)
+		fmt.Println("  uninstalled.")
+		return 0
+	case "start":
+		// A login-spawned daemon would compete with the service for :7400 and
+		// this account's tunnel claims — stop it first so the service is the
+		// single daemon.
+		stopTransientDaemon()
+		if err := svc.Start(); err != nil {
+			fmt.Fprintln(os.Stderr, "start:", err)
+			return 1
+		}
+		fmt.Println("  start requested.")
+		return 0
+	case "stop":
+		if err := svc.Stop(); err != nil {
+			fmt.Fprintln(os.Stderr, "stop:", err)
+			return 1
+		}
+		fmt.Println("  stop requested.")
+		return 0
+	case "restart":
+		_ = svc.Stop()
+		stopTransientDaemon()
+		if err := svc.Start(); err != nil {
+			fmt.Fprintln(os.Stderr, "restart:", err)
+			return 1
+		}
+		fmt.Println("  restart requested.")
+		return 0
+	case "status":
+		st, err := svc.Status()
+		if err != nil {
+			// kardianos returns ErrNotInstalled / ErrServiceNotFound
+			// depending on platform — both mean "service entry missing".
+			if errors.Is(err, service.ErrNotInstalled) {
+				fmt.Println("  not installed (run: calabi daemon install)")
+				return 0
+			}
+			fmt.Fprintln(os.Stderr, "status:", err)
+			return 1
+		}
+		switch st {
+		case service.StatusRunning:
+			fmt.Println("  running")
+		case service.StatusStopped:
+			fmt.Println("  stopped")
+		default:
+			fmt.Println("  unknown")
+		}
+		return 0
+	}
+	fmt.Fprintf(os.Stderr, "calabi daemon: unknown subcommand %q\n", sub)
+	return 2
+}
+
+// buildService wraps the kardianos service.Config + program shim.
+// Picks UserService on macOS where launchd LaunchAgents (per-user)
+// avoid sudo. On Windows + Linux we install as a system service
+// because user-level systemd is a footgun (different default targets).
+//
+// installArgs are the flags that followed the subcommand (e.g. the
+// `--config tunnels.yaml` in `calabi daemon install --config …`). They decide
+// what command the installed service launches at boot — see serviceArguments.
+//
+// extraEnv (install only) carries the service credential resolved by
+// serviceInstallEnv — CALABI_API_KEY plus the user's region/affinity — so the
+// service authenticates without the user's profile. It overrides any same-named
+// var from the shell. nil for non-install callers and the SCM Run path.
+func buildService(installArgs []string, extraEnv map[string]string) (service.Service, error) {
+	// All three service managers honor per-service env vars: systemd writes
+	// Environment= into the unit, launchd an EnvironmentVariables dict, and
+	// Windows a REG_MULTI_SZ "Environment" value under the service key (SCM
+	// injects it at start — kardianos v1.2.2 does this; an older note that
+	// "Windows ignores" EnvVars was wrong).
+	env := passthroughEnv()
+	for k, v := range extraEnv {
+		env[k] = v
+	}
+	// Path-valued env vars MUST be absolute: the service starts from a different
+	// working directory (C:\Windows\System32 on Windows; / under systemd), so a
+	// relative CALABI_EDGE_CA_FILE / CALABI_CONFIG inherited from the install
+	// shell silently fails to resolve at boot — e.g. a dev edge CA at
+	// "deploy/dev/certs/ca.crt" becomes "cannot find the path", the TLS dial
+	// fails, and the daemon reconnects forever. Resolve against the install
+	// shell's cwd (where these paths were meant to be relative to).
+	for _, k := range []string{"CALABI_EDGE_CA_FILE", "CALABI_CONFIG"} {
+		if v := env[k]; v != "" && !filepath.IsAbs(v) {
+			if abs, err := filepath.Abs(v); err == nil {
+				env[k] = abs
+			}
+		}
+	}
+	cfg := &service.Config{
+		Name:        "calabi",
+		DisplayName: "Calabi Tunnel Client",
+		Description: "Calabi tunnel daemon — keeps the local client online + auto-claims console-pushed tunnels.",
+		Arguments:   serviceArguments(installArgs),
+		EnvVars:     env,
+		// Auto-restart the daemon if it exits abnormally, so "install as a
+		// service" keeps tunnels online across a crash/OOM — not just across
+		// reboots. Each service manager reads the key that applies to it:
+		//   • Windows SCM → Option["OnFailure"]="restart" wires SCM recovery
+		//     actions. WITHOUT it kardianos sets NONE (a crashed service stays
+		//     dead) — this is the gap this closes.
+		//   • systemd → already defaults to Restart=always (kardianos), so
+		//     OnFailure is ignored here.
+		//   • launchd → already KeepAlive=true, so OnFailure is ignored here.
+		Option: service.KeyValue{
+			"OnFailure":              "restart",
+			"OnFailureDelayDuration": "5s",
+		},
+	}
+	if runtime.GOOS == "darwin" {
+		// Per-user LaunchAgent so install needs no sudo.
+		cfg.Option["UserService"] = true
+	}
+	prog := &serviceProgram{}
+	return service.New(prog, cfg)
+}
+
+// serviceArguments computes the command-line the OS service manager launches
+// the binary with at boot. When `calabi daemon install` carried a local-daemon
+// config (`--config tunnels.yaml`), the installed service runs the LOCAL
+// supervisor — `daemon --local --config <abs path>` — resolved to an ABSOLUTE
+// path because the service manager starts us from a different working directory
+// (a relative path would silently fail at boot). Without a config it runs the
+// bare platform daemon (`daemon`), the behaviour.
+func serviceArguments(installArgs []string) []string {
+	cfgPath := extractFlagValue(installArgs, "config")
+	if cfgPath == "" {
+		return []string{"daemon"}
+	}
+	if abs, err := filepath.Abs(cfgPath); err == nil {
+		cfgPath = abs
+	}
+	return []string{"daemon", "--local", "--config", cfgPath}
+}
+
+// extractFlagValue pulls `--name value` / `--name=value` (also single-dash
+// forms) out of a raw arg slice without a full flag.FlagSet parse — we only
+// need one value and the slice still carries the subcommand-stripped tail.
+// Returns "" when the flag is absent.
+func extractFlagValue(args []string, name string) string {
+	dd, sd := "--"+name, "-"+name
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == dd || a == sd:
+			if i+1 < len(args) {
+				return args[i+1]
+			}
+		case strings.HasPrefix(a, dd+"="):
+			return strings.TrimPrefix(a, dd+"=")
+		case strings.HasPrefix(a, sd+"="):
+			return strings.TrimPrefix(a, sd+"=")
+		}
+	}
+	return ""
+}
+
+// serviceProgram is the kardianos shim. Start/Stop must return quickly
+// (the service manager kills us if Start takes too long), so we spawn
+// a goroutine and stash the cancel func.
+type serviceProgram struct {
+	doneCh chan struct{}
+}
+
+func (p *serviceProgram) Start(s service.Service) error {
+	p.doneCh = make(chan struct{})
+	// runDaemon parses flags from os.Args[2:]. When the service manager
+	// invokes us with Arguments=["daemon"], os.Args is [calabi, daemon].
+	// runDaemon's flag set gets an empty slice — exactly what we want.
+	go func() {
+		code := runDaemonBody(os.Args[2:])
+		_ = code // service manager doesn't surface our exit code
+		close(p.doneCh)
+	}()
+	return nil
+}
+
+func (p *serviceProgram) Stop(s service.Service) error {
+	// Cancel the daemon directly rather than via an OS signal: on Windows a
+	// service has no console, and (*os.Process).Signal(os.Interrupt) on self is
+	// unsupported there, so the old self-SIGINT was a silent no-op and Stop
+	// hung. Closing serviceStop cancels the daemon body's context
+	// withSignalContext), and its deferred lock.Release then cleans up.
+	serviceStopOnce.Do(func() { close(serviceStop) })
+	<-p.doneCh
+	return nil
+}
+
+// runDaemonBody is the original runDaemon split out so serviceProgram
+// can invoke it without re-entering the install/uninstall router.
+// runDaemon itself stays a thin wrapper that does the routing + calls
+// this when there's no service subcommand.
+//
+// Implementation: we DON'T duplicate the body — runDaemon calls into
+// itself with a sentinel-free arg slice, and the install switch sees
+// nothing matching and falls through to the boot path. To avoid
+// recursion we use a package-level guard (read by
+// maybeRunUnderServiceManager).
+var inServiceManager bool
+
+func runDaemonBody(args []string) int {
+	inServiceManager = true
+	// As a service the per-user %LOCALAPPDATA% resolves to the SYSTEM account's
+	// hard-to-find systemprofile dir (…\config\systemprofile\AppData\Local\calabi).
+	// Pin creds / local-token / pidfile next to the executable — where the log
+	// already goes — so all of the service's files sit in one readable place.
+	if dir := exeDir(); dir != "" {
+		creds.SetDataDir(dir)
+	}
+	return runDaemon(args)
+}
+
+// exeDir is the directory of the running executable, or "" if it can't be
+// resolved. Used to anchor a service's data files next to its binary.
+func exeDir() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	return filepath.Dir(exe)
+}
+
+// maybeRunUnderServiceManager bridges a Windows Service Control Manager (SCM)
+// launch into the kardianos service-control dispatcher. Both runDaemon variants
+// (platform + community) call it right after their subcommand routing.
+//
+// Why it's needed: `calabi daemon install` registers a Windows service whose
+// binPath is `calabi.exe daemon …`. When SCM starts it, the process MUST connect
+// back to the SCM control pipe — via StartServiceCtrlDispatcher, which kardianos
+// calls inside svc.Run — and report SERVICE_RUNNING within the start timeout. A
+// plain console daemon that skips this never connects, so SCM gives up with
+// error 1053: "the service did not respond to the start or control request in a
+// timely fashion" ("等待 … 服务的连接超时(120000 毫秒)"). systemd and launchd have
+// no such handshake, which is why the direct boot path is fine there.
+//
+// Returns handled=false (caller continues with its in-process boot) on every
+// non-Windows OS, on an interactive/console run, and on the re-entrant call from
+// serviceProgram.Start (guarded by inServiceManager) — so the real daemon body
+// still runs exactly once, inside prog.Start.
+//
+// service.Interactive() is false ONLY under the SCM: kardianos v1.2.2 derives it
+// from x/sys/windows/svc.IsWindowsService(), so a daemon spawned by a console or
+// by the desktop supervisor (not a registered service) is left untouched.
+func maybeRunUnderServiceManager() (handled bool, code int) {
+	if runtime.GOOS != "windows" || inServiceManager || service.Interactive() {
+		return false, 0
+	}
+	svc, err := buildService(nil, nil) // Arguments/EnvVars unused by Run; Name must match the installed service
+	if err != nil {
+		// Last resort: fall back to a direct run rather than failing to boot.
+		// SCM may still time out, but a daemon started another way keeps working.
+		fmt.Fprintln(os.Stderr, "calabi daemon: service wrapper:", err)
+		return false, 0
+	}
+	if rerr := svc.Run(); rerr != nil {
+		fmt.Fprintln(os.Stderr, "calabi daemon: service run:", rerr)
+		return true, 1
+	}
+	return true, 0
+}
+
+// passthroughEnv copies the CALABI_* vars from the current environment
+// into the service config so a user-set CALABI_SERVER survives the
+// service-manager handoff. Skip secrets — those live in the creds file.
+func passthroughEnv() map[string]string {
+	out := map[string]string{}
+	for _, e := range os.Environ() {
+		for i := 0; i < len(e); i++ {
+			if e[i] == '=' {
+				key := e[:i]
+				if hasPrefix(key, "CALABI_") {
+					out[key] = e[i+1:]
+				}
+				break
+			}
+		}
+	}
+	return out
+}
+
+func hasPrefix(s, p string) bool { return len(s) >= len(p) && s[:len(p)] == p }
+
+// explainInstallErr converts the most common permission failure into a
+// human hint. kardianos surfaces "access is denied" / "permission denied"
+// — neither tells the user to elevate.
+func explainInstallErr(err error) string {
+	msg := err.Error()
+	switch runtime.GOOS {
+	case "windows":
+		if containsAny(msg, "Access is denied", "access is denied", "permission") {
+			return msg + " — re-run from an Administrator PowerShell."
+		}
+	case "linux":
+		if containsAny(msg, "permission denied") {
+			return msg + " — re-run with sudo, or use a user-level systemd unit (set $XDG_RUNTIME_DIR + run as your user)."
+		}
+	}
+	return msg
+}
+
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		for i := 0; i+len(sub) <= len(s); i++ {
+			if s[i:i+len(sub)] == sub {
+				return true
+			}
+		}
+	}
+	return false
+}

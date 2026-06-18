@@ -1,0 +1,21 @@
+# Local installs — produced by `npm install`, regenerated on demand.
+node_modules/
+
+# Vite caches — never needed in the repo.
+.vite/
+*.log
+
+# TypeScript / Vite build cache + compiled vite.config.ts — produced by
+# `npm run build`, regenerated on demand. Never want these in the repo
+# (they vary per-machine and per-Node version).
+*.tsbuildinfo
+vite.config.d.ts
+vite.config.js
+
+# NOTE: dist/ IS committed. The Go build embeds dist/ via go:embed, so
+# the file tree must be populated whenever someone runs `go build` on
+# the client module. Before pushing UI changes:
+#
+#   cd apps/client/internal/status/ui && npm install && npm run build
+#
+# and stage the new dist/ output alongside the .tsx changes.

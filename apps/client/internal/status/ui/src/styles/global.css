@@ -1,0 +1,115 @@
+/* Daemon UI global styles — minimal, lets Ant Design do the heavy lift. */
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #05070f;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "Microsoft YaHei", "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: rgba(255, 255, 255, 0.85);
+  /* The Tauri shell embeds Edge WebView2 — disabling overflow on the
+     document keeps the window-level scrollbar from appearing alongside
+     our inner Content scrollbar, which would look like two scrollbars
+     and out the app as "just a webpage". */
+  overflow: hidden;
+}
+
+/* Thin, neutral, hover-darken scrollbars wherever scrolling happens.
+   Mimics native desktop chrome (Windows 11 / macOS overlay style) so
+   the calabi window doesn't read as a browser tab. Applies to the
+   inner Content area, the Logs viewer, the inspector drawer, etc. */
+* {
+  scrollbar-width: thin;                         /* Firefox */
+  scrollbar-color: rgba(255,255,255,.18) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,.18);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.32); }
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* Sidebar + topbar are non-interactive chrome — keep them unselectable
+   like a native window, so accidental drag-selects don't highlight
+   menu labels and reveal the underlying HTML. Content stays selectable
+   so users can still copy domains / session IDs / log lines. */
+.ant-layout-sider,
+.ant-layout-header {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+a { color: #22d3ee; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code, pre {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Cascadia Code", monospace;
+  font-size: 12.5px;
+}
+
+/* Pulse used in the "live" connection indicator. */
+.live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #52c41a;
+  animation: pulse 2s infinite;
+}
+.live-dot.bad { background: #ff4d4f; }
+.live-dot.warn { background: #faad14; }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Logs viewer — black-on-white terminal feel, monospace.
+ *
+ * Height comes from flex:1 against a height:100% column on Logs.tsx,
+ * so the viewer fills whatever vertical space Layout's Content leaves
+ * after the toolbar row. min-height:0 is needed because flex children
+ * default to min-height:auto which would refuse to shrink below the
+ * content's intrinsic size and break inner overflow scrolling.
+ */
+.log-viewer {
+  background: #0f172a;
+  color: #d1d5db;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  padding: 12px 14px;
+  border-radius: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.log-viewer .lvl-warn { color: #fbbf24; }
+.log-viewer .lvl-error { color: #f87171; }
+.log-viewer .lvl-debug { color: #94a3b8; }
+.log-viewer .lvl-info { color: #d1d5db; }
+
+/* Small chip used in tunnel rows. */
+.chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+  background: rgba(94, 127, 255, 0.16);
+  color: #9bb4ff;
+}
+.chip.ok { background: rgba(16, 185, 129, 0.16); color: #6ee7b7; }
+.chip.warn { background: rgba(245, 158, 11, 0.16); color: #fcd34d; }
+.chip.bad { background: rgba(244, 63, 94, 0.16); color: #fca5a5; }
+.chip.muted { background: rgba(255, 255, 255, 0.08); color: #94a3b8; }
