@@ -133,6 +133,23 @@ func (d *daemonInspector) End(handle any, bytesIn, bytesOut int64, err error) {
 	}
 }
 
+// AddConnBytes feeds live per-connection byte deltas (the optional
+// session.liveByteInspector hook). Routes to the right ConnectionLog via the
+// row's ProxyID, exactly like End — so an in-progress connection's in/out grow
+// as data flows instead of staying 0 until close.
+func (d *daemonInspector) AddConnBytes(handle any, inDelta, outDelta int64) {
+	st, ok := handle.(*inspectorState)
+	if !ok || st == nil || st.connRow == nil {
+		return
+	}
+	d.mu.Lock()
+	cl := d.conns[st.connRow.ProxyID]
+	d.mu.Unlock()
+	if cl != nil {
+		cl.AddBytes(st.connRow, inDelta, outDelta)
+	}
+}
+
 // SnapshotConnections returns the per-tunnel connection ring.
 func (d *daemonInspector) SnapshotConnections(proxyID string) []inspect.Connection {
 	d.mu.Lock()

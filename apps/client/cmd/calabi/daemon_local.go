@@ -213,14 +213,16 @@ func runLocalDaemon(args []string) int {
 		Health:    health,
 		Server:    server,
 	})
-	startLocalConsole(logger, state, lw.Register)
+	console := startLocalConsole(logger, state, lw.Register)
+	if console == "" {
+		console = "http://" + envOr("CALABI_STATUS_ADDR", defaultStatusAddr)
+	}
 
 	ctx, cancel := withSignalContext()
 	defer cancel()
 	go meter.run(ctx, state, 5*time.Second)
 	go health.Run(ctx)
 
-	console := "http://" + envOr("CALABI_STATUS_ADDR", defaultStatusAddr)
 	logger.Info("local daemon starting",
 		"server", server, "tunnels", len(planned),
 		"config", *configPath, "pidfile", lock.Path(),

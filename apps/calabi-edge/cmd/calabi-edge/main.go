@@ -271,12 +271,13 @@ func run() error {
 		},
 	})
 	http := listener.NewHTTP(logger, listener.HTTPOptions{
-		Addr:          cfg.HTTP.Addr,
-		Router:        r,
-		Observer:      metricsSet,
-		MeshResolver:  deps.meshResolver,
-		SelfEdgeID:    edgeID,
-		GlobalLimiter: globalLimiter,
+		Addr:                  cfg.HTTP.Addr,
+		Router:                r,
+		Observer:              metricsSet,
+		MeshResolver:          deps.meshResolver,
+		SelfEdgeID:            edgeID,
+		GlobalLimiter:         globalLimiter,
+		ACMEChallengeResolver: deps.acmeChallengeResolver,
 	})
 	sni := listener.NewSNI(logger, listener.SNIOptions{
 		Addr:          cfg.SNI.Addr,

@@ -12,6 +12,47 @@ import (
 	"time"
 )
 
+// listenWithFallback must move to the next free port when the requested one is
+// taken — this is what lets a second daemon get its own console port.
+func TestListenWithFallback_PortBusy(t *testing.T) {
+	busy, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer busy.Close()
+	addr := busy.Addr().String() // "127.0.0.1:<P>"
+	_, portStr, _ := net.SplitHostPort(addr)
+
+	ln, err := listenWithFallback(addr)
+	if err != nil {
+		t.Fatalf("fallback failed: %v", err)
+	}
+	defer ln.Close()
+	_, gotPort, _ := net.SplitHostPort(ln.Addr().String())
+	if gotPort == portStr {
+		t.Fatalf("expected a different port than the busy %s, got the same", portStr)
+	}
+}
+
+// When the requested port is free, listenWithFallback binds exactly it.
+func TestListenWithFallback_PortFree(t *testing.T) {
+	probe, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := probe.Addr().String()
+	probe.Close() // free it so the requested port is available
+
+	ln, err := listenWithFallback(addr)
+	if err != nil {
+		t.Fatalf("listen on free port: %v", err)
+	}
+	defer ln.Close()
+	if ln.Addr().String() != addr {
+		t.Fatalf("free port not bound exactly: want %s, got %s", addr, ln.Addr().String())
+	}
+}
+
 func TestStateAddRemoveTunnel(t *testing.T) {
 	s := New("test", "edge:7443")
 	s.AddTunnel(TunnelInfo{

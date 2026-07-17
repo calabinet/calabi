@@ -26,8 +26,8 @@
     "free": "Free",
     "basic": "Basic",
     "pro": "Pro",
-    "enterprise": "Business",
-    "custom": "Enterprise",
+    "business": "Business",
+    "enterprise": "Enterprise",
     "pro_gift": "Pro-Bonus"
   },
   "lifecycle": {
@@ -68,6 +68,7 @@
     "switchRegion": "Region wechseln",
     "current": "Aktuell",
     "onlineCount": "{{healthy}}/{{total}} online",
+    "tunnelCount": "{{count}} Tunnel",
     "unavailable": "Nicht verfügbar",
     "noOwnNodeOnline": "Kein selbst gehosteter Knoten online",
     "reconnectTitle": "Erneut mit Region \"{{region}}\" verbinden?",
@@ -100,7 +101,7 @@
     "readOnlyDesc": "Überfällige Abrechnung oder ein überschrittenes Kontingent versetzt das Konto in den Nur-Lese-Modus, in dem keine neuen Tunnel erstellt werden können. Öffne die Konsole für Details.",
     "quotaExceededMsg": "Monatlicher Traffic über dem Limit ({{pct}}%)",
     "quotaExceededDesc": "Nach Überschreitung funktionieren alle bestehenden Tunnel weiter, es können jedoch keine neuen hinzugefügt werden. Aktualisiere deinen Tarif oder warte auf die Zurücksetzung im nächsten Monat.",
-    "activeTunnels": "Aktive Tunnel",
+    "activeTunnels": "Org-Tunnel",
     "uptime": "Laufzeit",
     "todayTraffic": "Heutiger Traffic",
     "monthTraffic": "Traffic diesen Monat",
@@ -141,6 +142,22 @@
     "probeOkTip": "Lokale Prüfung OK ({{ms}}ms, {{n}} in Folge)",
     "probeFailTip": "Lokale Prüfung fehlgeschlagen: {{err}} ({{n}} in Folge)",
     "serverOnlineTip": "Online — bedient durch eine andere Sitzung dieses Clients (z. B. ein 'calabi http' im Vordergrund) oder Synchronisierung läuft",
+    "heldByOtherClientTip": "Dieser Tunnel ist an einen anderen Client Ihrer Organisation gebunden und läuft nicht auf dieser Maschine.",
+    "onlineOtherClientTip": "Online — bedient von einem anderen Client Ihrer Organisation, nicht von dieser Maschine.",
+    "takeover": {
+      "btn": "Übernehmen",
+      "tip": "Diesen Tunnel auf diese Maschine holen",
+      "titleNamed": "Tunnel «{{name}}» übernehmen",
+      "confirm": "Übernehmen",
+      "warnTitle": "Vor der Übernahme",
+      "warnLocal": "Diese Maschine leitet an die unten angegebene lokale Adresse weiter — stellen Sie sicher, dass dieser Dienst hier läuft.",
+      "warnOther": "Der andere Client bedient diesen Tunnel danach nicht mehr.",
+      "warnGap": "Die öffentliche URL bleibt gleich, es kann aber zu einer kurzen Unterbrechung kommen, während der Tunnel umzieht.",
+      "localTip": "Der lokale Dienst auf DIESER Maschine, an den weitergeleitet wird (oft anders als auf der ursprünglichen Maschine).",
+      "done": "Auf diese Maschine übernommen",
+      "failed": "Übernahme fehlgeschlagen",
+      "crossEdgeTip": "Dieser Tunnel läuft in einer anderen Region/Edge. Seine öffentliche Adresse ist an diesen Edge gebunden — eine http/https-Subdomain ist dort fixiert und ein tcp/udp-Port wird dort vergeben — eine Übernahme auf diesen Client würde die öffentliche Adresse ändern (oder zerstören). Wechseln Sie diesen Client zuerst in die Region des Tunnels oder erstellen Sie den Tunnel hier neu."
+    },
     "sameRegionTip": "Gleiche Region wie die aktuelle Sitzung dieses Clients; der Verkehr wird normal weitergeleitet.",
     "otherRegionTip": "Die aktuelle Sitzung dieses Clients ist in {{current}}; dieser Tunnel muss über einen Knoten in {{region}} erreicht werden.",
     "inspectBtn": "Anfragen",
@@ -197,7 +214,8 @@
       "titleNamed": "Zugriffssteuerung · {{name}}",
       "save": "Speichern",
       "saved": "Sicherheitsrichtlinie gespeichert",
-      "failed": "Sicherheitsrichtlinie konnte nicht gespeichert werden"
+      "failed": "Sicherheitsrichtlinie konnte nicht gespeichert werden",
+      "lockedNotice": "Einige Funktionen erfordern ein Tarif-Upgrade: {{features}}."
     },
     "edit": {
       "title": "Tunnel bearbeiten",
@@ -205,7 +223,10 @@
       "save": "Speichern",
       "saved": "Tunnel aktualisiert",
       "failed": "Tunnel konnte nicht aktualisiert werden",
-      "endpointFixed": "Typ und öffentliche Adresse können nicht geändert werden — erstelle einen neuen Tunnel, um andere zu verwenden."
+      "endpointFixed": "Typ und öffentliche Adresse können nicht geändert werden — erstelle einen neuen Tunnel, um andere zu verwenden.",
+      "offMachineTitle": "Dieser Tunnel läuft auf einer anderen Maschine",
+      "offMachineDesc": "Name und Sicherheitsrichtlinie werden remote übernommen. Die „lokale Adresse“ verweist jedoch auf den Upstream der Maschine, die diesen Tunnel tatsächlich bereitstellt — nicht auf diese. Um ihn hier auszuführen, nutze die Übernahme.",
+      "offMachineLocalHint": "Diese Adresse gilt für die andere Maschine, die diesen Tunnel bereitstellt."
     },
     "deleteConfirmTitle": "Löschen bestätigen?",
     "deleteConfirmDesc": "Er wird sofort vom Edge-Knoten entfernt; wenn ein Client läuft, werden zugehörige Verbindungen getrennt.",
@@ -221,7 +242,20 @@
     "dismissFailed": "Schließen fehlgeschlagen",
     "deleted": "Gelöscht",
     "deleteFailed": "Löschen fehlgeschlagen",
-    "emptyText": "Noch keine Tunnel · klicke oben rechts auf \"Neuer Tunnel\""
+    "emptyText": "Noch keine Tunnel · klicke oben rechts auf \"Neuer Tunnel\"",
+    "regionFilteredMsg": "{{count}} Tunnel in anderen Regionen ausgeblendet",
+    "regionFilteredDesc": "Diese Tunnel sind an Edges in anderen Regionen gebunden und können von hier nicht bedient werden. Wechsle oben die Region oder sieh alle Regionen in der Web-Konsole.",
+    "state": {
+      "admin_disabled": "Von Admin deaktiviert",
+      "disabled": "Deaktiviert",
+      "error": "Fehler",
+      "pending": "Warte auf Client",
+      "offline": "Offline",
+      "mismatch": "Client auf anderem Knoten",
+      "active": "Online"
+    },
+    "mismatchTip": "Der Client ist mit Edge #{{clientEdge}} verbunden, aber die Domain dieses Tunnels ist an Edge #{{boundEdge}} gebunden, sodass die öffentliche Adresse nicht erreichbar ist. Wechsle den Client zurück zu Edge #{{boundEdge}} oder lösche den Tunnel und erstelle ihn auf dem aktuellen Edge neu (die öffentliche Domain ändert sich).",
+    "pendingTip": "Auf dem Server erfasst, aber noch von keinem Edge übernommen. Es synchronisiert automatisch, sobald du den calabi-Client startest und dich anmeldest."
   },
   "tunnelStatus": {
     "enabled": "Aktiviert",
@@ -260,7 +294,14 @@
     "subdomainFreeLabel": "Subdomain",
     "subdomainFreePlaceholder": "Der Free-Tarif weist eine zufällige Subdomain zu (nach dem Upgrade selbst wählbar)",
     "countHint": "Diese Organisation hat bereits {{team}} Tunnel; ein neuer wird der Liste angehängt",
-    "countHintShared": "Diese Organisation hat bereits {{team}} Tunnel ({{mine}} auf diesem Client); ein neuer wird der Liste angehängt"
+    "countHintShared": "Diese Organisation hat bereits {{team}} Tunnel ({{mine}} auf diesem Client); ein neuer wird der Liste angehängt",
+    "customDomainSelectPlaceholder": "Verifizierte Domain wählen",
+    "customDomainNone": "Keine verifizierten Domains",
+    "customDomainNoneHint": "Füge deine Domain zuerst in der Web-Konsole unter „Domains“ hinzu und verifiziere sie.",
+    "domainCertReady": "Zertifikat bereit",
+    "domainNoCert": "kein Zertifikat",
+    "domainInUse": "in Verwendung",
+    "domainNoCertHint": "Diese Domain hat noch kein Zertifikat: HTTP funktioniert sofort; HTTPS startet, sobald du in der Web-Konsole unter „Domains“ ein Zertifikat ausstellst."
   },
   "inspector": {
     "title": "Anfrage-Inspektor · {{name}}",
@@ -346,6 +387,17 @@
     "importDone": "{{total}} neue(r) Tunnel importiert",
     "allSkipped": "Alle {{n}} existieren bereits — nichts importiert",
     "importFailed": "Import fehlgeschlagen"
+  },
+  "serviceMode": {
+    "readonlyTag": "Schreibgeschützt",
+    "agentTooltip": "Dieser Client läuft unter einer festen Identität ({{identity}}); die lokale Konsole ist schreibgeschützt. Verwalten Sie Tunnel und Konto in der Web-Konsole.",
+    "agentManageTooltip": "Dieser Client läuft unter einer festen Identität ({{identity}}). Sie können hier die Tunnel dieser Organisation verwalten; Anmeldung und Org-Wechsel erfolgen in der Web-Konsole.",
+    "tunnelsReadonly": "Im Agent-Modus schreibgeschützt – Tunnel in der Web-Konsole verwalten",
+    "agentBannerTitle": "Schreibgeschützte Konsole (Agent-Modus)",
+    "agentBannerDesc": "Dieser Client läuft als Dienst unter einer festen API-Schlüssel-Identität. Tunnel erstellen, bearbeiten und löschen Sie in der Web-Konsole.",
+    "agentTag": "Agent",
+    "agentManageBannerTitle": "Agent-Modus (Verwaltungsschlüssel)",
+    "agentManageBannerDesc": "Dieser Client läuft als Dienst unter einer festen API-Schlüssel-Identität mit Schreibrecht. Sie können die Tunnel dieser Organisation hier wie in der Web-Konsole verwalten. Anmeldung und Org-Wechsel bleiben deaktiviert."
   },
   "login": {
     "title": "Bei Calabi anmelden",

@@ -250,7 +250,11 @@ export default function Overview() {
             <Statistic
               title={t("overview.activeTunnels")}
               value={activeTunnels}
-              suffix={me?.plan?.max_tunnels ? `/ ${me.plan.max_tunnels}` : undefined}
+              suffix={
+                me?.plan?.max_tunnels && me.plan.max_tunnels > 0
+                  ? `/ ${me.plan.max_tunnels}`
+                  : undefined
+              }
             />
             {/* M11.19.1 + M11.20.5: surface my-share when the Org has more
                 tunnels than just this machine's. In a personal Org or

@@ -21,6 +21,7 @@ import (
 	"net"
 	"net/http"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -667,6 +668,12 @@ type Server struct {
 	// guard is anti-footgun, not security (the socket is loopback-only), so
 	// relaxing it for self-hosters is safe. See AllowBrowser + browserGuard.
 	allowBrowser bool
+
+	// ready receives the ACTUAL bound console URL once Run() binds — which may
+	// differ from the requested addr after the port fallback. Buffered(1) so the
+	// send never blocks even if nobody's listening; the daemon boot reads it to
+	// print the real address (the requested port can be wrong post-fallback).
+	ready chan string
 }
 
 // NewServer constructs a Server bound to addr (default "127.0.0.1:7400").
@@ -678,8 +685,14 @@ func NewServer(logger *slog.Logger, state *State, addr string) *Server {
 		logger: logger.With("component", "client.status"),
 		state:  state,
 		addr:   addr,
+		ready:  make(chan string, 1),
 	}
 }
+
+// Ready returns a channel that delivers the ACTUAL bound console URL once the
+// server binds (after any port fallback). Buffered(1); fires at most once.
+// Callers read it (with a timeout) to print the real address at startup.
+func (s *Server) Ready() <-chan string { return s.ready }
 
 // AttachAPI hooks a /v1/* registrar to be called when Run() builds the
 // mux. The api package builds the registrar with its own dependencies
@@ -713,7 +726,10 @@ func (s *Server) Run(ctx context.Context) error {
 	// link to /ui/index.html).
 	if spaFS, err := UIFileSystem(); err == nil {
 		mux.Handle("/ui/", http.StripPrefix("/ui/", http.FileServer(http.FS(spaFS))))
-		mux.Handle("/assets/", http.FileServer(http.FS(spaFS)))
+		// Vite emits content-hashed filenames under /assets/, so the bytes behind
+		// a given URL can never change — cache them hard. A new release ships new
+		// hashes, so there's nothing to invalidate.
+		mux.Handle("/assets/", immutableAssets(http.FileServer(http.FS(spaFS))))
 	}
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/healthz", s.handleHealthz)
@@ -729,19 +745,37 @@ func (s *Server) Run(ctx context.Context) error {
 		s.apiRegister(mux)
 	}
 
-	ln, err := net.Listen("tcp", s.addr)
+	// Bind the console port, falling back to the next free port when the
+	// requested one is taken — this is what lets several daemons run on one
+	// machine (each with its own config dir / identity): the first gets 7400,
+	// the next 7401, and so on. The actually-bound URL is logged so the user
+	// knows where to point their browser.
+	requested := s.addr
+	ln, err := listenWithFallback(requested)
 	if err != nil {
-		s.logger.Warn("status page unavailable", "addr", s.addr, "err", err)
+		s.logger.Warn("status page unavailable", "addr", requested, "err", err)
 		// Block until ctx done so we don't crash the client.
 		<-ctx.Done()
 		return nil
 	}
+	s.addr = ln.Addr().String()
 	var handler http.Handler = mux
 	if !s.allowBrowser {
 		handler = browserGuard(mux)
 	}
 	s.srv = &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second}
-	s.logger.Info("status page up", "url", "http://"+ln.Addr().String())
+	if s.addr != requested {
+		s.logger.Info("status page up (requested port busy — fell back)",
+			"url", "http://"+s.addr, "requested", requested)
+	} else {
+		s.logger.Info("status page up", "url", "http://"+s.addr)
+	}
+	// Publish the real bound URL so the daemon boot can print it. Non-blocking
+	// (buffered 1); a slow/absent reader never stalls Serve.
+	select {
+	case s.ready <- "http://" + s.addr:
+	default:
+	}
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -762,6 +796,36 @@ func (s *Server) Run(ctx context.Context) error {
 	case err := <-errCh:
 		return err
 	}
+}
+
+// listenWithFallback binds addr ("host:port"), and if that port is already in
+// use, scans the next few ports for a free one. This is how a second daemon on
+// the same machine gets its own console port instead of silently losing the UI
+// (default 7400 → 7401 → …). It tries the next port on ANY bind error (avoids
+// platform-specific "address in use" matching — Windows and Linux word it
+// differently); if every candidate fails it returns the FIRST error, which is
+// the most informative. An addr with no parseable port is tried once as-is.
+func listenWithFallback(addr string) (net.Listener, error) {
+	host, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		return net.Listen("tcp", addr)
+	}
+	start, err := strconv.Atoi(portStr)
+	if err != nil || start <= 0 {
+		return net.Listen("tcp", addr)
+	}
+	const maxScan = 20
+	var firstErr error
+	for p := start; p < start+maxScan && p <= 65535; p++ {
+		ln, lerr := net.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(p)))
+		if lerr == nil {
+			return ln, nil
+		}
+		if firstErr == nil {
+			firstErr = lerr
+		}
+	}
+	return nil, firstErr
 }
 
 // browserGuard rejects requests that don't carry the desktop-client
@@ -867,6 +931,17 @@ func (s *Server) handleTunnels(w http.ResponseWriter, _ *http.Request) {
 	_ = enc.Encode(snap)
 }
 
+// immutableAssets stamps a long immutable cache directive onto the hashed SPA
+// assets. Safe because Vite renames the file whenever its contents change; the
+// shell (handleIndex) is the only thing that must stay uncached so a new release
+// is actually picked up.
+func immutableAssets(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		h.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -879,6 +954,14 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 			defer f.Close()
 			if buf, err := io.ReadAll(f); err == nil && len(buf) > 0 {
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				// NEVER cache the SPA shell. It comes from an embedded FS whose
+				// files have a zero modtime, so net/http emits no Last-Modified
+				// and no ETag either — with no cache directive at all the desktop
+				// WebView falls back to HEURISTIC caching and keeps rendering the
+				// PREVIOUS release's shell (pinned to its old asset hashes) after
+				// an upgrade: new daemon underneath, stale UI on top. Mirrors the
+				// no-cache the www/console nginx configs put on their shells.
+				w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 				_, _ = w.Write(buf)
 				return
 			}

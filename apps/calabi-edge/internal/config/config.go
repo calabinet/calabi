@@ -408,10 +408,13 @@ func Load(path string) (Config, error) {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return cfg, nil
-		}
-		return Config{}, fmt.Errorf("read config: %w", err)
+		// An explicitly-requested config path that doesn't exist is almost
+		// always a deploy mistake — a wrong volume mount or a -config pointing
+		// at a path that isn't mounted into the container. Fail LOUDLY instead
+		// of silently returning Default(), whose dev-localhost control-plane
+		// addresses make the edge dial 127.0.0.1 with no hint as to why.
+		// (Running with NO config is still fine: path=="" returns Default above.)
+		return Config{}, fmt.Errorf("read config %q: %w", path, err)
 	}
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return Config{}, fmt.Errorf("parse config: %w", err)

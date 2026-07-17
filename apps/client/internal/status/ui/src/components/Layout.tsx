@@ -12,6 +12,7 @@ import {
   FileTextOutlined,
   GlobalOutlined,
   HddOutlined,
+  LockOutlined,
   LogoutOutlined,
   SettingOutlined,
   TeamOutlined,
@@ -44,8 +45,10 @@ import type {
   Lifecycle,
   OrgListResponse,
   Snapshot,
+  TunnelList,
 } from "../api/types";
 import { planLabel } from "../utils/plan";
+import { useServiceMode } from "../hooks/use-service-mode";
 import { useTranslation } from "react-i18next";
 import { LANGS, resolveLang, type LangCode } from "../i18n/languages";
 
@@ -111,6 +114,14 @@ export default function Layout() {
   // Hide the logout + region switcher; the org switcher and BYOI egress toggle
   // already hide themselves on the empty /v1/orgs + owned_total:0 stubs.
   const standalone = me?.plan?.code === "standalone";
+  // Agent mode: the daemon runs on a pinned API-key identity. The daemon 403s
+  // sign-in / sign-out / org-switch (IDENTITY changes), so those affordances are
+  // hidden + a pinned-identity chip is shown. The region + egress (BYOI) switchers
+  // are NOT identity — they're data-plane routing prefs — so an agent operator
+  // CAN change them from the local console (they just pick which edge/region the
+  // pinned identity connects to). canManage distinguishes a management key
+  // (writable console) from a read-only key (read-only chip).
+  const { agentMode, canManage } = useServiceMode();
 
   // M11.7 multi-Org: list the user's memberships so the topbar can
   // expose a switcher. Cached for the lifetime of the SPA — orgs
@@ -353,6 +364,35 @@ export default function Layout() {
     return m;
   }, [edgeItemsForRegions]);
 
+  // Per-region tunnel count for the current identity. The daemon's /v1/tunnels
+  // is already scoped to the active Org and filtered to THIS user's tunnels
+  // (created_by_me || bound to this device), so counting items by their bound
+  // edge's region gives "我在每个地域有几条隧道" — the figure the dropdown shows
+  // on the right of each row. Same edge→region join Tunnels.tsx uses.
+  const { data: tunnelList } = useQuery<TunnelList>({
+    queryKey: ["tunnels"],
+    queryFn: api.tunnels,
+    refetchInterval: 30_000,
+    retry: false,
+    enabled: !standalone,
+  });
+  const edgeRegionById = useMemo(() => {
+    const m = new Map<number, string>();
+    (edgeList?.items ?? []).forEach((e) => {
+      if (e.region) m.set(e.edge_node_id, e.region);
+    });
+    return m;
+  }, [edgeList]);
+  const regionTunnelCount = useMemo(() => {
+    const m = new Map<string, number>();
+    (tunnelList?.items ?? []).forEach((tn) => {
+      const rg = tn.edge_node_id ? edgeRegionById.get(tn.edge_node_id) : "";
+      if (!rg) return; // unbound / pending / edge not in directory → no region
+      m.set(rg, (m.get(rg) ?? 0) + 1);
+    });
+    return m;
+  }, [tunnelList, edgeRegionById]);
+
   const switchRegionMu = useMutation({
     mutationFn: (region: string) => api.switchRegion(region),
     onSuccess: (_d, region) => {
@@ -525,37 +565,26 @@ export default function Layout() {
                 <span style={{ width: 14 }} />
               )}
               <span>{rg}</span>
-              {/* 当前 sits right after the region name so the health column
-                  lines up across all rows. */}
-              {rg === currentRegion && (
-                <Tag color="default" style={{ marginRight: 0, fontSize: 11 }}>
-                  {t("region.current")}
-                </Tag>
-              )}
-              {/* spacer pushes the health indicator to the far right */}
+              {/* The checkmark already marks the current region — no extra
+                  「当前」tag needed. Spacer pushes the per-region tunnel count
+                  to the far right. */}
               <span style={{ flex: 1 }} />
-              {/* health: green dot + "N/M 在线" when any edge is up, red
-                  "不可用" when the region has edges but none healthy, gray
-                  "未知" when the region isn't in the edge directory. */}
-              {h ? (
-                <Badge
-                  status={h.healthy > 0 ? "success" : "error"}
-                  text={
-                    <span style={{ fontSize: 11, color: "#8c8c8c" }}>
-                      {h.healthy > 0
-                        ? t("region.onlineCount", {
-                            healthy: h.healthy,
-                            total: h.total,
-                          })
-                        : t("region.unavailable")}
-                    </span>
-                  }
-                />
-              ) : (
-                <span style={{ fontSize: 11, color: "#bfbfbf" }}>
-                  {t("common.unknown")}
-                </span>
-              )}
+              {/* Right-aligned: how many of THIS identity's tunnels live in
+                  this region. The dot still reflects edge reachability (green =
+                  has a healthy edge, red = region down) so a region you can't
+                  switch to is still visually flagged. */}
+              <Badge
+                status={
+                  !h ? "default" : h.healthy > 0 ? "success" : "error"
+                }
+                text={
+                  <span style={{ fontSize: 11, color: "#8c8c8c" }}>
+                    {t("region.tunnelCount", {
+                      count: regionTunnelCount.get(rg) ?? 0,
+                    })}
+                  </span>
+                }
+              />
             </span>
           ),
           onClick: () => pickRegion(rg),
@@ -727,7 +756,7 @@ export default function Layout() {
                             i18n.changeLanguage(lang.code),
                         })),
                       },
-                      ...(standalone
+                      ...(standalone || agentMode
                         ? []
                         : [
                             { type: "divider" as const },
@@ -802,7 +831,7 @@ export default function Layout() {
             {/* M11.7 multi-Org switcher — only render when the user
                 actually has more than one Org. Single-Org accounts get
                 no extra chrome to wade through. */}
-            {orgs.length > 1 && activeOrg && (
+            {orgs.length > 1 && activeOrg && !agentMode && (
               <Dropdown
                 trigger={["click"]}
                 menu={orgSwitcherMenu}
@@ -826,13 +855,43 @@ export default function Layout() {
                 </Space>
               </Dropdown>
             )}
-            {/* Single-Org accounts still see the Org name (read-only)
-                so they have context — but no clickable affordance. */}
-            {orgs.length === 1 && activeOrg && (
+            {/* Single-Org accounts — and agent mode (no switching) — see the Org
+                name read-only so they have context, but no clickable affordance. */}
+            {activeOrg && (agentMode || orgs.length === 1) && (
               <Text type="secondary" style={{ fontSize: 13 }}>
                 <TeamOutlined style={{ marginInlineEnd: 4 }} />
                 {orgDisplay(activeOrg)}
               </Text>
+            )}
+            {/* Agent mode: pinned identity. A lock chip + tooltip make it obvious
+                this console can't change identity. A management key still manages
+                tunnels (green chip); a read-only key shows the read-only chip. */}
+            {agentMode && (
+              <Tooltip
+                title={t(
+                  canManage ? "serviceMode.agentManageTooltip" : "serviceMode.agentTooltip",
+                  {
+                    // An agent is an ORG credential (no human user_id), so the
+                    // identity is the org it's pinned to. me.org is always set
+                    // (account/me); fall back to #id if the name is blank, and
+                    // only then to a logged-in email (interactive edge case).
+                    identity:
+                      me?.org?.name ||
+                      (activeOrg ? orgDisplay(activeOrg) : "") ||
+                      (me?.org?.id ? `#${me.org.id}` : "") ||
+                      me?.user?.email ||
+                      "",
+                  },
+                )}
+              >
+                <Tag
+                  icon={<LockOutlined />}
+                  color={canManage ? "success" : "default"}
+                  style={{ fontSize: 12, marginInlineEnd: 0 }}
+                >
+                  {canManage ? t("serviceMode.agentTag") : t("serviceMode.readonlyTag")}
+                </Tag>
+              </Tooltip>
             )}
             {health && (
               <Badge
@@ -914,11 +973,12 @@ export default function Layout() {
                 </Space>
               </Dropdown>
             )}
-            {health && (standalone || (regions.length === 0 && !currentRegion)) && (
-              <Text type="secondary" style={{ fontSize: 13 }}>
-                edge {health.server_addr}
-              </Text>
-            )}
+            {health &&
+              (standalone || (regions.length === 0 && !currentRegion)) && (
+                <Text type="secondary" style={{ fontSize: 13 }}>
+                  edge {currentRegion || health.server_addr}
+                </Text>
+              )}
           </Space>
         </Header>
         <Content

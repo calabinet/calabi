@@ -148,12 +148,41 @@ func runDaemonService(args []string) int {
 			return 1
 		}
 		extraEnv = e
+		// Pin the local console port for THIS service. The port is otherwise
+		// decided at runtime (the daemon scans from :7400 for a free one), which
+		// is nondeterministic across restarts and invisible unless you read the
+		// log. --status-port bakes a fixed CALABI_STATUS_ADDR into the service
+		// env so each service client owns a known port; the runtime still shifts
+		// to the next free port if that one is busy.
+		if pr := strings.TrimSpace(extractFlagValue(args[1:], "status-port")); pr != "" {
+			if _, err := strconv.Atoi(pr); err != nil {
+				fmt.Fprintf(os.Stderr, "calabi daemon install: --status-port must be a number, got %q\n", pr)
+				return 1
+			}
+			if extraEnv == nil {
+				extraEnv = map[string]string{}
+			}
+			extraEnv["CALABI_STATUS_ADDR"] = "127.0.0.1:" + pr
+		}
 	}
 
 	svc, err := buildService(args[1:], extraEnv)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "calabi daemon:", err)
 		return 1
+	}
+	// A NAMED (non-default) service is a deliberate second-client-on-this-machine
+	// install. It must NOT reap whatever holds :7400 — that would kill a sibling
+	// client's daemon. Named services coexist via the :7400 port fallback, so the
+	// transient-daemon / port-reaping coordination only applies to the default
+	// "calabi" service.
+	name := resolveServiceName(args[1:])
+	isDefault := name == defaultServiceName
+	// Suffix the management commands we print with --service-name for a named
+	// service, so the user knows how to drive THIS one.
+	nameFlag := ""
+	if !isDefault {
+		nameFlag = " --service-name " + name
 	}
 	switch sub {
 	case "install":
@@ -163,9 +192,13 @@ func runDaemonService(args []string) int {
 		}
 		// The service is now the canonical daemon — retire the login-spawned
 		// one so it doesn't keep :7400 and this account's tunnel claims when the
-		// service starts.
-		stopTransientDaemon()
-		fmt.Println("  installed. start with:  calabi daemon start")
+		// service starts. Default service only (see above).
+		if isDefault {
+			stopTransientDaemon()
+		}
+		fmt.Printf("  installed (service %q). start with:  calabi daemon start%s\n", name, nameFlag)
+		fmt.Printf("  console: %s  (shifts to the next free port if busy — see the service log for the actual one)\n",
+			installStatusURL(args[1:]))
 		return 0
 	case "uninstall":
 		// Try to stop first — uninstall on a running service fails on
@@ -178,20 +211,28 @@ func runDaemonService(args []string) int {
 		// Reap any daemon that survived on :7400 — e.g. an older registered
 		// binary whose Stop was a no-op, now an invisible SYSTEM orphan. The
 		// service entry is gone, so no recovery action resurrects it. (0 = no
-		// pid to spare; kill whoever still holds the port.)
-		killDaemonOnStatusPort(0)
+		// pid to spare; kill whoever still holds the port.) Default service only:
+		// a named service may bind a fallback port and isn't tied to :7400, and
+		// reaping :7400 here could kill a sibling client.
+		if isDefault {
+			killDaemonOnStatusPort(0)
+		}
 		fmt.Println("  uninstalled.")
 		return 0
 	case "start":
 		// A login-spawned daemon would compete with the service for :7400 and
 		// this account's tunnel claims — stop it first so the service is the
-		// single daemon.
-		stopTransientDaemon()
+		// single daemon. Default service only (a named service coexists).
+		if isDefault {
+			stopTransientDaemon()
+		}
+		startedAt := time.Now()
 		if err := svc.Start(); err != nil {
 			fmt.Fprintln(os.Stderr, "start:", err)
 			return 1
 		}
 		fmt.Println("  start requested.")
+		printConsoleHint(startedAt)
 		return 0
 	case "stop":
 		if err := svc.Stop(); err != nil {
@@ -202,12 +243,16 @@ func runDaemonService(args []string) int {
 		return 0
 	case "restart":
 		_ = svc.Stop()
-		stopTransientDaemon()
+		if isDefault {
+			stopTransientDaemon()
+		}
+		startedAt := time.Now()
 		if err := svc.Start(); err != nil {
 			fmt.Fprintln(os.Stderr, "restart:", err)
 			return 1
 		}
 		fmt.Println("  restart requested.")
+		printConsoleHint(startedAt)
 		return 0
 	case "status":
 		st, err := svc.Status()
@@ -224,6 +269,11 @@ func runDaemonService(args []string) int {
 		switch st {
 		case service.StatusRunning:
 			fmt.Println("  running")
+			// Show the console address (any published value; a running service
+			// keeps it current). time.Time{} = accept stale too.
+			if url := awaitConsoleURL(time.Time{}, 0); url != "" {
+				fmt.Println("  console: " + url)
+			}
 		case service.StatusStopped:
 			fmt.Println("  stopped")
 		default:
@@ -233,6 +283,89 @@ func runDaemonService(args []string) int {
 	}
 	fmt.Fprintf(os.Stderr, "calabi daemon: unknown subcommand %q\n", sub)
 	return 2
+}
+
+// defaultServiceName is the OS service id used when --service-name isn't given.
+// Keeping it "calabi" preserves single-install back-compat.
+const defaultServiceName = "calabi"
+
+// resolveServiceName picks the OS service id for this invocation. Precedence:
+//
+//	--service-name flag  →  CALABI_SERVICE_NAME env  →  "calabi" (default).
+//
+// The env fallback is how a service launched by the SCM/systemd learns its OWN
+// name: install bakes CALABI_SERVICE_NAME into the service env
+// buildService), so the in-service Run path — which calls buildService(nil,nil)
+// with no args — resolves the same name the install used, and the control
+// dispatcher matches. Letting users name services is what allows several
+// service-installed clients on one machine (calabi-client1, calabi-client2, …),
+// each in its own dir (its own creds/pid/port via the per-dir data dir + the
+// :7400 port fallback).
+func resolveServiceName(args []string) string {
+	if v := strings.TrimSpace(extractFlagValue(args, "service-name")); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(os.Getenv("CALABI_SERVICE_NAME")); v != "" {
+		return v
+	}
+	return defaultServiceName
+}
+
+// installStatusURL is the console URL we PRINT at install — the intended
+// address, from --status-port, else a CALABI_STATUS_ADDR in the install shell,
+// else the :7400 default. (The actual bound port is resolved at runtime and may
+// shift on a conflict; the daemon logs the real one.)
+func installStatusURL(installArgs []string) string {
+	if p := strings.TrimSpace(extractFlagValue(installArgs, "status-port")); p != "" {
+		return "http://127.0.0.1:" + p
+	}
+	if a := strings.TrimSpace(os.Getenv("CALABI_STATUS_ADDR")); a != "" {
+		return "http://" + a
+	}
+	return "http://" + defaultStatusAddr
+}
+
+// awaitConsoleURL reads the console URL the daemon publishes to its data dir.
+// `calabi daemon start` runs in a SEPARATE process from the detached service
+// (which is where the daemon's startup banner prints), so it can't see the real
+// bound port directly — it reads it from <exe-dir>/console.url, the service's
+// data dir (creds.SetDataDir(exeDir) under the service manager). Polls up to
+// `timeout` for a FRESH value (mtime after `since`); on timeout returns a stale
+// value if one exists (better than nothing — usually the same port).
+func awaitConsoleURL(since time.Time, timeout time.Duration) string {
+	dir := exeDir()
+	if dir == "" {
+		return ""
+	}
+	p := filepath.Join(dir, consoleURLFile)
+	deadline := time.Now().Add(timeout)
+	var stale string
+	for {
+		if b, err := os.ReadFile(p); err == nil {
+			if u := strings.TrimSpace(string(b)); u != "" {
+				if fi, e2 := os.Stat(p); e2 == nil && fi.ModTime().After(since.Add(-3*time.Second)) {
+					return u // fresh — this run's bind
+				}
+				stale = u
+			}
+		}
+		if time.Now().After(deadline) {
+			return stale
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+}
+
+// printConsoleHint prints the console URL after a start, or a fallback pointing
+// at the service log when the daemon hasn't published it yet.
+func printConsoleHint(since time.Time) {
+	if url := awaitConsoleURL(since, 5*time.Second); url != "" {
+		fmt.Println("  console: " + url)
+		return
+	}
+	if dir := exeDir(); dir != "" {
+		fmt.Printf("  console: starting — the address will appear in the service log under %s\n", dir)
+	}
 }
 
 // buildService wraps the kardianos service.Config + program shim.
@@ -272,9 +405,18 @@ func buildService(installArgs []string, extraEnv map[string]string) (service.Ser
 			}
 		}
 	}
+	name := resolveServiceName(installArgs)
+	// Bake the name into the service env so the in-service Run path (which calls
+	// buildService(nil,nil)) resolves the same name and the control dispatcher
+	// matches. EnvVars only takes effect at Install; harmless for other callers.
+	env["CALABI_SERVICE_NAME"] = name
+	display := "Calabi Tunnel Client"
+	if name != defaultServiceName {
+		display = "Calabi Tunnel Client (" + name + ")"
+	}
 	cfg := &service.Config{
-		Name:        "calabi",
-		DisplayName: "Calabi Tunnel Client",
+		Name:        name,
+		DisplayName: display,
 		Description: "Calabi tunnel daemon — keeps the local client online + auto-claims console-pushed tunnels.",
 		Arguments:   serviceArguments(installArgs),
 		EnvVars:     env,
@@ -468,6 +610,99 @@ func hasPrefix(s, p string) bool { return len(s) >= len(p) && s[:len(p)] == p }
 // explainInstallErr converts the most common permission failure into a
 // human hint. kardianos surfaces "access is denied" / "permission denied"
 // — neither tells the user to elevate.
+// runningInContainer reports whether we're executing inside a container, where
+// there is no OS service manager to install into — the container runtime IS the
+// supervisor, so `daemon install` is meaningless and fails with errors like
+// `open /etc/init.d/calabi: no such file or directory`. Our own image sets
+// CALABI_IN_CONTAINER=1; we also sniff the usual Docker / Kubernetes / LXC
+// markers so a hand-rolled image is handled too.
+func runningInContainer() bool {
+	// Explicit override wins both ways: "1"/"true" forces on, "0"/"false" forces
+	// off (escape hatch for a containerized host where you really do want the
+	// service path, and it keeps detection deterministic).
+	switch v := strings.TrimSpace(os.Getenv("CALABI_IN_CONTAINER")); {
+	case v == "1" || strings.EqualFold(v, "true"):
+		return true
+	case v == "0" || strings.EqualFold(v, "false"):
+		return false
+	}
+	if runtime.GOOS != "linux" {
+		return false
+	}
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return true
+	}
+	if b, err := os.ReadFile("/proc/1/cgroup"); err == nil {
+		s := string(b)
+		if strings.Contains(s, "docker") || strings.Contains(s, "kubepods") ||
+			strings.Contains(s, "containerd") || strings.Contains(s, "/lxc/") {
+			return true
+		}
+	}
+	return false
+}
+
+// containerizeDaemonArgs adapts the `daemon {install|start|restart|stop|…}`
+// subcommands for a container. A container is its own supervisor, so installing
+// an OS service is both impossible (no init system) and pointless. Instead we
+// run the daemon in the FOREGROUND — the container restarts it on exit:
+//
+//   - install / start / restart: carry the install-only flags people pass
+//     (--api-key, --status-port) into the env the foreground daemon reads, then
+//     strip the subcommand so the caller falls through to the foreground daemon.
+//   - stop / uninstall / status: there's no OS service to act on — print a
+//     one-liner and tell the caller to return.
+//
+// Returns (newArgs, handled, code): handled=true ⇒ caller should `return code`
+// now; otherwise it continues with newArgs. A no-op outside a container.
+func containerizeDaemonArgs(args []string) (newArgs []string, handled bool, code int) {
+	if len(args) == 0 || !runningInContainer() {
+		return args, false, 0
+	}
+	switch args[0] {
+	case "install", "start", "restart":
+		rest := args[1:]
+		if k := strings.TrimSpace(extractFlagValue(rest, "api-key")); k != "" {
+			_ = os.Setenv("CALABI_API_KEY", k)
+		}
+		if p := strings.TrimSpace(extractFlagValue(rest, "status-port")); p != "" {
+			_ = os.Setenv("CALABI_STATUS_ADDR", "127.0.0.1:"+p)
+		}
+		fmt.Fprintln(os.Stderr,
+			"calabi daemon: container detected — a container supervises its own process, so there is no "+
+				"OS service to install. Running `calabi daemon` in the foreground instead "+
+				"(authenticate with CALABI_API_KEY or --api-key). Tip: set the image's default command to "+
+				"`daemon` and pass -e CALABI_API_KEY=tk_….")
+		return foregroundDaemonArgs(rest), false, 0
+	case "stop", "uninstall":
+		fmt.Fprintln(os.Stderr,
+			"calabi daemon "+args[0]+": container detected — there is no OS service here. "+
+				"Stop or remove the container itself.")
+		return args, true, 0
+	case "status":
+		fmt.Fprintln(os.Stderr,
+			"calabi daemon status: container detected — the daemon runs in the foreground (no OS service). "+
+				"Inspect it with your container runtime (docker ps / kubectl).")
+		return args, true, 0
+	}
+	return args, false, 0
+}
+
+// foregroundDaemonArgs rebuilds the arg list for a foreground `calabi daemon`
+// from a service subcommand's flags, keeping ONLY the flags the foreground
+// daemon's flagset understands — so it doesn't choke on the install-only
+// --api-key / --status-port / --service-name (those are translated to env in
+// containerizeDaemonArgs).
+func foregroundDaemonArgs(rest []string) []string {
+	var out []string
+	for _, name := range []string{"name", "edge-region", "edge-affinity"} {
+		if v := strings.TrimSpace(extractFlagValue(rest, name)); v != "" {
+			out = append(out, "--"+name, v)
+		}
+	}
+	return out
+}
+
 func explainInstallErr(err error) string {
 	msg := err.Error()
 	switch runtime.GOOS {

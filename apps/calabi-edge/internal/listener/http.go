@@ -42,6 +42,13 @@ type HTTPOptions struct {
 	// GlobalLimiter is the process-wide backpressure (Phase B). nil =
 	// unlimited (admits everything). Checked at accept before sniff/route.
 	GlobalLimiter *ratelimit.GlobalLimiter
+	// ACMEChallengeResolver, when non-nil, answers ACME http-01 validation
+	// probes (/.well-known/acme-challenge/<token>) served by this edge on
+	// behalf of cert-svc's user-self-service issuance. It maps a token to
+	// its keyAuth. nil (community / no cert-svc) disables interception, so
+	// such a path falls through to normal host routing. Checked BEFORE host
+	// routing and BEFORE any auth / rate-limit gate — the probe is anonymous.
+	ACMEChallengeResolver func(token string) (keyAuth string, ok bool)
 }
 
 // HTTP accepts incoming HTTP/1.x connections, sniffs the Host header, and
@@ -119,6 +126,25 @@ func (h *HTTP) handle(visitor net.Conn) {
 		return
 	}
 	_ = visitor.SetReadDeadline(time.Time{})
+
+	// ACME http-01 interception: a Let's Encrypt validator probing
+	// /.well-known/acme-challenge/<token> must be answered by THIS edge
+	// (the token lives in cert-svc and was broadcast to us), not routed to
+	// a tunnel. Handled before host routing and before any auth/rate gate
+	// because the probe is anonymous and must never be challenged or shed.
+	if h.opts.ACMEChallengeResolver != nil {
+		if token, ok := acmeChallengeToken(path); ok {
+			if keyAuth, found := h.opts.ACMEChallengeResolver(token); found {
+				writeACMEChallenge(visitor, keyAuth)
+				h.observeRequest("acme_challenge")
+				h.logger.Info("served acme http-01 challenge", "host", host, "token", token)
+			} else {
+				writeStatus(visitor, 404, "acme challenge token not found")
+				h.observeRequest("acme_challenge_miss")
+			}
+			return
+		}
+	}
 
 	target, ok := h.opts.Router.LookupHTTP(host)
 	if !ok {
@@ -224,13 +250,20 @@ func (h *HTTP) handle(visitor net.Conn) {
 	}
 	defer stream.Close()
 
-	// Replay the bytes we consumed during sniffing, applying any configured
-	// request-header rewrite to request #1's head (⑥). Requests #2.N are
-	// rewritten by the headerRewritingReader wrapping the copy below.
-	replayHead := head
-	if pol.HasRequestHeaders() {
-		replayHead = pol.RewriteRequestHead(head)
+	// Replay the bytes we consumed during sniffing. Every request head gets the
+	// reverse-proxy forwarding headers (real visitor IP, scheme, host) stamped
+	// on so the backend sees the real client; a per-tunnel header rewrite, if
+	// configured, runs AFTER so an operator can still override. Requests #2.N on
+	// this keep-alive connection are transformed by the wrap below.
+	visitorIP := extractIP(visitor.RemoteAddr())
+	headXform := func(h []byte) []byte {
+		h = injectForwardHeaders(h, visitorIP, host, false)
+		if pol.HasRequestHeaders() {
+			h = pol.RewriteRequestHead(h)
+		}
+		return h
 	}
+	replayHead := headXform(head)
 	if _, err := stream.Write(replayHead); err != nil {
 		h.observeRequest("replay_head_failed")
 		return
@@ -266,10 +299,7 @@ func (h *HTTP) handle(visitor net.Conn) {
 	// per-day cap. Transparent: bytes are forwarded verbatim; on cap-hit the
 	// reader surfaces an error that unwinds the copy and closes the conn.
 	reqCounter := newRequestCounter(head, sess.AllowHTTPReq)
-	var vsrc io.Reader = br
-	if pol.HasRequestHeaders() {
-		vsrc = wrapHeaderRewrite(br, pol, head)
-	}
+	vsrc := wrapHeadTransform(br, headXform, head)
 	go func() {
 		n, e := io.Copy(newBytesMeter(lim.Writer(stream), inC), reqCounter.wrap(vsrc))
 		errCh <- result{"visitor->stream", n, e}
@@ -360,6 +390,40 @@ func sniffHTTP(br *bufio.Reader) (head []byte, host, method, path string, err er
 		return nil, "", "", "", errors.New("missing Host header")
 	}
 	return head, host, method, path, nil
+}
+
+// acmeChallengePrefix is the well-known path ACME http-01 validators hit.
+const acmeChallengePrefix = "/.well-known/acme-challenge/"
+
+// acmeChallengeToken returns the token from an ACME http-01 request path,
+// or ok=false if the path isn't a challenge request. The token is the
+// single path segment after the prefix; any query string is stripped and
+// a token containing a further '/' is rejected (defends the lookup key).
+func acmeChallengeToken(path string) (string, bool) {
+	if !strings.HasPrefix(path, acmeChallengePrefix) {
+		return "", false
+	}
+	tok := path[len(acmeChallengePrefix):]
+	if i := strings.IndexByte(tok, '?'); i >= 0 {
+		tok = tok[:i]
+	}
+	if tok == "" || strings.Contains(tok, "/") {
+		return "", false
+	}
+	return tok, true
+}
+
+// writeACMEChallenge replies with the keyAuth as text/plain — the exact
+// body Let's Encrypt expects at the challenge URL.
+func writeACMEChallenge(w io.Writer, keyAuth string) {
+	msg := fmt.Sprintf(
+		"HTTP/1.1 200 OK\r\n"+
+			"Content-Type: text/plain; charset=utf-8\r\n"+
+			"Content-Length: %d\r\n"+
+			"Connection: close\r\n\r\n%s",
+		len(keyAuth), keyAuth,
+	)
+	_, _ = io.WriteString(w, msg)
 }
 
 func writeStatus(w io.Writer, code int, body string) {

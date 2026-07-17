@@ -26,8 +26,8 @@
     "free": "Free",
     "basic": "Basic",
     "pro": "Pro",
-    "enterprise": "Business",
-    "custom": "Enterprise",
+    "business": "Business",
+    "enterprise": "Enterprise",
     "pro_gift": "Pro 보너스"
   },
   "lifecycle": {
@@ -68,6 +68,7 @@
     "switchRegion": "리전 전환",
     "current": "현재",
     "onlineCount": "{{healthy}}/{{total}} 온라인",
+    "tunnelCount": "터널 {{count}}개",
     "unavailable": "사용 불가",
     "noOwnNodeOnline": "온라인 상태인 자체 호스팅 노드 없음",
     "reconnectTitle": "\"{{region}}\" 리전에 재연결할까요?",
@@ -100,7 +101,7 @@
     "readOnlyDesc": "청구 연체나 할당량 초과 시 계정이 읽기 전용 모드가 되어 새 터널을 만들 수 없습니다. 자세한 내용은 콘솔을 확인하세요.",
     "quotaExceededMsg": "이번 달 트래픽이 한도를 초과했습니다 ({{pct}}%)",
     "quotaExceededDesc": "초과 후에도 기존 터널은 모두 계속 작동하지만 새로 추가할 수 없습니다. 요금제를 업그레이드하거나 다음 달 초기화를 기다리세요.",
-    "activeTunnels": "활성 터널",
+    "activeTunnels": "조직 터널",
     "uptime": "가동 시간",
     "todayTraffic": "오늘 트래픽",
     "monthTraffic": "이번 달 트래픽",
@@ -141,6 +142,22 @@
     "probeOkTip": "로컬 탐지 정상 ({{ms}}ms, 연속 {{n}}회)",
     "probeFailTip": "로컬 탐지 실패: {{err}} (연속 {{n}}회)",
     "serverOnlineTip": "온라인 — 이 클라이언트의 다른 세션(예: 포그라운드 'calabi http')에서 서비스 중이거나 동기화 중",
+    "heldByOtherClientTip": "이 터널은 조직의 다른 클라이언트에 연결되어 있으며 이 머신에서 실행되지 않습니다.",
+    "onlineOtherClientTip": "온라인 — 조직의 다른 클라이언트에서 서비스 중이며 이 머신이 아닙니다.",
+    "takeover": {
+      "btn": "가져오기",
+      "tip": "이 터널을 이 머신으로 가져오기",
+      "titleNamed": "터널 '{{name}}' 가져오기",
+      "confirm": "가져오기",
+      "warnTitle": "가져오기 전 확인",
+      "warnLocal": "가져온 후에는 이 머신이 전달합니다. 아래 로컬 주소의 서비스가 이 머신에서 실제로 실행 중인지 확인하세요.",
+      "warnOther": "다른 클라이언트는 이 터널 서비스를 중단합니다.",
+      "warnGap": "공개 URL은 그대로지만, 이전되는 동안 잠시 접속이 끊길 수 있습니다.",
+      "localTip": "이 머신에서 전달할 로컬 서비스 주소(원래 머신과 다른 경우가 많음).",
+      "done": "이 머신으로 가져왔습니다",
+      "failed": "가져오기 실패",
+      "crossEdgeTip": "이 터널은 다른 리전/엣지에서 실행 중입니다. 공용 주소가 해당 엣지에 묶여 있어(http/https 서브도메인은 거기에 고정되고 tcp/udp 포트도 거기서 할당됨), 이 클라이언트로 인계하면 공용 주소가 변경(또는 손상)됩니다. 먼저 이 클라이언트를 터널의 리전으로 전환하거나 여기서 터널을 다시 만드세요."
+    },
     "sameRegionTip": "이 클라이언트의 현재 세션과 같은 리전입니다. 트래픽이 정상적으로 전달됩니다.",
     "otherRegionTip": "이 클라이언트의 현재 세션은 {{current}}에 있습니다. 이 터널은 {{region}} 노드를 통해 접근해야 합니다.",
     "inspectBtn": "요청",
@@ -197,7 +214,8 @@
       "titleNamed": "접근 제어 · {{name}}",
       "save": "저장",
       "saved": "보안 정책이 저장됨",
-      "failed": "보안 정책 저장 실패"
+      "failed": "보안 정책 저장 실패",
+      "lockedNotice": "일부 기능은 요금제 업그레이드가 필요합니다: {{features}}."
     },
     "edit": {
       "title": "터널 편집",
@@ -205,7 +223,10 @@
       "save": "저장",
       "saved": "터널이 업데이트됨",
       "failed": "터널 업데이트 실패",
-      "endpointFixed": "유형과 공개 주소는 변경할 수 없습니다. 다른 것을 사용하려면 새 터널을 생성하세요."
+      "endpointFixed": "유형과 공개 주소는 변경할 수 없습니다. 다른 것을 사용하려면 새 터널을 생성하세요.",
+      "offMachineTitle": "이 터널은 다른 기기에서 실행 중입니다",
+      "offMachineDesc": "이름과 보안 정책 변경은 원격으로 적용됩니다. 하지만 “로컬 주소”는 이 터널을 실제로 제공하는 기기의 업스트림을 가리킵니다 — 이 기기가 아닙니다. 여기서 실행하려면 “인계”를 사용하세요.",
+      "offMachineLocalHint": "이 주소는 터널을 제공하는 다른 기기에 적용됩니다."
     },
     "deleteConfirmTitle": "삭제를 확인할까요?",
     "deleteConfirmDesc": "엣지 노드에서 즉시 제거됩니다. 클라이언트가 실행 중이면 관련 연결이 끊깁니다.",
@@ -221,7 +242,20 @@
     "dismissFailed": "닫기 실패",
     "deleted": "삭제됨",
     "deleteFailed": "삭제 실패",
-    "emptyText": "아직 터널이 없습니다 · 오른쪽 위의 \"새 터널\"을 클릭하세요"
+    "emptyText": "아직 터널이 없습니다 · 오른쪽 위의 \"새 터널\"을 클릭하세요",
+    "regionFilteredMsg": "다른 리전의 터널 {{count}}개를 숨겼습니다",
+    "regionFilteredDesc": "이 터널들은 다른 리전의 엣지에 고정되어 있어 여기서는 제공할 수 없습니다. 위에서 리전을 전환하거나 웹 콘솔에서 모든 리전을 확인하세요.",
+    "state": {
+      "admin_disabled": "관리자가 비활성화함",
+      "disabled": "비활성화됨",
+      "error": "오류",
+      "pending": "클라이언트 대기 중",
+      "offline": "오프라인",
+      "mismatch": "클라이언트가 다른 노드에 있음",
+      "active": "온라인"
+    },
+    "mismatchTip": "클라이언트가 엣지 #{{clientEdge}}에 연결되어 있지만, 이 터널의 도메인은 엣지 #{{boundEdge}}에 고정되어 있어 공개 주소에 접근할 수 없습니다. 클라이언트를 엣지 #{{boundEdge}}(으)로 다시 전환하거나, 현재 엣지에서 터널을 삭제하고 다시 생성하세요(공개 도메인이 변경됨).",
+    "pendingTip": "서버에 기록되었지만 아직 엣지가 인계받지 않았습니다. calabi 클라이언트를 시작하고 로그인하면 자동으로 동기화됩니다."
   },
   "tunnelStatus": {
     "enabled": "활성화됨",
@@ -260,7 +294,14 @@
     "subdomainFreeLabel": "하위 도메인",
     "subdomainFreePlaceholder": "Free 요금제는 무작위 하위 도메인을 할당합니다(업그레이드 후 직접 선택 가능)",
     "countHint": "이 조직에는 이미 {{team}}개의 터널이 있습니다. 새 터널은 목록에 추가됩니다",
-    "countHintShared": "이 조직에는 이미 {{team}}개의 터널이 있습니다(이 클라이언트에 {{mine}}개). 새 터널은 목록에 추가됩니다"
+    "countHintShared": "이 조직에는 이미 {{team}}개의 터널이 있습니다(이 클라이언트에 {{mine}}개). 새 터널은 목록에 추가됩니다",
+    "customDomainSelectPlaceholder": "검증된 도메인 선택",
+    "customDomainNone": "검증된 도메인 없음",
+    "customDomainNoneHint": "먼저 웹 콘솔의 ‘도메인 관리’에서 도메인을 추가하고 검증하세요.",
+    "domainCertReady": "인증서 준비됨",
+    "domainNoCert": "인증서 없음",
+    "domainInUse": "사용 중",
+    "domainNoCertHint": "이 도메인은 아직 인증서가 없습니다: HTTP는 바로 작동합니다. HTTPS는 웹 콘솔 ‘도메인 관리’에서 인증서를 발급하면 작동합니다."
   },
   "inspector": {
     "title": "요청 검사기 · {{name}}",
@@ -346,6 +387,17 @@
     "importDone": "{{total}}개의 새 터널을 가져왔습니다",
     "allSkipped": "{{n}}개 모두 이미 존재함 — 가져온 항목 없음",
     "importFailed": "가져오기 실패"
+  },
+  "serviceMode": {
+    "readonlyTag": "읽기 전용",
+    "agentTooltip": "이 클라이언트는 고정된 ID({{identity}})로 실행되며 로컬 콘솔은 읽기 전용입니다. 터널과 계정은 웹 콘솔에서 관리하세요.",
+    "agentManageTooltip": "이 클라이언트는 고정된 ID({{identity}})로 실행됩니다. 이 조직의 터널을 여기서 관리할 수 있습니다. 로그인과 조직 전환은 웹 콘솔에서 합니다.",
+    "tunnelsReadonly": "에이전트 모드에서는 읽기 전용입니다 — 터널은 웹 콘솔에서 관리하세요",
+    "agentBannerTitle": "읽기 전용 콘솔(에이전트 모드)",
+    "agentBannerDesc": "이 클라이언트는 고정된 API 키 ID로 서비스로 실행됩니다. 터널 생성·편집·삭제는 웹 콘솔에서 하세요.",
+    "agentTag": "Agent",
+    "agentManageBannerTitle": "에이전트 모드(관리 키)",
+    "agentManageBannerDesc": "이 클라이언트는 쓰기 권한이 있는 고정된 API 키 ID로 서비스로 실행됩니다. 웹 콘솔과 동일하게 이 조직의 터널을 여기서 관리할 수 있습니다. 로그인과 조직 전환은 계속 비활성화됩니다."
   },
   "login": {
     "title": "Calabi에 로그인",

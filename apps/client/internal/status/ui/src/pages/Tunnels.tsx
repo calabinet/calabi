@@ -10,6 +10,7 @@ import {
   CodeOutlined,
   DeleteOutlined,
   EditOutlined,
+  ImportOutlined,
   PlusOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
@@ -53,6 +54,8 @@ import type {
 import InspectorDrawer from "../components/InspectorDrawer";
 import TunnelWizard from "../components/TunnelWizard";
 import { notify } from "../hooks/use-notifications";
+import { useServiceMode } from "../hooks/use-service-mode";
+import { effectiveState, type EffectiveState } from "../lib/tunnelState";
 import { useTranslation } from "react-i18next";
 
 const { Title, Text } = Typography;
@@ -143,15 +146,18 @@ function CopyableAddr({ full, display }: { full: string; display: string }) {
   );
 }
 
-// statusBadge maps the raw tunnel-svc Status enum → an antd Badge `status`
-// (the semantic dot color). The status column renders ONLY the dot now; the
-// human-readable label moved into a hover tooltip (StatusDot), so the dot
-// color is the sole at-a-glance signal.
-const statusBadge: Record<string, BadgeProps["status"]> = {
-  enabled: "success",
-  disabled: "default",
+// STATE_BADGE maps the UNIFIED effective-state vocabulary → an antd Badge dot
+// color. Identical to the cloud console (web/console Tunnels.tsx) so :7400 and
+// the web console show the same color for the same state. Labels live in i18n
+// under `tunnels.state.*` (also shared with the cloud console).
+const STATE_BADGE: Record<EffectiveState, BadgeProps["status"]> = {
+  active: "success",
+  offline: "default",
+  pending: "warning",
+  mismatch: "warning",
   error: "error",
-  offline: "warning",
+  disabled: "default",
+  admin_disabled: "error",
 };
 
 // StatusDot renders a colored status dot followed by a short inline label
@@ -176,11 +182,11 @@ function StatusDot({
   );
 }
 
-// Tunnel status labels live in i18n under `tunnelStatus.*` (mirrors the
-// tunnel-svc Status enum: enabled | disabled | error | offline). Unknown
-// values fall back to the raw key via t()'s defaultValue so a future
-// server-side status still renders something readable — same pattern as
-// web/admin's labels.ts::translate().
+// Tunnel state labels live in i18n under `tunnels.state.*` — the SAME keys the
+// cloud console uses, so the two consoles speak one vocabulary (active / offline
+// / pending / mismatch / error / disabled / admin_disabled). The raw tunnel-svc
+// Status enum ("enabled" etc.) is no longer surfaced directly; it's collapsed
+// into the effective state by lib/tunnelState.ts + the daemon's local refinement.
 
 interface Row extends RemoteTunnel {
   bytes_in?: number;
@@ -194,10 +200,18 @@ interface Row extends RemoteTunnel {
 export default function Tunnels() {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  // Agent mode: pinned API-key identity. A MANAGEMENT key (tunnel.write) keeps a
+  // fully writable console — create / edit / security / delete all work against
+  // the agent's org. A READ-ONLY key greys those writes (reads + inspect stay
+  // live) and shows a read-only banner. canManage folds both axes; readOnlyAgent
+  // is the "agent without write" case that wants the explanatory banner.
+  const { agentMode, canManage } = useServiceMode();
+  const readOnlyAgent = agentMode && !canManage;
   const [wizardOpen, setWizardOpen] = useState(false);
   const [drawerProxy, setDrawerProxy] = useState<{ id: string; name?: string } | null>(null);
   const [secRow, setSecRow] = useState<RemoteTunnel | null>(null);
   const [editRow, setEditRow] = useState<RemoteTunnel | null>(null);
+  const [takeoverRow, setTakeoverRow] = useState<RemoteTunnel | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const prefillPort = searchParams.get("prefill_port");
 
@@ -215,6 +229,13 @@ export default function Tunnels() {
     queryFn: api.tunnels,
     refetchInterval: 8_000,
   });
+  // This daemon's own device. The list now includes tunnels bound to OTHER
+  // clients in the org; a row whose client_id differs runs elsewhere, so we
+  // explain that in the status tooltip (and offer takeover) instead of a bare
+  // "offline" with no reason.
+  const myDeviceId = list?.my_device_id ?? 0;
+  const isOffMachine = (r: Row) =>
+    !!r.client_id && myDeviceId > 0 && r.client_id !== myDeviceId;
   // Pull plan info so we can pre-disable "新建隧道" once the cap is hit
   // — server-side tunnel-svc enforces the same limit, but blocking the
   // UI first means the user gets immediate feedback instead of filling
@@ -293,14 +314,11 @@ export default function Tunnels() {
     (edgeList?.items ?? []).forEach((e) => m.set(e.edge_node_id, e));
     return m;
   }, [edgeList]);
-  // Current edge — what the daemon dialed THIS boot. Used to derive
-  // the region of THIS daemon's session so the Edge column can compare
-  // regions (not individual edge ids — user explicitly doesn't care
-  // which specific edge within a region is up). Empty when unknown.
-  const currentEdgeID = snap?.edge_node_id ?? 0;
-  const currentRegion = currentEdgeID
-    ? edgeById.get(currentEdgeID)?.region || ""
-    : "";
+  // edgeById is still used by the status column's edge-down check (an edge that
+  // dropped out of the directory means a tunnel pinned to it is offline). The
+  // old region-comparison logic moved to the shared effectiveState() "mismatch"
+  // state (driven by server-provided client_edge_node_id), so currentEdgeID /
+  // currentRegion are no longer derived here.
 
   // M7-S5: fire a desktop notification on the 3rd consecutive bad
   // health check (≈90s of brokenness) so the user knows the local
@@ -357,174 +375,140 @@ export default function Tunnels() {
     };
   });
 
+  // Region scoping: the local console lists only tunnels whose bound edge sits
+  // in the SAME region this daemon is currently anchored to. A tunnel pinned to
+  // an edge in another region has a public address this client can't serve from
+  // here (per-edge wildcard DNS + edge-allocated ports), so showing it would be
+  // misleading — the cloud console is where you see every region at once.
+  //
+  // We hide a row ONLY when we can POSITIVELY place its edge in a DIFFERENT
+  // region. Everything ambiguous degrades OPEN (kept): unknown own region,
+  // unbound/pending rows (no edge yet), and rows whose edge isn't in the
+  // directory — so a directory blip or a fresh boot never empties the list.
+  const currentRegion =
+    snap?.preferred_region ||
+    (snap?.edge_node_id ? edgeById.get(snap.edge_node_id)?.region : undefined) ||
+    "";
+  const inCurrentRegion = (r: Row): boolean => {
+    if (!currentRegion) return true; // own region unknown → don't filter
+    if (!r.edge_node_id) return true; // unbound / pending → belongs here
+    const e = edgeById.get(r.edge_node_id);
+    if (!e || !e.region) return true; // edge not in directory → degrade open
+    return e.region === currentRegion;
+  };
+  const visibleRows = rows.filter(inCurrentRegion);
+  const hiddenByRegion = rows.length - visibleRows.length;
+
   const columns: ColumnsType<Row> = [
     {
       title: t("tunnels.colStatus"),
       dataIndex: "status",
-      width: 110,
-      // Server status is the source of truth. The "运行中" badge only
-      // wins when BOTH the server says enabled AND this daemon has the
-      // proxy_id mapped — otherwise we'd render Org A's stale claims as
-      // "运行中" while the daemon is actually serving Org B (M11.9
-      // regression: post Org-switch the daemon's snap held stale tunnel
-      // ids that didn't match the new Org's list, so every row was
-      // mis-classified as 离线 even when the server had them at enabled.
-      // Reading server status first sidesteps that whole class of bug).
-      render: (s: string, row) => {
-        // When the local daemon has no live edge session (reconnecting /
-        // parked "unavailable" / fatal), it isn't serving ANY tunnel right
-        // now — the snap.live flags and the server's client_online are both
-        // stale from the last good session, so 运行中 / 启用中 / 跨地域不可达
-        // would all mislead (this was the "掉线了还显示运行中" report). Show
-        // enabled rows as 离线; keep the real config status for disabled /
-        // error. Guard on `snap &&` so we don't flash 离线 during the initial
-        // load before the first snapshot arrives.
-        if (snap && !snap.connected) {
-          if (s === "enabled") {
-            return (
-              <StatusDot
-                status="default"
-                label={t("tunnelStatus.offline")}
-                tip={t("tunnels.offlineNotConnectedTip")}
-              />
-            );
-          }
+      width: 120,
+      // Unified state vocabulary: we start from the SAME effectiveState() the
+      // cloud console uses, then layer the daemon's local signals on top — its
+      // own edge session being down, the per-tunnel health probe, and the edge
+      // directory. The LABEL/COLOR always come from the shared `tunnels.state.*`
+      // set, so :7400 and the web console never disagree (the old code leaked
+      // the raw "已启用"/enabled status here, which says nothing about online).
+      render: (_s, row) => {
+        // Base state from the shared collapse (server-authoritative signals).
+        let st = effectiveState(row);
+        let tip: ReactNode = t(`tunnels.state.${st}`);
+
+        // Does THIS daemon own/serve the row? (unbound or bound to us)
+        const mine = !row.client_id || row.client_id === myDeviceId;
+
+        // (1) This daemon's edge session is down → anything IT would be serving
+        // is offline right now, regardless of stale server presence (the
+        // "掉线了还显示在线" report). Doesn't touch tunnels served by OTHER
+        // clients — those stay on their server-derived state.
+        if (
+          snap &&
+          !snap.connected &&
+          mine &&
+          (st === "active" || st === "pending" || st === "mismatch")
+        ) {
           return (
             <StatusDot
-              status={statusBadge[s] || "default"}
-              label={t(`tunnelStatus.${s}`, { defaultValue: s })}
-              tip={t(`tunnelStatus.${s}`, { defaultValue: s })}
+              status={STATE_BADGE.offline}
+              label={t("tunnels.state.offline")}
+              tip={t("tunnels.offlineNotConnectedTip")}
             />
           );
         }
-        // The tunnel's OWNING edge has dropped out of the edge directory
-        // (or is flagged unhealthy) — i.e. the node hosting this tunnel is
-        // offline. The server's client_online can lag behind (presence
-        // reaper hasn't fired yet), so without this check the row shows a
-        // misleading 启用中 / 运行中 even though the owning edge node is
-        // actually down. Render 离线 to match. Guard on the
-        // directory actually being loaded (>0 items) so we don't flash 离线
-        // for every row before /v1/edges responds; and on !row.live so a
-        // row this daemon is actively serving (always on a healthy edge)
-        // is never mis-flagged.
+
+        // (2) The owning edge dropped out of the directory (node down). Server
+        // presence lags, so trust the directory — but never override a row we're
+        // actively serving (it's on a healthy edge by definition).
         const edgeDirLoaded = (edgeList?.items?.length ?? 0) > 0;
-        const rowEdge = row.edge_node_id
-          ? edgeById.get(row.edge_node_id)
-          : undefined;
+        const rowEdge = row.edge_node_id ? edgeById.get(row.edge_node_id) : undefined;
         const edgeDown =
           edgeDirLoaded &&
           !!row.edge_node_id &&
-          row.edge_node_id !== 0 &&
           (!rowEdge || rowEdge.healthy === false);
-        if (edgeDown && !row.live) {
+        if (edgeDown && !row.live && (st === "active" || st === "mismatch")) {
           return (
             <StatusDot
-              status="default"
-              label={t("tunnelStatus.offline")}
+              status={STATE_BADGE.offline}
+              label={t("tunnels.state.offline")}
               tip={t("tunnels.edgeDownTip", { id: row.edge_node_id })}
             />
           );
         }
-        // M15 regional mesh: a tunnel owned by a DIFFERENT edge is only
-        // truly unreachable when that edge is in another REGION — cross-
-        // region edges never forward to each other, and the URL's
-        // base_domain differs. Same-region different-edge is transparent
-        // (the regional mesh relays the visitor to the owning peer, and a
-        // reconnect re-homes the tunnel), so we do NOT flag it.
-        //
-        // Guard on both ids being non-zero (pending row / daemon booting)
-        // AND on both regions being known + different.
-        const rowRegion = row.edge_node_id
-          ? edgeById.get(row.edge_node_id)?.region || ""
-          : "";
-        if (
-          row.edge_node_id &&
-          row.edge_node_id !== 0 &&
-          currentEdgeID !== 0 &&
-          row.edge_node_id !== currentEdgeID &&
-          rowRegion !== "" &&
-          currentRegion !== "" &&
-          rowRegion !== currentRegion
-        ) {
-          return (
-            <StatusDot
-              status="warning"
-              label={t("tunnelStatus.crossRegion")}
-              tip={t("tunnels.crossRegionTip", { rowRegion, currentRegion })}
-            />
-          );
-        }
-        if (s === "enabled" && row.live) {
-          // Server agrees AND this daemon owns the claim — render the
-          // health-probe dot so the user can see real-time status on hover.
+
+        // (3) We're actively serving this tunnel — the local upstream probe is
+        // the freshest truth. A failing probe means the upstream is down even
+        // though the server still says active; a passing one carries latency.
+        if (row.live) {
           const h = row.health;
-          if (!h) {
-            // No probe result for this tunnel. Two cases:
-            //  - probing is OFF on this daemon (health.enabled === false, e.g.
-            //    standalone daemons before upstream probing was wired): there
-            //    will NEVER be a result, so a perpetual "Probing..." is wrong.
-            //    The tunnel IS live (row.live), so show a plain online dot.
-            //  - probing is ON but the first probe hasn't landed yet: show
-            //    "Probing...".
-            if (health?.enabled === false) {
-              return (
-                <StatusDot
-                  status="success"
-                  label={t("tunnelStatus.online")}
-                  tip={t("tunnels.onlineTip")}
-                />
-              );
-            }
+          if (h && !h.healthy) {
             return (
               <StatusDot
-                status="processing"
-                label={t("tunnelStatus.probing")}
-                tip={t("tunnels.probing")}
-              />
-            );
-          }
-          if (h.healthy) {
-            return (
-              <StatusDot
-                status="success"
-                label={t("tunnelStatus.running")}
-                tip={t("tunnels.probeOkTip", {
-                  ms: h.latency_ms,
-                  n: h.consecutive_good,
+                status={STATE_BADGE.error}
+                label={t("tunnels.state.error")}
+                tip={t("tunnels.probeFailTip", {
+                  err: h.error || t("common.unknown"),
+                  n: h.consecutive_bad,
                 })}
               />
             );
           }
           return (
             <StatusDot
-              status="error"
-              label={t("tunnelStatus.error")}
-              tip={t("tunnels.probeFailTip", {
-                err: h.error || t("common.unknown"),
-                n: h.consecutive_bad,
-              })}
+              status={STATE_BADGE.active}
+              label={t("tunnels.state.active")}
+              tip={
+                h && h.healthy
+                  ? t("tunnels.probeOkTip", { ms: h.latency_ms, n: h.consecutive_good })
+                  : health?.enabled === false
+                    ? t("tunnels.onlineTip")
+                    : t("tunnels.probing")
+              }
             />
           );
         }
-        // Enabled-but-not-locally-live: another machine may own the
-        // claim, or our daemon hasn't completed catch-up yet. Show the
-        // server status as a plain tag + a small hint when the server
-        // also says client_online (someone, somewhere, is serving it).
-        if (s === "enabled" && row.client_online) {
-          return (
-            <StatusDot
-              status="success"
-              label={t("tunnelStatus.online")}
-              tip={t("tunnels.serverOnlineTip")}
-            />
-          );
+
+        // (4) Not served locally — trust the shared state, but enrich the
+        // tooltip so a bare "离线"/"在线" always says WHY (esp. for rows that
+        // run on another client in the org).
+        if (st === "active") {
+          tip = isOffMachine(row)
+            ? t("tunnels.onlineOtherClientTip")
+            : t("tunnels.serverOnlineTip");
+        } else if (st === "offline") {
+          tip = isOffMachine(row)
+            ? t("tunnels.heldByOtherClientTip")
+            : t("tunnels.state.offline");
+        } else if (st === "mismatch") {
+          tip = t("tunnels.mismatchTip", {
+            clientEdge: row.client_edge_node_id ?? "?",
+            boundEdge: row.edge_node_id ?? "?",
+          });
+        } else if (st === "pending") {
+          tip = t("tunnels.pendingTip");
         }
         return (
-          <StatusDot
-            status={statusBadge[s] || "default"}
-            label={t(`tunnelStatus.${s}`, { defaultValue: s })}
-            tip={t(`tunnelStatus.${s}`, { defaultValue: s })}
-          />
+          <StatusDot status={STATE_BADGE[st]} label={t(`tunnels.state.${st}`)} tip={tip} />
         );
       },
     },
@@ -668,30 +652,65 @@ export default function Tunnels() {
               />
             </Tooltip>
           )}
-          <Tooltip title={t("tunnels.edit.title")}>
+          {isOffMachine(r) && canManage && r.created_by_me && (() => {
+            // The public address is bound to the tunnel's edge: an http/https
+            // subdomain is DNS-pinned to its issuing edge, and a tcp/udp port is
+            // allocated by that edge. So taking the tunnel over to a client on a
+            // DIFFERENT edge/region changes (or breaks) the public address — for
+            // a subdomain the new edge can't even serve it (the tunnel ends up
+            // stuck). Grey out takeover whenever this daemon's current edge
+            // differs from the tunnel's, regardless of type.
+            const crossEdge =
+              !!r.edge_node_id &&
+              !!snap?.edge_node_id &&
+              r.edge_node_id !== snap.edge_node_id;
+            return (
+              <Tooltip
+                title={crossEdge ? t("tunnels.takeover.crossEdgeTip") : t("tunnels.takeover.tip")}
+              >
+                <Button
+                  size="small"
+                  icon={<ImportOutlined />}
+                  disabled={crossEdge}
+                  onClick={() => setTakeoverRow(r)}
+                >
+                  {t("tunnels.takeover.btn")}
+                </Button>
+              </Tooltip>
+            );
+          })()}
+          <Tooltip title={canManage ? t("tunnels.edit.title") : t("serviceMode.tunnelsReadonly")}>
             <Button
               size="small"
               icon={<EditOutlined />}
+              disabled={!canManage}
               onClick={() => setEditRow(r)}
             />
           </Tooltip>
-          <Tooltip title={t("tunnels.security.title")}>
+          <Tooltip title={canManage ? t("tunnels.security.title") : t("serviceMode.tunnelsReadonly")}>
             <Button
               size="small"
               icon={<SafetyCertificateOutlined />}
+              disabled={!canManage}
               onClick={() => setSecRow(r)}
             />
           </Tooltip>
-          <Popconfirm
-            title={t("tunnels.deleteConfirmTitle")}
-            description={t("tunnels.deleteConfirmDesc")}
-            okText={t("common.delete")}
-            okButtonProps={{ danger: true }}
-            cancelText={t("common.cancel")}
-            onConfirm={() => del.mutate(r.id)}
-          >
-            <Button danger size="small" icon={<DeleteOutlined />} />
-          </Popconfirm>
+          {!canManage ? (
+            <Tooltip title={t("serviceMode.tunnelsReadonly")}>
+              <Button danger size="small" icon={<DeleteOutlined />} disabled />
+            </Tooltip>
+          ) : (
+            <Popconfirm
+              title={t("tunnels.deleteConfirmTitle")}
+              description={t("tunnels.deleteConfirmDesc")}
+              okText={t("common.delete")}
+              okButtonProps={{ danger: true }}
+              cancelText={t("common.cancel")}
+              onConfirm={() => del.mutate(r.id)}
+            >
+              <Button danger size="small" icon={<DeleteOutlined />} />
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
@@ -721,22 +740,42 @@ export default function Tunnels() {
           </Tooltip>
           <Tooltip
             title={
-              capped
-                ? t("tunnels.cappedTooltip", { count: tunnelCount, max: planMax })
-                : ""
+              !canManage
+                ? t("serviceMode.tunnelsReadonly")
+                : capped
+                  ? t("tunnels.cappedTooltip", { count: tunnelCount, max: planMax })
+                  : ""
             }
           >
             <Button
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => setWizardOpen(true)}
-              disabled={capped}
+              disabled={capped || !canManage}
             >
               {t("tunnels.newTunnel")}
             </Button>
           </Tooltip>
         </Space>
       </div>
+
+      {readOnlyAgent ? (
+        <Alert
+          showIcon
+          type="info"
+          message={t("serviceMode.agentBannerTitle")}
+          description={t("serviceMode.agentBannerDesc")}
+        />
+      ) : (
+        agentMode && (
+          <Alert
+            showIcon
+            type="success"
+            message={t("serviceMode.agentManageBannerTitle")}
+            description={t("serviceMode.agentManageBannerDesc")}
+          />
+        )
+      )}
 
       {snap?.edge_switch && (
         <Alert
@@ -776,11 +815,20 @@ export default function Tunnels() {
         />
       )}
 
+      {hiddenByRegion > 0 && (
+        <Alert
+          showIcon
+          type="info"
+          message={t("tunnels.regionFilteredMsg", { count: hiddenByRegion })}
+          description={t("tunnels.regionFilteredDesc")}
+        />
+      )}
+
       <Table<Row>
         rowKey="id"
         size="middle"
         loading={isLoading}
-        dataSource={rows}
+        dataSource={visibleRows}
         columns={columns}
         pagination={{ pageSize: 20, showSizeChanger: false }}
         locale={{ emptyText: t("tunnels.emptyText") }}
@@ -818,7 +866,13 @@ export default function Tunnels() {
         onClose={() => setSecRow(null)}
       />
 
-      <EditTunnelModal tunnel={editRow} onClose={() => setEditRow(null)} />
+      <EditTunnelModal
+        tunnel={editRow}
+        offMachine={editRow ? isOffMachine(editRow) : false}
+        onClose={() => setEditRow(null)}
+      />
+
+      <TakeoverModal tunnel={takeoverRow} onClose={() => setTakeoverRow(null)} />
     </Space>
   );
 }
@@ -866,9 +920,15 @@ function localAddrIssue(addr: string): "" | "format" | "public" {
 // but changing it would re-allocate the public address (delete + recreate).
 function EditTunnelModal({
   tunnel,
+  offMachine,
   onClose,
 }: {
   tunnel: RemoteTunnel | null;
+  // offMachine = this tunnel runs on ANOTHER client (you created it, but a
+  // different machine serves it). Name + security apply remotely just fine, but
+  // local_addr names an upstream on THAT machine — so we annotate the field
+  // instead of silently letting the user point it at the wrong host.
+  offMachine: boolean;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -910,6 +970,15 @@ function EditTunnelModal({
       onOk={() => form.submit()}
       destroyOnClose
     >
+      {offMachine && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={t("tunnels.edit.offMachineTitle")}
+          description={t("tunnels.edit.offMachineDesc")}
+        />
+      )}
       <Form layout="vertical" form={form} onFinish={(v) => save.mutate(v)}>
         <Form.Item label={t("tunnels.colType")}>
           <Tag>{(tunnel?.type || "").toUpperCase()}</Tag>
@@ -928,6 +997,95 @@ function EditTunnelModal({
           label={t("wizard.localAddrLabel")}
           name="local_addr"
           tooltip={t("wizard.localAddrTip")}
+          extra={
+            offMachine ? (
+              <Typography.Text type="warning" style={{ fontSize: 12 }}>
+                {t("tunnels.edit.offMachineLocalHint")}
+              </Typography.Text>
+            ) : undefined
+          }
+          rules={[
+            { required: true, message: t("wizard.localAddrFormat") },
+            {
+              validator: (_, value) => {
+                const r = localAddrIssue(value);
+                if (r === "public")
+                  return Promise.reject(new Error(t("wizard.localAddrPublic")));
+                if (r === "format")
+                  return Promise.reject(new Error(t("wizard.localAddrFormat")));
+                return Promise.resolve();
+              },
+            },
+          ]}
+        >
+          <Input placeholder="127.0.0.1:8080" />
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+}
+
+// TakeoverModal re-binds a tunnel that runs on ANOTHER client to this machine.
+// The public endpoint is unchanged; the other client stops serving it and this
+// daemon claims it on its own edge. Because the upstream service usually lives
+// somewhere different on a new machine, the modal lets the user set the local
+// address (defaulting to the tunnel's current one) and spells out the caveats.
+function TakeoverModal({
+  tunnel,
+  onClose,
+}: {
+  tunnel: RemoteTunnel | null;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [form] = Form.useForm<{ local_addr: string }>();
+
+  useEffect(() => {
+    if (tunnel) form.setFieldsValue({ local_addr: tunnel.local_addr ?? "" });
+  }, [tunnel, form]);
+
+  const run = useMutation({
+    mutationFn: (v: { local_addr: string }) =>
+      api.takeoverTunnel(tunnel!.id, v.local_addr.trim()),
+    onSuccess: () => {
+      message.success(t("tunnels.takeover.done"));
+      qc.invalidateQueries({ queryKey: ["tunnels"] });
+      qc.invalidateQueries({ queryKey: ["snapshot"] });
+      onClose();
+    },
+    onError: (e: any) => message.error(e?.message || t("tunnels.takeover.failed")),
+  });
+
+  return (
+    <Modal
+      open={!!tunnel}
+      title={tunnel ? t("tunnels.takeover.titleNamed", { name: tunnel.name }) : t("tunnels.takeover.btn")}
+      onCancel={onClose}
+      okText={t("tunnels.takeover.confirm")}
+      cancelText={t("common.cancel")}
+      confirmLoading={run.isPending}
+      onOk={() => form.submit()}
+      destroyOnClose
+    >
+      <Alert
+        type="warning"
+        showIcon
+        style={{ marginBottom: 12 }}
+        message={t("tunnels.takeover.warnTitle")}
+        description={
+          <ul style={{ margin: 0, paddingInlineStart: 18 }}>
+            <li>{t("tunnels.takeover.warnLocal")}</li>
+            <li>{t("tunnels.takeover.warnOther")}</li>
+            <li>{t("tunnels.takeover.warnGap")}</li>
+          </ul>
+        }
+      />
+      <Form layout="vertical" form={form} onFinish={(v) => run.mutate(v)}>
+        <Form.Item
+          label={t("wizard.localAddrLabel")}
+          name="local_addr"
+          tooltip={t("tunnels.takeover.localTip")}
           rules={[
             { required: true, message: t("wizard.localAddrFormat") },
             {
@@ -1192,6 +1350,20 @@ function SecurityDrawer({
     onError: (e: any) => message.error(e?.message || t("tunnels.security.failed")),
   });
 
+  // Roll every plan-locked feature into ONE notice instead of repeating an
+  // upgrade box under each section. The user is a paying customer, so the copy
+  // says "higher-tier plan", never "paid feature". Standalone has no plan to
+  // upgrade — there the unavailable sections are simply hidden, no notice.
+  const lockedFeatures = standalone
+    ? []
+    : ([
+        !ipPolicyEnabled && t("tunnels.ipPolicy.title"),
+        !basicAuthEnabled && t("tunnels.basicAuth.title"),
+        !rateLimitEnabled && t("tunnels.rateLimit.title"),
+        !headerRewriteEnabled && t("tunnels.headers.title"),
+        !oauthEnabled && t("tunnels.oauth.title"),
+      ].filter(Boolean) as string[]);
+
   return (
     <Drawer
       open={!!tunnel}
@@ -1215,34 +1387,42 @@ function SecurityDrawer({
         </div>
       }
     >
-      <Typography.Title level={5} style={{ marginTop: 0 }}>{t("tunnels.ipPolicy.title")}</Typography.Title>
-      <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
-        {t("tunnels.ipPolicy.hint")}
-      </Typography.Paragraph>
-      {!ipPolicyEnabled ? (
-        <Alert type="info" showIcon message={t("tunnels.ipPolicy.upgrade")} />
-      ) : (
-        <Space direction="vertical" style={{ width: "100%" }} size="small">
-          <div>
-            <div style={{ fontSize: 12, color: "#8c8c8c", marginBottom: 4 }}>{t("tunnels.ipPolicy.allow")}</div>
-            <Input.TextArea value={allow} onChange={(e) => setAllow(e.target.value)} rows={3} placeholder={"203.0.113.0/24\n198.51.100.7"} />
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: "#8c8c8c", marginBottom: 4 }}>{t("tunnels.ipPolicy.deny")}</div>
-            <Input.TextArea value={deny} onChange={(e) => setDeny(e.target.value)} rows={2} placeholder={"192.0.2.0/24"} />
-          </div>
-        </Space>
+      {lockedFeatures.length > 0 && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={t("tunnels.security.lockedNotice", { features: lockedFeatures.join("、") })}
+        />
       )}
 
-      <Divider />
-      <Typography.Title level={5} style={{ marginTop: 0 }}>{t("tunnels.basicAuth.title")}</Typography.Title>
-      <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
-        {t("tunnels.basicAuth.hint")}
-      </Typography.Paragraph>
-      {!basicAuthEnabled ? (
-        <Alert type="info" showIcon message={t("tunnels.basicAuth.upgrade")} />
-      ) : (
-        <Space direction="vertical" style={{ width: "100%" }} size="small">
+      {ipPolicyEnabled && (
+        <>
+          <Typography.Title level={5} style={{ marginTop: 0 }}>{t("tunnels.ipPolicy.title")}</Typography.Title>
+          <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+            {t("tunnels.ipPolicy.hint")}
+          </Typography.Paragraph>
+          <Space direction="vertical" style={{ width: "100%" }} size="small">
+            <div>
+              <div style={{ fontSize: 12, color: "#8c8c8c", marginBottom: 4 }}>{t("tunnels.ipPolicy.allow")}</div>
+              <Input.TextArea value={allow} onChange={(e) => setAllow(e.target.value)} rows={3} placeholder={"203.0.113.0/24\n198.51.100.7"} />
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: "#8c8c8c", marginBottom: 4 }}>{t("tunnels.ipPolicy.deny")}</div>
+              <Input.TextArea value={deny} onChange={(e) => setDeny(e.target.value)} rows={2} placeholder={"192.0.2.0/24"} />
+            </div>
+          </Space>
+        </>
+      )}
+
+      {basicAuthEnabled && (
+        <>
+          <Divider />
+          <Typography.Title level={5} style={{ marginTop: 0 }}>{t("tunnels.basicAuth.title")}</Typography.Title>
+          <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+            {t("tunnels.basicAuth.hint")}
+          </Typography.Paragraph>
+          <Space direction="vertical" style={{ width: "100%" }} size="small">
           {users.map((u, i) => (
             <Space key={i} style={{ width: "100%" }} align="start">
               <Input
@@ -1265,44 +1445,38 @@ function SecurityDrawer({
           <Button onClick={() => setUsers((us) => [...us, { user: "", password: "", hash: "" }])}>
             + {t("tunnels.basicAuth.addUser")}
           </Button>
-        </Space>
+          </Space>
+        </>
       )}
 
-      {(rateLimitEnabled || !standalone) && (
+      {rateLimitEnabled && (
         <>
           <Divider />
           <Typography.Title level={5} style={{ marginTop: 0 }}>{t("tunnels.rateLimit.title")}</Typography.Title>
           <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
             {t("tunnels.rateLimit.hint")}
           </Typography.Paragraph>
-          {!rateLimitEnabled ? (
-            <Alert type="info" showIcon message={t("tunnels.rateLimit.upgrade")} />
-          ) : (
-            <Space>
-              <InputNumber
-                min={0}
-                style={{ width: 150 }}
-                value={rate}
-                onChange={(v) => setRate(typeof v === "number" ? v : null)}
-                placeholder={t("tunnels.rateLimit.placeholder")}
-              />
-              <span style={{ fontSize: 12, color: "#8c8c8c" }}>{t("tunnels.rateLimit.unit")}</span>
-            </Space>
-          )}
+          <Space>
+            <InputNumber
+              min={0}
+              style={{ width: 150 }}
+              value={rate}
+              onChange={(v) => setRate(typeof v === "number" ? v : null)}
+              placeholder={t("tunnels.rateLimit.placeholder")}
+            />
+            <span style={{ fontSize: 12, color: "#8c8c8c" }}>{t("tunnels.rateLimit.unit")}</span>
+          </Space>
         </>
       )}
 
-      {(headerRewriteEnabled || !standalone) && (
+      {headerRewriteEnabled && (
         <>
           <Divider />
           <Typography.Title level={5} style={{ marginTop: 0 }}>{t("tunnels.headers.title")}</Typography.Title>
           <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
             {t("tunnels.headers.hint")}
           </Typography.Paragraph>
-          {!headerRewriteEnabled ? (
-            <Alert type="info" showIcon message={t("tunnels.headers.upgrade")} />
-          ) : (
-            <Space direction="vertical" style={{ width: "100%" }} size="small">
+          <Space direction="vertical" style={{ width: "100%" }} size="small">
               <div style={{ fontSize: 12, color: "#8c8c8c" }}>{t("tunnels.headers.set")}</div>
               {hdrSet.map((h, i) => (
                 <Space key={i} style={{ width: "100%" }} align="start">
@@ -1333,21 +1507,17 @@ function SecurityDrawer({
                 rows={2}
                 placeholder={"X-Powered-By\nCookie"}
               />
-            </Space>
-          )}
+          </Space>
         </>
       )}
 
-      {(oauthEnabled || !standalone) && (
+      {oauthEnabled && (
         <>
       <Divider />
       <Typography.Title level={5} style={{ marginTop: 0 }}>{t("tunnels.oauth.title")}</Typography.Title>
       <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
         {t("tunnels.oauth.hint")}
       </Typography.Paragraph>
-      {!oauthEnabled ? (
-        <Alert type="info" showIcon message={t("tunnels.oauth.upgrade")} />
-      ) : (
         <Space direction="vertical" style={{ width: "100%" }} size="small">
           <Select
             style={{ width: 200 }}
@@ -1384,7 +1554,6 @@ function SecurityDrawer({
             </>
           )}
         </Space>
-      )}
         </>
       )}
 

@@ -142,22 +142,8 @@ export default function Settings() {
               <Tag color={planTagColor(me.plan?.code)}>{planLabel(me.plan?.code)}</Tag>
               {me.plan?.read_only && <Tag color="red">{t("settings.readOnly")}</Tag>}
             </div>
-            {/* 显示客户端配额。-1 表示不限,展示成「不限」。
-                未知(undefined)时不渲染,避免 bff-console 没回这个字段
-                时空白行。和隧道、月流量并列,让用户一眼看到自己
-                套餐的几个关键上限 —— 这是 max_online_clients 的
-                UI 落地。2026-05-30 文案对齐套餐页：
-                「在线客户端」→「客户端」、「并发隧道」→「隧道」。 */}
-            {me.plan?.max_online_clients !== undefined && me.plan.max_online_clients !== 0 && (
-              <div>
-                <Text type="secondary">{t("settings.clientCap")}</Text>{" "}
-                <code>
-                  {me.plan.max_online_clients < 0
-                    ? t("common.unlimited")
-                    : t("settings.clientUnit", { n: me.plan.max_online_clients })}
-                </code>
-              </div>
-            )}
+            {/* 客户端并发在线限制(max_online_clients)已于 2026-06-21
+                整体下线,不再展示该行。只保留隧道上限。 */}
             {me.plan?.max_tunnels !== undefined && me.plan.max_tunnels !== 0 && (
               <div>
                 <Text type="secondary">{t("settings.tunnelCap")}</Text>{" "}

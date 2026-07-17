@@ -27,6 +27,29 @@ export interface Healthz {
   server_addr: string;
 }
 
+// ServiceMode — GET /v1/service-mode. Tells the SPA whether this daemon is a
+// pinned-identity "agent" (a service installed via `daemon install --api-key`,
+// or CALABI_API_KEY in the env) or "interactive" (desktop / a service installed
+// without a key). In agent mode the login portal and org switching are refused
+// server-side, so the SPA hides those affordances. Whether the agent may MANAGE
+// tunnels is a separate axis derived from the pinned key's scopes (see
+// AccountMe.scopes / tunnel.write) — a management key gets a writable console, a
+// read-only key stays read-only. The endpoint is daemon-only; when absent (older
+// daemon) the SPA defaults to interactive.
+export interface ServiceMode {
+  mode: "agent" | "interactive";
+  // `agent` is the canonical flag; `read_only` is a deprecated alias kept for
+  // one release so a stale cached bundle still reads the pinned-identity state.
+  agent?: boolean;
+  read_only?: boolean;
+  login_enabled: boolean;
+  // WEB console origin (e.g. https://console.calabi.net) — where the login page
+  // links for registration. Baked into the daemon at build time and overridable
+  // via $CALABI_CONSOLE_WEB, so self-hosted deployments point at their own
+  // console. Absent/empty (older daemon, or unset) → hide the link.
+  console_web?: string;
+}
+
 export interface TunnelInfo {
   proxy_id: string;
   tunnel_id?: number;
@@ -117,9 +140,20 @@ export interface RemoteTunnel {
   edge_node_id?: number;
   config_json?: string;
   client_online?: boolean;
+  // The edge the OWNING client's daemon is currently connected to. When it
+  // differs from edge_node_id (where the domain is pinned) the public URL is
+  // unreachable — the shared effectiveState() maps that to "mismatch". 0 = no
+  // signal. Mirrors bff-console marshalTunnel's client_edge_node_id.
+  client_edge_node_id?: number;
+  // True when an ADMIN disabled this tunnel (vs the user's own disable). The
+  // user can't lift it; effectiveState() surfaces it as "admin_disabled".
+  disabled_by_admin?: boolean;
   client_last_seen_at?: string;
   created_at?: string;
   updated_at?: string;
+  // True when the current identity created this tunnel. Drives the takeover
+  // affordance — takeover is creator-only (you can't grab a teammate's tunnel).
+  created_by_me?: boolean;
 }
 
 export interface TunnelList {
@@ -135,6 +169,11 @@ export interface TunnelList {
   // break the SPA — Overview falls back to items.length in that case.
   my_total?: number;
   team_total?: number;
+  // This daemon's own device_id (creds.DeviceID). The list now includes
+  // tunnels bound to OTHER clients in the org; the SPA compares each row's
+  // client_id against this to tell "runs here" from "runs on another client"
+  // (and to offer takeover). 0/absent on a freshly-installed daemon.
+  my_device_id?: number;
 }
 
 export interface CreateTunnelBody {
@@ -162,6 +201,11 @@ export interface UpdateTunnelBody {
 export interface AccountMe {
   user: { id: number; email?: string };
   org: { id: number; name?: string };
+  // Data-plane scopes of the bearer behind this console. Only an API-key
+  // principal carries these (e.g. ["tunnel.read","tunnel.write"]); a login
+  // session gets null. In agent mode the SPA reads this to decide whether the
+  // pinned key may MANAGE tunnels (tunnel.write present) or is read-only.
+  scopes?: string[] | null;
   plan: {
     code: string;
     // Gating subset of quota-svc features_json (tcp/udp/sni/custom_domain).
@@ -324,4 +368,22 @@ export interface EdgeList {
   // so it stays visible even when the org's edge is momentarily offline.
   // items[].owned still reflects live ownership (used to detect "node down").
   owned_total?: number;
+}
+
+// DomainItem mirrors bff-console GET /v1/domains item shape (a subset).
+// Keep in sync with apps/bff-console/internal/handlers/domains.go::domainToMap.
+export interface DomainItem {
+  name: string;
+  status: string; // "pending" | "verified" | "failed"
+  cert_id?: number;
+  cert_name?: string;
+  // True when some tunnel in the org already uses this domain as its public
+  // hostname (bff-console cross-references the org's tunnels). bound_tunnel_name
+  // is that tunnel's name. Drives the wizard's "in use" tag + unused-first sort.
+  in_use?: boolean;
+  bound_tunnel_name?: string;
+}
+
+export interface DomainList {
+  items: DomainItem[];
 }

@@ -26,8 +26,8 @@
     "free": "Free",
     "basic": "Basic",
     "pro": "Pro",
-    "enterprise": "Business",
-    "custom": "Enterprise",
+    "business": "Business",
+    "enterprise": "Enterprise",
     "pro_gift": "Pro Bonus"
   },
   "lifecycle": {
@@ -68,6 +68,7 @@
     "switchRegion": "Cambia regione",
     "current": "Attuale",
     "onlineCount": "{{healthy}}/{{total}} online",
+    "tunnelCount": "{{count}} tunnel",
     "unavailable": "Non disponibile",
     "noOwnNodeOnline": "Nessun nodo self-hosted online",
     "reconnectTitle": "Riconnettersi alla regione \"{{region}}\"?",
@@ -100,7 +101,7 @@
     "readOnlyDesc": "Fatturazione scaduta o quota superata mettono l'account in modalità di sola lettura, in cui non è possibile creare nuovi tunnel. Apri la console per i dettagli.",
     "quotaExceededMsg": "Traffico mensile oltre il limite ({{pct}}%)",
     "quotaExceededDesc": "Una volta superato, tutti i tunnel esistenti continuano a funzionare ma non se ne possono aggiungere di nuovi. Aggiorna il piano o attendi il reset del mese prossimo.",
-    "activeTunnels": "Tunnel attivi",
+    "activeTunnels": "Tunnel dell'org",
     "uptime": "Tempo di attività",
     "todayTraffic": "Traffico di oggi",
     "monthTraffic": "Traffico di questo mese",
@@ -141,6 +142,22 @@
     "probeOkTip": "Sondaggio locale OK ({{ms}}ms, {{n}} di fila)",
     "probeFailTip": "Sondaggio locale fallito: {{err}} ({{n}} di fila)",
     "serverOnlineTip": "Online — servito da un'altra sessione di questo client (es. un 'calabi http' in primo piano), o in sincronizzazione",
+    "heldByOtherClientTip": "Questo tunnel è associato a un altro client della tua organizzazione e non è in esecuzione su questa macchina.",
+    "onlineOtherClientTip": "Online — servito da un altro client della tua organizzazione, non da questa macchina.",
+    "takeover": {
+      "btn": "Assumi",
+      "tip": "Porta questo tunnel su questa macchina",
+      "titleNamed": "Assumi il tunnel «{{name}}»",
+      "confirm": "Assumi",
+      "warnTitle": "Prima di assumere",
+      "warnLocal": "Questa macchina inoltrerà all'indirizzo locale qui sotto — assicurati che quel servizio sia in esecuzione qui.",
+      "warnOther": "L'altro client smetterà di servire questo tunnel.",
+      "warnGap": "L'URL pubblico resta lo stesso, ma è prevista una breve interruzione durante lo spostamento.",
+      "localTip": "Il servizio locale su QUESTA macchina verso cui inoltrare (spesso diverso dalla macchina originale).",
+      "done": "Assunto su questa macchina",
+      "failed": "Assunzione non riuscita",
+      "crossEdgeTip": "Questo tunnel è in esecuzione in un'altra regione/edge. Il suo indirizzo pubblico è legato a quell'edge (un sottodominio http/https è ancorato lì e una porta tcp/udp è assegnata lì), quindi prenderlo in carico su questo client cambierebbe (o romperebbe) l'indirizzo pubblico. Sposta prima questo client nella regione del tunnel, oppure ricrea il tunnel qui."
+    },
     "sameRegionTip": "Stessa regione della sessione attuale di questo client; il traffico viene inoltrato normalmente.",
     "otherRegionTip": "La sessione attuale di questo client è in {{current}}; questo tunnel deve essere raggiunto tramite un nodo {{region}}.",
     "inspectBtn": "Richieste",
@@ -197,7 +214,8 @@
       "titleNamed": "Controllo accessi · {{name}}",
       "save": "Salva",
       "saved": "Policy di sicurezza salvata",
-      "failed": "Impossibile salvare la policy di sicurezza"
+      "failed": "Impossibile salvare la policy di sicurezza",
+      "lockedNotice": "Alcune funzioni richiedono l'upgrade del piano: {{features}}."
     },
     "edit": {
       "title": "Modifica tunnel",
@@ -205,7 +223,10 @@
       "save": "Salva",
       "saved": "Tunnel aggiornato",
       "failed": "Impossibile aggiornare il tunnel",
-      "endpointFixed": "Il tipo e l'indirizzo pubblico non possono essere modificati — crea un nuovo tunnel per usarne uno diverso."
+      "endpointFixed": "Il tipo e l'indirizzo pubblico non possono essere modificati — crea un nuovo tunnel per usarne uno diverso.",
+      "offMachineTitle": "Questo tunnel è in esecuzione su un’altra macchina",
+      "offMachineDesc": "La modifica di nome e criterio di sicurezza si applica da remoto. Ma «indirizzo locale» indica l’upstream sulla macchina che serve davvero questo tunnel, non questa. Per eseguirlo qui, usa Acquisisci.",
+      "offMachineLocalHint": "Questo indirizzo si applica all’altra macchina che serve questo tunnel."
     },
     "deleteConfirmTitle": "Confermare l'eliminazione?",
     "deleteConfirmDesc": "Viene rimosso immediatamente dall'edge node; se un client è in esecuzione, le connessioni correlate vengono interrotte.",
@@ -221,7 +242,20 @@
     "dismissFailed": "Impossibile chiudere",
     "deleted": "Eliminato",
     "deleteFailed": "Impossibile eliminare",
-    "emptyText": "Ancora nessun tunnel · clicca \"Nuovo tunnel\" in alto a destra"
+    "emptyText": "Ancora nessun tunnel · clicca \"Nuovo tunnel\" in alto a destra",
+    "regionFilteredMsg": "{{count}} tunnel di altre regioni nascosti",
+    "regionFilteredDesc": "Questi tunnel sono ancorati a edge di altre regioni e non possono essere serviti da qui. Cambia regione in alto, oppure vedile tutte nella console web.",
+    "state": {
+      "admin_disabled": "Disabilitato da un amministratore",
+      "disabled": "Disabilitato",
+      "error": "Errore",
+      "pending": "In attesa del client",
+      "offline": "Offline",
+      "mismatch": "Client su un altro nodo",
+      "active": "Online"
+    },
+    "mismatchTip": "Il client è connesso all'edge #{{clientEdge}}, ma il dominio di questo tunnel è ancorato all'edge #{{boundEdge}}, quindi l'indirizzo pubblico non è raggiungibile. Riporta il client all'edge #{{boundEdge}}, oppure elimina e ricrea il tunnel sull'edge attuale (il dominio pubblico cambierà).",
+    "pendingTip": "Registrato sul server ma non ancora preso in carico da un edge. Si sincronizza automaticamente non appena avvii e accedi al client calabi."
   },
   "tunnelStatus": {
     "enabled": "Abilitato",
@@ -260,7 +294,14 @@
     "subdomainFreeLabel": "Sottodominio",
     "subdomainFreePlaceholder": "Il piano Free assegna un sottodominio casuale (scegline uno tuo dopo l'aggiornamento)",
     "countHint": "Questa organizzazione ha già {{team}} tunnel; uno nuovo viene aggiunto in fondo alla lista",
-    "countHintShared": "Questa organizzazione ha già {{team}} tunnel ({{mine}} su questo client); uno nuovo viene aggiunto in fondo alla lista"
+    "countHintShared": "Questa organizzazione ha già {{team}} tunnel ({{mine}} su questo client); uno nuovo viene aggiunto in fondo alla lista",
+    "customDomainSelectPlaceholder": "Seleziona un dominio verificato",
+    "customDomainNone": "Nessun dominio verificato",
+    "customDomainNoneHint": "Aggiungi e verifica prima il tuo dominio nella console web, in “Domini”.",
+    "domainCertReady": "certificato pronto",
+    "domainNoCert": "nessun certificato",
+    "domainInUse": "in uso",
+    "domainNoCertHint": "Questo dominio non ha ancora un certificato: l’HTTP funziona subito; l’HTTPS si attiva appena emetti un certificato in “Domini” nella console web."
   },
   "inspector": {
     "title": "Ispettore richieste · {{name}}",
@@ -346,6 +387,17 @@
     "importDone": "Importati {{total}} nuovi tunnel",
     "allSkipped": "Tutti i {{n}} esistono già — nulla importato",
     "importFailed": "Importazione fallita"
+  },
+  "serviceMode": {
+    "readonlyTag": "Sola lettura",
+    "agentTooltip": "Questo client è in esecuzione con un'identità fissa ({{identity}}); la console locale è di sola lettura. Gestisci i tunnel e l'account dalla console web.",
+    "agentManageTooltip": "Questo client è in esecuzione con un'identità fissa ({{identity}}). Puoi gestire i tunnel di questa organizzazione qui; l'accesso e il cambio di organizzazione si effettuano dalla console web.",
+    "tunnelsReadonly": "Sola lettura in modalità agente: gestisci i tunnel dalla console web",
+    "agentBannerTitle": "Console di sola lettura (modalità agente)",
+    "agentBannerDesc": "Questo client è in esecuzione come servizio con un'identità a chiave API fissa. Crea, modifica ed elimina i tunnel dalla console web.",
+    "agentTag": "Agent",
+    "agentManageBannerTitle": "Modalità agente (chiave di gestione)",
+    "agentManageBannerDesc": "Questo client è in esecuzione come servizio con un'identità a chiave API fissa con permesso di scrittura. Puoi gestire i tunnel di questa organizzazione qui, come dalla console web. L'accesso e il cambio di organizzazione restano disabilitati."
   },
   "login": {
     "title": "Accedi a Calabi",

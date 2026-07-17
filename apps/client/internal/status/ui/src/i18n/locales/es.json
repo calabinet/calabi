@@ -26,8 +26,8 @@
     "free": "Gratis",
     "basic": "Básico",
     "pro": "Pro",
-    "enterprise": "Business",
-    "custom": "Enterprise",
+    "business": "Business",
+    "enterprise": "Enterprise",
     "pro_gift": "Pro Bonus"
   },
   "lifecycle": {
@@ -68,6 +68,7 @@
     "switchRegion": "Cambiar de región",
     "current": "Actual",
     "onlineCount": "{{healthy}}/{{total}} en línea",
+    "tunnelCount": "{{count}} túneles",
     "unavailable": "No disponible",
     "noOwnNodeOnline": "No hay ningún nodo autoalojado en línea",
     "reconnectTitle": "¿Reconectar a la región \"{{region}}\"?",
@@ -100,7 +101,7 @@
     "readOnlyDesc": "Una facturación vencida o una cuota superada ponen la cuenta en modo de solo lectura, donde no se pueden crear nuevos túneles. Abre la consola para ver los detalles.",
     "quotaExceededMsg": "Tráfico mensual por encima del límite ({{pct}}%)",
     "quotaExceededDesc": "Una vez superado, todos los túneles existentes siguen funcionando, pero no se pueden añadir nuevos. Mejora tu plan o espera al reinicio del próximo mes.",
-    "activeTunnels": "Túneles activos",
+    "activeTunnels": "Túneles de la org",
     "uptime": "Tiempo activo",
     "todayTraffic": "Tráfico de hoy",
     "monthTraffic": "Tráfico de este mes",
@@ -141,6 +142,22 @@
     "probeOkTip": "Sondeo local correcto ({{ms}}ms, {{n}} seguidos)",
     "probeFailTip": "Sondeo local fallido: {{err}} ({{n}} seguidos)",
     "serverOnlineTip": "En línea — atendido por otra sesión de este cliente (p. ej. un 'calabi http' en primer plano), o sincronizando",
+    "heldByOtherClientTip": "Este túnel está vinculado a otro cliente de tu organización y no se ejecuta en esta máquina.",
+    "onlineOtherClientTip": "En línea — atendido por otro cliente de tu organización, no por esta máquina.",
+    "takeover": {
+      "btn": "Tomar control",
+      "tip": "Traer este túnel a esta máquina",
+      "titleNamed": "Tomar control del túnel «{{name}}»",
+      "confirm": "Tomar control",
+      "warnTitle": "Antes de tomar el control",
+      "warnLocal": "Esta máquina reenviará a la dirección local de abajo — asegúrate de que ese servicio esté en ejecución aquí.",
+      "warnOther": "El otro cliente dejará de servir este túnel.",
+      "warnGap": "La URL pública no cambia, pero habrá una breve interrupción mientras se traslada.",
+      "localTip": "El servicio local en ESTA máquina al que reenviar (suele ser distinto al de la máquina original).",
+      "done": "Tomado en esta máquina",
+      "failed": "Error al tomar el control",
+      "crossEdgeTip": "Este túnel se ejecuta en otra región/edge. Su dirección pública está ligada a ese edge (un subdominio http/https está fijado allí y un puerto tcp/udp se asigna allí), así que tomarlo en este cliente cambiaría (o rompería) la dirección pública. Cambia este cliente a la región del túnel primero, o vuelve a crear el túnel aquí."
+    },
     "sameRegionTip": "Misma región que la sesión actual de este cliente; el tráfico se reenvía con normalidad.",
     "otherRegionTip": "La sesión actual de este cliente está en {{current}}; este túnel debe alcanzarse a través de un nodo de {{region}}.",
     "inspectBtn": "Solicitudes",
@@ -197,7 +214,8 @@
       "titleNamed": "Control de acceso · {{name}}",
       "save": "Guardar",
       "saved": "Política de seguridad guardada",
-      "failed": "No se pudo guardar la política de seguridad"
+      "failed": "No se pudo guardar la política de seguridad",
+      "lockedNotice": "Algunas funciones requieren mejorar el plan para usarse: {{features}}."
     },
     "edit": {
       "title": "Editar túnel",
@@ -205,7 +223,10 @@
       "save": "Guardar",
       "saved": "Túnel actualizado",
       "failed": "No se pudo actualizar el túnel",
-      "endpointFixed": "El tipo y la dirección pública no se pueden cambiar — crea un nuevo túnel para usar otra."
+      "endpointFixed": "El tipo y la dirección pública no se pueden cambiar — crea un nuevo túnel para usar otra.",
+      "offMachineTitle": "Este túnel se ejecuta en otra máquina",
+      "offMachineDesc": "Editar el nombre y la política de seguridad se aplica de forma remota. Pero «dirección local» apunta al upstream de la máquina que realmente sirve este túnel, no a esta. Para ejecutarlo aquí, usa Tomar el control.",
+      "offMachineLocalHint": "Esta dirección se aplica a la otra máquina que sirve este túnel."
     },
     "deleteConfirmTitle": "¿Confirmar eliminación?",
     "deleteConfirmDesc": "Se elimina del edge node de inmediato; si hay un cliente en ejecución, las conexiones relacionadas se cortan.",
@@ -221,7 +242,20 @@
     "dismissFailed": "No se pudo descartar",
     "deleted": "Eliminado",
     "deleteFailed": "No se pudo eliminar",
-    "emptyText": "Aún no hay túneles · haz clic en \"Nuevo túnel\" en la parte superior derecha"
+    "emptyText": "Aún no hay túneles · haz clic en \"Nuevo túnel\" en la parte superior derecha",
+    "regionFilteredMsg": "{{count}} túnel(es) de otras regiones ocultos",
+    "regionFilteredDesc": "Estos túneles están anclados a edges de otras regiones y no se pueden servir desde aquí. Cambia de región arriba o velos todos en la consola web.",
+    "state": {
+      "admin_disabled": "Desactivado por un administrador",
+      "disabled": "Desactivado",
+      "error": "Error",
+      "pending": "Esperando al cliente",
+      "offline": "Sin conexión",
+      "mismatch": "Cliente en otro nodo",
+      "active": "En línea"
+    },
+    "mismatchTip": "El cliente está conectado al edge n.º {{clientEdge}}, pero el dominio de este túnel está fijado al edge n.º {{boundEdge}}, por lo que la dirección pública es inaccesible. Vuelve a cambiar el cliente al edge n.º {{boundEdge}}, o elimina y vuelve a crear el túnel en el edge actual (el dominio público cambiará).",
+    "pendingTip": "Registrado en el servidor, pero aún no reclamado por un edge. Se sincroniza automáticamente en cuanto inicies y accedas al cliente de calabi."
   },
   "tunnelStatus": {
     "enabled": "Activado",
@@ -260,7 +294,14 @@
     "subdomainFreeLabel": "Subdominio",
     "subdomainFreePlaceholder": "El plan Gratis asigna un subdominio aleatorio (elige el tuyo tras mejorar el plan)",
     "countHint": "Esta organización ya tiene {{team}} túneles; uno nuevo se añade a la lista",
-    "countHintShared": "Esta organización ya tiene {{team}} túneles ({{mine}} en este cliente); uno nuevo se añade a la lista"
+    "countHintShared": "Esta organización ya tiene {{team}} túneles ({{mine}} en este cliente); uno nuevo se añade a la lista",
+    "customDomainSelectPlaceholder": "Selecciona un dominio verificado",
+    "customDomainNone": "No hay dominios verificados",
+    "customDomainNoneHint": "Añade y verifica tu dominio primero en la consola web, en “Dominios”.",
+    "domainCertReady": "certificado listo",
+    "domainNoCert": "sin certificado",
+    "domainInUse": "en uso",
+    "domainNoCertHint": "Este dominio aún no tiene certificado: HTTP funciona ya; HTTPS empieza a funcionar cuando emitas un certificado en “Dominios” en la consola web."
   },
   "inspector": {
     "title": "Inspector de solicitudes · {{name}}",
@@ -346,6 +387,17 @@
     "importDone": "Se importaron {{total}} túnel(es) nuevo(s)",
     "allSkipped": "Los {{n}} ya existen — no se importó nada",
     "importFailed": "Error al importar"
+  },
+  "serviceMode": {
+    "readonlyTag": "Solo lectura",
+    "agentTooltip": "Este cliente se ejecuta con una identidad fija ({{identity}}); la consola local es de solo lectura. Gestiona los túneles y tu cuenta desde la consola web.",
+    "agentManageTooltip": "Este cliente se ejecuta con una identidad fija ({{identity}}). Puedes gestionar los túneles de esta organización aquí; el inicio de sesión y el cambio de organización se hacen desde la consola web.",
+    "tunnelsReadonly": "Solo lectura en modo agente: gestiona los túneles desde la consola web",
+    "agentBannerTitle": "Consola de solo lectura (modo agente)",
+    "agentBannerDesc": "Este cliente se ejecuta como servicio con una identidad de clave API fija. Crea, edita y elimina túneles desde la consola web.",
+    "agentTag": "Agent",
+    "agentManageBannerTitle": "Modo agente (clave de gestión)",
+    "agentManageBannerDesc": "Este cliente se ejecuta como servicio con una identidad de clave API fija con permiso de escritura. Puedes gestionar los túneles de esta organización aquí, igual que en la consola web. El inicio de sesión y el cambio de organización siguen desactivados."
   },
   "login": {
     "title": "Iniciar sesión en Calabi",

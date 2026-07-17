@@ -103,6 +103,21 @@ func (l *ConnectionLog) End(c *Connection, bytesIn, bytesOut int64, err error) {
 	l.mu.Unlock()
 }
 
+// AddBytes adds live byte deltas to an in-progress connection so the inspector
+// shows traffic on long-lived connections (raw TCP, SMB, WebSocket, SSE) WHILE
+// they're open — not only at close. End() later overwrites with the
+// authoritative totals (which equal the accumulated deltas), so there's no
+// double-count. No-op on a nil row / zero delta. Safe with Snapshot.
+func (l *ConnectionLog) AddBytes(c *Connection, inDelta, outDelta int64) {
+	if c == nil || (inDelta == 0 && outDelta == 0) {
+		return
+	}
+	l.mu.Lock()
+	c.BytesIn += inDelta
+	c.BytesOut += outDelta
+	l.mu.Unlock()
+}
+
 // Snapshot returns the current ring contents, most recent first.
 func (l *ConnectionLog) Snapshot() []Connection {
 	l.mu.RLock()

@@ -24,10 +24,35 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
+	"github.com/calabi/calabi/apps/client/internal/creds"
 	"github.com/calabi/calabi/apps/client/internal/logging"
 	"github.com/calabi/calabi/apps/client/internal/status"
 )
+
+// consoleURLFile is the basename the daemon writes its REAL bound console URL
+// to (in its data dir), so a separate `calabi daemon start/status` invocation —
+// which can't see the detached service's stdout — can read it back and print
+// the address. For a service the data dir is the exe dir (creds.SetDataDir).
+const consoleURLFile = "console.url"
+
+// publishConsoleURL writes the bound console URL to <datadir>/console.url so the
+// service-control commands can surface it. Best-effort; never fatal.
+func publishConsoleURL(url string) {
+	if url == "" {
+		return
+	}
+	dir, err := creds.DataDir()
+	if err != nil || dir == "" {
+		return
+	}
+	p := filepath.Join(dir, consoleURLFile)
+	tmp := p + ".tmp"
+	if os.WriteFile(tmp, []byte(url+"\n"), 0o600) == nil {
+		_ = os.Rename(tmp, p)
+	}
+}
 
 // startStatusPage launches the local /status HTTP server in a background
 // goroutine. Bind failure (port in use, etc.) is logged but never fatal --
@@ -50,10 +75,14 @@ func startStatusPage(logger *slog.Logger, state *status.State) {
 // the server only binds 127.0.0.1. Platform users asked to open :7400 in a
 // browser (screenshots / quick checks), so we relax it here too — matching
 // the standalone `--local` console (startLocalConsole).
-func startStatusPageWithAPI(logger *slog.Logger, state *status.State, attachAPI func(mux *http.ServeMux)) {
+// startStatusPageWithAPI returns the ACTUAL console URL once bound (after any
+// port fallback), or "" if the console is disabled / didn't bind in time. The
+// daemon boot prints this so the user sees the real address rather than the
+// requested-but-maybe-wrong default.
+func startStatusPageWithAPI(logger *slog.Logger, state *status.State, attachAPI func(mux *http.ServeMux)) string {
 	addr := envOr("CALABI_STATUS_ADDR", defaultStatusAddr)
 	if strings.EqualFold(addr, "disabled") || addr == "off" {
-		return
+		return ""
 	}
 	srv := status.NewServer(logger, state, addr)
 	srv.AllowBrowser()
@@ -63,16 +92,32 @@ func startStatusPageWithAPI(logger *slog.Logger, state *status.State, attachAPI 
 	go func() {
 		_ = srv.Run(context.Background())
 	}()
+	url := waitConsoleURL(srv)
+	publishConsoleURL(url)
+	return url
+}
+
+// waitConsoleURL blocks briefly for the server to report its real bound URL.
+// The bind is near-instant; the timeout is just a safety cap so boot never
+// hangs if the port is unbindable (then "" — the daemon falls back to printing
+// the requested address).
+func waitConsoleURL(srv *status.Server) string {
+	select {
+	case url := <-srv.Ready():
+		return url
+	case <-time.After(2 * time.Second):
+		return ""
+	}
 }
 
 // startLocalConsole launches the status server with a LOCAL /v1/* API (no
 // bff-console proxy) and plain-browser access allowed — the self-hosted
 // read-only console for `calabi daemon --local`. attachAPI is
 // localweb.Server.Register. See internal/localweb + daemon_local.go.
-func startLocalConsole(logger *slog.Logger, state *status.State, attachAPI func(mux *http.ServeMux)) {
+func startLocalConsole(logger *slog.Logger, state *status.State, attachAPI func(mux *http.ServeMux)) string {
 	addr := envOr("CALABI_STATUS_ADDR", defaultStatusAddr)
 	if strings.EqualFold(addr, "disabled") || addr == "off" {
-		return
+		return ""
 	}
 	srv := status.NewServer(logger, state, addr)
 	srv.AllowBrowser()
@@ -82,6 +127,9 @@ func startLocalConsole(logger *slog.Logger, state *status.State, attachAPI func(
 	go func() {
 		_ = srv.Run(context.Background())
 	}()
+	url := waitConsoleURL(srv)
+	publishConsoleURL(url)
+	return url
 }
 
 // loggingHub is a thin accessor so the daemon command can defer Close() on the
@@ -104,15 +152,48 @@ const (
 	// points CALABI_EDGE_CA_FILE at deploy/dev/certs/ca.crt instead.
 	defaultInsecure   = false
 	defaultStatusAddr = "127.0.0.1:7400"
-	// default — the daemon proxies tunnel CRUD here when the UI
-	// hits /v1/tunnels on the local status server. Matches the port
-	// scripts/dev/run.ps1 binds bff-console to (see that script's
-	// header comment + the "bff-console: http://127.0.0.1:8002" banner
-	// it prints on startup). Override via $CALABI_BFF_CONSOLE for prod
-	// / staging.
-	defaultBFFConsole = "http://127.0.0.1:8002"
-	version           = "0.1.0-m7-sprint4"
 )
+
+// defaultBFFConsole is the compile-time default control-plane endpoint (the
+// daemon/CLI talk to bff-console for auth + edge discovery). It's a VAR, not a
+// const, so a RELEASE build can bake the production URL via linker flags:
+//
+//	go build -ldflags "-X main.defaultBFFConsole=https://api.calabi.net"
+//
+// (scripts/package-release-client.sh does this). The dev default is the local
+// port scripts/dev/run.ps1 binds bff-console to. A runtime $CALABI_BFF_CONSOLE
+// still overrides this baked value.
+var defaultBFFConsole = "http://127.0.0.1:8002"
+
+// defaultConsoleWeb is the compile-time default WEB console origin — where a
+// human signs up / manages their account in a browser. It is deliberately
+// SEPARATE from defaultBFFConsole: the API endpoint and the web console are
+// different hosts in production (api.calabi.net vs console.calabi.net), so the
+// web URL cannot be derived from the API one. Same bakeable-var pattern:
+//
+//	go build -ldflags "-X main.defaultConsoleWeb=https://console.calabi.net"
+//
+// (scripts/package-release-client.sh + scripts/build-desktop.ps1 do this.) The
+// dev default is the port scripts/dev/run.ps1 binds web/console to. A runtime
+// $CALABI_CONSOLE_WEB overrides the baked value — a self-hosted deployment
+// points this at its own console instead of the platform's.
+//
+// The daemon hands this to the SPA via GET /v1/service-mode so the login page
+// can link to registration. Empty = the SPA hides the link rather than sending
+// the user to a dead URL (which is what a hardcoded placeholder used to do).
+var defaultConsoleWeb = "http://127.0.0.1:5173"
+
+// version is the value printed by `calabi version`. It's a VAR, not a const, so
+// a RELEASE build can bake the real version via linker flags:
+//
+//	go build -ldflags "-X main.version=1.2.1"
+//
+// (the package-release-client.sh / build-release-image.sh scripts do this from
+// the repo-root VERSION file). As a const it was silently un-bakeable — `-X`
+// only patches variables — so every release shipped reporting this dev default.
+// The dev/un-baked default is intentionally "dev" to make non-release builds
+// obvious;
+var version = "dev"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -218,7 +299,7 @@ Note:
 Environment:
   CALABI_BFF_CONSOLE   bff-console base URL — single public endpoint
                        for login / keys / certs / domains / org
-                       (default: http://127.0.0.1:8002)
+                       (overrides the build-time default endpoint)
   CALABI_SERVER        calabi-edge host:port (optional, fallback when
                        /v1/edges returns nothing) (default: localhost:7443)
   CALABI_API_KEY       API key (tk_…) for running tunnels; overrides creds file

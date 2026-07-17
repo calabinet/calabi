@@ -24,8 +24,8 @@ export function planLabel(code?: string): string {
 }
 
 // planTagColor picks an antd Tag color that escalates with tier. Free
-// is neutral, basic/pro are progressively richer blues, enterprise is
-// gold-ish, custom is purple (matches the catalog page on the marketing
+// is neutral, basic/pro are progressively richer blues, business is
+// gold-ish, enterprise is purple (matches the catalog page on the marketing
 // site so users associate the colors with the same tier elsewhere).
 export function planTagColor(code?: string): string {
   switch (code) {
@@ -35,9 +35,9 @@ export function planTagColor(code?: string): string {
       return "blue";
     case "pro":
       return "geekblue";
-    case "enterprise":
+    case "business":
       return "gold";
-    case "custom":
+    case "enterprise":
       return "purple";
     default:
       return "blue";

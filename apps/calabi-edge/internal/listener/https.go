@@ -230,11 +230,19 @@ func (h *HTTPS) handle(visitor net.Conn) {
 	}
 	defer stream.Close()
 
-	// Request-header rewrite for request #1 (⑥); #2.N via the wrapper below.
-	replayHead := head
-	if pol.HasRequestHeaders() {
-		replayHead = pol.RewriteRequestHead(head)
+	// Stamp reverse-proxy forwarding headers (real visitor IP, scheme=https,
+	// host) on every request so the backend sees the real client; a per-tunnel
+	// header rewrite, if any, runs AFTER. Request #1 here; #2.N via the wrapper
+	// below.
+	visitorIP := extractIP(visitor.RemoteAddr())
+	headXform := func(h []byte) []byte {
+		h = injectForwardHeaders(h, visitorIP, host, true)
+		if pol.HasRequestHeaders() {
+			h = pol.RewriteRequestHead(h)
+		}
+		return h
 	}
+	replayHead := headXform(head)
 	if _, err := stream.Write(replayHead); err != nil {
 		h.observeRequest("replay_head_failed")
 		return
@@ -262,10 +270,7 @@ func (h *HTTPS) handle(visitor net.Conn) {
 	// Wrap the visitor→stream half with the request-boundary counter
 	// reqcount.go) so keepalive requests are metered against the per-day cap.
 	reqCounter := newRequestCounter(head, sess.AllowHTTPReq)
-	var vsrc io.Reader = br
-	if pol.HasRequestHeaders() {
-		vsrc = wrapHeaderRewrite(br, pol, head)
-	}
+	vsrc := wrapHeadTransform(br, headXform, head)
 	go func() {
 		n, e := io.Copy(newBytesMeter(lim.Writer(stream), inC), reqCounter.wrap(vsrc))
 		errCh <- result{"visitor->stream", n, e}

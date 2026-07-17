@@ -87,6 +87,15 @@ type ConnectionInspector interface {
 	End(handle any, bytesIn, bytesOut int64, err error)
 }
 
+// liveByteInspector is an OPTIONAL extension of ConnectionInspector. When the
+// attached inspector implements it, pumpTCP feeds per-connection byte deltas
+// LIVE (as data flows) so the UI shows traffic on long-lived connections (raw
+// TCP, SMB, WebSocket, SSE) while they're open, instead of 0 until close. End()
+// still delivers the authoritative totals.
+type liveByteInspector interface {
+	AddConnBytes(handle any, inDelta, outDelta int64)
+}
+
 // Client is one connected session against an edge node.
 type Client struct {
 	logger   *slog.Logger
@@ -1045,6 +1054,13 @@ func (c *Client) pumpTCP(req *proto.NewConnRequest, t Tunnel, stream io.ReadWrit
 	if inspector != nil {
 		inspHandle, reqBuf, respBuf = inspector.Begin(req.ProxyID, req.VisitorIP, string(t.Type))
 	}
+	// Optional live per-connection byte updates (raw TCP/SMB/WebSocket show
+	// traffic while open, not just at close). nil when the inspector doesn't
+	// implement it (e.g. a future minimal one).
+	var liveInsp liveByteInspector
+	if inspector != nil && inspHandle != nil {
+		liveInsp, _ = inspector.(liveByteInspector)
+	}
 
 	c.logger.Info("piping",
 		"proxy_id", req.ProxyID, "local", t.LocalAddr,
@@ -1072,9 +1088,23 @@ func (c *Client) pumpTCP(req *proto.NewConnRequest, t Tunnel, stream io.ReadWrit
 	// avoids the c.mu lock that req.ProxyID would imply if read live.
 	proxyID := req.ProxyID
 	var inFlush, outFlush func(int64)
-	if tracker != nil {
-		inFlush = func(n int64) { tracker.AddBytes(proxyID, "in", n) }
-		outFlush = func(n int64) { tracker.AddBytes(proxyID, "out", n) }
+	if tracker != nil || liveInsp != nil {
+		inFlush = func(n int64) {
+			if tracker != nil {
+				tracker.AddBytes(proxyID, "in", n)
+			}
+			if liveInsp != nil {
+				liveInsp.AddConnBytes(inspHandle, n, 0)
+			}
+		}
+		outFlush = func(n int64) {
+			if tracker != nil {
+				tracker.AddBytes(proxyID, "out", n)
+			}
+			if liveInsp != nil {
+				liveInsp.AddConnBytes(inspHandle, 0, n)
+			}
+		}
 	}
 	meterIn := newMeterWriter(local, inFlush)
 	meterOut := newMeterWriter(stream, outFlush)

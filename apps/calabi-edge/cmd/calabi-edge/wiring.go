@@ -63,6 +63,11 @@ type platformDeps struct {
 	// leaves run() on its self-signed wildcard dev/standalone fallback.
 	getCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)
 
+	// acmeChallengeResolver answers ACME http-01 probes on the visitor HTTP
+	// listener (user self-service custom-domain certs). nil in community / no
+	// cert-svc, leaving such requests to normal host routing.
+	acmeChallengeResolver func(token string) (keyAuth string, ok bool)
+
 	runners []namedRunner
 	closers []io.Closer
 }

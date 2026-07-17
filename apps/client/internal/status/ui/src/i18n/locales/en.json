@@ -26,8 +26,8 @@
     "free": "Free",
     "basic": "Basic",
     "pro": "Pro",
-    "enterprise": "Business",
-    "custom": "Enterprise",
+    "business": "Business",
+    "enterprise": "Enterprise",
     "pro_gift": "Pro Bonus"
   },
   "lifecycle": {
@@ -68,6 +68,7 @@
     "switchRegion": "Switch region",
     "current": "Current",
     "onlineCount": "{{healthy}}/{{total}} online",
+    "tunnelCount": "{{count}} tunnels",
     "unavailable": "Unavailable",
     "noOwnNodeOnline": "No self-hosted node online",
     "reconnectTitle": "Reconnect to region \"{{region}}\"?",
@@ -100,7 +101,7 @@
     "readOnlyDesc": "Overdue billing or an exceeded quota puts the account in read-only mode, where new tunnels can't be created. Open the console for details.",
     "quotaExceededMsg": "Monthly traffic over limit ({{pct}}%)",
     "quotaExceededDesc": "Once exceeded, all existing tunnels keep working but no new ones can be added. Upgrade your plan or wait for next month's reset.",
-    "activeTunnels": "Active tunnels",
+    "activeTunnels": "Org tunnels",
     "uptime": "Uptime",
     "todayTraffic": "Today's traffic",
     "monthTraffic": "This month's traffic",
@@ -141,6 +142,22 @@
     "probeOkTip": "Local probe OK ({{ms}}ms, {{n}} in a row)",
     "probeFailTip": "Local probe failed: {{err}} ({{n}} in a row)",
     "serverOnlineTip": "Online — served by another session of this client (e.g. a foreground 'calabi http'), or syncing",
+    "heldByOtherClientTip": "This tunnel is bound to another client in your org and isn't running on this machine.",
+    "onlineOtherClientTip": "Online — served by another client in your org, not this machine.",
+    "takeover": {
+      "btn": "Take over",
+      "tip": "Bring this tunnel to this machine",
+      "titleNamed": "Take over tunnel «{{name}}»",
+      "confirm": "Take over",
+      "warnTitle": "Before you take over",
+      "warnLocal": "This machine will forward to the local address below — make sure that service is actually running here.",
+      "warnOther": "The other client will stop serving this tunnel.",
+      "warnGap": "The public URL stays the same, but expect a brief interruption while it moves here.",
+      "localTip": "The local service on THIS machine to forward to (often differs from the original machine).",
+      "done": "Taken over to this machine",
+      "failed": "Takeover failed",
+      "crossEdgeTip": "This tunnel runs in another region/edge. Its public address is bound to that edge — an http/https subdomain is pinned there and a tcp/udp port is allocated there — so taking it over to this client would change (or break) the public address. Switch this client to the tunnel's region first, or recreate the tunnel here."
+    },
     "sameRegionTip": "Same region as this client's current session; traffic forwards normally.",
     "otherRegionTip": "This client's current session is in {{current}}; this tunnel must be reached via a {{region}} node.",
     "inspectBtn": "Requests",
@@ -197,7 +214,8 @@
       "titleNamed": "Access control · {{name}}",
       "save": "Save",
       "saved": "Security policy saved",
-      "failed": "Failed to save security policy"
+      "failed": "Failed to save security policy",
+      "lockedNotice": "Some features require a plan upgrade to use: {{features}}."
     },
     "edit": {
       "title": "Edit tunnel",
@@ -205,7 +223,10 @@
       "save": "Save",
       "saved": "Tunnel updated",
       "failed": "Failed to update tunnel",
-      "endpointFixed": "Type and public address can't be changed — create a new tunnel to use a different one."
+      "endpointFixed": "Type and public address can't be changed — create a new tunnel to use a different one.",
+      "offMachineTitle": "This tunnel runs on another machine",
+      "offMachineDesc": "Editing the name and security policy applies remotely. But “local address” points at the upstream on the machine that actually serves this tunnel — not this one. To run it here instead, use Takeover.",
+      "offMachineLocalHint": "This address applies to the other machine serving this tunnel."
     },
     "deleteConfirmTitle": "Confirm delete?",
     "deleteConfirmDesc": "It's removed from the edge node immediately; if a client is running, related connections are cut.",
@@ -221,7 +242,20 @@
     "dismissFailed": "Failed to dismiss",
     "deleted": "Deleted",
     "deleteFailed": "Failed to delete",
-    "emptyText": "No tunnels yet · click \"New tunnel\" in the top-right"
+    "emptyText": "No tunnels yet · click \"New tunnel\" in the top-right",
+    "regionFilteredMsg": "{{count}} tunnel(s) in other regions hidden",
+    "regionFilteredDesc": "These tunnels are pinned to edges in other regions and can't be served from here. Switch region above, or see every region at once in the web console.",
+    "state": {
+      "admin_disabled": "Disabled by admin",
+      "disabled": "Disabled",
+      "error": "Error",
+      "pending": "Waiting for client",
+      "offline": "Offline",
+      "mismatch": "Client on another node",
+      "active": "Online"
+    },
+    "mismatchTip": "The client is connected to edge #{{clientEdge}}, but this tunnel's domain is pinned to edge #{{boundEdge}}, so the public address is unreachable. Switch the client back to edge #{{boundEdge}}, or delete and recreate the tunnel on the current edge (the public domain will change).",
+    "pendingTip": "Recorded on the server but not yet claimed by an edge. It syncs automatically once you start and sign in to the calabi client."
   },
   "tunnelStatus": {
     "enabled": "Enabled",
@@ -260,7 +294,14 @@
     "subdomainFreeLabel": "Subdomain",
     "subdomainFreePlaceholder": "Free plan assigns a random subdomain (choose your own after upgrading)",
     "countHint": "This organization already has {{team}} tunnels; a new one is appended to the list",
-    "countHintShared": "This organization already has {{team}} tunnels ({{mine}} on this client); a new one is appended to the list"
+    "countHintShared": "This organization already has {{team}} tunnels ({{mine}} on this client); a new one is appended to the list",
+    "customDomainSelectPlaceholder": "Select a verified domain",
+    "customDomainNone": "No verified domains",
+    "customDomainNoneHint": "Add and verify your domain in the web console under “Domains” first.",
+    "domainCertReady": "cert ready",
+    "domainNoCert": "no cert",
+    "domainInUse": "in use",
+    "domainNoCertHint": "This domain has no certificate yet: HTTP works now; HTTPS starts working once you issue a certificate under “Domains” in the web console."
   },
   "inspector": {
     "title": "Request inspector · {{name}}",
@@ -346,6 +387,17 @@
     "importDone": "Imported {{total}} new tunnel(s)",
     "allSkipped": "All {{n}} already exist — nothing imported",
     "importFailed": "Import failed"
+  },
+  "serviceMode": {
+    "readonlyTag": "Read-only",
+    "agentTooltip": "This client runs under a fixed identity ({{identity}}); the local console is read-only. Manage tunnels and your account from the web console.",
+    "agentManageTooltip": "This client runs under a fixed identity ({{identity}}). You can manage this organization's tunnels here; sign-in and org switching are done from the web console.",
+    "tunnelsReadonly": "Read-only in agent mode — manage tunnels from the web console",
+    "agentBannerTitle": "Read-only console (agent mode)",
+    "agentBannerDesc": "This client runs as a service under a pinned API-key identity. Create, edit, and delete tunnels from the web console.",
+    "agentTag": "Agent",
+    "agentManageBannerTitle": "Agent mode (management key)",
+    "agentManageBannerDesc": "This client runs as a service under a pinned API-key identity with the tunnel.write scope. You can manage this organization's tunnels here, just like the web console. Sign-in and org switching stay disabled."
   },
   "login": {
     "title": "Sign in to Calabi",

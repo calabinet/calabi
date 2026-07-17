@@ -10,16 +10,18 @@
 //      reconnect loop (15s ticks) picks up the new creds and brings
 //      the edge session up within ~15s.
 //
-// We don't ship registration / password-reset in M7.1 — those are TODO.
-// Users who don't have an account today need to register via the web
-// console first (https://calabi.example.com/register).
+// We don't ship registration / password-reset here — those live in the web
+// console. The link below is built from the console origin the daemon reports
+// (/v1/service-mode → console_web), NOT a hardcoded host, so self-hosted
+// deployments point at their own console.
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Form, Input, Space, Typography } from "antd";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import Logo from "../components/Logo";
+import { useServiceMode } from "../hooks/use-service-mode";
 import { useTranslation } from "react-i18next";
 
 const { Title, Text, Paragraph } = Typography;
@@ -36,6 +38,9 @@ export default function Login() {
   const [needsTotp, setNeedsTotp] = useState(false);
   const qc = useQueryClient();
   const navigate = useNavigate();
+  // Agent mode pins one identity and the daemon 403s login — there's nothing to
+  // sign into here, and /v1/me already authed us. Bounce to the console.
+  const { agentMode, consoleWebUrl } = useServiceMode();
 
   const login = useMutation({
     mutationFn: (body: LoginForm) => api.login(body),
@@ -72,6 +77,10 @@ export default function Login() {
       }
     },
   });
+
+  if (agentMode) {
+    return <Navigate to="/overview" replace />;
+  }
 
   return (
     <div
@@ -172,20 +181,29 @@ export default function Login() {
             </Form.Item>
           </Form>
 
-          <Paragraph
-            type="secondary"
-            style={{ fontSize: 12, margin: 0, textAlign: "center" }}
-          >
-            {t("login.registerPre")}
-            <a
-              href="https://calabi.example.com/register"
-              target="_blank"
-              rel="noopener noreferrer"
+          {/* Registration lives in the web console, not here. The URL comes from
+              the daemon (/v1/service-mode → console_web), baked at build time and
+              overridable via $CALABI_CONSOLE_WEB, so self-hosted deployments link
+              to their own console. When the daemon supplies nothing (older build,
+              or deliberately unset) we drop the link entirely — this used to be a
+              hardcoded https://calabi.example.com/register placeholder that went
+              nowhere. ?mode=register lands on the console's register tab. */}
+          {consoleWebUrl && (
+            <Paragraph
+              type="secondary"
+              style={{ fontSize: 12, margin: 0, textAlign: "center" }}
             >
-              {t("login.consoleLink")}
-            </a>
-            {t("login.registerPost")}
-          </Paragraph>
+              {t("login.registerPre")}
+              <a
+                href={`${consoleWebUrl}/login?mode=register`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t("login.consoleLink")}
+              </a>
+              {t("login.registerPost")}
+            </Paragraph>
+          )}
         </Space>
       </Card>
     </div>

@@ -21,6 +21,7 @@ import {
   Modal,
   Select,
   Space,
+  Tag,
 } from "antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
@@ -30,6 +31,7 @@ import type {
   AccountMe,
   ClientDevicesList,
   CreateTunnelBody,
+  DomainList,
   EdgeList,
   Snapshot,
   TunnelList,
@@ -171,6 +173,34 @@ export default function TunnelWizard({ open, onClose, prefillPort }: Props) {
   const onOwnEdge = !!(edges?.items ?? []).find(
     (e) => e.edge_node_id === snap?.edge_node_id,
   )?.owned;
+  // Verified custom domains for the dropdown (BYOI egress only). The server
+  // enforces verification; we list so users PICK a ready domain instead of
+  // typing an unverified one and hitting a create-time rejection.
+  const { data: domains } = useQuery<DomainList>({
+    queryKey: ["domains"],
+    queryFn: api.domains,
+    enabled: open && onOwnEdge,
+    retry: false,
+  });
+  // Verified domains, FREE ones first (a domain already bound to another tunnel
+  // can't be reused, so surface the pickable ones at the top); stable a→z within
+  // each group. in_use comes from bff-console cross-referencing org tunnels.
+  const verifiedDomains = (domains?.items ?? [])
+    .filter((d) => d.status === "verified")
+    .slice()
+    .sort((a, b) => {
+      const au = a.in_use ? 1 : 0;
+      const bu = b.in_use ? 1 : 0;
+      if (au !== bu) return au - bu;
+      return a.name.localeCompare(b.name);
+    });
+  const domainHasCert = (name: string) => {
+    const d = verifiedDomains.find((x) => x.name === name);
+    return !!(d && (d.cert_id || d.cert_name));
+  };
+  // Watch the chosen domain so we can warn when it has no cert yet (HTTP works,
+  // HTTPS lights up once a cert is issued in the console).
+  const chosenDomain = Form.useWatch("domain", form);
   // Self-hosted (standalone): no plans, no quota, no BYOI distinction — you own
   // the edge, so every offered protocol is available without gating. SNI
   // passthrough is intentionally NOT offered here (it's not a headline feature
@@ -190,17 +220,9 @@ export default function TunnelWizard({ open, onClose, prefillPort }: Props) {
         { value: "https", label: "HTTPS" },
         { value: "tcp", label: features.tcp ? "TCP" : t("wizard.tcpNeedPro"), disabled: !features.tcp },
         { value: "udp", label: features.udp ? "UDP" : t("wizard.udpNeedPro"), disabled: !features.udp },
-        {
-          value: "sni",
-          // SNI 透传必须用自有域名(自购域名) ⟹ 与自购域名同口径,只在自建节点出口可用。
-          // 双门槛:增强版(features.sni) + 自建节点出口(onOwnEdge)。
-          label: !features.sni
-            ? t("wizard.sniNeedEnterprise")
-            : !onOwnEdge
-              ? t("wizard.sniNeedOwnEdge")
-              : "SNI",
-          disabled: !features.sni || !onOwnEdge,
-        },
+        // SNI passthrough is no longer offered (dropped from the product); the
+        // edge + CLI still accept it for power users via YAML, but it's hidden
+        // from the wizard.
       ];
 
   // First online client is "this device" 99% of the time — daemon
@@ -292,35 +314,75 @@ export default function TunnelWizard({ open, onClose, prefillPort }: Props) {
                 </Form.Item>
               );
             }
-            if (ty === "sni") {
-              // SNI 仅增强版 + 自建节点出口（类型下拉已 gating）。透传由本地服务
-              // 终结 TLS，必须填你自己的域名（自购域名 ⟺ 自建节点）。
-              return (
-                <Form.Item
-                  label={t("wizard.sniDomainLabel")}
-                  name="domain"
-                  rules={[{ required: true, message: t("wizard.sniDomainRequired") }]}
-                  tooltip={t("wizard.sniDomainTip")}
-                >
-                  <Input placeholder="secure.example.com" />
-                </Form.Item>
-              );
-            }
+            // SNI is no longer offered in the wizard (type dropdown hides it),
+            // so there's no SNI domain field here anymore.
             // http / https 域名形态按「当前出口」决定（自购域名 ⟺ 自建节点）：
             //   - 自建节点出口：只能填自购域名（required）。自建节点不服务平台
             //     *.calabi.net，公网地址用你自己的域名。
             //   - 平台出口：只能用平台子域名（付费版自选前缀 / 体验版随机）；
             //     自购域名仅自建节点出口可用，这里不展示。
             if (onOwnEdge) {
+              const noCertChosen =
+                !!chosenDomain && !domainHasCert(chosenDomain);
               return (
-                <Form.Item
-                  label={t("wizard.customDomainLabel")}
-                  name="domain"
-                  rules={[{ required: true, message: t("wizard.customDomainRequired") }]}
-                  tooltip={t("wizard.customDomainTip")}
-                >
-                  <Input placeholder="app.example.com" />
-                </Form.Item>
+                <>
+                  <Form.Item
+                    label={t("wizard.customDomainLabel")}
+                    name="domain"
+                    rules={[{ required: true, message: t("wizard.customDomainRequired") }]}
+                    tooltip={t("wizard.customDomainTip")}
+                    extra={
+                      verifiedDomains.length === 0
+                        ? t("wizard.customDomainNoneHint")
+                        : undefined
+                    }
+                  >
+                    <Select
+                      placeholder={t("wizard.customDomainSelectPlaceholder")}
+                      notFoundContent={t("wizard.customDomainNone")}
+                      optionLabelProp="value"
+                      options={verifiedDomains.map((d) => {
+                        const hasCert = !!(d.cert_id || d.cert_name);
+                        const inUseLabel = d.bound_tunnel_name
+                          ? `${t("wizard.domainInUse")} · ${d.bound_tunnel_name}`
+                          : t("wizard.domainInUse");
+                        return {
+                          value: d.name,
+                          // A domain bound to another tunnel can't be reused —
+                          // disable it so the create can't fail on a conflict.
+                          disabled: !!d.in_use,
+                          label: (
+                            <Space>
+                              <span>{d.name}</span>
+                              {d.in_use ? (
+                                <Tag color="default" style={{ marginInlineEnd: 0 }}>
+                                  {inUseLabel}
+                                </Tag>
+                              ) : (
+                                <Tag
+                                  color={hasCert ? "green" : "orange"}
+                                  style={{ marginInlineEnd: 0 }}
+                                >
+                                  {hasCert
+                                    ? t("wizard.domainCertReady")
+                                    : t("wizard.domainNoCert")}
+                                </Tag>
+                              )}
+                            </Space>
+                          ),
+                        };
+                      })}
+                    />
+                  </Form.Item>
+                  {noCertChosen && (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      style={{ marginTop: -8, marginBottom: 16 }}
+                      message={t("wizard.domainNoCertHint")}
+                    />
+                  )}
+                </>
               );
             }
             return isPaid ? (

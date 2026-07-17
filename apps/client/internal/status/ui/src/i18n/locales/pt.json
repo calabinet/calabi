@@ -26,8 +26,8 @@
     "free": "Free",
     "basic": "Basic",
     "pro": "Pro",
-    "enterprise": "Business",
-    "custom": "Enterprise",
+    "business": "Business",
+    "enterprise": "Enterprise",
     "pro_gift": "Bônus Pro"
   },
   "lifecycle": {
@@ -68,6 +68,7 @@
     "switchRegion": "Trocar de região",
     "current": "Atual",
     "onlineCount": "{{healthy}}/{{total}} online",
+    "tunnelCount": "{{count}} túneis",
     "unavailable": "Indisponível",
     "noOwnNodeOnline": "Nenhum nó auto-hospedado online",
     "reconnectTitle": "Reconectar à região \"{{region}}\"?",
@@ -100,7 +101,7 @@
     "readOnlyDesc": "Cobrança em atraso ou cota excedida deixa a conta em modo somente leitura, no qual não é possível criar novos túneis. Abra o console para detalhes.",
     "quotaExceededMsg": "Tráfego mensal acima do limite ({{pct}}%)",
     "quotaExceededDesc": "Uma vez excedido, todos os túneis existentes continuam funcionando, mas nenhum novo pode ser adicionado. Faça upgrade do plano ou aguarde a redefinição do próximo mês.",
-    "activeTunnels": "Túneis ativos",
+    "activeTunnels": "Túneis da org",
     "uptime": "Tempo online",
     "todayTraffic": "Tráfego de hoje",
     "monthTraffic": "Tráfego deste mês",
@@ -141,6 +142,22 @@
     "probeOkTip": "Sondagem local OK ({{ms}}ms, {{n}} seguidas)",
     "probeFailTip": "Sondagem local falhou: {{err}} ({{n}} seguidas)",
     "serverOnlineTip": "Online — atendido por outra sessão deste cliente (ex.: um 'calabi http' em primeiro plano), ou sincronizando",
+    "heldByOtherClientTip": "Este túnel está vinculado a outro cliente da sua organização e não está em execução nesta máquina.",
+    "onlineOtherClientTip": "Online — atendido por outro cliente da sua organização, não por esta máquina.",
+    "takeover": {
+      "btn": "Assumir",
+      "tip": "Trazer este túnel para esta máquina",
+      "titleNamed": "Assumir o túnel «{{name}}»",
+      "confirm": "Assumir",
+      "warnTitle": "Antes de assumir",
+      "warnLocal": "Esta máquina encaminhará para o endereço local abaixo — garanta que esse serviço esteja em execução aqui.",
+      "warnOther": "O outro cliente deixará de servir este túnel.",
+      "warnGap": "A URL pública não muda, mas haverá uma breve interrupção durante a migração.",
+      "localTip": "O serviço local NESTA máquina para onde encaminhar (geralmente diferente da máquina original).",
+      "done": "Assumido nesta máquina",
+      "failed": "Falha ao assumir",
+      "crossEdgeTip": "Este túnel é executado em outra região/edge. Seu endereço público está vinculado a esse edge (um subdomínio http/https está fixado lá e uma porta tcp/udp é alocada lá), então assumi-lo neste cliente mudaria (ou quebraria) o endereço público. Mude este cliente para a região do túnel primeiro, ou recrie o túnel aqui."
+    },
     "sameRegionTip": "Mesma região da sessão atual deste cliente; o tráfego é encaminhado normalmente.",
     "otherRegionTip": "A sessão atual deste cliente está em {{current}}; este túnel precisa ser acessado por um nó de {{region}}.",
     "inspectBtn": "Requisições",
@@ -197,7 +214,8 @@
       "titleNamed": "Controle de acesso · {{name}}",
       "save": "Salvar",
       "saved": "Política de segurança salva",
-      "failed": "Falha ao salvar a política de segurança"
+      "failed": "Falha ao salvar a política de segurança",
+      "lockedNotice": "Alguns recursos exigem upgrade do plano: {{features}}."
     },
     "edit": {
       "title": "Editar túnel",
@@ -205,7 +223,10 @@
       "save": "Salvar",
       "saved": "Túnel atualizado",
       "failed": "Falha ao atualizar o túnel",
-      "endpointFixed": "O tipo e o endereço público não podem ser alterados — crie um novo túnel para usar outro."
+      "endpointFixed": "O tipo e o endereço público não podem ser alterados — crie um novo túnel para usar outro.",
+      "offMachineTitle": "Este túnel é executado em outra máquina",
+      "offMachineDesc": "Editar o nome e a política de segurança é aplicado remotamente. Mas «endereço local» aponta para o upstream na máquina que realmente serve este túnel — não esta. Para executá-lo aqui, use Assumir.",
+      "offMachineLocalHint": "Este endereço se aplica à outra máquina que serve este túnel."
     },
     "deleteConfirmTitle": "Confirmar exclusão?",
     "deleteConfirmDesc": "Ele é removido do edge node imediatamente; se houver um cliente em execução, as conexões relacionadas são cortadas.",
@@ -221,7 +242,20 @@
     "dismissFailed": "Falha ao dispensar",
     "deleted": "Excluído",
     "deleteFailed": "Falha ao excluir",
-    "emptyText": "Nenhum túnel ainda · clique em \"Novo túnel\" no canto superior direito"
+    "emptyText": "Nenhum túnel ainda · clique em \"Novo túnel\" no canto superior direito",
+    "regionFilteredMsg": "{{count}} túnel(eis) de outras regiões ocultados",
+    "regionFilteredDesc": "Esses túneis estão fixados a edges de outras regiões e não podem ser servidos daqui. Troque de região acima, ou veja todas na console web.",
+    "state": {
+      "admin_disabled": "Desativado por um administrador",
+      "disabled": "Desativado",
+      "error": "Erro",
+      "pending": "Aguardando o cliente",
+      "offline": "Offline",
+      "mismatch": "Cliente em outro nó",
+      "active": "Online"
+    },
+    "mismatchTip": "O cliente está conectado ao edge #{{clientEdge}}, mas o domínio deste túnel está fixado no edge #{{boundEdge}}, então o endereço público fica inacessível. Volte o cliente para o edge #{{boundEdge}}, ou exclua e recrie o túnel no edge atual (o domínio público mudará).",
+    "pendingTip": "Registrado no servidor, mas ainda não assumido por um edge. Sincroniza automaticamente assim que você inicia e faz login no cliente calabi."
   },
   "tunnelStatus": {
     "enabled": "Ativado",
@@ -260,7 +294,14 @@
     "subdomainFreeLabel": "Subdomínio",
     "subdomainFreePlaceholder": "O plano Free atribui um subdomínio aleatório (escolha o seu após o upgrade)",
     "countHint": "Esta organização já tem {{team}} túneis; um novo é adicionado à lista",
-    "countHintShared": "Esta organização já tem {{team}} túneis ({{mine}} neste cliente); um novo é adicionado à lista"
+    "countHintShared": "Esta organização já tem {{team}} túneis ({{mine}} neste cliente); um novo é adicionado à lista",
+    "customDomainSelectPlaceholder": "Selecione um domínio verificado",
+    "customDomainNone": "Nenhum domínio verificado",
+    "customDomainNoneHint": "Adicione e verifique seu domínio primeiro no console web, em “Domínios”.",
+    "domainCertReady": "certificado pronto",
+    "domainNoCert": "sem certificado",
+    "domainInUse": "em uso",
+    "domainNoCertHint": "Este domínio ainda não tem certificado: o HTTP já funciona; o HTTPS passa a funcionar assim que você emitir um certificado em “Domínios” no console web."
   },
   "inspector": {
     "title": "Inspetor de requisições · {{name}}",
@@ -346,6 +387,17 @@
     "importDone": "Importado(s) {{total}} túnel(is) novo(s)",
     "allSkipped": "Todos os {{n}} já existem — nada importado",
     "importFailed": "Falha na importação"
+  },
+  "serviceMode": {
+    "readonlyTag": "Somente leitura",
+    "agentTooltip": "Este cliente é executado sob uma identidade fixa ({{identity}}); o console local é somente leitura. Gerencie os túneis e a conta no console web.",
+    "agentManageTooltip": "Este cliente é executado sob uma identidade fixa ({{identity}}). Você pode gerenciar os túneis desta organização aqui; o login e a troca de organização são feitos no console web.",
+    "tunnelsReadonly": "Somente leitura no modo agente — gerencie os túneis no console web",
+    "agentBannerTitle": "Console somente leitura (modo agente)",
+    "agentBannerDesc": "Este cliente é executado como serviço sob uma identidade de chave de API fixa. Crie, edite e exclua túneis no console web.",
+    "agentTag": "Agent",
+    "agentManageBannerTitle": "Modo agente (chave de gestão)",
+    "agentManageBannerDesc": "Este cliente é executado como serviço sob uma identidade de chave de API fixa com permissão de escrita. Você pode gerenciar os túneis desta organização aqui, como no console web. O login e a troca de organização permanecem desativados."
   },
   "login": {
     "title": "Entrar no Calabi",

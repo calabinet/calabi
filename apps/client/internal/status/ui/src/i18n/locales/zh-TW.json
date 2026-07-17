@@ -26,8 +26,8 @@
     "free": "體驗版",
     "basic": "基礎版",
     "pro": "專業版",
-    "enterprise": "商業版",
-    "custom": "客製版",
+    "business": "商業版",
+    "enterprise": "企業版",
     "pro_gift": "Pro 贈送"
   },
   "lifecycle": {
@@ -68,6 +68,7 @@
     "switchRegion": "切換地區",
     "current": "目前",
     "onlineCount": "{{healthy}}/{{total}} 線上",
+    "tunnelCount": "{{count}} 條隧道",
     "unavailable": "不可用",
     "noOwnNodeOnline": "暫無線上自建節點",
     "reconnectTitle": "重新連線「{{region}}」地區?",
@@ -100,7 +101,7 @@
     "readOnlyDesc": "帳單逾期或配額超限時會進入唯讀模式,無法建立新隧道。請前往主控台查看詳情。",
     "quotaExceededMsg": "本月流量已超出限額 ({{pct}}%)",
     "quotaExceededDesc": "超出後所有現有隧道繼續運作,但無法新增。升級套餐或等下個月重置。",
-    "activeTunnels": "使用中隧道",
+    "activeTunnels": "組織通道",
     "uptime": "線上時間",
     "todayTraffic": "今日流量",
     "monthTraffic": "本月流量",
@@ -141,6 +142,22 @@
     "probeOkTip": "本機探測 OK ({{ms}}ms,連續 {{n}} 次)",
     "probeFailTip": "本機探測失敗: {{err}} (連續 {{n}} 次)",
     "serverOnlineTip": "線上 —— 由本客戶端的另一個工作階段服務（例如前景的 'calabi http'）,或正在同步",
+    "heldByOtherClientTip": "此通道綁定在本組織的另一台客戶端，不在本機執行。",
+    "onlineOtherClientTip": "線上 —— 由本組織的另一台客戶端服務，不在本機執行。",
+    "takeover": {
+      "btn": "接管",
+      "tip": "將這條通道接管到本機執行",
+      "titleNamed": "接管通道「{{name}}」到本機",
+      "confirm": "接管",
+      "warnTitle": "接管前請確認",
+      "warnLocal": "接管後由本機回源 —— 請確保下面填的「本地位址」在本機真有對應服務在執行。",
+      "warnOther": "原客戶端將停止服務這條通道。",
+      "warnGap": "公網位址不變，但遷移瞬間會有短暫無法存取。",
+      "localTip": "本機要轉發到的本地服務位址（通常和原機器不一樣）。",
+      "done": "已接管到本機",
+      "failed": "接管失敗",
+      "crossEdgeTip": "該隧道執行在其他地域/節點。它的公網位址綁定在那個節點上——http/https 子網域鎖定在那裡、tcp/udp 連接埠也由那裡分配——接管到目前用戶端會讓公網位址發生變化(子網域甚至無法承載)。請先把本用戶端切換到該隧道所在地域,或在此重建隧道。"
+    },
     "sameRegionTip": "與本機目前工作階段同地區,流量可正常轉發",
     "otherRegionTip": "本機目前工作階段在 {{current}},此隧道需透過 {{region}} 節點存取",
     "inspectBtn": "請求",
@@ -197,7 +214,8 @@
       "titleNamed": "存取控制 · {{name}}",
       "save": "儲存",
       "saved": "安全策略已儲存",
-      "failed": "儲存安全策略失敗"
+      "failed": "儲存安全策略失敗",
+      "lockedNotice": "部分功能需升級方案後可用：{{features}}。"
     },
     "edit": {
       "title": "編輯隧道",
@@ -205,7 +223,10 @@
       "save": "儲存",
       "saved": "隧道已更新",
       "failed": "更新隧道失敗",
-      "endpointFixed": "類型和公網位址不可修改——如需更換請新建隧道。"
+      "endpointFixed": "類型和公網位址不可修改——如需更換請新建隧道。",
+      "offMachineTitle": "該隧道執行在另一台機器上",
+      "offMachineDesc": "名稱和安全策略的修改會遠端生效;但「本機位址」指的是真正執行該隧道的那台機器上的上游服務,不是目前這台。若想改為在本機執行,請改用「接管」。",
+      "offMachineLocalHint": "此位址作用於執行該隧道的另一台機器。"
     },
     "deleteConfirmTitle": "確認刪除?",
     "deleteConfirmDesc": "刪除後會立即從邊緣節點移除,如果客戶端在執行,關聯連線會被切斷。",
@@ -221,7 +242,20 @@
     "dismissFailed": "關閉失敗",
     "deleted": "已刪除",
     "deleteFailed": "刪除失敗",
-    "emptyText": "暫無隧道 · 點擊右上角「新建隧道」"
+    "emptyText": "暫無隧道 · 點擊右上角「新建隧道」",
+    "regionFilteredMsg": "已隱藏 {{count}} 條其他地域的隧道",
+    "regionFilteredDesc": "這些隧道綁定在其他地域的邊緣節點上，無法從目前地域接入；可在上方切換地域，或在網頁控制台查看全部地域。",
+    "state": {
+      "admin_disabled": "管理員停用",
+      "disabled": "已停用",
+      "error": "錯誤",
+      "pending": "待客戶端啟動",
+      "offline": "離線",
+      "mismatch": "客戶端在其他節點",
+      "active": "線上"
+    },
+    "mismatchTip": "客戶端目前連線在 edge #{{clientEdge}},但本隧道網域綁定在 edge #{{boundEdge}}。公網位址實際不可存取 —— 請把客戶端切回 edge #{{boundEdge}},或刪除本隧道並在目前 edge 重建（公網網域會變）。",
+    "pendingTip": "伺服器已記錄但還沒有任何 edge 認領;啟動並登入 calabi 客戶端後會自動同步"
   },
   "tunnelStatus": {
     "enabled": "已啟用",
@@ -260,7 +294,14 @@
     "subdomainFreeLabel": "子網域",
     "subdomainFreePlaceholder": "體驗版自動分配隨機子網域（升級後可自選）",
     "countHint": "目前組織已有 {{team}} 條隧道,新建後會追加到清單",
-    "countHintShared": "目前組織已有 {{team}} 條隧道（其中本客戶端 {{mine}} 條）,新建後會追加到清單"
+    "countHintShared": "目前組織已有 {{team}} 條隧道（其中本客戶端 {{mine}} 條）,新建後會追加到清單",
+    "customDomainSelectPlaceholder": "選擇一個已驗證的域名",
+    "customDomainNone": "沒有已驗證的域名",
+    "customDomainNoneHint": "請先在 Web 控制台「域名管理」新增並驗證你的域名。",
+    "domainCertReady": "已簽證書",
+    "domainNoCert": "未簽證書",
+    "domainInUse": "使用中",
+    "domainNoCertHint": "該域名尚未簽發證書：HTTP 可立即使用；HTTPS 需在 Web 控制台「域名管理」簽發證書後才會生效。"
   },
   "inspector": {
     "title": "請求檢查器 · {{name}}",
@@ -346,6 +387,17 @@
     "importDone": "匯入完成,新增 {{total}} 條",
     "allSkipped": "{{n}} 條均已存在,無需匯入",
     "importFailed": "匯入失敗"
+  },
+  "serviceMode": {
+    "readonlyTag": "唯讀",
+    "agentTooltip": "本機以固定身分（{{identity}}）執行，本機主控台為唯讀。通道與帳號請於網頁主控台管理。",
+    "agentManageTooltip": "本機以固定身分（{{identity}}）執行。可於此處管理本組織的通道；登入與組織切換請於網頁主控台進行。",
+    "tunnelsReadonly": "代理模式唯讀，請於網頁主控台管理通道",
+    "agentBannerTitle": "唯讀主控台（代理模式）",
+    "agentBannerDesc": "本機以服務方式、綁定固定 API 金鑰身分執行。通道的新增、編輯與刪除請於網頁主控台完成。",
+    "agentTag": "Agent",
+    "agentManageBannerTitle": "代理模式（管理金鑰）",
+    "agentManageBannerDesc": "本機以服務方式、綁定固定 API 金鑰（具備寫入權限）執行。可於此處像網頁主控台一樣管理本組織的通道；登入與組織切換仍為停用。"
   },
   "login": {
     "title": "登入 Calabi",

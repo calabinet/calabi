@@ -17,6 +17,7 @@ import type {
   CurrentUsage,
   EdgeAffinity,
   EdgeList,
+  DomainList,
   Healthz,
   HTTPCaptureRow,
   OrgListResponse,
@@ -25,6 +26,7 @@ import type {
   ProbePort,
   RemoteTunnel,
   ReplayResponse,
+  ServiceMode,
   Snapshot,
   TunnelList,
   UpdateTunnelBody,
@@ -109,6 +111,16 @@ export const api = {
     jsonOrThrow<Snapshot>(await fetch("/tunnels")),
   me: async (): Promise<AccountMe> =>
     jsonOrThrow<AccountMe>(await fetch("/v1/me")),
+  // serviceMode tells the SPA whether the daemon is a pinned-identity agent
+  // (read-only console) or interactive. Defaults to interactive when the
+  // endpoint is missing (older daemon) so the UI degrades gracefully.
+  serviceMode: async (): Promise<ServiceMode> => {
+    try {
+      return await jsonOrThrow<ServiceMode>(await fetch("/v1/service-mode"));
+    } catch {
+      return { mode: "interactive", agent: false, login_enabled: true };
+    }
+  },
   usage: async (): Promise<CurrentUsage> =>
     jsonOrThrow<CurrentUsage>(await fetch("/v1/usage/current")),
   // /v1/usage/current?period=today returns an UNCAPPED real-time SUM
@@ -133,6 +145,10 @@ export const api = {
   // 30s; the SPA polls every 30s so most calls are cache hits.
   edges: async (): Promise<EdgeList> =>
     jsonOrThrow<EdgeList>(await fetch("/v1/edges")),
+  // Verified custom domains (BYOI) — the New-tunnel wizard offers these as a
+  // dropdown so users pick a ready domain instead of typing an unverified one.
+  domains: async (): Promise<DomainList> =>
+    jsonOrThrow<DomainList>(await fetch("/v1/domains")),
   logsTail: async (n: number): Promise<{ lines: string[]; count: number }> =>
     jsonOrThrow(await fetch("/logs?tail=" + n)),
 
@@ -151,6 +167,17 @@ export const api = {
   // re-pushes config so the owning daemon re-homes onto the new upstream.
   updateTunnel: async (id: number, body: UpdateTunnelBody): Promise<RemoteTunnel> =>
     jsonOrThrow<RemoteTunnel>(await writeRequest("PUT", "/v1/tunnels/" + id, body)),
+
+  // Take over a tunnel that runs on (is bound to) another client — re-bind it
+  // to THIS machine. localAddr is optional: the upstream service usually differs
+  // on a different machine, so the modal lets the user set it. The public
+  // endpoint is unchanged; the other client stops serving it.
+  takeoverTunnel: async (id: number, localAddr?: string): Promise<RemoteTunnel> =>
+    jsonOrThrow<RemoteTunnel>(
+      await writeRequest("POST", "/v1/tunnels/" + id + "/takeover", {
+        local_addr: localAddr ?? "",
+      }),
+    ),
 
   // Set a tunnel's IP access-control policy by replacing its config_json
   // (the SPA builds the full blob; empty clears the policy). Server validates
