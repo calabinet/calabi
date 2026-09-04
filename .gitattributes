@@ -1,0 +1,3 @@
+# Reproducible builds require a byte-identical working tree on every platform,
+# so nothing is EOL-converted on checkout. See the release build manifest.
+* -text
