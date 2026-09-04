@@ -180,13 +180,13 @@ func (r *Reloader) reload() error {
 //   - HTTP.BaseDomain
 //   - AcceptedTokens
 //
-// Everything else (NodeID, Region, all listener addrs, all upstream
+// Everything else (NodeLabel, Region, all listener addrs, all upstream
 // addrs, log config) is a restart-only field.
 func requireOnlyWhitelisted(prev, next config.Config) error {
 	type comparable struct {
-		NodeID  string
-		Region  string
-		Control config.ControlListener
+		NodeLabel string
+		Region    string
+		Control   config.ControlListener
 		// note: HTTP.BaseDomain is whitelisted; we only compare HTTP.Addr
 		HTTPAddr string
 		HTTPS    config.HTTPSListener
@@ -201,19 +201,19 @@ func requireOnlyWhitelisted(prev, next config.Config) error {
 	}
 	cmp := func(c config.Config) comparable {
 		return comparable{
-			NodeID:   c.NodeID,
-			Region:   c.Region,
-			Control:  c.Control,
-			HTTPAddr: c.HTTP.Addr,
-			HTTPS:    c.HTTPS,
-			SNI:      c.SNI,
-			Admin:    c.Admin,
-			Identity: c.Identity,
-			Tunnel:   c.Tunnel,
-			Cert:     c.Cert,
-			Config:   c.Config,
-			Quota:    c.Quota,
-			Log:      c.Log,
+			NodeLabel: c.NodeLabel,
+			Region:    c.Region,
+			Control:   c.Control,
+			HTTPAddr:  c.HTTP.Addr,
+			HTTPS:     c.HTTPS,
+			SNI:       c.SNI,
+			Admin:     c.Admin,
+			Identity:  c.Identity,
+			Tunnel:    c.Tunnel,
+			Cert:      c.Cert,
+			Config:    c.Config,
+			Quota:     c.Quota,
+			Log:       c.Log,
 		}
 	}
 	if !reflect.DeepEqual(cmp(prev), cmp(next)) {

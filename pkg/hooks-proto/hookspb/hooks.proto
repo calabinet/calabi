@@ -1,0 +1,185 @@
+// hooks.proto — what a coordinator needs FROM a platform.
+//
+// WHY THIS EXISTS (docs/runbook/full-oss-plan.md F4)
+//
+// calabi-coord used four RPCs off the control-plane contract: identity's
+// ValidateToken and ListEdges, quota's CheckAdmit, metering's ListDeniedOrgs.
+// Importing them dragged in the generated control_plane monolith — 11 services,
+// ~150 RPCs, every Admin* one — which is what kept the coordinator unpublishable.
+//
+// This file is the replacement, and it is deliberately NOT a gateway. A gateway
+// exists to police a trust boundary; coord runs inside the cluster, so what it
+// needed was a narrow CONTRACT, not another hop. These services are registered
+// by the SAME servers that already answer coord — identity-svc, quota-svc,
+// metering-svc each mount one on its existing port. Zero new deployment units.
+//
+// The second, better reason to have it: these four calls are the entire surface
+// between "a coordinator" and "a platform". A self-hoster who implements them
+// plugs coord into their own IdP and their own billing. Contract isolation
+// stops being a chore and becomes the integration point.
+//
+// SHAPE: three services, one per providing server, so each server implements
+// exactly what it owns rather than stubbing out its neighbours' methods.
+//
+// MIRRORING: ValidateToken / CheckAdmit / ListDeniedOrgs restate their
+// control-plane originals field-for-field — those messages were already the
+// narrow thing you would design here. ListRelayEndpoints does NOT: coord used
+// identity's ListEdges purely to build the DERP map, and of EdgeNode's 14
+// fields it read four. The other ten (edge_class, edge_class_override,
+// reserved_org_id, internal_addr, …) are platform-internal and have no business
+// in a public contract, so this asks for what coord actually wants.
+
+syntax = "proto3";
+
+package calabi.v1.hooks;
+
+option go_package = "github.com/calabi/calabi/pkg/hooks-proto/hookspb;hookspb";
+
+import "google/protobuf/timestamp.proto";
+
+// ===================== identity-svc =====================
+
+// IdentityHooks answers "who is this" and "where are the relays".
+service IdentityHooks {
+  // ValidateToken resolves a node's tk_ auth key to the org that owns it.
+  // The org IS the meshnet: this is what makes a device part of a network.
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+
+  // ListRelayEndpoints returns the relay endpoints the coordinator should put
+  // in the DERP map. A platform derives these from its edge fleet; a
+  // self-hoster can answer with a static list.
+  rpc ListRelayEndpoints(ListRelayEndpointsRequest) returns (ListRelayEndpointsResponse);
+}
+
+// [mirrors calabi.v1.control_plane.ValidateTokenRequest]
+message ValidateTokenRequest {
+  string access_token  = 1;
+  int64  caller_org_id = 2;
+}
+
+// [mirrors calabi.v1.control_plane.ValidateTokenResponse]
+message ValidateTokenResponse {
+  bool                      valid      = 1;
+  int64                     user_id    = 2;
+  string                    session_id = 3;
+  google.protobuf.Timestamp expires_at = 4;
+  // org_id:role pairs, e.g. "1:owner". The coordinator reads the org.
+  repeated string           roles      = 5;
+  // Populated when valid=false.
+  ErrorDetail               error      = 6;
+}
+
+// [mirrors calabi.v1.control_plane.ErrorDetail]
+message ErrorDetail {
+  uint32 code       = 1;
+  string i18n_key   = 2;
+  string message_en = 3;
+  string message_zh = 4;
+}
+
+// ListRelayEndpointsRequest asks for relays that were seen recently.
+message ListRelayEndpointsRequest {
+  // Empty = every region. freshness_seconds = 0 lets the server pick a default
+  // (a platform typically uses a few heartbeat intervals).
+  string region            = 1;
+  int32  freshness_seconds = 2;
+}
+
+message ListRelayEndpointsResponse {
+  repeated RelayEndpoint items = 1;
+}
+
+// RelayEndpoint is one relay a mesh node can home on. This is the whole of what
+// a coordinator needs to build a DERP map — deliberately not a description of
+// the node behind it.
+message RelayEndpoint {
+  // DERP region code this relay serves.
+  string region    = 1;
+  // Publicly reachable host (no port; the ports below carry that).
+  string host      = 2;
+  // Relay data port mesh nodes dial. 0 = this node serves no relay.
+  int32  derp_port = 3;
+  // STUN responder port, used for reflexive-address discovery. 0 = none.
+  int32  stun_port = 4;
+}
+
+// ===================== quota-svc =====================
+
+// QuotaHooks answers "may this meshnet grow".
+service QuotaHooks {
+  rpc CheckAdmit(CheckAdmitRequest) returns (CheckAdmitResponse);
+}
+
+// [mirrors calabi.v1.control_plane.CheckAdmitRequest]
+message CheckAdmitRequest {
+  int64  org_id  = 1;
+  // Resource kind, e.g. "mesh_node".
+  string kind    = 2;
+  // Typically 1 for "create one more".
+  int64  delta   = 3;
+  int64  current = 4;
+}
+
+// [mirrors calabi.v1.control_plane.CheckAdmitResponse]
+message CheckAdmitResponse {
+  bool   allowed = 1;
+  int64  current = 2;
+  int64  limit   = 3;
+  // Populated when allowed=false.
+  string reason  = 4;
+}
+
+// ===================== metering-svc =====================
+
+// BillingHooks is the coordinator's whole relationship with billing: it reports
+// what its relays moved, and asks who is cut off as a result.
+service BillingHooks {
+  rpc ListDeniedOrgs(ListDeniedOrgsRequest) returns (ListDeniedOrgsResponse);
+
+  // ReportRelayUsage delivers attributed relay traffic. Replaces coord's direct
+  // publish to the cluster's NATS (subject calabi.usage.relay) — the last thing
+  // that kept the coordinator wired to platform infrastructure.
+  //
+  // Samples carry the RUNNING TOTAL of their minute, never a delta: delivery may
+  // repeat, and a receiver that merges by max is then correct without any
+  // dedupe state, while a repeated delta would double-count. A late re-send is
+  // a correction, not a duplicate. Implementers MUST merge by max.
+  rpc ReportRelayUsage(ReportRelayUsageRequest) returns (ReportRelayUsageResponse);
+}
+
+// [mirrors calabi.v1.control_plane.ListDeniedOrgsRequest]
+message ListDeniedOrgsRequest {}
+
+// [mirrors calabi.v1.control_plane.ListDeniedOrgsResponse]
+message ListDeniedOrgsResponse {
+  repeated int64 org_ids = 1;
+}
+
+// ReportRelayUsageRequest carries every pending sample in one call. Batched
+// because the coordinator holds bytes that exist nowhere else — the relay's
+// counters were already reset — so the whole batch succeeding or the whole batch
+// being retried is the only bookkeeping that cannot lose them.
+message ReportRelayUsageRequest {
+  repeated RelayUsageSample samples = 1;
+}
+
+// RelayUsageSample is one meshnet's relayed bytes, in one region, for one
+// minute. NOT a mirror of a control-plane message: the coordinator published
+// this as JSON on NATS, and this restates that payload field for field
+// (org_id/region/ts/bytes_in/bytes_out) so both paths write the same row.
+message RelayUsageSample {
+  // The meshnet == the org that owns it.
+  int64  org_id    = 1;
+  // DERP region code. A "self-" prefix marks a customer's own relay, which a
+  // platform excludes from its traffic cap.
+  string region    = 2;
+  // Unix seconds, truncated to the minute this total covers.
+  int64  ts        = 3;
+  int64  bytes_in  = 4;
+  int64  bytes_out = 5;
+}
+
+// ReportRelayUsageResponse is empty: a sample the server rejects as malformed is
+// dropped and logged there, exactly as the NATS consumer did. Anything the
+// caller could act on arrives as an error instead.
+message ReportRelayUsageResponse {}

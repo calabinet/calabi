@@ -15,8 +15,55 @@ import (
 
 // Config is the root configuration for calabi-edge.
 type Config struct {
-	NodeID string `yaml:"node_id"`
-	Region string `yaml:"region"`
+	// NodeLabel is this node's human NAME ("lax-1", "sgp-01") — a string the
+	// operator picks. Nothing routes on it; it identifies the node to people.
+	// It travels to clients in the control handshake, to the edge directory
+	// (EdgeNode.node_label), to tunnel-svc (Tunnel.edge_node_label) and into
+	// every usage report and log line — where it doubles as the cross-service
+	// JOIN key bff-admin uses to line the edge directory up against tunnel
+	// counts and metering.
+	//
+	// Spelled `node_id` until now, which is one character away from
+	// `edge_node_id` below and means something entirely different. The edge
+	// config was the LAST place still using that name: identity.proto,
+	// tunnel.proto and both BFF JSON APIs have called it node_label all along
+	// (identity.proto even documents it as "node_label (human edge.yaml
+	// node_id)"). `node_id` still loads — see resolveNodeScoped.
+	NodeLabel string `yaml:"node_label"`
+	Region    string `yaml:"region"`
+
+	// EdgeNodeID is this node's NUMERIC identity in the control plane: the value
+	// tunnels are owned by, port claims are keyed on, config-svc pushes are
+	// scoped to, and the mesh resolver compares against to decide whether a
+	// tunnel is its own. The counterpart to NodeLabel and NOT derivable from it:
+	// NodeLabel is a name an operator chooses, this is a key the control plane
+	// assigns. Rule of thumb — label names the node to humans, id addresses it.
+	//
+	// MUST be set on any node wired to a control plane, and must be small:
+	// ids >= 1,000,000,000 are the per-org BYOI reserved blocks, and
+	// bff-console's /v1/edges hides an edge whose id decodes to another org.
+	// Left at 0 the edge falls back to an FNV hash of NodeLabel, which ALWAYS
+	// lands in that reserved range — the edge boots healthy and no client can
+	// see it. main.go warns at startup when that fallback fires with a control
+	// plane wired.
+	//
+	// Historically nested as `tunnel.edge_node_id`, which is what every config
+	// deployed today still uses. Both spellings load; Load keeps them equal and
+	// REJECTS a config that sets both to different values.
+	EdgeNodeID int64 `yaml:"edge_node_id"`
+
+	// BaseDomain is the wildcard domain this node serves — u<N>.<base_domain>.
+	// Node-scoped, not HTTP-scoped: the subdomain allocator, the TCP endpoint
+	// namer, the HTTPS self-signed wildcard, the control handshake and the
+	// mesh owner cache all read it, and only the first of those is HTTP. MUST
+	// also appear in TUNNEL_SVC_BASE_DOMAINS on the control plane, or tunnel-svc
+	// won't treat these subdomains as platform-managed.
+	//
+	// Historically nested as `http.base_domain`, which is what every config
+	// deployed today still uses. Same rule as EdgeNodeID: both spellings load,
+	// Load keeps them equal and rejects a config that sets both differently.
+	BaseDomain string `yaml:"base_domain"`
+
 	// EdgeClass buckets this node into the plan-tier routing pool:
 	//   "shared"    — default; every plan may dial it.
 	//   "dedicated" — only plans entitled with features.dedicated_edge
@@ -46,6 +93,15 @@ type Config struct {
 	// guard lives in main.go (TrustsClientPolicy + the controlPlaneWired check).
 	Mode string `yaml:"mode"`
 
+	// Role selects which data plane(s) this node runs (edge/derp merge):
+	//   "edge"  (default; empty) — tunnels only, exactly today's calabi-edge.
+	//   "relay"                  — mesh-relay (calabi-derp) datapath only.
+	//   "both"                   — one process serving tunnels AND relay.
+	// The relay datapath is ciphertext-only and NEVER crosses the edge's TLS
+	// termination. Empty defaults to
+	// "edge" so every existing edge is unchanged.
+	Role string `yaml:"role"`
+
 	Control  ControlListener `yaml:"control"`
 	HTTP     HTTPListener    `yaml:"http"`
 	HTTPS    HTTPSListener   `yaml:"https"`
@@ -61,6 +117,7 @@ type Config struct {
 	Presence PresenceConfig  `yaml:"presence"`
 	Public   PublicConfig    `yaml:"public"`
 	Mesh     MeshConfig      `yaml:"mesh"`
+	Relay    RelayRole       `yaml:"relay"`
 
 	// AcceptedTokens is the temporary auth list. replaces this with
 	// identity-svc gRPC lookup.
@@ -90,7 +147,10 @@ type ControlListener struct {
 // HTTPListener configures the public HTTP entrypoint (port 80 in prod, 8080
 // in dev). HTTPS+ACME.
 type HTTPListener struct {
-	Addr       string `yaml:"addr"`        // e.g. ":8080"
+	Addr string `yaml:"addr"` // e.g. ":8080"
+	// BaseDomain is the legacy nesting of the top-level base_domain; Load keeps
+	// the two equal, so this stays the read path used across the codebase.
+	// See Config.BaseDomain for what it means and where else it is read.
 	BaseDomain string `yaml:"base_domain"` // e.g. "localtest.me"
 }
 
@@ -145,8 +205,11 @@ type IdentityClient struct {
 // TunnelClient configures the tunnel-svc gRPC client. Empty Addr means
 // "tunnels live in edge memory only".
 type TunnelClient struct {
-	Addr       string `yaml:"addr"`         // e.g. "127.0.0.1:7003"
-	EdgeNodeID int64  `yaml:"edge_node_id"` // numeric edge id, 0 = derive from hash(node_id)
+	Addr string `yaml:"addr"` // e.g. "127.0.0.1:7003"
+	// EdgeNodeID is the legacy nesting of the top-level edge_node_id; Load keeps
+	// the two equal, so this stays the read path used across the codebase.
+	// See Config.EdgeNodeID — in particular why leaving it 0 is a trap.
+	EdgeNodeID int64 `yaml:"edge_node_id"` // 0 = derive from hash(node_id)
 }
 
 // QuotaClient configures the quota-svc lookup used by the per-session
@@ -227,6 +290,82 @@ type MeshConfig struct {
 // Both bind + advertise addrs must be set; either blank = disabled.
 func (c Config) MeshEnabled() bool {
 	return c.Mesh.ForwardAddr != "" && c.Mesh.AdvertiseAddr != ""
+}
+
+// RelayRole
+// configures the mesh-relay (calabi-derp) datapath a node runs when role is
+// "relay" or "both". NOT related to MeshConfig above ( edge-to-edge
+// peer forwarding, a different mechanism).
+//
+// The relay forwards already-encrypted mesh packets keyed by node key; it never
+// sees plaintext. Auth mirrors calabi-derp's R0' grant model — the same shared
+// pkg/relay hub serves this datapath in-process (the standalone derp-node
+// binary it also used to power was retired in F2).
+type RelayRole struct {
+	DERPPort int `yaml:"derp_port"` // TCP relay port mesh nodes dial; default 3340
+	STUNPort int `yaml:"stun_port"` // UDP STUN responder port; default 3478 (0 disables)
+	// Label names the DERP region this node advertises: region code = "self-"+Label.
+	// Used when the node registers its relay endpoint; harmless if unset.
+	Label string `yaml:"label"`
+	// Kind is "self" (default — a BYOI node's relay is the org's self-hosted relay)
+	// or "platform". Drives R0' grant-scope acceptance; was DERP_NODE_KIND on the retired derp-node.
+	Kind string `yaml:"kind"`
+	// RequireAuth enforces R0' grants (reject connections without a valid one).
+	// Default off for a staged rollout (this was DERP_NODE_REQUIRE_AUTH on the
+	// retired derp-node binary).
+	RequireAuth bool `yaml:"require_auth"`
+	// CoordPubKey is the coordinator's base64 ed25519 public key used to verify
+	// R0' grants. Required when RequireAuth is true.
+	CoordPubKey string `yaml:"coord_pubkey"`
+}
+
+// RunsRelay reports whether this node runs the mesh-relay datapath (role
+// "relay" or "both"). Case/space-insensitive.
+func (c Config) RunsRelay() bool {
+	r := strings.ToLower(strings.TrimSpace(c.Role))
+	return r == "relay" || r == "both"
+}
+
+// RunsEdge reports whether this node runs the edge (tunnel) datapath. Empty role
+// defaults to edge, so every existing calabi-edge keeps its exact behaviour.
+func (c Config) RunsEdge() bool {
+	r := strings.ToLower(strings.TrimSpace(c.Role))
+	return r == "" || r == "edge" || r == "both"
+}
+
+// ValidateRole rejects a typo'd role rather than silently running neither data
+// plane (RunsEdge && RunsRelay both false).
+func (c Config) ValidateRole() error {
+	switch strings.ToLower(strings.TrimSpace(c.Role)) {
+	case "", "edge", "relay", "both":
+		return nil
+	default:
+		return fmt.Errorf("invalid role %q: want edge, relay, or both", c.Role)
+	}
+}
+
+// IsPlatformKind reports whether this relay is a platform (multi-tenant) relay
+// rather than a self-hosted one. Mirrors relayAuthConfig's parsing exactly:
+// empty / "self" / "self-hosted" is self-hosted, only "platform" is platform.
+// It decides how relay usage is attributed — a platform relay bills PER org from
+// each node's grant, a self-hosted one bills its single org under a "self-" region.
+func (r RelayRole) IsPlatformKind() bool {
+	return strings.EqualFold(strings.TrimSpace(r.Kind), "platform")
+}
+
+// RelayDERPPort / RelaySTUNPort apply calabi-derp's defaults when unset.
+func (r RelayRole) RelayDERPPort() int {
+	if r.DERPPort == 0 {
+		return 3340
+	}
+	return r.DERPPort
+}
+
+func (r RelayRole) RelaySTUNPort() int {
+	if r.STUNPort == 0 {
+		return 3478
+	}
+	return r.STUNPort
 }
 
 // PresenceConfig controls how often the edge publishes its active
@@ -361,8 +500,12 @@ type LogConfig struct {
 // silently degrading two big features — see the 2026-05-27 thread.
 func Default() Config {
 	return Config{
-		NodeID: "edge-dev-1",
-		Region: "local",
+		NodeLabel: "edge-dev-1",
+		Region:    "local",
+		// Both spellings of the node-scoped base domain, kept equal — Load
+		// upholds that invariant for file-backed configs, Default() for the
+		// file-less one.
+		BaseDomain: "localtest.me",
 		Control: ControlListener{
 			Addr: ":7443",
 		},
@@ -380,12 +523,6 @@ func Default() Config {
 		},
 		Admin: AdminListener{
 			Addr: ":9101",
-		},
-		Identity: IdentityClient{
-			Addr: "127.0.0.1:7001",
-		},
-		Tunnel: TunnelClient{
-			Addr: "127.0.0.1:7003",
 		},
 		AcceptedTokens: []TokenEntry{
 			{
@@ -419,7 +556,102 @@ func Load(path string) (Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return Config{}, fmt.Errorf("parse config: %w", err)
 	}
+	// Reconcile the two accepted spellings of the node-scoped fields. This reads
+	// a SECOND, zero-valued parse of the same bytes rather than the merged cfg:
+	// Default() pre-fills http.base_domain, so a config that sets only the
+	// top-level base_domain would otherwise look like it disagreed with itself.
+	var raw Config
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return Config{}, fmt.Errorf("parse config: %w", err)
+	}
+	var legacy legacySpellings
+	if err := yaml.Unmarshal(data, &legacy); err != nil {
+		return Config{}, fmt.Errorf("parse config: %w", err)
+	}
+	if err := resolveNodeScoped(&cfg, raw, legacy); err != nil {
+		return Config{}, err
+	}
+	// Role assertions that need to tell "the operator wrote this" from
+	// "Default() filled it in", hence the raw parse. See roleguard.go.
+	if err := checkRoleConfig(cfg, raw); err != nil {
+		return Config{}, err
+	}
+	// Settings that parse but no longer do anything (see obsolete.go).
+	if err := checkObsoleteFields(raw); err != nil {
+		return Config{}, err
+	}
+	// A merged node's relay region defaults to the node's own region, so a node
+	// needs no identifier separate from the region the operator already named it:
+	// a self-hosted relay's code reads self-<region>, a platform relay's code IS
+	// that region (the coordinator lists this same region from the edge directory,
+	// so the two can't drift). relay.label overrides it only when a node must
+	// advertise a region distinct from its own — e.g. two relays sharing one
+	// region. Resolving here (not at each use) means every downstream reader — map
+	// registration, usage attribution, the startup warning, the relay log — sees
+	// the effective label with no special-casing.
+	if cfg.RunsRelay() && strings.TrimSpace(cfg.Relay.Label) == "" {
+		cfg.Relay.Label = strings.TrimSpace(cfg.Region)
+	}
 	return cfg, nil
+}
+
+// resolveNodeScoped reconciles the config keys that accept two spellings:
+//
+//   - node_label, renamed from node_id (too easily confused with edge_node_id);
+//   - edge_node_id and base_domain, lifted to the top level from their historical
+//     nesting under tunnel: / http:. For these two BOTH copies are left equal —
+//     every reader goes through Tunnel.EdgeNodeID / HTTP.BaseDomain, and keeping
+//     them in sync is what lets the new spelling exist without touching a single
+//     call site.
+//
+// `raw` must be a zero-valued parse of the config file, so "not set in the file"
+// is distinguishable from "seeded by Default()".
+//
+// A config that sets both spellings to DIFFERENT values is REJECTED rather than
+// resolved by precedence. Quietly preferring one produces the two failures that
+// are hardest to trace back to config: an edge registered under an id no client
+// is shown, or one allocating subdomains on a domain it does not serve.
+// legacySpellings carries config keys that have been RENAMED, parsed separately
+// so Config itself only ever declares the current name. A field here is read by
+// resolveNodeScoped and then forgotten; nothing else in the codebase may touch
+// it, which is exactly the property a plain alias field on Config would lose.
+type legacySpellings struct {
+	NodeID string `yaml:"node_id"` // → node_label
+}
+
+func resolveNodeScoped(cfg *Config, raw Config, legacy legacySpellings) error {
+	switch label, legacyID := strings.TrimSpace(raw.NodeLabel), strings.TrimSpace(legacy.NodeID); {
+	case label != "" && legacyID != "" && label != legacyID:
+		return fmt.Errorf("config: node_label (%q) and node_id (%q) disagree; set one of them", label, legacyID)
+	case label != "":
+		cfg.NodeLabel = label
+	case legacyID != "":
+		cfg.NodeLabel = legacyID
+	}
+
+	switch top, nested := raw.EdgeNodeID, raw.Tunnel.EdgeNodeID; {
+	case top != 0 && nested != 0 && top != nested:
+		return fmt.Errorf("config: edge_node_id (%d) and tunnel.edge_node_id (%d) disagree; set one of them", top, nested)
+	case top != 0:
+		cfg.EdgeNodeID, cfg.Tunnel.EdgeNodeID = top, top
+	default:
+		cfg.EdgeNodeID, cfg.Tunnel.EdgeNodeID = nested, nested
+	}
+
+	top := strings.TrimSpace(raw.BaseDomain)
+	nested := strings.TrimSpace(raw.HTTP.BaseDomain)
+	switch {
+	case top != "" && nested != "" && !strings.EqualFold(top, nested):
+		return fmt.Errorf("config: base_domain (%q) and http.base_domain (%q) disagree; set one of them", top, nested)
+	case top != "":
+		cfg.BaseDomain, cfg.HTTP.BaseDomain = top, top
+	case nested != "":
+		cfg.BaseDomain, cfg.HTTP.BaseDomain = nested, nested
+	default:
+		// Neither spelling in the file: carry Default()'s seed to both.
+		cfg.BaseDomain = cfg.HTTP.BaseDomain
+	}
+	return nil
 }
 
 // LookupToken returns the TokenEntry matching token, or false if not found.

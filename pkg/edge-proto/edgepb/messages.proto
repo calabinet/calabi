@@ -1,0 +1,766 @@
+// messages.proto — the self-contained message set of the bff-edge contract.
+//
+// WHY THIS FILE EXISTS (docs/runbook/full-oss-plan.md F3)
+//
+// bff_edge.proto used to declare its RPCs directly over
+// calabi.v1.control_plane.* messages. That made the "narrow edge-facing
+// gateway" an illusion at the code level: those messages generate into ONE
+// monolithic Go package carrying all 11 control-plane services -- ~150 RPC
+// signatures including every Admin* one -- so anything that linked bff_edge
+// linked the entire internal API surface. It is the single reason the platform
+// edge could not be published.
+//
+// The definitions below are MIRRORS of the control_plane messages the edge
+// actually exchanges: same field numbers, same types, so the wire format is
+// byte-identical and no coordinated redeploy is needed. What changes is only
+// which Go package they generate into.
+//
+// MAINTENANCE CONTRACT -- read before editing:
+//
+//  1. This file is HAND-MAINTAINED, not generated. It was bootstrapped once by
+//     scripts/gen-bffedge-mirror.py, and that script is a diff aid, not a build
+//     step. Auto-deriving it would make bff_edge a shadow of control_plane
+//     rather than an independent contract, and every internal edit would
+//     silently rewrite the public one. A public contract changes deliberately.
+//
+//  2. Field numbers here MUST match the control_plane original. The bridge at
+//     apps/bff-edge/internal/server converts between the two by re-encoding on
+//     the wire, so a mismatched tag silently moves data into the wrong field.
+//     TestMirroredMessagesMatchControlPlane compares the descriptors and fails
+//     when they drift -- do not skip it.
+//
+//  3. Adding a field to a mirrored message upstream does NOT require adding it
+//     here. Extra fields on either side are dropped by the bridge, which is
+//     correct: the edge should receive only what its contract promises. Add it
+//     here when the EDGE needs it.
+//
+//  4. Never mirror a message the edge does not exchange. The point of the
+//     exercise is that the public tree carries the edge-facing contract and
+//     nothing else.
+
+syntax = "proto3";
+
+package calabi.v1.bff_edge;
+
+option go_package = "github.com/calabi/calabi/pkg/edge-proto/edgepb;edgepb";
+
+import "google/protobuf/timestamp.proto";
+
+// [mirrored from proto/calabi/v1/control_plane/config.proto]
+message Ack {
+  string delta_id = 1;
+  bool   ok       = 2;
+  string error   = 3;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/cert.proto]
+// CertMeta is the audit-safe view of a cert row. Excludes anything
+// secret. SANs are the cert's SubjectAlternativeNames as parsed at
+// upload time; the lookup-by-domain logic on edge uses these.
+message CertMeta {
+  ResourceMeta meta = 1;
+
+  int64    org_id      = 2;
+  string   name        = 3;            // user-supplied label, unique per org
+  string   fingerprint = 4;            // sha256:HEX of the DER cert
+  string   issuer      = 5;            // X509 Issuer.CommonName
+  string   subject     = 6;            // X509 Subject.CommonName
+  repeated string sans = 7;            // dns names
+  google.protobuf.Timestamp not_before = 8;
+  google.protobuf.Timestamp not_after  = 9;
+
+  // Source: "uploaded" for static M3; "acme-letsencrypt" / "acme-aliyun"
+  // etc. in M4. Free-form to absorb new CAs without a proto v2.
+  string source = 10;
+
+  // When the renewal cron will pick this cert up (not_after minus its
+  // lookahead window). Set ONLY for certs the cron actually renews — the scan
+  // filters on source prefix "acme-", so an uploaded cert leaves this empty
+  // rather than promising a renewal that will never happen. Never set on a
+  // revoked cert: nothing renews it, and a date there would read as a promise.
+  google.protobuf.Timestamp renew_at = 11;
+
+  // Set once the CA has accepted a revocation. Present ONLY on rows returned
+  // with ListCertsRequest.include_revoked — the default list is what is live.
+  //
+  // It is deliberately separate from meta.deleted_at, which a revoked row also
+  // carries. Deleted means "we stopped serving it"; revoked means "the CA was
+  // told, and no client anywhere should accept it again". The second is a fact
+  // about the world that outlives our row, so it gets its own field and its own
+  // history entry rather than being inferred from an absence.
+  google.protobuf.Timestamp revoked_at    = 12;
+  // RFC 5280 CRLReason, as passed to the CA. 0 = unspecified (what the domain
+  // cascade sends), 1 = keyCompromise (what the console's revoke button sends).
+  // Meaningless unless revoked_at is set.
+  int32                     revoke_reason = 13;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+// ClaimTunnelRequest patches a pending tunnel (edge_node_id=0) with the
+// runtime fields the edge now owns. Sent by calabi-edge in response to a
+// NEW_PROXY frame carrying claim_tunnel_id.
+//
+//   - id              : tunnel-svc row id being claimed.
+//   - edge_node_id    : numeric edge id (must be non-zero).
+//   - edge_node_label : human-readable edge id from edge config.
+//   - domain          : assigned domain for http/https/sni; "" for tcp/udp.
+//   - remote_port     : assigned port for tcp/udp; 0 for the other kinds.
+//   - org_id          : sanity check; server rejects if it doesn't match
+//                       the row's org_id. Bandwidth-zero, dramatically
+//                       limits blast radius of a misrouted claim.
+//   - client_id       : same idea for client_id, if the row has one set.
+message ClaimTunnelRequest {
+  int64  id              = 1;
+  int64  edge_node_id    = 2;
+  string edge_node_label = 3;
+  string domain          = 4;
+  int32  remote_port     = 5;
+  int64  org_id          = 6;
+  int64  client_id       = 7;
+  // M12 — the calling edge's local base_domain (e.g. "edge1.calabi.net").
+  // Same semantics as CreateTunnelRequest.base_domain — used for the
+  // zone-edge consistency check in per-edge wildcard DNS deploys. Required
+  // when domain falls under any managed base; empty means "edge didn't
+  // declare a base; tunnel-svc skips the per-edge cross-check and falls
+  // back to the global BASE_DOMAINS allowlist only".
+  string base_domain     = 8;
+  // BYOI: authenticated org of the calling edge (bff-edge-stamped, >0 only
+  // for BYOI edges). tunnel-svc rejects a claim targeting a platform-managed
+  // domain — BYOI is custom-domain-only. See byoi-plan.md BYOI.5.
+  int64  caller_org_id   = 9;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/config.proto]
+message ConfigMessage {
+  oneof kind {
+    Snapshot snapshot = 1;
+    Delta    delta    = 2;
+  }
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+message CreateTunnelRequest {
+  int64  org_id       = 1;
+  int64  workspace_id = 2;
+  int64  client_id    = 3;
+  string name         = 4;
+  string type         = 5;
+  string local_addr   = 6;
+  string domain       = 7;
+  int32  remote_port  = 8;
+  string config_json  = 9;
+  // M11.20.6 — set ONLY by edge-internal callers (tunnelstore.Client.
+  // Persist) so the row goes in with a real edge ownership stamp and
+  // the (edge_node_id, remote_port) unique check fires on insert. The
+  // user-facing bff-console REST handler does NOT forward this field —
+  // user rows continue to start at edge_node_id=0 and get their ownership
+  // assigned by the edge via ClaimTunnel. See server.CreateTunnel notes.
+  int64  edge_node_id = 10;
+  // M12 — the calling edge's local base_domain (e.g. "edge1.calabi.net").
+  // Set by edge-internal callers ONLY. tunnel-svc uses it for the
+  // zone-edge consistency check in the per-edge wildcard DNS deployment
+  // mode: if `domain` falls under any managed base (TUNNEL_SVC_BASE_-
+  // DOMAINS), it MUST equal/end-with THIS base_domain. Without this,
+  // edge1 could mistakenly claim *.edge2.calabi.net after a daemon
+  // reconnect, and DNS would route the traffic to edge2 where the proxy
+  // isn't registered (silent 404). Empty in user-facing paths (which
+  // create rows at edge_node_id=0 — checked when an edge later Claims).
+  string base_domain   = 11;
+  // subdomain (Phase 2, 2026-06-07) — user-requested platform subdomain
+  // PREFIX for http/https (基础版+). bff-console forwards it from the
+  // create form; tunnel-svc stores it on the row; the daemon resolves it
+  // to a full managed subdomain using the connected edge's base_domain at
+  // NEW_PROXY time. Mutually exclusive with a custom `domain`. Empty =
+  // auto-allocated subdomain (the edge mints u%06d.<base> at claim).
+  string subdomain = 12;
+  // BYOI: authenticated org of the calling edge (bff-edge-stamped, >0 only
+  // for single-tenant BYOI edges). tunnel-svc rejects when set and the
+  // tunnel targets a platform-managed domain — BYOI is custom-domain-only.
+  // See docs/runbook/byoi-plan.md BYOI.5.
+  int64  caller_org_id = 13;
+  // creator_user_id — set by the user-facing bff-console path from the caller
+  // principal's user id, so the row is attributed to its creator for org RBAC
+  // visibility. Edge-internal callers leave it 0 (their rows are claimed, not
+  // user-created). See docs/runbook/org-resource-visibility-rbac.md.
+  int64  creator_user_id = 14;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+message DeleteTunnelRequest  {
+  int64 id = 1;
+  // BYOI: the authenticated org of the calling edge (stamped by bff-edge
+  // from its mTLS cert). >0 ⇒ tunnel-svc enforces target.org == caller_org_id;
+  // 0 = trusted in-cluster caller (no cross-org gate). See byoi-plan.md.
+  int64 caller_org_id = 2;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+message DeleteTunnelResponse {}
+
+// [mirrored from proto/calabi/v1/control_plane/config.proto]
+message Delta {
+  string delta_id    = 1;
+  string parent_sha  = 2;       // expected previous snapshot sha
+  bytes  patch_json  = 3;       // RFC 6902 JSON Patch
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+// DrainEdgeRequest releases every tunnel owned by edge_node_id back to
+// the pool (edge_node_id=0 + status=disabled).
+message DrainEdgeRequest {
+  int64  edge_node_id = 1;
+  // When true, broadcast a routes.delete event for each drained tunnel
+  // so other edges drop their in-process route cache. Use for emergency
+  // takedowns; the soft default is safer for routine maintenance.
+  bool   hard         = 2;
+  // Caller-supplied reason string included in audit logs (e.g.
+  // "k8s pre-stop", "manual drain edge-prod-3").
+  string reason       = 3;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+message DrainEdgeResponse {
+  int32 drained = 1;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/config.proto]
+message EdgeMessage {
+  oneof kind {
+    HelloEdge   hello   = 1;
+    Ack         ack     = 2;
+    Heartbeat   beat    = 3;
+  }
+}
+
+// [mirrored from proto/calabi/v1/control_plane/identity.proto]
+// EdgeNode is one row in the edge directory ListEdges returns.
+message EdgeNode {
+  int64  edge_node_id            = 1;
+  string node_label              = 2;
+  string region                  = 3;
+  // host:port the daemon should dial for the control listener
+  // (typically the edge's :7443 endpoint).
+  string public_addr             = 4;
+  // True when the row passes the freshness check at query time.
+  bool   healthy                 = 5;
+  // 0 = unknown; populated by edge in heartbeat to influence client
+  // selection (the daemon prefers lightly-loaded edges in the same
+  // region).
+  int32  active_clients          = 6;
+  google.protobuf.Timestamp last_seen_at = 7;
+  // M15: VPC-internal "host:port" a SAME-REGION peer edge dials to
+  // forward a visitor connection for a tunnel this edge owns (edge mesh
+  // HA). NOT public — never exposed via bff-console /v1/edges; only the
+  // in-cluster / bff-edge ListEdges path carries it. Empty = this edge
+  // doesn't participate in peer forwarding (single-edge region / mesh
+  // disabled).
+  string internal_addr           = 8;
+  // edge_class buckets the platform edge pool for plan-tier routing.
+  //   "shared"    — the default pool every plan may land on.
+  //   "dedicated" — the paid "independent pool". Plans entitled with
+  //                 features.dedicated_edge (any PAID plan — Basic/Pro/Business/
+  //                 Custom since 2026-06-22) are routed here; FREE is HARD-
+  //                 filtered off it by bff-console so the free crowd can't
+  //                 contend a paying org's pooled capacity (the per-org token
+  //                 bucket already caps RATE — dedicated buys contention/uplink-
+  //                 headroom isolation, not a higher cap).
+  // Self-declared by the edge in its config (edge_class:); empty is treated
+  // as "shared" everywhere, so legacy/unset edges keep serving every plan.
+  // BYOI (owned) edges ignore this — they're always offered to their owner.
+  //
+  // NOTE: ListEdges returns the EFFECTIVE class here — i.e. edge_class_override
+  // when an operator has pinned one, otherwise the edge's self-declared value.
+  // bff-console routing only ever reads this effective field; the raw override
+  // is surfaced separately (below) for the admin console.
+  string edge_class              = 9;
+  // edge_class_override is the operator-set value of edge_class that SURVIVES
+  // heartbeats (the edge's own register call can't clobber it). "" = no
+  // override (follow the edge's self-declared edge_class); "shared"/"dedicated"
+  // force the pool. Set via AdminUpdateEdgeNode. Populated only on the
+  // bff-admin ListEdges path; the daemon/bff-console path leaves it empty
+  // because it consumes the already-resolved `edge_class` above.
+  string edge_class_override     = 10;
+  // reserved_org_id pins this PLATFORM edge to a single org for true single-
+  // tenant "dedicated" capacity (the hybrid model's operator-assigned add-on).
+  // 0 = not reserved (serves the shared/dedicated pools by edge_class as
+  // usual). When >0, bff-console HIDES this edge from every OTHER org and PINS
+  // the owning org's tunnels onto it. This is SOFT routing isolation: the per-
+  // org token bucket + tunnel-svc-authoritative claim already prevent cross-
+  // tenant data leakage, so reserving buys reserved capacity (no noisy
+  // neighbour), not a new security boundary. Distinct from BYOI ownership
+  // (id-range-encoded + cert-derived, the customer's own VPS): a reserved edge
+  // is PLATFORM-operated hardware we set aside for one customer. Admin-set;
+  // never touched by the heartbeat upsert.
+  int64  reserved_org_id         = 11;
+  // Mesh relay endpoint (edge/derp merge): the DERP/STUN ports this edge's
+  // in-process relay listens on when it runs role=relay|both. The relay's host
+  // is host(public_addr) — a merged node serves control and relay on one host.
+  // relay_derp_port == 0 means this edge runs no relay; the coordinator builds
+  // its platform DERP map from the rows where it is > 0, so no separate map file
+  // is maintained. Populated only on the in-cluster / bff-edge ListEdges path.
+  int32  relay_derp_port         = 12;
+  int32  relay_stun_port         = 13;
+  // The wildcard domain this node serves visitor traffic on — the SUFFIX a
+  // tunnel's hostname gets: <prefix>.<base_domain>. Platform nodes carry a
+  // region domain ("lax.calabi.online"); a self-hosted (BYOI) node carries the
+  // org's own. Self-declared in the boot upsert. Empty = a node older than the
+  // field; readers must fall back rather than show an empty suffix.
+  string base_domain             = 14;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/quota.proto]
+message EffectiveQuota {
+  int64  org_id        = 1;
+  string plan_code     = 2;
+  // After merging plan defaults with quota_overrides for this org.
+  string features_json = 3;
+  string quotas_json   = 4;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/common.proto]
+// ErrorDetail mirrors pkg/protocol/payload.go's wire error so control-
+// plane RPC errors look the same in logs as data-plane ones. Use as the
+// google.rpc.Status detail when surfacing through gRPC.
+message ErrorDetail {
+  uint32 code        = 1;
+  string i18n_key    = 2;
+  string message_en  = 3;
+  string message_zh  = 4;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/cert.proto]
+message GetCertRequest {
+  // Either id or (org_id + name) -- whichever the caller has.
+  int64  id     = 1;
+  int64  org_id = 2;
+  string name   = 3;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/cert.proto]
+message GetCertResponse {
+  CertMeta cert            = 1;
+  bytes    fullchain_pem   = 2;
+  bytes    private_key_pem = 3;         // DECRYPTED; edge-only.
+  ErrorDetail error        = 4;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/quota.proto]
+message GetEffectiveRequest { int64 org_id = 1; }
+
+// [mirrored from proto/calabi/v1/control_plane/identity.proto]
+message GetOrgOnlineCountRequest {
+  int64 org_id            = 1;
+  // freshness_seconds caps how stale a last_ping_at can be before the
+  // server stops counting it as online. 0 = server default (35s).
+  int32 freshness_seconds = 2;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/identity.proto]
+message GetOrgOnlineCountResponse {
+  // Number of distinct client_ids currently online under this org.
+  int32 count = 1;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/config.proto]
+message Heartbeat { google.protobuf.Timestamp ts = 1; }
+
+// [mirrored from proto/calabi/v1/control_plane/config.proto]
+message HelloEdge {
+  int64  edge_node_id = 1;
+  string region       = 2;
+  string version      = 3;
+  // The SHA the edge currently believes it has; an empty value forces
+  // a full snapshot reply.
+  string current_snapshot_sha = 4;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/cert.proto]
+message IssueEdgeCertResponse {
+  // PEM-encoded leaf cert (CN = "edge-{id}-{region}").
+  bytes cert_pem = 1;
+  // PEM-encoded private key (PKCS#8). CLEARTEXT on the wire —
+  // bff-admin is responsible for serving the response over TLS.
+  bytes key_pem = 2;
+  // PEM-encoded CA bundle. Edge installs this as its trusted root for
+  // verifying bff-edge's server cert.
+  bytes ca_pem = 3;
+  // Serial number in hex (lowercase, no leading zeros). Stable handle
+  // for Revoke / List.
+  string serial_hex = 4;
+  google.protobuf.Timestamp not_before = 5;
+  google.protobuf.Timestamp not_after  = 6;
+  // The edge id baked into the cert. Echoed back so a BYOI self-serve
+  // caller (edge_node_id=0 in the request) learns the auto-allocated id to
+  // put in its edge config.
+  int64 edge_node_id = 7;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/cert.proto]
+message ListCertsRequest {
+  int64       org_id = 1;
+  PageRequest page   = 2;
+  // Also return certs that were REVOKED (never ones merely deleted). Opt-in
+  // and default-false on purpose: this same RPC feeds the edge's serving pool
+  // and bff-console's domain cascade, and a revoked cert reappearing in either
+  // is the exact failure revocation exists to prevent. Only the console's
+  // certificate list — which shows them as history, greyed and inert — asks
+  // for them.
+  bool include_revoked = 3;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/cert.proto]
+message ListCertsResponse {
+  repeated CertMeta items = 1;
+  PageResponse page = 2;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+// M11.20.5 — edge boot port-pool seed.
+message ListEdgeClaimedPortsRequest {
+  int64 edge_node_id = 1;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+message ListEdgeClaimedPortsResponse {
+  // Distinct remote_port values across all live (not-deleted) tunnels
+  // currently owned by edge_node_id. Includes both tcp and udp; the
+  // pool reserves both because the edge's TCP and UDP port spaces are
+  // managed by one PortPool today.
+  repeated int32 ports = 1;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/identity.proto]
+message ListEdgesRequest {
+  // Empty = return all regions. Daemon usually passes its preferred
+  // region first, then re-queries with "" if no healthy result lands.
+  string region            = 1;
+  // 0 = server default (90s = 3× heartbeat).
+  int32  freshness_seconds = 2;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/identity.proto]
+message ListEdgesResponse {
+  repeated EdgeNode items = 1;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+message ListTunnelsRequest  {
+  int64 org_id       = 1;
+  int64 workspace_id = 2;
+  string status      = 3;       // "" = any
+  PageRequest page   = 4;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+message ListTunnelsResponse { repeated Tunnel items = 1; PageResponse page = 2; }
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+message OwnerEntry {
+  string domain       = 1;
+  int64  edge_node_id = 2;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/common.proto]
+// PageRequest is the canonical cursor-style pagination input. Empty
+// `page_token` means "first page". `page_size` defaults to 50, capped 200.
+message PageRequest {
+  string page_token = 1;
+  int32  page_size  = 2;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/common.proto]
+// PageResponse echoes the next cursor. Empty `next_page_token` means
+// "last page".
+message PageResponse {
+  string next_page_token = 1;
+  int32  total_size      = 2;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/identity.proto]
+// PresenceClient is one entry in ReportClientPresenceRequest.clients.
+// Added 2026-05-28 — old edges using `client_ids` still work (server
+// promotes each id to a PresenceClient with org_id=0), but those rows
+// won't be counted by GetOrgOnlineCount until the edge upgrades.
+message PresenceClient {
+  int64 client_id = 1;
+  // Org the client authenticated as. Server denormalizes onto the
+  // session row so GetOrgOnlineCount is a single-table count. 0 =
+  // legacy edge that didn't supply it; row's org_id stays unchanged.
+  int64 org_id    = 2;
+  // Monotonic per-connection epoch: the reporting edge's wall-clock
+  // unix-millis at the moment this control session was established
+  // (session.New). identity-svc keeps the HIGHEST epoch per client_id
+  // and refuses to let a LOWER-epoch report overwrite edge_node_id.
+  // This stops an old edge that hasn't yet reaped a now-dead session
+  // from "stealing" the presence row back after the client re-homed to
+  // a new edge (the new connection always carries a larger epoch). A
+  // genuine re-home wins instantly (newer epoch); a stale straggler
+  // can't. 0 = legacy edge that didn't supply it; the server then
+  // falls back to last-writer-wins for that report (pre-guard behavior).
+  int64 conn_epoch = 3;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+// ReclaimTunnelRequest hands a tunnel from an evicted edge to a new one.
+// See the RPC comment for the fencing semantics.
+message ReclaimTunnelRequest {
+  int64  tunnel_id            = 1;
+  int64  new_edge_node_id     = 2;
+  string new_edge_node_label  = 3;
+  int64  org_id               = 4;          // org guard, same idea as ClaimTunnel
+  int64  evicted_edge_node_id = 5;          // who we think currently owns it
+  // Minimum seconds the evicted edge must have been silent on presence
+  // for the reclaim to be considered safe. Server clamps to a 60s floor.
+  int32  staleness_seconds    = 6;
+  // Monotonic counter the caller bumps on each reclaim attempt.
+  // Server refuses anything <= the row's current value. Counter zero on
+  // un-migrated rows means the first reclaim always wins.
+  int64  fencing_token        = 7;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+message ReclaimTunnelResponse {
+  Tunnel tunnel = 1;
+  // True when the row was actually transferred. False + no error means
+  // someone else already moved it (caller is stale; just refetch).
+  bool   reclaimed = 2;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/identity.proto]
+message RegisterEdgeNodeRequest {
+  int64  edge_node_id   = 1;
+  string node_label     = 2;
+  string region         = 3;
+  string public_addr    = 4;
+  int32  active_clients = 5;
+  // M15: VPC-internal host:port for same-region peer forwarding (edge
+  // mesh HA). Empty = no peer forwarding.
+  string internal_addr  = 6;
+  // Pool bucket for plan-tier routing ("shared" | "dedicated"); self-
+  // declared from edge config. Empty upserts as "shared". See EdgeNode.
+  string edge_class     = 7;
+  // Mesh relay endpoint for a merged node (role=relay|both): the DERP/STUN ports
+  // its in-process relay listens on. 0 = this edge runs no relay. The relay host
+  // is host(public_addr). The coordinator lists these to assemble the platform
+  // DERP map from the edge directory, so no static map file is maintained.
+  int32  relay_derp_port = 8;
+  int32  relay_stun_port = 9;
+  // This node's visitor wildcard domain (edge.yaml base_domain), so the
+  // console can show the suffix a tunnel created on this node will get.
+  string base_domain     = 10;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/identity.proto]
+message RegisterEdgeNodeResponse {}
+
+// [mirrored from proto/calabi/v1/control_plane/identity.proto]
+message ReportClientPresenceRequest {
+  // Reporting edge — non-zero. Identity-svc stores this on each row so
+  // tunnel-svc can later route push events back through the right edge.
+  int64  edge_node_id    = 1;
+  string edge_node_label = 2;
+  // Legacy field. M3 edges send a flat id list; M6+ edges fill `clients`
+  // instead so the server can stamp org_id. When `clients` is non-empty
+  // this is ignored.
+  repeated int64 client_ids = 3;
+  // Preferred shape from 2026-05-28: one entry per active client with
+  // its (client_id, org_id) pair.
+  repeated PresenceClient clients = 4;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/identity.proto]
+message ReportClientPresenceResponse {
+  // upserted_count is the number of rows touched. Diagnostic only;
+  // callers do not need to inspect it.
+  int32 upserted_count = 1;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+message ReportStatusRequest {
+  int64  tunnel_id  = 1;
+  string status     = 2;
+  string reason     = 3;        // populated when status=error
+  // BYOI: authenticated org of the calling edge (bff-edge-stamped). >0 ⇒
+  // tunnel-svc rejects (PermissionDenied) when target.org != caller_org_id.
+  int64  caller_org_id = 4;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+message ReportStatusResponse {}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+message ResolveOwnersRequest {
+  // base_domain suffix to scope the query, e.g. "cn-chengdu.calabi.net".
+  // Required — we never return the global ownership table; an edge only
+  // ever needs the owners under its own region's zone.
+  string base_domain = 1;
+  // known_generation is the `generation` token the edge received from its
+  // previous ResolveOwners reply for this base_domain (empty on the first
+  // poll). When it equals the server's current generation, the response
+  // sets unchanged=true and omits items, so a poll over an unchanged owner
+  // set costs a few bytes instead of the whole region's table. ETag-style
+  // conditional poll — owner sets change rarely, so most polls hit this
+  // path and the per-edge poll bandwidth collapses to ~zero at steady state.
+  string known_generation = 2;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+message ResolveOwnersResponse {
+  // items is the full owner set under base_domain — populated only when
+  // unchanged=false. Empty (and ignored by the edge) when unchanged=true.
+  repeated OwnerEntry items = 1;
+  // generation is an opaque token derived from the current owner set (a
+  // content fingerprint — order-independent, stable across tunnel-svc
+  // replicas and restarts, so no server-side bookkeeping is needed). The
+  // edge stores it and echoes it back as known_generation next poll.
+  string generation = 2;
+  // unchanged is true when the request's known_generation equalled the
+  // current generation: items is empty and the edge keeps its existing cache.
+  bool unchanged = 3;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+message ResolveRequest {
+  // Exactly one of the two lookup keys MUST be set.
+  string domain        = 1;
+  int64  edge_node_id  = 2;
+  int32  remote_port   = 3;
+  // BYOI: authenticated org of the calling edge (bff-edge-stamped). >0 ⇒
+  // tunnel-svc returns found=false for a tunnel whose org differs, so a
+  // single-tenant edge can't resolve another org's domains. See byoi-plan.md.
+  int64  caller_org_id = 4;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+message ResolveResponse {
+  bool   found        = 1;
+  Tunnel tunnel       = 2;
+  ErrorDetail error   = 3;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/common.proto]
+// ResourceMeta is embedded into every domain object so audit / RBAC code
+// has a single place to read identity-stamping fields.
+message ResourceMeta {
+  int64                     id          = 1;
+  google.protobuf.Timestamp created_at  = 2;
+  google.protobuf.Timestamp updated_at  = 3;
+  // Soft-delete: null means "alive". M2 sprint 1 does not enforce.
+  google.protobuf.Timestamp deleted_at  = 4;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/config.proto]
+message Snapshot {
+  // A monotonic SHA computed by config-svc; the edge persists this
+  // alongside the snapshot for fast resync on reconnect.
+  string sha          = 1;
+  // Compact JSON-encoded list of tunnels, tokens, and route entries.
+  // Sprint 2 may swap to typed nested messages if cardinality bites.
+  bytes  body_json   = 2;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+message Tunnel {
+  ResourceMeta meta = 1;
+  int64  org_id        = 2;
+  int64  workspace_id  = 3;
+  int64  client_id     = 4;
+  string name          = 5;
+  string type          = 6;     // http/https/tcp/udp/sni
+  string local_addr    = 7;
+  string domain        = 8;     // http(s)
+  int32  remote_port   = 9;     // tcp/udp
+  string status        = 10;    // enabled/disabled/error
+  int64  edge_node_id  = 11;
+  // Free-form per-protocol config (basic-auth, IP allowlist, ...).
+  // JSON-encoded for now; sprint 2+ may move to typed oneof.
+  string config_json   = 12;
+  // legacy_route_key is kept as a worked example of the field-evolution
+  // pattern documented in docs/protocol-spec.md §11.4 (S7-2). It carries
+  // no live data: new servers always emit "" and ignore incoming values;
+  // existing v1.0 clients that still set it continue to round-trip
+  // without errors. Removal target: v2 (proto package calabi.v2).
+  // See apps/tunnel-svc/internal/server/legacy_field_example.go.
+  string legacy_route_key = 13 [deprecated = true];
+
+  // ---- Client presence enrichment (Phase A) ----
+  //
+  // Populated by tunnel-svc.ListTunnels via a BatchGetClientStatus
+  // round-trip to identity-svc. Best-effort: when identity-svc isn't
+  // wired or the lookup fails the fields default to (false, zero).
+  // Per-tunnel `status` continues to track the tunnel's edge-side
+  // liveness; these new fields track whether the OWNING client is
+  // currently online so the console can warn the user before they
+  // try to create / mutate tunnels for an unreachable device.
+  bool                       client_online       = 14;
+  google.protobuf.Timestamp  client_last_seen_at = 15;
+  // client_edge_node_id is the edge the OWNING client's daemon is
+  // currently connected to (from identity-svc presence). Under M12
+  // per-edge wildcard DNS this matters: if it differs from
+  // edge_node_id (the edge that owns the tunnel's domain), the
+  // tunnel's public URL is unreachable because daemon's session
+  // lives on the wrong edge — readers should render "mismatch"
+  // rather than the naive "active" the older client_online check
+  // produces.
+  //
+  // 0 = unknown (client offline, identity-svc unreachable, or
+  // identity-svc returned no edge for this client). Readers MUST
+  // treat 0 as "no signal", not "mismatched": a client that's
+  // briefly disconnected during reconnect would otherwise flap
+  // through mismatch on every poll.
+  int64                      client_edge_node_id = 16;
+
+  // ---- M18 delete/disable surfacing (admin) ----
+  // disabled_by_admin: an admin (not the user) disabled this tunnel; the
+  // user cannot re-enable it and the edge refuses to serve it.
+  bool   disabled_by_admin = 17;
+  // status_reason mirrors the row's status_reason (admin disable note).
+  // Soft-delete time is carried by meta.deleted_at (already populated);
+  // the admin surfaces are the only ones that ever return deleted rows.
+  string status_reason = 18;
+
+  // subdomain (Phase 2, 2026-06-07) — the user-requested platform
+  // subdomain PREFIX (e.g. "myapp") for http/https tunnels. The daemon
+  // resolves it to `<subdomain>.<connected edge base_domain>` before
+  // NEW_PROXY, and the resolved full host lands in `domain` once the edge
+  // claims. Empty for auto-allocated (体验版) or custom-domain (增强版)
+  // tunnels. Paid tiers (基础版+) only.
+  string subdomain = 19;
+
+  // creator_user_id — the user who created this tunnel (org RBAC). Drives
+  // member visibility: a non-management member (developer/viewer) only sees
+  // rows where creator_user_id == themselves; owner/admin/auditor see all.
+  // 0 = legacy/unattributed (pre-RBAC rows until backfilled). See
+  // docs/runbook/org-resource-visibility-rbac.md.
+  int64 creator_user_id = 20;
+
+  // ---- Upstream (local_addr) health, reported by the owning daemon ----
+  // upstream_state: "" = unknown (never probed / old client), "healthy" =
+  // last probe reached the local target, "unhealthy" = local target was
+  // unreachable. Independent of `status` (edge liveness) + client_online
+  // (daemon presence): all three can be "up" while the local service is down.
+  string upstream_state = 21;
+  // upstream_error: the probe failure detail when unhealthy (e.g.
+  // "connection refused", "timeout", "upstream returned 502"); "" when healthy.
+  string upstream_error = 22;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/identity.proto]
+message ValidateTokenRequest {
+  string access_token = 1;
+  // BYOI: authenticated org of the calling edge (bff-edge-stamped, >0 only
+  // for single-tenant BYOI edges). When set, identity-svc returns
+  // valid=false unless the token's org matches — a BYOI edge may only
+  // authenticate its own org's clients. See byoi-plan.md BYOI.4b.
+  int64  caller_org_id = 2;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/identity.proto]
+message ValidateTokenResponse {
+  bool   valid       = 1;
+  int64  user_id     = 2;
+  string session_id  = 3;
+  google.protobuf.Timestamp expires_at = 4;
+  repeated string roles  = 5;     // org_id:role pairs, e.g. "1:owner"
+  ErrorDetail error      = 6;     // populated when valid=false
+}

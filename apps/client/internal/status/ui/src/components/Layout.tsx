@@ -7,6 +7,8 @@ import {
   BarsOutlined,
   CheckOutlined,
   CloudServerOutlined,
+  ApiOutlined,
+  DeploymentUnitOutlined,
   DownOutlined,
   ExclamationCircleOutlined,
   FileTextOutlined,
@@ -80,7 +82,7 @@ export default function Layout() {
     refetchInterval: 5_000,
   });
 
-  // snap + edges feed the top-bar 「edge <region>」 chip — we used to
+  // snap + edges feed the top-bar 「<region>」 chip — we used to
   // print the bare IP:port from /healthz which doesn't say much to the
   // user. Joining snap.edge_node_id against the edge directory lets us
   // print "cn-chengdu" / "cn-hangzhou" instead. Both queries are cached
@@ -651,6 +653,16 @@ export default function Layout() {
               label: <Link to="/tunnels">{t("nav.tunnels")}</Link>,
             },
             {
+              key: "mesh",
+              icon: <DeploymentUnitOutlined />,
+              label: <Link to="/mesh">{t("nav.mesh")}</Link>,
+            },
+            {
+              key: "services",
+              icon: <ApiOutlined />,
+              label: <Link to="/services">{t("nav.services")}</Link>,
+            },
+            {
               key: "logs",
               icon: <FileTextOutlined />,
               label: <Link to="/logs">{t("nav.logs")}</Link>,
@@ -967,7 +979,7 @@ export default function Layout() {
                 >
                   <GlobalOutlined style={{ color: "#5e7fff" }} />
                   <Text style={{ fontSize: 13 }}>
-                    edge {currentRegion || health.server_addr}
+                    {currentRegion || health.server_addr}
                   </Text>
                   <DownOutlined style={{ fontSize: 10, color: "#94a3b8" }} />
                 </Space>
@@ -976,7 +988,7 @@ export default function Layout() {
             {health &&
               (standalone || (regions.length === 0 && !currentRegion)) && (
                 <Text type="secondary" style={{ fontSize: 13 }}>
-                  edge {currentRegion || health.server_addr}
+                  {currentRegion || health.server_addr}
                 </Text>
               )}
           </Space>

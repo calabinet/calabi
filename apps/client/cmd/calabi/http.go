@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"sync"
@@ -84,6 +85,35 @@ func resolveDeviceID() int64 {
 		return 0
 	}
 	return c.DeviceID
+}
+
+// resolveFingerprint loads the persisted per-install fingerprint; "" = none.
+//
+// Unlike EnsureFingerprint this never CREATES one: a client that has no
+// device registration should stay unlinked rather than mint an id that
+// matches nothing on the Publish side.
+//
+// It takes a logger because the failure it can hit is INVISIBLE otherwise. A
+// read error here — the container out of file descriptors, a config dir that
+// isn't readable — returns exactly what "this machine has no device
+// registration yet" returns, and the mesh node then enrols with no fingerprint
+// and no explanation anywhere. That cost a production investigation: the daemon
+// was registered and online, and nothing in any log said why the console
+// couldn't link it to its client record.
+func resolveFingerprint(logger *slog.Logger) string {
+	c, err := creds.Load()
+	if err != nil {
+		if logger != nil {
+			logger.Warn("could not read this install's device fingerprint; "+
+				"mesh will enrol without it and the console can't link this node to its client record",
+				"err", err)
+		}
+		return ""
+	}
+	if c == nil {
+		return ""
+	}
+	return c.Fingerprint
 }
 
 // runHTTP implements `calabi http <port>`.

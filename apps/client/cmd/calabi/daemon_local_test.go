@@ -249,7 +249,7 @@ func TestTokenEnvRef(t *testing.T) {
 		{"${CALABI_TOKEN}", "CALABI_TOKEN", true},
 		{"${ FOO }", "FOO", true}, // trimmed
 		{"tk_literalsecret", "", false},
-		{"${}", "", false},        // empty name
+		{"${}", "", false},           // empty name
 		{"$CALABI_TOKEN", "", false}, // no braces → opaque literal
 		{"pre${X}post", "", false},   // not a whole-string ref
 		{"", "", false},

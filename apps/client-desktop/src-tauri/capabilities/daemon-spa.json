@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "daemon-spa",
+  "description": "Permissions for the daemon's SPA, which is a REMOTE origin as far as Tauri is concerned. The window starts on the bundled shell/index.html (a local origin) and the native side then navigates it to http://127.0.0.1:<port> — the console the supervised daemon serves (Supervisor::url(); the port is 7400 or the next free one, so it cannot be pinned). Tauri capabilities apply to local app origins unless a `remote` block names the origin, so without this capability EVERY IPC command from the SPA is refused with 'not allowed by ACL' — which is exactly what happened to the login page's registration link: Tauri routes target=\"_blank\" through plugin:shell|open, and the call was rejected, so clicking did nothing at all. Scoped to loopback only, and deliberately to `shell:default` rather than the bare `shell:allow-open` — default carries the pre-configured scope that permits only http(s)/tel/mailto URLs, whereas allow-open grants the open command with NO scope (it could launch arbitrary paths). The SPA needs nothing else; the rest of the app's permissions stay on the local-origin `default` capability, invoked from the Rust side.",
+  "windows": ["main"],
+  "remote": {
+    "urls": ["http://127.0.0.1:*"]
+  },
+  "permissions": ["shell:default"]
+}

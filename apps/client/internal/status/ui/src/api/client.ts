@@ -20,9 +20,13 @@ import type {
   DomainList,
   Healthz,
   HTTPCaptureRow,
+  MeshAdvertise,
+  MeshServiceDecl,
+  MeshStatus,
   OrgListResponse,
   OrgSwitchResponse,
   ProbeHealth,
+  ProbeCheck,
   ProbePort,
   RemoteTunnel,
   ReplayResponse,
@@ -31,6 +35,7 @@ import type {
   TunnelList,
   UpdateTunnelBody,
   UsageHistory,
+  MeshUsage,
 } from "./types";
 
 export class ApiError extends Error {
@@ -136,6 +141,11 @@ export const api = {
   // real-time figure use usageToday() above.
   usageDaily: async (n = 30): Promise<UsageHistory> =>
     jsonOrThrow<UsageHistory>(await fetch("/v1/usage/daily?n=" + n)),
+
+  // This machine's Connect (mesh) traffic — today / month / last-N-days. Served
+  // locally by the daemon (both editions), separate from the tunnel usage above.
+  meshUsage: async (days = 7): Promise<MeshUsage> =>
+    jsonOrThrow<MeshUsage>(await fetch("/v1/usage/mesh?days=" + days)),
   tunnels: async (): Promise<TunnelList> =>
     jsonOrThrow<TunnelList>(await fetch("/v1/tunnels")),
   clients: async (): Promise<ClientDevicesList> =>
@@ -152,7 +162,54 @@ export const api = {
   logsTail: async (n: number): Promise<{ lines: string[]; count: number }> =>
     jsonOrThrow(await fetch("/logs?tail=" + n)),
 
+  // Connect (WireGuard mesh) status for the local node. enabled:false when no
+  // `mesh:` block is configured; a 404 means the daemon build predates /v1/mesh.
+  mesh: async (): Promise<MeshStatus> =>
+    jsonOrThrow<MeshStatus>(await fetch("/v1/mesh")),
+
   // ---- write endpoints ----------------------------------------------------
+
+  // Stop the mesh subsystem on this daemon (leave the meshnet). Local-token gated.
+  // Reversible with meshUp. The org-wide kill switch is the web console.
+  meshDown: async (): Promise<void> => {
+    const r = await writeRequest("POST", "/v1/mesh/down");
+    if (!r.ok && r.status !== 204) await jsonOrThrow(r);
+  },
+
+  // Resume mesh after meshDown (re-enroll immediately). Local-token gated.
+  meshUp: async (): Promise<void> => {
+    const r = await writeRequest("POST", "/v1/mesh/up");
+    if (!r.ok && r.status !== 204) await jsonOrThrow(r);
+  },
+
+  // Subnet-router / exit-node role for this node.
+  meshAdvertise: async (): Promise<MeshAdvertise> =>
+    jsonOrThrow<MeshAdvertise>(await fetch("/v1/mesh/advertise")),
+
+  // Set the role (routes / exit-node). Local-token gated; restarts the mesh
+  // session so the change takes effect.
+  // accept_routes / route_excludes are OPTIONAL on the wire: omitting a field
+  // means "leave it unchanged", so an older page can't silently switch route
+  // acceptance off when it saves the three fields it knows about.
+  setMeshAdvertise: async (body: {
+    routes: string[];
+    advertise_exit_node: boolean;
+    exit_node: string;
+    accept_routes?: boolean;
+    route_excludes?: string[];
+  }): Promise<MeshAdvertise> =>
+    jsonOrThrow<MeshAdvertise>(await writeRequest("POST", "/v1/mesh/advertise", body)),
+
+  // What this machine declares it offers on the mesh.
+  meshServices: async (): Promise<{ items: MeshServiceDecl[] }> =>
+    jsonOrThrow<{ items: MeshServiceDecl[] }>(await fetch("/v1/mesh/services")),
+
+  // Replace the console-managed declarations. Local-token gated; restarts the
+  // mesh session so the new set is re-declared to the coordinator.
+  setMeshServices: async (items: MeshServiceDecl[]): Promise<{ items: MeshServiceDecl[] }> =>
+    jsonOrThrow<{ items: MeshServiceDecl[] }>(
+      await writeRequest("POST", "/v1/mesh/services", { items }),
+    ),
 
   createTunnel: async (body: CreateTunnelBody): Promise<RemoteTunnel> =>
     jsonOrThrow<RemoteTunnel>(await writeRequest("POST", "/v1/tunnels", body)),
@@ -232,6 +289,14 @@ export const api = {
 
   probeHealth: async (): Promise<{ items: ProbeHealth[]; enabled: boolean }> =>
     jsonOrThrow(await fetch("/v1/probe/health")),
+
+  // One-shot check behind the new-tunnel wizard's 「检测」 button. The daemon
+  // validates the address before dialling, so a public host comes back as
+  // healthy:false with a reason rather than being probed.
+  probeCheck: async (type: string, localAddr: string): Promise<ProbeCheck> =>
+    jsonOrThrow(
+      await writeRequest("POST", "/v1/probe/check", { type, local_addr: localAddr }),
+    ),
 
   inspectConnections: async (proxyID: string): Promise<{ items: ConnectionRow[] }> =>
     jsonOrThrow(await fetch("/v1/inspect/connections?proxy_id=" + encodeURIComponent(proxyID))),

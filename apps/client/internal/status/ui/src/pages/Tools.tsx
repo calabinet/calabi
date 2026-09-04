@@ -6,7 +6,7 @@ import {
   ReloadOutlined,
   ThunderboltOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Card, Space, Table, Tag, Typography } from "antd";
+import { Alert, Button, Card, Space, Table, Tag, Tooltip, Typography } from "antd";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -27,6 +27,14 @@ export default function Tools() {
     enabled,
     refetchInterval: false,
   });
+
+  // Declaring a mesh service reuses the Connect page's form rather than
+  // duplicating one here — same shape as the tunnel hand-off below.
+  function declareService(r: ProbePort) {
+    const q = new URLSearchParams({ declare_port: String(r.port) });
+    if (r.hint) q.set("declare_name", r.hint);
+    navigate("/services?" + q.toString());
+  }
 
   function go(port: number) {
     // Open the new-tunnel wizard pre-filled by passing through query.
@@ -93,10 +101,46 @@ export default function Tools() {
                 render: (p) => <code style={{ fontSize: 13 }}>{p}</code>,
               },
               {
-                title: t("tools.colPurpose"),
-                dataIndex: "hint",
-                render: (h) =>
-                  h ? <Tag color="blue">{h}</Tag> : <Text type="secondary">—</Text>,
+                // The bind address is the one fact that explains a "loopback
+                // only" verdict at a glance — and the thing the dial scan could
+                // never see. Only the enumerated scan fills it in; the dial
+                // fallback leaves it blank.
+                title: t("tools.colBind"),
+                dataIndex: "bind_addrs",
+                width: 150,
+                render: (addrs?: string[]) =>
+                  addrs && addrs.length ? (
+                    <Space direction="vertical" size={0}>
+                      {addrs.map((a) => (
+                        <code key={a} style={{ fontSize: 12 }}>
+                          {a}
+                        </code>
+                      ))}
+                    </Space>
+                  ) : (
+                    <Text type="secondary">—</Text>
+                  ),
+              },
+              {
+                // The port scan dials LOOPBACK, so "listening" alone says
+                // nothing about whether a mesh peer could reach it. This column
+                // is the difference between a service others can use and one
+                // only this machine can.
+                title: t("tools.colMeshReach"),
+                dataIndex: "mesh_reachable",
+                width: 130,
+                render: (_v: unknown, r: ProbePort) =>
+                  !r.mesh_probed ? (
+                    <Tooltip title={t("tools.meshNotProbedTip")}>
+                      <Text type="secondary">—</Text>
+                    </Tooltip>
+                  ) : r.mesh_reachable ? (
+                    <Tag color="green">{t("tools.meshReachable")}</Tag>
+                  ) : (
+                    <Tooltip title={t("tools.meshLoopbackOnlyTip")}>
+                      <Tag color="orange">{t("tools.meshLoopbackOnly")}</Tag>
+                    </Tooltip>
+                  ),
               },
               {
                 title: t("tools.colLatency"),
@@ -106,16 +150,27 @@ export default function Tools() {
               },
               {
                 title: t("common.actions"),
-                width: 130,
+                width: 230,
                 render: (_v, r) => (
-                  <Button
-                    size="small"
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={() => go(r.port)}
-                  >
-                    {t("tools.createTunnelBtn")}
-                  </Button>
+                  <Space size={4}>
+                    <Button
+                      size="small"
+                      icon={<PlusOutlined />}
+                      onClick={() => go(r.port)}
+                    >
+                      {t("tools.createTunnelBtn")}
+                    </Button>
+                    {/* Offered even when the port is loopback-only: the operator
+                        may be about to fix the binding, and the Connect form
+                        repeats the warning. Hiding it would just be confusing. */}
+                    <Button
+                      size="small"
+                      icon={<PlusOutlined />}
+                      onClick={() => declareService(r)}
+                    >
+                      {t("tools.declareServiceBtn")}
+                    </Button>
+                  </Space>
                 ),
               },
             ]}

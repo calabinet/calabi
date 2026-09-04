@@ -1,0 +1,5 @@
+# Keeps this directory present so build.rs always finds it. build-desktop.{ps1,sh}
+# stage the daemon binary (calabi / calabi.exe) here before `cargo tauri build`,
+# and build.rs bakes it into calabi-desktop.exe via include_bytes!. The binary
+# itself is gitignored; if absent, build.rs embeds an empty placeholder and the
+# app falls back to a sibling/PATH calabi at runtime.

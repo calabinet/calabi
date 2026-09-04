@@ -20,12 +20,19 @@ import {
   InputNumber,
   Modal,
   Select,
+  Typography,
   Space,
   Tag,
 } from "antd";
+import {
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
+  LoadingOutlined,
+} from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { api } from "../api/client";
 import type {
   AccountMe,
@@ -33,6 +40,7 @@ import type {
   CreateTunnelBody,
   DomainList,
   EdgeList,
+  ProbeCheck,
   Snapshot,
   TunnelList,
 } from "../api/types";
@@ -104,15 +112,90 @@ function localAddrIssue(addr: string): "" | "format" | "public" {
   return ""; // hostname / IPv6 — daemon resolves & checks
 }
 
+// LocalCheckLine renders the reachability answer under the local-service row.
+//
+// It is a HINT, never a gate. "Nothing is listening on 127.0.0.1:8080" is a
+// perfectly ordinary state five seconds before you start the dev server, so the
+// unreachable case says so and still lets you create the tunnel — it just means
+// the 502 you would otherwise have debugged from the public URL is explained
+// here instead.
+function LocalCheckLine({
+  checking,
+  result,
+}: {
+  checking: boolean;
+  result: ProbeCheck | null;
+}) {
+  const { t } = useTranslation();
+  if (checking) {
+    return (
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <LoadingOutlined /> {t("wizard.checkRunning")}
+      </Typography.Text>
+    );
+  }
+  if (!result) return null;
+  if (result.healthy) {
+    return (
+      <Typography.Text type="success" style={{ fontSize: 12 }}>
+        <CheckCircleOutlined /> {t("wizard.checkOk", { ms: result.latency_ms })}
+      </Typography.Text>
+    );
+  }
+  return (
+    <span style={{ fontSize: 12 }}>
+      <Typography.Text type="warning">
+        <ExclamationCircleOutlined /> {probeMessage(t, result)}
+      </Typography.Text>
+      <br />
+      <Typography.Text type="secondary">{t("wizard.checkFailHint")}</Typography.Text>
+      {/* The OS sentence stays available underneath rather than being hidden:
+          the friendly line is for the 95% case, and someone debugging an odd
+          one still needs the real text. */}
+      {result.error && (
+        <>
+          <br />
+          <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+            {result.error}
+          </Typography.Text>
+        </>
+      )}
+    </span>
+  );
+}
+
+// probeMessage turns a failed check into one plain sentence.
+//
+// It reads `reason` — a stable code the daemon assigns (probe/reason.go) — and
+// NOT the `error` text. Matching English substrings here would have been the
+// obvious shortcut and would break the day Windows, Go, or a translation
+// reworded anything; the daemon is the only place that can classify reliably,
+// because only it holds the actual error value.
+function probeMessage(t: TFunction, r: ProbeCheck): string {
+  const known = ["refused", "timeout", "unreachable", "dns", "tls", "http_5xx", "invalid"];
+  if (r.reason && known.includes(r.reason)) return t(`wizard.reason.${r.reason}`);
+  // Unclassified: show what the daemon said rather than inventing a friendlier
+  // sentence that might be wrong about the cause.
+  return t("wizard.checkFail", { err: r.error || t("wizard.checkFailUnknown") });
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
   // M7-S5: if set, the wizard initializes local_addr to 127.0.0.1:<port>.
   // Passed through by the Tunnels page when arriving from the port scanner.
   prefillPort?: number;
+  // Publishing a mesh service to the public (from the Services page). Carries
+  // the service name (also the tunnel's default name), the local address to
+  // forward to (its target), and the proto (udp forces a udp tunnel; tcp is
+  // left to the user, since it may be http/https). When set, the tunnel records
+  // config_json.origin so the console can show which service it came from —
+  // tunnel-svc treats config_json as opaque, so nothing there learns about
+  // services (facility-and-service-model §五).
+  publish?: { serviceName: string; localAddr: string; proto: string };
 }
 
-export default function TunnelWizard({ open, onClose, prefillPort }: Props) {
+export default function TunnelWizard({ open, onClose, prefillPort, publish }: Props) {
   const { t } = useTranslation();
   const [form] = Form.useForm<CreateTunnelBody>();
   const qc = useQueryClient();
@@ -198,9 +281,77 @@ export default function TunnelWizard({ open, onClose, prefillPort }: Props) {
     const d = verifiedDomains.find((x) => x.name === name);
     return !!(d && (d.cert_id || d.cert_name));
   };
-  // Watch the chosen domain so we can warn when it has no cert yet (HTTP works,
-  // HTTPS lights up once a cert is issued in the console).
-  const chosenDomain = Form.useWatch("domain", form);
+  // The domain is two controls on one line: an OPTIONAL prefix and the parent.
+  // chosenDomain is what they add up to — the name the tunnel gets. An empty
+  // prefix is a real answer: the tunnel takes the parent itself.
+  const domainParent = Form.useWatch("domain_parent", form) as string | undefined;
+  const domainPrefix = Form.useWatch("subdomain_prefix", form) as string | undefined;
+  const chosenDomain = (() => {
+    if (!domainParent) return "";
+    const pfx = (domainPrefix || "").trim().toLowerCase();
+    return pfx ? `${pfx}.${domainParent}` : domainParent;
+  })();
+
+  // The parents this node can actually serve — which is exactly the one domain
+  // it declares as base_domain, when that domain is verified.
+  //
+  // Not "every verified domain the org owns". base_domain is what tunnel-svc's
+  // allowReclaim compares a claiming edge against, so a tunnel created here
+  // under some OTHER domain would be stamped with that domain's pool and this
+  // very node would be refused the claim. The tunnel would exist, look created,
+  // and never be served. The daemon knows which node it is on, so it can rule
+  // that out instead of letting the user discover it.
+  const parentDomains = verifiedDomains.filter(
+    (d) => !!baseDomain && d.name.toLowerCase() === baseDomain.toLowerCase(),
+  );
+
+  // Reachability check for the local service. It runs ONLY when asked: the
+  // 「检测」 button, or pressing create. It used to probe on its own, debounced,
+  // as you typed — which meant the wizard dialled your machine on every
+  // keystroke-pause and flashed a red cross at addresses you were still in the
+  // middle of typing. The answer is worth having; volunteering it isn't.
+  const typeWatch = Form.useWatch("type", form) as string | undefined;
+  const addrWatch = Form.useWatch("local_addr", form) as string | undefined;
+  const [checked, setChecked] = useState<ProbeCheck | null>(null);
+  const [checking, setChecking] = useState(false);
+  // Separate from `checking`: the submit button must show progress during the
+  // pre-flight probe, but the 「检测」 button must not spin when the user pressed
+  // create (and vice versa).
+  const [preflight, setPreflight] = useState(false);
+
+  // Written with a plain effect + a sequence guard rather than a mutation
+  // because the ONLY thing that matters here is that a stale answer never
+  // outlives the address it was about: every run bumps `seq`, and a reply for
+  // an older `seq` is dropped. A late green tick under an address the user has
+  // already edited is worse than no tick at all.
+  const seq = useRef(0);
+  // Returns the result too, so the create path can decide what to do with it
+  // without re-reading state that React hasn't committed yet.
+  const runCheck = async (ty: string, addr: string): Promise<ProbeCheck> => {
+    const mine = ++seq.current;
+    setChecking(true);
+    setChecked(null);
+    let res: ProbeCheck;
+    try {
+      res = await api.probeCheck(ty, addr);
+    } catch (e) {
+      res = { healthy: false, checked_at: "", latency_ms: 0, error: (e as Error).message };
+    }
+    if (seq.current === mine) {
+      setChecked(res);
+      setChecking(false);
+    }
+    return res;
+  };
+
+  // No probing here — only invalidation. A result describes ONE address, so the
+  // moment the address changes the old answer has to go: a green tick left
+  // sitting under an address it was never about is worse than no tick at all.
+  useEffect(() => {
+    seq.current++; // drop any answer still in flight for the previous address
+    setChecked(null);
+    setChecking(false);
+  }, [open, typeWatch, addrWatch]);
   // Self-hosted (standalone): no plans, no quota, no BYOI distinction — you own
   // the edge, so every offered protocol is available without gating. SNI
   // passthrough is intentionally NOT offered here (it's not a headline feature
@@ -264,44 +415,151 @@ export default function TunnelWizard({ open, onClose, prefillPort }: Props) {
         layout="vertical"
         form={form}
         initialValues={{
-          type: "http",
-          local_addr: prefillPort
-            ? `127.0.0.1:${prefillPort}`
-            : "127.0.0.1:8080",
+          // udp services can only be udp tunnels; a tcp service may front an
+          // http/https server, so leave the common default and let the user pick.
+          type: publish ? (publish.proto === "udp" ? "udp" : "http") : "http",
+          name: publish?.serviceName,
+          local_addr: publish
+            ? publish.localAddr
+            : prefillPort
+              ? `127.0.0.1:${prefillPort}`
+              : "127.0.0.1:8080",
           client_id: defaultClientId,
         }}
-        onFinish={(v) => {
+        onFinish={async (v) => {
+          // Prefix mode is an INPUT shape, not a wire format: join it with this
+          // node's suffix and submit the finished domain, the same way the
+          // console does. The platform `subdomain` field stays as it is — there
+          // the EDGE joins prefix + its own base_domain at claim time.
+          const withPrefix = v as typeof v & {
+            subdomain_prefix?: string;
+            domain_parent?: string;
+          };
+          if (withPrefix.domain_parent) {
+            const pfx = (withPrefix.subdomain_prefix || "").trim().toLowerCase();
+            v.domain = pfx
+              ? `${pfx}.${withPrefix.domain_parent}`
+              : withPrefix.domain_parent;
+          }
+          delete withPrefix.subdomain_prefix;
+          delete withPrefix.domain_parent;
           // 自购域名与子域名互斥：填了 domain 就不发 subdomain。
           if (v.domain && v.subdomain) v.subdomain = undefined;
+          // Link the tunnel back to the service it was published from. mesh_node
+          // is THIS device's client id (the same value the console stores as the
+          // Publish-side device_id), so the origin points at the right machine.
+          if (publish) {
+            v.config_json = JSON.stringify({
+              origin: { mesh_node: v.client_id, mesh_service: publish.serviceName },
+            });
+          }
+          // Check the local service HERE rather than while the user types.
+          // This is the moment the answer is actually worth having, and it is
+          // still only a hint: "nothing is listening yet" is an ordinary state
+          // five seconds before you start the dev server, so an unreachable
+          // upstream asks instead of refusing. A reachable one says nothing and
+          // gets out of the way.
+          const ty = (form.getFieldValue("type") || "").trim();
+          const addr = (form.getFieldValue("local_addr") || "").trim();
+          if (ty && addr && localAddrIssue(addr) === "") {
+            setPreflight(true);
+            let res: ProbeCheck;
+            try {
+              res = await runCheck(ty, addr);
+            } finally {
+              setPreflight(false);
+            }
+            if (!res.healthy) {
+              const go = await new Promise<boolean>((resolve) => {
+                Modal.confirm({
+                  title: t("wizard.preflightTitle"),
+                  content: (
+                    <div>
+                      <p style={{ marginTop: 0 }}>{probeMessage(t, res)}</p>
+                      <p style={{ marginBottom: 0, color: "#8c8c8c" }}>
+                        {t("wizard.preflightBody")}
+                      </p>
+                    </div>
+                  ),
+                  okText: t("wizard.preflightCreateAnyway"),
+                  cancelText: t("wizard.preflightGoStart"),
+                  width: 440,
+                  onOk: () => resolve(true),
+                  onCancel: () => resolve(false),
+                });
+              });
+              if (!go) return;
+            }
+          }
           create.mutate(v);
         }}
       >
-        <Form.Item label={t("wizard.typeLabel")} name="type" rules={[{ required: true }]}>
-          <Select options={typeOptions} />
-        </Form.Item>
+        {publish && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={t("wizard.publishBanner", { name: publish.serviceName })}
+            description={t("wizard.publishBannerDesc")}
+          />
+        )}
 
         <Form.Item label={t("wizard.nameLabel")} name="name" rules={[{ required: true, message: t("wizard.nameRequired") }]}>
           <Input placeholder={t("wizard.namePlaceholder")} maxLength={64} showCount />
         </Form.Item>
 
+        {/* 类型 + 本地地址 是一件事,所以是一行。
+            类型描述的是「本机服务说什么协议」,决定的只有客户端怎么拨本地上游
+            (session/dial.go: http 明文 TCP、https 再包一层 TLS)。它不决定公网
+            入口:edge 的 http/https 两个 listener 查的是同一张域名表
+            (RegisterHTTP),入口能不能走 https 由域名和证书决定。类型单独占一行
+            时,读起来就像在选入口协议。 */}
         <Form.Item
-          label={t("wizard.localAddrLabel")}
-          name="local_addr"
-          tooltip={t("wizard.localAddrTip")}
-          rules={[
-            {
-              validator: (_, value) => {
-                const r = localAddrIssue(value);
-                if (r === "public")
-                  return Promise.reject(new Error(t("wizard.localAddrPublic")));
-                if (r === "format")
-                  return Promise.reject(new Error(t("wizard.localAddrFormat")));
-                return Promise.resolve();
-              },
-            },
-          ]}
+          label={t("wizard.localServiceLabel")}
+          tooltip={t("wizard.localServiceTip")}
+          extra={<LocalCheckLine checking={checking} result={checked} />}
+          required
         >
-          <Input placeholder="127.0.0.1:8080" />
+          <Space.Compact style={{ width: "100%" }}>
+            <Form.Item name="type" noStyle rules={[{ required: true }]}>
+              <Select
+                options={typeOptions}
+                aria-label={t("wizard.typeLabel")}
+                style={{ width: 120 }}
+              />
+            </Form.Item>
+            <Form.Item
+              name="local_addr"
+              noStyle
+              rules={[
+                { required: true, message: t("wizard.localAddrFormat") },
+                {
+                  validator: (_, value) => {
+                    const r = localAddrIssue(value);
+                    if (r === "public")
+                      return Promise.reject(new Error(t("wizard.localAddrPublic")));
+                    if (r === "format")
+                      return Promise.reject(new Error(t("wizard.localAddrFormat")));
+                    return Promise.resolve();
+                  },
+                },
+              ]}
+            >
+              <Input placeholder="127.0.0.1:8080" aria-label={t("wizard.localAddrLabel")} />
+            </Form.Item>
+            {/* Re-check on demand: the usual sequence is "oh, it's not running"
+                → start the service → ask again, without touching the address. */}
+            <Button
+              loading={checking}
+              onClick={() => {
+                const ty = (form.getFieldValue("type") || "").trim();
+                const addr = (form.getFieldValue("local_addr") || "").trim();
+                if (ty && addr && localAddrIssue(addr) === "") runCheck(ty, addr);
+              }}
+            >
+              {t("wizard.checkBtn")}
+            </Button>
+          </Space.Compact>
         </Form.Item>
 
         <Form.Item shouldUpdate noStyle>
@@ -322,66 +580,118 @@ export default function TunnelWizard({ open, onClose, prefillPort }: Props) {
             //   - 平台出口：只能用平台子域名（付费版自选前缀 / 体验版随机）；
             //     自购域名仅自建节点出口可用，这里不展示。
             if (onOwnEdge) {
-              const noCertChosen =
-                !!chosenDomain && !domainHasCert(chosenDomain);
               return (
                 <>
                   <Form.Item
                     label={t("wizard.customDomainLabel")}
-                    name="domain"
-                    rules={[{ required: true, message: t("wizard.customDomainRequired") }]}
-                    tooltip={t("wizard.customDomainTip")}
+                    required
+                    tooltip={
+                      snap?.server_ip
+                        ? t("wizard.prefixTipNode", {
+                            suffix: domainParent || baseDomain,
+                            ip: snap.server_ip,
+                          })
+                        : t("wizard.customDomainTip")
+                    }
                     extra={
-                      verifiedDomains.length === 0
-                        ? t("wizard.customDomainNoneHint")
-                        : undefined
+                      parentDomains.length === 0
+                        ? t("wizard.parentEmptyHint")
+                        : chosenDomain
+                          ? t("wizard.fullAddress", { addr: chosenDomain })
+                          : undefined
                     }
                   >
-                    <Select
-                      placeholder={t("wizard.customDomainSelectPlaceholder")}
-                      notFoundContent={t("wizard.customDomainNone")}
-                      optionLabelProp="value"
-                      options={verifiedDomains.map((d) => {
-                        const hasCert = !!(d.cert_id || d.cert_name);
-                        const inUseLabel = d.bound_tunnel_name
-                          ? `${t("wizard.domainInUse")} · ${d.bound_tunnel_name}`
-                          : t("wizard.domainInUse");
-                        return {
-                          value: d.name,
-                          // A domain bound to another tunnel can't be reused —
-                          // disable it so the create can't fail on a conflict.
-                          disabled: !!d.in_use,
-                          label: (
-                            <Space>
-                              <span>{d.name}</span>
-                              {d.in_use ? (
-                                <Tag color="default" style={{ marginInlineEnd: 0 }}>
-                                  {inUseLabel}
-                                </Tag>
-                              ) : (
-                                <Tag
-                                  color={hasCert ? "green" : "orange"}
-                                  style={{ marginInlineEnd: 0 }}
-                                >
-                                  {hasCert
-                                    ? t("wizard.domainCertReady")
-                                    : t("wizard.domainNoCert")}
-                                </Tag>
-                              )}
-                            </Space>
-                          ),
-                        };
-                      })}
-                    />
+                    <Space.Compact style={{ width: "100%" }}>
+                      <Form.Item
+                        name="subdomain_prefix"
+                        noStyle
+                        dependencies={["domain_parent"]}
+                        rules={[
+                          {
+                            pattern: /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/,
+                            message: t("wizard.subdomainPattern"),
+                          },
+                          // Empty means the parent itself — legal, unless the
+                          // parent already carries a tunnel.
+                          ({ getFieldValue }) => ({
+                            validator(_: unknown, value: string | undefined) {
+                              if ((value || "").trim()) return Promise.resolve();
+                              const parent = getFieldValue("domain_parent") as
+                                | string
+                                | undefined;
+                              const row = parentDomains.find((d) => d.name === parent);
+                              if (!row?.in_use) return Promise.resolve();
+                              return Promise.reject(
+                                new Error(
+                                  t("wizard.apexInUse", {
+                                    name: parent,
+                                    tunnel: row.bound_tunnel_name || "—",
+                                  }),
+                                ),
+                              );
+                            },
+                          }),
+                        ]}
+                      >
+                        <Input
+                          style={{ width: "38%" }}
+                          placeholder={t("wizard.prefixPlaceholder")}
+                        />
+                      </Form.Item>
+                      <Form.Item
+                        name="domain_parent"
+                        noStyle
+                        rules={[
+                          { required: true, message: t("wizard.customDomainRequired") },
+                        ]}
+                      >
+                        <Select
+                          style={{ width: "62%" }}
+                          placeholder={t("wizard.customDomainSelectPlaceholder")}
+                          notFoundContent={t("wizard.parentEmptyHint")}
+                          optionLabelProp="value"
+                          options={parentDomains.map((d) => {
+                            const hasCert = !!(d.cert_id || d.cert_name);
+                            return {
+                              value: d.name,
+                              label: (
+                                <Space>
+                                  <span>{d.name}</span>
+                                  <Tag
+                                    color={hasCert ? "green" : "orange"}
+                                    style={{ marginInlineEnd: 0 }}
+                                  >
+                                    {hasCert
+                                      ? t("wizard.domainCertReady")
+                                      : t("wizard.domainNoCert")}
+                                  </Tag>
+                                </Space>
+                              ),
+                            };
+                          })}
+                        />
+                      </Form.Item>
+                    </Space.Compact>
                   </Form.Item>
-                  {noCertChosen && (
-                    <Alert
-                      type="warning"
-                      showIcon
-                      style={{ marginTop: -8, marginBottom: 16 }}
-                      message={t("wizard.domainNoCertHint")}
-                    />
-                  )}
+                  {/* Exactly ONE cert line: a prefixed name gets a certificate
+                      issued for it automatically once the tunnel exists, the
+                      parent itself does not. Showing both said opposite things. */}
+                  {chosenDomain &&
+                    ((domainPrefix || "").trim() ? (
+                      <Alert
+                        type="info"
+                        showIcon
+                        style={{ marginTop: -8, marginBottom: 16 }}
+                        message={t("wizard.prefixCertNote")}
+                      />
+                    ) : !domainHasCert(chosenDomain) ? (
+                      <Alert
+                        type="warning"
+                        showIcon
+                        style={{ marginTop: -8, marginBottom: 16 }}
+                        message={t("wizard.domainNoCertHint")}
+                      />
+                    ) : null)}
                 </>
               );
             }
@@ -453,7 +763,7 @@ export default function TunnelWizard({ open, onClose, prefillPort }: Props) {
         <Form.Item style={{ marginBottom: 0 }}>
           <Space style={{ width: "100%", justifyContent: "flex-end" }}>
             <Button onClick={onClose}>{t("common.cancel")}</Button>
-            <Button type="primary" htmlType="submit" loading={create.isPending}>
+            <Button type="primary" htmlType="submit" loading={create.isPending || preflight}>
               {t("common.create")}
             </Button>
           </Space>

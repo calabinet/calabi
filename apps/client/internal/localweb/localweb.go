@@ -1,6 +1,6 @@
 // Package localweb serves the daemon SPA's /v1/* API LOCALLY for the
 // self-hosted (standalone) local supervisor daemon — no bff-console proxy, no
-// account, no control plane. It's the community counterpart to
+// account, no control plane. It's the standalone counterpart to
 // internal/platform/statusapi: same JSON shapes the SPA already understands, but
 // sourced from the local config + runtime instead of a managed backend.
 //
@@ -16,6 +16,7 @@
 package localweb
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -86,6 +87,44 @@ type HealthSource interface {
 	Snapshot() []probe.Result
 }
 
+// MeshSource powers /v1/mesh — the Connect (WireGuard mesh) status the console
+// and `calabi mesh status` render. The daemon's meshRunner implements it. nil =
+// mesh not configured (the endpoint reports enabled:false).
+type MeshSource interface {
+	MeshStatus() MeshStatus
+	// MeshDown stops the mesh subsystem (idempotent; nil if already down).
+	MeshDown() error
+}
+
+// MeshStatus is the JSON shape for /v1/mesh.
+type MeshStatus struct {
+	Enabled bool   `json:"enabled"`
+	Up      bool   `json:"up"`
+	Coord   string `json:"coord,omitempty"`
+	Relay   string `json:"relay,omitempty"`
+	// DerpHome is the region code this node is homed on ("self-…" = the org's own
+	// relay). Relay is the address; DerpHome is what tells self-hosted from
+	// platform, so the console can flag "中继节点：自建".
+	DerpHome string     `json:"derp_home,omitempty"`
+	Name     string     `json:"name,omitempty"`
+	Overlay  string     `json:"overlay,omitempty"`
+	Peers    []MeshPeer `json:"peers"`
+}
+
+// MeshPeer is one peer's live state in /v1/mesh.
+type MeshPeer struct {
+	PublicKey        string   `json:"public_key"`
+	AllowedIPs       []string `json:"allowed_ips"`
+	LastHandshakeSec int64    `json:"last_handshake_sec"`
+	RxBytes          int64    `json:"rx_bytes"`
+	TxBytes          int64    `json:"tx_bytes"`
+	// Path is "direct" when hole punching found a working peer-to-peer path,
+	// "relay" when traffic goes through calabi-derp. Endpoint carries the direct
+	// UDP address in the former case.
+	Path     string `json:"path,omitempty"`
+	Endpoint string `json:"endpoint,omitempty"`
+}
+
 // TunnelSpec is a create request. ConfigJSON is the already-transformed
 // (bcrypt'd) security blob, or "".
 type TunnelSpec struct {
@@ -125,6 +164,7 @@ type Config struct {
 	Inspector InspectorSource // /v1/inspect/*; nil disables
 	Usage     UsageSource     // /v1/usage/current; nil → always 0
 	Health    HealthSource    // /v1/probe/health; nil → enabled:false
+	Mesh      MeshSource      // /v1/mesh (Connect status); nil → enabled:false
 	Server    string          // edge control endpoint, shown in the synthetic /v1/edges row
 	Region    string          // labels the synthetic edge; empty → "local"
 }
@@ -160,6 +200,9 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/v1/edge-affinity", s.handleEdgeAffinity)
 	mux.HandleFunc("/v1/probe/health", s.handleProbeHealth)
 	mux.HandleFunc("/v1/probe/ports", s.handleProbePorts)
+	mux.HandleFunc("/v1/probe/check", s.handleProbeCheck)
+	mux.HandleFunc("/v1/mesh", s.handleMesh)          // GET status
+	mux.HandleFunc("/v1/mesh/down", s.handleMeshDown) // POST stop (local-token)
 	mux.HandleFunc("/v1/inspect/connections", s.handleInspectConnections)
 	mux.HandleFunc("/v1/inspect/captures", s.handleInspectCaptures)
 	mux.HandleFunc("/v1/inspect/replay", notSupported)
@@ -587,11 +630,101 @@ func (s *Server) handleProbeHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "enabled": true})
 }
 
+// meshOverlay is this machine's mesh address, or "" when it isn't on the mesh —
+// reachability is then not probed rather than reported as false.
+func (s *Server) meshOverlay() string {
+	if s.cfg.Mesh == nil {
+		return ""
+	}
+	st := s.cfg.Mesh.MeshStatus()
+	if !st.Up {
+		return ""
+	}
+	return st.Overlay
+}
+
 func (s *Server) handleProbePorts(w http.ResponseWriter, r *http.Request) {
 	// Real local-port scan (dial-test 127.0.0.1 on the common dev ports +
 	// $CALABI_PROBE_PORTS). Same scanner the platform daemon uses; was a stub
 	// returning [] in standalone, so the Tools page looked broken.
-	writeJSON(w, http.StatusOK, map[string]any{"items": probe.Ports(r.Context())})
+	writeJSON(w, http.StatusOK, map[string]any{"items": probe.Scan(r.Context(), s.meshOverlay())})
+}
+
+// handleProbeCheck probes ONE address on demand — the new-tunnel wizard's
+// "is my local service actually up?" check, so a tunnel that would 502 says so
+// before it's created.
+//
+// POST because it makes the daemon dial something. probe.CheckOnce validates
+// the address first: this endpoint must not become a port scanner for whoever
+// can reach the local console.
+//
+// A failed check returns 200 with healthy:false. Creating a tunnel before
+// starting the service behind it is normal — the SPA shows a hint, not an error.
+func (s *Server) handleProbeCheck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, 4*1024))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "read body: "+err.Error())
+		return
+	}
+	var req struct {
+		Type      string `json:"type"`
+		LocalAddr string `json:"local_addr"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "parse: "+err.Error())
+		return
+	}
+	if strings.TrimSpace(req.LocalAddr) == "" {
+		writeError(w, http.StatusBadRequest, "local_addr required")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
+	defer cancel()
+	writeJSON(w, http.StatusOK, probe.CheckOnce(ctx, probe.TunnelTarget{
+		Type:      req.Type,
+		LocalAddr: req.LocalAddr,
+	}))
+}
+
+// --- /v1/mesh — Connect (WireGuard mesh) status ----------------------------
+
+func (s *Server) handleMesh(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if s.cfg.Mesh == nil {
+		writeJSON(w, http.StatusOK, MeshStatus{Enabled: false, Peers: []MeshPeer{}})
+		return
+	}
+	st := s.cfg.Mesh.MeshStatus()
+	if st.Peers == nil {
+		st.Peers = []MeshPeer{}
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+func (s *Server) handleMeshDown(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if s.cfg.Mesh == nil {
+		writeError(w, http.StatusNotFound, "mesh not configured")
+		return
+	}
+	if !checkLocalToken(w, r) {
+		return
+	}
+	if err := s.cfg.Mesh.MeshDown(); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "down"})
 }
 
 // --- /v1/inspect/* — live connections + HTTP captures ----------------------

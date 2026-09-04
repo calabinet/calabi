@@ -68,6 +68,12 @@ type platformDeps struct {
 	// cert-svc, leaving such requests to normal host routing.
 	acmeChallengeResolver func(token string) (keyAuth string, ok bool)
 
+	// relayReporter re-sends a merged edge/relay node's OWN relay usage as a
+	// self-<label> region (edge/derp merge). nil in community, or when the
+	// node has no single-org identity / no relay label — runRelay then relays
+	// without reporting.
+	relayReporter *relayUsageReporter
+
 	runners []namedRunner
 	closers []io.Closer
 }

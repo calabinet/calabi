@@ -1,0 +1,28 @@
+version: v2
+# Standalone buf module for the EDGE contract, separate from the root proto/
+# module (which generates into pkg/api — the control-plane contract that is
+# never open-sourced).
+#
+# Keeping it here is not tidiness, it is the export boundary: scripts/
+# export-community.sh excludes the whole pkg/api MODULE, so a contract that
+# generates into pkg/api can never reach the public tree no matter how few
+# packages it links. Same reasoning, and the same shape, as pkg/mesh-proto.
+# See docs/runbook/full-oss-plan.md F3.
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+  except:
+    # The gateway deliberately mirrors the control-plane RPC names and reuses
+    # request/response shapes across RPCs, so the edge-side adapter stays a
+    # one-liner per call.
+    - RPC_REQUEST_RESPONSE_UNIQUE
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+    # Mirrored messages keep their upstream names on purpose — that is what
+    # makes the descriptor drift test a meaningful comparison.
+    - PACKAGE_DIRECTORY_MATCH
+breaking:
+  use:
+    - FILE

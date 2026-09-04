@@ -1,0 +1,20 @@
+version: v2
+# Standalone buf module for the mesh contract, SEPARATE from the root proto/
+# module (which generates into pkg/api — the control-plane contract that is
+# never open-sourced). Keeping the mesh proto here means the pkg/api generator
+# never touches it; `buf generate` is driven by this module's own buf.gen.yaml
+# with LOCAL plugins (no network, no protoc). See docs/runbook/mesh-plan.md §十一.
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+  except:
+    # NetMap is the natural stream element of PullNetMap, and the empty
+    # ReportEndpointsResponse / bare responses mirror the control_plane style.
+    - RPC_REQUEST_RESPONSE_UNIQUE
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+breaking:
+  use:
+    - FILE

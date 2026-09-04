@@ -84,6 +84,12 @@ export interface Snapshot {
   session_id?: string;
   tenant_id?: string;
   client_id?: string;
+  // This install's Publish-side identity: the fingerprint the daemon reports
+  // (and the mesh sends to the coordinator) plus the clients.id it resolved to.
+  // Empty until a device registration has happened — which is a state worth
+  // seeing, since it's the reason a mesh device can show no client link.
+  fingerprint?: string;
+  device_id?: number;
   // M11.20.3 — edge's HTTPListener.BaseDomain plumbed through AUTH_RESP.
   // Tunnels.tsx uses it to render TCP/UDP public addrs as
   // `<base_domain>:<remote_port>`. Empty if the edge is too old; the SPA
@@ -253,6 +259,24 @@ export interface CurrentUsage {
   bytes_total: number;
   percent_of_limit: number;
   limit_mb: number;
+  // Billing split (bff-console usage.go). platform_bytes_total = platform TUNNEL
+  // bytes (billed); self_hosted = BYOI tunnel (not billed);
+  // platform_relay_bytes_total = platform mesh-relay bytes (billed). The cap %
+  // is over platform tunnel + platform relay. Optional so an older backend that
+  // omits them degrades to bytes_total. Relay is org-level → 0 for a member view.
+  platform_bytes_total?: number;
+  self_hosted_bytes_total?: number;
+  platform_relay_bytes_total?: number;
+  // Self-hosted relay ("self-…" regions): the org's own relays DO report usage
+  // (attributed to the org, tagged self-) but it's display-only, never billed.
+  // Org-level — same on every client of the org, so two clients finally agree; 0
+  // for a member's own-scoped view (falls back to the local mesh meter there).
+  self_hosted_relay_bytes_total?: number;
+  // "org" (management/auditor — carries the platform/self + relay splits) vs
+  // "own" (a plain member — no splits, self_hosted/relay are always 0). The
+  // overview uses it to know the split fields are trustworthy; a member on a
+  // self-hosted edge has no split, so their whole tunnel total IS self-hosted.
+  scope?: "org" | "own";
 }
 
 // UsageBucket mirrors apps/bff-console/internal/handlers/usage.go::marshalBuckets.
@@ -260,15 +284,48 @@ export interface CurrentUsage {
 // "今日流量" card via /v1/usage/daily?n=1.
 export interface UsageBucket {
   ts: string;
+  // PLATFORM (billed) pair — platform tunnel plus platform relay EGRESS.
   bytes_in: number;
   bytes_out: number;
   bytes_total: number;
+  // SELF-HOSTED pair, composed the same way (BYOI tunnel + "self-" relay egress).
+  // Recorded but never billed, and never summed into the pair above — a node whose
+  // egress moved to its own edge reads its traffic HERE. Optional: a daemon may be
+  // talking to a bff-console older than the field.
+  self_hosted_bytes_in?: number;
+  self_hosted_bytes_out?: number;
+  self_hosted_bytes_total?: number;
+  // The relay egress already INSIDE each pair. Subtract to get tunnel-only; edge
+  // and relay are independent axes (own edge + platform relay is a real setup).
+  relay_bytes_out?: number;
+  self_hosted_relay_bytes_out?: number;
 }
 
 export interface UsageHistory {
   org_id: number;
   granularity: string;
   buckets: UsageBucket[];
+}
+
+// MeshUsage is THIS machine's Connect (mesh) traffic — GET /v1/usage/mesh.
+// Served locally by the daemon in both editions (mesh isn't metered server-side
+// per machine), so it's a separate call from the tunnel usage above. Each figure
+// is split by transport: relay (via a DERP relay — billed when the relay is a
+// platform one) vs direct (a hole-punched peer-to-peer path — never billed). The
+// server can't provide this split (it never sees direct traffic), so it's local.
+export interface MeshUsageBucket {
+  relay: number;
+  direct: number;
+}
+export interface MeshUsageDay {
+  date: string; // local "2006-01-02"
+  relay: number;
+  direct: number;
+}
+export interface MeshUsage {
+  today: MeshUsageBucket;
+  month: MeshUsageBucket;
+  daily: MeshUsageDay[]; // oldest→newest, gaps filled with 0
 }
 
 export interface ClientDevice {
@@ -289,7 +346,27 @@ export interface ProbePort {
   listening: boolean;
   latency_ms: number;
   hint?: string;
+  // mesh_probed: whether reachability at this machine's overlay address
+  // could be tested at all (false = not on the mesh). It keeps "couldn't
+  // check" from reading as "not reachable".
+  mesh_probed?: boolean;
+  // mesh_reachable: the port accepts connections at the overlay address, not
+  // just loopback. A 127.0.0.1-only service is listening but no mesh peer can
+  // reach it. Meaningless unless mesh_probed.
+  mesh_reachable?: boolean;
+  // bind_addrs: the addresses this port is actually bound to (0.0.0.0,
+  // 127.0.0.1, a specific IP, ...), read from the kernel socket table. Present
+  // only in the enumerated scan; the dial fallback can't know it.
+  bind_addrs?: string[];
+  // source: "enumerated" (real socket table, carries bind_addrs and every port)
+  // or "dialed" (curated-list fallback when the platform can't be enumerated).
+  source?: string;
 }
+
+// ProbeCheck is one on-demand reachability check (POST /v1/probe/check) — the
+// same Go probe.Result the background monitor publishes, so proxy_id and the
+// consecutive_* counters come back zeroed and mean nothing here.
+export type ProbeCheck = Omit<ProbeHealth, "proxy_id" | "consecutive_bad" | "consecutive_good">;
 
 export interface ProbeHealth {
   proxy_id: string;
@@ -297,6 +374,11 @@ export interface ProbeHealth {
   checked_at: string;
   latency_ms: number;
   error?: string;
+  // Stable code for WHY it failed (apps/client/internal/probe/reason.go), so
+  // the UI can word it in the user's language instead of showing the OS
+  // sentence in `error`. Absent when healthy, or when the failure didn't match
+  // a known case — then `error` is all we have.
+  reason?: string;
   consecutive_bad: number;
   consecutive_good: number;
 }
@@ -386,4 +468,75 @@ export interface DomainItem {
 
 export interface DomainList {
   items: DomainItem[];
+}
+
+// MeshPeer / MeshStatus mirror localweb.MeshStatus (GET /v1/mesh) — the Connect
+// (WireGuard mesh) state the daemon reports for the local node.
+export interface MeshPeer {
+  public_key: string;
+  allowed_ips: string[];
+  last_handshake_sec: number; // unix seconds; 0 = never
+  rx_bytes: number;
+  tx_bytes: number;
+  path?: string; // "direct" once hole punching found a peer-to-peer path, else "relay"
+  endpoint?: string; // the direct UDP endpoint carrying it (empty over the relay)
+}
+
+export interface MeshStatus {
+  enabled: boolean; // a `mesh:` block is configured on this daemon
+  up: boolean; // the datapath is currently live
+  paused?: boolean; // stopped locally via meshDown; Start (meshUp) re-enrolls
+  coord?: string;
+  relay?: string;
+  // derp_home is the region this node is homed on ("self-…" = the org's own
+  // relay). relay is the address; derp_home is what flags self-hosted vs platform.
+  derp_home?: string;
+  name?: string;
+  overlay?: string; // this node's overlay IP
+  // org_id is the org (== meshnet) the RUNNING session enrolled into. It can
+  // lag the daemon's active org for the moment between an org switch and the
+  // re-enrollment — which is precisely when it needs to be visible.
+  org_id?: number;
+  peers: MeshPeer[];
+}
+
+// MeshServiceDecl is one service THIS machine declares it offers on the mesh
+// (GET/POST /v1/mesh/services). A declaration only — an admin confirms it in the
+// web console before any access rule matches it. from_config entries come from
+// --mesh-service / the config file and can't be removed here.
+export interface MeshServiceDecl {
+  name: string;
+  proto: string;
+  port: number;
+  // What THIS machine dials to reach the app; "" = 127.0.0.1:<port>. NOT where
+  // the app is bound, and not on the path mesh traffic takes — a peer's packet
+  // arrives on this machine's mesh address and finds a socket there or doesn't.
+  target?: string;
+  note?: string;
+  from_config?: boolean;
+  // Registered by a manager in the WEB console. This machine checks it like any
+  // other but cannot edit or remove it.
+  from_console?: boolean;
+  // This machine's own last self-check. checked=false means it could not test
+  // (udp, or nothing observed yet) — not a failure. target_ok && !mesh_ok is the
+  // one this page exists for: the app answers where this machine dials it but
+  // not on the address peers use, i.e. it is bound to 127.0.0.1.
+  checked?: boolean;
+  target_ok?: boolean;
+  mesh_ok?: boolean;
+}
+
+// MeshAdvertise is this node's subnet-router / exit-node role (GET/POST
+// /v1/mesh/advertise). forwarding_supported is false off Linux — the node then
+// advertises but doesn't actually forward.
+export interface MeshAdvertise {
+  routes: string[]; // subnet-router CIDRs this node advertises
+  advertise_exit_node: boolean; // advertise this node AS an exit node
+  exit_node: string; // route THIS node's default traffic through this peer
+  forwarding_supported: boolean; // read-only; true only on Linux
+  // The CONSUMER side: what this node accepts FROM peers. Off by default — an
+  // accepted route lands in THIS machine's routing table and can hijack the
+  // return path of connections to services this machine publishes.
+  accept_routes?: boolean;
+  route_excludes?: string[]; // refused even while accepting the rest
 }

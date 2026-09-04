@@ -1,0 +1,22 @@
+version: v2
+# Standalone buf module for the platform-hooks contract — the four calls a
+# coordinator needs FROM a platform (auth, quota, billing denial, relay
+# directory). Separate from the root proto/ module, which generates into
+# pkg/api: that whole MODULE is excluded from the public export, so a contract
+# generated there can never ship. Same shape as pkg/mesh-proto and
+# pkg/edge-proto. See docs/runbook/full-oss-plan.md F4.
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+  except:
+    # ListDeniedOrgsRequest is legitimately empty, and the mirrored messages keep
+    # their upstream names so the correspondence stays checkable.
+    - RPC_REQUEST_RESPONSE_UNIQUE
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+    - PACKAGE_DIRECTORY_MATCH
+breaking:
+  use:
+    - FILE

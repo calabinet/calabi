@@ -1,0 +1,73 @@
+{
+  "_comment": [
+    "CALABI_COORD_DERP_MAP_FILE — the relay directory calabi-coord distributes to mesh",
+    "nodes (MESH.4 B2b). Use this INSTEAD of CALABI_COORD_DERP_ADDR once the",
+    "deployment runs more than one calabi-derp.",
+    "",
+    "Each host_name:derp_port MUST be the public address mesh clients can dial:",
+    "a node listens on the relay its home region resolves to here, and peers send",
+    "to it through exactly that address. A region listed with an address clients",
+    "cannot reach makes every node that homes there unreachable by relay.",
+    "",
+    "stun_port must match that relay's relay.stun_port: clients measure their",
+    "latency to each region over STUN to choose a home, and a region with no",
+    "stun_port cannot be measured, so it is never chosen.",
+    "",
+    "home_region is only the default stamped on a node before it has measured",
+    "anything — clients replace it with their own measurement.",
+    "",
+    "Mount it read-only and point calabi-coord at it:",
+    "  volumes:",
+    "    - ./mesh/derp-map.json:/etc/calabi/derp-map.json:ro",
+    "  environment:",
+    "    CALABI_COORD_DERP_MAP_FILE: /etc/calabi/derp-map.json",
+    "",
+    "usage_collection (F2) maps a region code to the base URL calabi-coord drains",
+    "that relay's byte counters from. It is a SEPARATE section on purpose:",
+    "'regions' above is broadcast to every mesh node, while this address is",
+    "internal and is reached with a credential. Never merge the two.",
+    "",
+    "The relay must be started with a relay usage token, and calabi-coord with the",
+    "same value in CALABI_COORD_RELAY_USAGE_TOKEN. Omit a region here and that relay",
+    "is simply not collected — which is exactly what a user's self-hosted relay",
+    "does: its traffic never reaches the platform's accounting at all.",
+    "",
+    "Prefer https. The token and the traffic graph both cross this link."
+  ],
+  "home_region": "lax",
+  "regions": [
+    {
+      "code": "lax",
+      "nodes": [
+        {
+          "host_name": "derp-lax.example.net",
+          "derp_port": 3340,
+          "stun_port": 3478
+        }
+      ]
+    },
+    {
+      "code": "sgp",
+      "nodes": [
+        {
+          "host_name": "derp-sgp.example.net",
+          "derp_port": 3340,
+          "stun_port": 3478
+        }
+      ]
+    },
+    {
+      "code": "fra",
+      "nodes": [
+        {
+          "host_name": "derp-fra.example.net",
+          "derp_port": 3340,
+          "stun_port": 3478
+        }
+      ]
+    }
+  ],
+  "usage_collection": {
+    "lax": "https://derp-lax.internal.example.net:9200"
+  }
+}

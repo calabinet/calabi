@@ -3,6 +3,14 @@ go 1.25.0
 use (
 	./apps/calabi-edge
 	./apps/client
+	./apps/calabi-coord
+	./pkg/certevents
+	./pkg/edge-proto
+	./pkg/hooks-proto
+	./pkg/mesh-proto
 	./pkg/observability
 	./pkg/protocol
+	./pkg/relay
+	./pkg/stunserver
+	./pkg/svcboot
 )

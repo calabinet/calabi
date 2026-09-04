@@ -14,13 +14,13 @@
 //
 // Lifecycle:
 //
-//   m := health.New(logger)
-//   m.SetSources(registry)  // pulls live tunnel list from anywhere
-//   ctx, cancel := context.WithCancel(...)
-//   go m.Run(ctx)            // loops until ctx cancels
+//	m := health.New(logger)
+//	m.SetSources(registry)  // pulls live tunnel list from anywhere
+//	ctx, cancel := context.WithCancel(...)
+//	go m.Run(ctx)            // loops until ctx cancels
 //
-//   // From the HTTP handler:
-//   m.Snapshot() -> map[proxy_id]Result
+//	// From the HTTP handler:
+//	m.Snapshot() -> map[proxy_id]Result
 package probe
 
 import (
@@ -78,11 +78,15 @@ func (s *SliceSource) LiveTunnels() []TunnelTarget {
 // "1 missed check" vs "5 in a row" (the latter is when we ring the
 // notification bell).
 type Result struct {
-	ProxyID         string `json:"proxy_id"`
-	Healthy         bool   `json:"healthy"`
-	CheckedAt       string `json:"checked_at"`
-	LatencyMs       int64  `json:"latency_ms"`
-	Error           string `json:"error,omitempty"`
+	ProxyID   string `json:"proxy_id"`
+	Healthy   bool   `json:"healthy"`
+	CheckedAt string `json:"checked_at"`
+	LatencyMs int64  `json:"latency_ms"`
+	Error     string `json:"error,omitempty"`
+	// Reason is a stable code for WHY it failed (see reason.go), so the UI can
+	// say it in the user's language instead of showing the OS sentence in
+	// Error. Empty when healthy, or when the failure didn't match a known case.
+	Reason          string `json:"reason,omitempty"`
 	ConsecutiveBad  int    `json:"consecutive_bad"`
 	ConsecutiveGood int    `json:"consecutive_good"`
 }
@@ -226,6 +230,31 @@ func (m *Monitor) Snapshot() []Result {
 	return out
 }
 
+// CheckOnce probes one address on demand and returns the result, for the
+// new-tunnel wizard's "is my local service actually up?" check. Same prober the
+// background monitor uses, so a green check here and a green badge later mean
+// the same thing.
+//
+// It validates the address FIRST. probeOne dials whatever it is handed, and the
+// :7400 console has no auth of its own — without this the endpoint in front of
+// it is a port scanner pointed at the user's network. ValidateLocalTarget is
+// the same predicate tunnel creation uses, so the check can't succeed against
+// something a tunnel would refuse to forward to anyway.
+//
+// A failure is INFORMATION, not a verdict: creating a tunnel before starting
+// the service it points at is normal. Callers should report, not block.
+func CheckOnce(ctx context.Context, t TunnelTarget) Result {
+	checkedAt := time.Now().UTC().Format(time.RFC3339)
+	if strings.TrimSpace(t.LocalAddr) == "" {
+		return Result{Healthy: false, CheckedAt: checkedAt, Error: "no local_addr"}
+	}
+	if err := ValidateLocalTarget(t.LocalAddr); err != nil {
+		return Result{Healthy: false, CheckedAt: checkedAt, Error: err.Error(), Reason: ReasonInvalid}
+	}
+	t.LocalAddr = NormalizeLocalTarget(t.LocalAddr)
+	return probeOne(ctx, t)
+}
+
 // probeOne picks the probe flavour based on tunnel type. HTTP tunnels
 // get an HTTP GET / (because a TCP connect succeeds for any process
 // that's listening, but a real HTTP backend may be hung); TCP/UDP
@@ -270,16 +299,17 @@ func probeOne(ctx context.Context, t TunnelTarget) Result {
 		resp, err := client.Do(req)
 		if err != nil {
 			return Result{Healthy: false, CheckedAt: checkedAt,
-				LatencyMs: time.Since(start).Milliseconds(), Error: err.Error()}
+				LatencyMs: time.Since(start).Milliseconds(),
+				Error:     errMessage(err), Reason: classifyErr(err)}
 		}
 		resp.Body.Close()
 		ok := resp.StatusCode < 500
-		errMsg := ""
+		errMsg, reason := "", ""
 		if !ok {
-			errMsg = "upstream returned " + resp.Status
+			errMsg, reason = "upstream returned "+resp.Status, ReasonHTTP5xx
 		}
 		return Result{Healthy: ok, CheckedAt: checkedAt,
-			LatencyMs: time.Since(start).Milliseconds(), Error: errMsg}
+			LatencyMs: time.Since(start).Milliseconds(), Error: errMsg, Reason: reason}
 
 	default:
 		d := net.Dialer{Timeout: 2 * time.Second}
@@ -292,7 +322,8 @@ func probeOne(ctx context.Context, t TunnelTarget) Result {
 					LatencyMs: time.Since(start).Milliseconds()}
 			}
 			return Result{Healthy: false, CheckedAt: checkedAt,
-				LatencyMs: time.Since(start).Milliseconds(), Error: errMessage(err)}
+				LatencyMs: time.Since(start).Milliseconds(),
+				Error:     errMessage(err), Reason: classifyErr(err)}
 		}
 		_ = c.Close()
 		return Result{Healthy: true, CheckedAt: checkedAt,
@@ -300,17 +331,24 @@ func probeOne(ctx context.Context, t TunnelTarget) Result {
 	}
 }
 
+// errMessage reduces a dial/request failure to its cause. The full chain reads
+//
+//	Get "http://127.0.0.1:9999/": dial tcp 127.0.0.1:9999: connectex: No
+//	connection could be made because the target machine actively refused it.
+//
+// where everything before the syscall error restates an address the reader is
+// already looking at. errors.As (not a type assertion) so the *net.OpError is
+// found even when it's wrapped inside a *url.Error from the HTTP probe.
 func errMessage(err error) string {
 	if err == nil {
 		return ""
 	}
-	// net.OpError prints the full "dial tcp 127.0.0.1:8080: ..." which
-	// is more noise than signal. Trim to just the cause.
-	if oe, ok := err.(*net.OpError); ok && oe.Err != nil {
-		return oe.Err.Error()
-	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return "timeout"
+	}
+	var oe *net.OpError
+	if errors.As(err, &oe) && oe.Err != nil {
+		return oe.Err.Error()
 	}
 	return err.Error()
 }

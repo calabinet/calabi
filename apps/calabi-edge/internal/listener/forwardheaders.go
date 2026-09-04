@@ -27,7 +27,7 @@ import (
 //	                   front keeps its (more accurate) value.
 //	X-Forwarded-Host   the original Host. Set only when ABSENT (same reason).
 //
-// Always on, both editions. A per-tunnel header-rewrite rule runs AFTER this
+// Always on. A per-tunnel header-rewrite rule runs AFTER this
 // (see the transform composed in http.go/https.go), so an operator who wants
 // different behavior — e.g. strip X-Forwarded-For — can still override it.
 //

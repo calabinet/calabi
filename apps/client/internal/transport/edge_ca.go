@@ -18,6 +18,17 @@ import (
 //go:embed certs/edge-ca.pem
 var embeddedEdgeCA []byte
 
+// EdgeRootCAs returns the trust pool for verifying any server certificate the
+// platform edge CA signed: the edge :7443 control listener AND — since the mesh
+// coordinator grew native TLS (R0′) — coord's public gRPC. It reads the embedded
+// root plus the optional CALABI_EDGE_CA_FILE override, so the mesh datapath can
+// dial coord with the exact trust root the edge control transport already uses;
+// coord presents an edge-CA-signed server cert (calabi-coord CALABI_COORD_TLS_*), and
+// this build needs no extra trust distribution to verify it.
+func EdgeRootCAs() (*x509.CertPool, error) {
+	return edgeRootCAs(os.Getenv("CALABI_EDGE_CA_FILE"))
+}
+
 // edgeRootCAs builds the trust pool used to verify the edge :7443 control
 // listener: the embedded platform root plus an optional extra CA file
 // (CALABI_EDGE_CA_FILE — a dev/override hook).

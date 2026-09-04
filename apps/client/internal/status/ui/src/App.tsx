@@ -8,6 +8,8 @@ import AuthGate from "./components/AuthGate";
 import Layout from "./components/Layout";
 import Overview from "./pages/Overview";
 import Tunnels from "./pages/Tunnels";
+import Mesh from "./pages/Mesh";
+import Services from "./pages/Services";
 import Logs from "./pages/Logs";
 import Login from "./pages/Login";
 import Settings from "./pages/Settings";
@@ -27,6 +29,8 @@ export default function App() {
         <Route index element={<Navigate to="/overview" replace />} />
         <Route path="overview" element={<Overview />} />
         <Route path="tunnels" element={<Tunnels />} />
+        <Route path="mesh" element={<Mesh />} />
+        <Route path="services" element={<Services />} />
         <Route path="logs" element={<Logs />} />
         <Route path="tools" element={<Tools />} />
         <Route path="settings" element={<Settings />} />

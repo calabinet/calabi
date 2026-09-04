@@ -17,6 +17,21 @@ import (
 	"runtime"
 )
 
+// MeshServiceDecl is one locally declared mesh service. A DECLARATION only:
+// the coordinator records it as pending and an admin authorizes it in the web
+// console before any ACL "svc:" rule matches.
+type MeshServiceDecl struct {
+	Name  string `json:"name"`
+	Proto string `json:"proto"` // tcp | udp
+	Port  int    `json:"port"`
+	// Target is what THIS machine dials to reach the application, e.g.
+	// "127.0.0.1:5432" or a box on its LAN. Empty means 127.0.0.1:<port>.
+	// Opening Port in the packet filter does nothing if the app is bound to
+	// loopback only, which is why the two are separate.
+	Target string `json:"target,omitempty"`
+	Note   string `json:"note,omitempty"`
+}
+
 // Config is the on-disk credential store.
 type Config struct {
 	// Server is the default calabi-edge control endpoint.
@@ -111,6 +126,42 @@ type Config struct {
 	// Set via `calabi mode standalone|platform`; overridable per-shell with
 	// CALABI_MODE.
 	Mode string `json:"mode,omitempty"`
+
+	// Mesh (Connect) subnet-router / exit-node role for this node, set from the
+	// :7400 console or the daemon flags (--advertise-routes etc.). Persisted so a
+	// UI toggle survives a daemon restart. The platform mesh controller reads these
+	// on (re)enroll; changing them from the console restarts the mesh session.
+	// Forwarding is Linux-only — on Windows/macOS
+	// these advertise but don't forward yet.
+	MeshAdvertiseRoutes   []string `json:"mesh_advertise_routes,omitempty"`    // subnet-router CIDRs
+	MeshAdvertiseExitNode bool     `json:"mesh_advertise_exit_node,omitempty"` // advertise AS an exit node
+	MeshExitNode          string   `json:"mesh_exit_node,omitempty"`           // route THIS node's default via this peer
+	// MeshServices are services DECLARED from the local console (:7400). They
+	// join whatever --mesh-service / the config file declares and are sent at
+	// registration, where they land PENDING until an admin confirms them. Kept
+	// here (not just in the flag) so a declaration made in the UI survives a
+	// restart, exactly like the subnet-router role above.
+	MeshServices []MeshServiceDecl `json:"mesh_services,omitempty"`
+	// MeshNodeName is this machine's mesh label, minted once and kept. It is the
+	// MagicDNS name peers resolve (<name>.mesh), so re-rolling it on every daemon
+	// start — which is what happened before it was persisted — silently broke
+	// every peer that had been using it, and gave the console a device whose name
+	// changed on every restart.
+	//
+	// Deliberately NOT the hostname: on a BYOD fleet that publishes the owner's
+	// machine name to the whole org. An operator who wants a meaningful name sets
+	// --name (or renames it in the console, which pins it server-side).
+	MeshNodeName string `json:"mesh_node_name,omitempty"`
+	// MeshAcceptRoutes decides whether this node INSTALLS the subnet routes its
+	// peers advertise. A POINTER on purpose: nil means "never decided", which is
+	// what lets an upgrade tell an existing node (keep working) apart from a fresh
+	// one (start safe). resolveAcceptRoutes seeds it once and it is never nil
+	// again.
+	MeshAcceptRoutes *bool `json:"mesh_accept_routes,omitempty"`
+	// MeshRouteExcludes are prefixes to refuse even while accepting routes — the
+	// surgical case, where one advertised prefix collides with this machine's own
+	// traffic and the rest are wanted.
+	MeshRouteExcludes []string `json:"mesh_route_excludes,omitempty"`
 }
 
 // Path returns the resolved credentials file path. Honors $CALABI_CONFIG
@@ -268,4 +319,23 @@ func configDir() (string, error) {
 		return "", err
 	}
 	return filepath.Join(h, ".config"), nil
+}
+
+// SystemDataDir returns the machine-wide data directory for a privileged system
+// service (root LaunchDaemon on macOS / LocalSystem on Windows / systemd system
+// unit on Linux) — as opposed to the per-user DataDir. Used so a system service's
+// config + login state is machine-scoped and root/SYSTEM-owned instead of tucked
+// under a per-user profile.
+func SystemDataDir() string {
+	switch runtime.GOOS {
+	case "windows":
+		if d := os.Getenv("ProgramData"); d != "" {
+			return filepath.Join(d, "Calabi")
+		}
+		return `C:\ProgramData\Calabi`
+	case "darwin":
+		return "/Library/Application Support/Calabi"
+	default: // linux and other unixes
+		return "/var/lib/calabi"
+	}
 }

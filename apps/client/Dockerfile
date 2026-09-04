@@ -95,7 +95,15 @@ LABEL org.opencontainers.image.title="calabi" \
 # ca-certificates: outbound HTTPS to api.calabi.net / the edge TLS handshake.
 # tzdata: correct local-time rendering in logs (no forced TZ — this is a
 # worldwide end-user CLI, unlike the server images that pin Asia/Shanghai).
-RUN apk add --no-cache ca-certificates tzdata && \
+# iproute2: `calabi mesh up` (Connect) shells out to `ip` to assign the tun's
+# overlay /32 + route 100.64.0.0/10 (mesh/linkconfig_linux.go).
+# wireguard-tools: `wg show <ifname>` reads the mesh device's UAPI socket
+# (/var/run/wireguard/*.sock, exposed by the datapath) — the primary handshake/
+# transfer diagnostic.
+# iptables: subnet-router NAT (MESH.7) MASQUERADEs mesh traffic to advertised
+# LAN CIDRs. All unused by the http/tcp tunnel path; kept in the single client
+# image so mesh works + is debuggable out of the box.
+RUN apk add --no-cache ca-certificates tzdata iproute2 wireguard-tools iptables && \
     addgroup -S calabi && adduser -S -G calabi -h /home/calabi calabi
 
 # HOME must point at a writable dir for the non-root `calabi` user — the daemon

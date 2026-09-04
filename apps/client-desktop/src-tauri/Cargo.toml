@@ -1,0 +1,36 @@
+[package]
+name = "calabi-desktop"
+version = "1.7.0"
+description = "Calabi tunnel client — desktop shell"
+authors = ["Calabi Team"]
+license = "Proprietary"
+repository = "https://github.com/calabi/calabi"
+edition = "2021"
+rust-version = "1.75"
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0", features = ["tray-icon", "devtools"] }
+tauri-plugin-shell = "2.0"
+# Updater disabled in M7.1 (no signing keys yet). Re-add when ops
+# generates them per docs/runbook/m7-desktop.md §5:
+#   tauri-plugin-updater = "2.0"
+tauri-plugin-autostart = "2.0"
+tauri-plugin-single-instance = "2.0"
+tauri-plugin-notification = "2.0"
+tauri-plugin-opener = "2.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+tokio = { version = "1", features = ["full"] }
+log = "0.4"
+env_logger = "0.11"
+which = "6"
+
+# `custom-protocol` is what tauri-build expects to be enabled when
+# producing release builds (it switches IPC from dev to production paths).
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

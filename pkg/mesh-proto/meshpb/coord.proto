@@ -1,0 +1,305 @@
+// coord.proto — v0 of the node<->coordinator API for Calabi mesh.
+//
+// ⚠ DELIBERATELY NOT under the repo's top-level proto/ tree. The root buf module
+// (proto/buf.yaml) generates EVERYTHING it sees into pkg/api — the control-plane
+// module that is NEVER open-sourced. Generating the mesh coordination contract
+// there would defeat the isolation invariant (see ../doc.go). So this file lives
+// inside the pkg/mesh-proto module with its OWN buf module + gen config, using
+// LOCAL plugins (no network, no protoc). Regenerate with:
+//
+//   cd pkg/mesh-proto && buf generate
+//
+// -> meshpb/coord.pb.go + meshpb/coord_grpc.pb.go (package meshpb). Also wired
+// as `make proto-mesh`.
+syntax = "proto3";
+
+package calabi.mesh.v1;
+
+option go_package = "github.com/calabi/calabi/pkg/mesh-proto/meshpb;meshpb";
+
+// Coordinator is the mesh control plane ("the brains"). Nodes authenticate out
+// of band (identity-svc auth key / interactive login) and then speak only this
+// API. The coordinator sees METADATA (keys, endpoints, the netmap) but never
+// node<->node payload — that is WireGuard end-to-end encrypted.
+service Coordinator {
+  // RegisterNode enrolls a node into its meshnet (= org): the coordinator
+  // records its public keys, allocates an overlay IP (IPAM), and returns the
+  // node's identity within the mesh.
+  rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
+
+  // PullNetMap is a long-lived server stream. The coordinator pushes a fresh
+  // NetMap whenever topology or ACL changes, so the node reprograms its
+  // WireGuard peers live without reconnecting.
+  rpc PullNetMap(PullNetMapRequest) returns (stream NetMap);
+
+  // ReportEndpoints uploads the node's freshly discovered candidate endpoints
+  // (local interfaces + STUN-reflexive) and, once measured, the relay region it
+  // is closest to. The coordinator relays both to peers via their NetMap so hole
+  // punching can begin and relayed traffic takes the nearest hop (MESH.4).
+  rpc ReportEndpoints(ReportEndpointsRequest) returns (ReportEndpointsResponse);
+
+  // UpdateNodeDeclarations changes what an ALREADY-ENROLLED node declares about
+  // itself, without re-enrolling it.
+  //
+  // Declarations used to travel only on RegisterNode, so editing a service list
+  // meant tearing the session down and building it back up: new WireGuard
+  // config, re-dialled relays, re-punched direct paths, and a home-relay flap —
+  // seconds of disrupted traffic for a metadata edit that changes no addresses.
+  //
+  // It is deliberately NOT a general "update the node" call. Only the fields a
+  // node merely ASSERTS about itself live here, and each is recorded exactly as
+  // RegisterNode records it (declarations stay pending until a human confirms
+  // them; the fingerprint stays display-only). Anything an admin can pin — name,
+  // tags, route approvals — is out of scope: those are decisions ABOUT the node,
+  // and a node must not be able to move them.
+  //
+  // FailedPrecondition when the node key isn't enrolled in this meshnet, so a
+  // caller that raced a wipe falls back to RegisterNode instead of silently
+  // doing nothing.
+  rpc UpdateNodeDeclarations(UpdateNodeDeclarationsRequest) returns (UpdateNodeDeclarationsResponse);
+
+  // ReportServiceHealth uploads what a node OBSERVES about the services it
+  // declares — not what it claims about them.
+  //
+  // It answers the question the console otherwise cannot: an admin writes a rule
+  // naming a service, confirms it, and it still does not work. The usual cause
+  // is that the application is bound to 127.0.0.1 only, so opening the port in
+  // the packet filter changes nothing — a peer's packet arrives on the tun
+  // interface addressed to the overlay address and finds no socket. The node is
+  // the only party that can tell the two cases apart, by dialing BOTH its own
+  // target and its own overlay address.
+  //
+  // Observation, deliberately, not configuration: nothing here grants anything,
+  // so a node lying costs it a wrong badge on its own row. The coordinator keeps
+  // only the CURRENT value and does not persist it — a history of which port
+  // answered when is exactly the kind of record §八 says not to accumulate.
+  rpc ReportServiceHealth(ReportServiceHealthRequest) returns (ReportServiceHealthResponse);
+}
+
+message RegisterNodeRequest {
+  // Base64 (WireGuard-style) public keys. Private keys never leave the node.
+  string node_key = 1;
+  string disco_key = 2;
+  // Human label used for MagicDNS (MESH.6): <name>.<meshnet>.mesh.calabi.net
+  string name = 3;
+  // Opaque auth-key/token proving the node may join a meshnet (verified by
+  // identity-svc on the platform build; a static file on the community coord).
+  string auth_key = 4;
+  // Highest protocol version + capabilities the node speaks (see version.go).
+  uint32 protocol_version = 5;
+  repeated string capabilities = 6;
+  // Subnet routes this node advertises (CIDRs it can forward to, e.g.
+  // "192.168.1.0/24"). The coordinator, once it approves them, adds them to this
+  // node's allowed_ips in peers' netmaps so they route the CIDR here (MESH.7).
+  repeated string advertised_routes = 7;
+  // device_fingerprint is the daemon's per-install id (the same one it registers
+  // with on the Publish side). A CLAIM, like name: it exists only so the console
+  // can offer "open this machine's client details" and is never used for
+  // authorization. The console resolves it against the org's own device list and
+  // shows nothing when it doesn't match, so a bogus value costs a link, not
+  // access. Empty from a daemon that has never registered a device.
+  string device_fingerprint = 8;
+  // Services this node's OPERATOR declared in its config (name + proto + port).
+  // A CLAIM, deliberately: a service name is an ACL selector, so a node that
+  // could name its own services could name one that is granted access and pull
+  // that traffic to itself. The coordinator therefore records these as PENDING
+  // and an admin confirms them in the console before any rule matches — same
+  // shape as advertised_routes above. Declared here so agent / IaC machines
+  // need no console visit to propose what they offer.
+  repeated DeclaredService declared_services = 9;
+}
+
+// DeclaredService is one entry of RegisterNodeRequest.declared_services.
+message DeclaredService {
+  string name = 1;   // MagicDNS-style label; it becomes an ACL "svc:" selector
+  string proto = 2;  // "tcp" or "udp"
+  // port is what mesh PEERS dial on this node's overlay address.
+  uint32 port = 3;
+  string note = 4;   // free text for the console; never interpreted
+  // target is what the NODE ITSELF dials to reach the application, e.g.
+  // "127.0.0.1:5432" or a box on its LAN. Empty means 127.0.0.1:<port>.
+  //
+  // The two differ for a reason worth stating: opening `port` in the packet
+  // filter does nothing if the application is bound to loopback only, because a
+  // peer's packet arrives on the tun interface addressed to the overlay address
+  // and finds no socket there. Recording the target is also what lets a service
+  // be published as a tunnel without asking for the address a second time — a
+  // tunnel's local_addr IS this value.
+  string target = 5;
+}
+
+message RegisterNodeResponse {
+  int64 node_id = 1;
+  // Allocated overlay address, e.g. "100.64.0.5".
+  string overlay_addr = 2;
+  // Negotiated working subset (intersection of node + coordinator caps).
+  uint32 protocol_version = 3;
+  repeated string capabilities = 4;
+}
+
+// ServiceHealth is one service as the node itself sees it.
+message ServiceHealth {
+  string name = 1;
+  // target_ok: the application answers where THIS MACHINE dials it.
+  bool target_ok = 2;
+  // mesh_ok: the machine can reach the service on its OWN overlay address, i.e.
+  // the way a peer would. target_ok && !mesh_ok is the loopback-only case.
+  bool mesh_ok = 3;
+  // checked: false when the node could not test at all (a udp service, where a
+  // connectionless dial proves nothing, or no overlay address yet). The two
+  // booleans above are then meaningless — absence of a result is not a failure,
+  // and rendering it as one would be worse than saying nothing.
+  bool checked = 4;
+}
+
+message UpdateNodeDeclarationsRequest {
+  // Authenticated the same way RegisterNode is: the auth key resolves to the
+  // meshnet, and node_key selects the node WITHIN it. A key that resolves to a
+  // different meshnet therefore cannot reach this node at all.
+  string auth_key = 1;
+  string node_key = 2;
+  repeated DeclaredService declared_services = 3;
+  // Empty means "no change", not "clear it". A node reports "" both when it has
+  // no Publish-side registration yet and when its config momentarily won't
+  // read, and the second must not erase a good value.
+  string device_fingerprint = 4;
+}
+message UpdateNodeDeclarationsResponse {
+  int64 node_id = 1;
+}
+
+message ReportServiceHealthRequest {
+  int64 node_id = 1;
+  repeated ServiceHealth services = 2;
+}
+
+message ReportServiceHealthResponse {}
+
+message PullNetMapRequest {
+  int64 node_id = 1;
+}
+
+// NetMap is the ACL-filtered view of the meshnet a single node is allowed to
+// see. Peers the ACL denies are ABSENT (first layer of isolation).
+message NetMap {
+  Peer self = 1;
+  repeated Peer peers = 2;
+  DERPMap derp_map = 3;
+  // Packet filter this node ENFORCES on inbound traffic (MESH.5b). The
+  // coordinator compiles it from the meshnet's ACL for this node specifically:
+  // "these sources may reach these ports OF MINE". Enforcement is on the
+  // RECEIVING side on purpose — a sender that lies (or is compromised) still
+  // can't get past the receiver's own copy of the rules.
+  //
+  // Empty list = allow nothing beyond what the netmap already permits at the
+  // host level; a node that is meant to be fully open gets an explicit
+  // allow-everything rule instead. (Clients that predate this field ignore it
+  // and keep host-level filtering only.)
+  repeated FilterRule packet_filter = 4;
+  // filter_enabled distinguishes the two very different meanings of an EMPTY
+  // packet_filter:
+  //   false — this coordinator doesn't compile filters (an older build): the
+  //           node must NOT filter, or upgrading a client would cut its traffic.
+  //   true  — the filter is authoritative: an empty list means "nothing may
+  //           reach me", which is what an ACL that names this node in no rule
+  //           actually says.
+  // A field that could be inferred from the list being empty would have to pick
+  // one of those, and either choice is an outage for the other case.
+  bool filter_enabled = 5;
+  // relay_grant is the coordinator's signed authorization for THIS node to use
+  // relays (R0'). Opaque here on purpose: the node forwards the bytes verbatim
+  // to a relay, which verifies them with the coordinator's public key held as
+  // static config — so a relay decides who may connect WITHOUT ever talking to
+  // the control plane. Format and rules in ../relaygrant.go.
+  //
+  // Empty means the node has no authorization to present. That is the normal
+  // state on a coordinator that doesn't issue grants (relays then must not
+  // require them), and it is also how an org over its traffic quota is cut off
+  // from the platform's relays — note the coordinator downgrades the grant's
+  // SCOPE rather than withholding it, so the org keeps the relays it runs
+  // itself. See docs/runbook/facility-and-service-model.md §3.5.
+  //
+  // Grants expire, so the coordinator re-sends the netmap well before they do;
+  // a relay may also re-challenge a live link at any time.
+  bytes relay_grant = 6;
+  // self_services is the coordinator's registry of the services registered on
+  // THIS node, sent so the node can self-check them (F3b).
+  //
+  // Needed because the registry is not only what the node declared. A manager
+  // can enter a service in the console (F4a), and nothing else ever pushes that
+  // back down — so without this field a console-authored service could never
+  // show a reachability result at all. That is exactly the kind most likely to
+  // be pointed at the wrong address, since nobody was standing at the machine
+  // when it was entered.
+  //
+  // OBSERVATION ONLY, and the direction is worth being explicit about. This is
+  // the coordinator handing a node addresses to dial, which sounds like it
+  // widens what the control plane can make a machine do — it does not: an org
+  // admin can already point that daemon anywhere via a tunnel's local_addr, and
+  // a probe is strictly weaker (connect, then close, nothing forwarded).
+  // Nothing here authorizes anything; the result is a badge on the node's own
+  // row. Only this node's own services appear, and only APPROVED ones (the same
+  // set the ACL sees) — a node's own unconfirmed declarations are already in its
+  // config, so it checks those without being told.
+  repeated DeclaredService self_services = 7;
+  // MagicDNS records land here in MESH.6.
+}
+
+// FilterRule allows traffic from any of src_cidrs to any of dst_ports on the
+// receiving node. Ports are the node's OWN listening ports.
+message FilterRule {
+  repeated string src_cidrs = 1;
+  repeated PortRange dst_ports = 2;
+}
+
+// PortRange is an inclusive port span for one protocol. proto is "tcp", "udp",
+// or "" for any; first=0,last=65535 means every port.
+message PortRange {
+  uint32 first = 1;
+  uint32 last = 2;
+  string proto = 3;
+}
+
+message Peer {
+  int64 node_id = 1;
+  string node_key = 2;
+  string disco_key = 3;
+  string overlay_addr = 4;
+  // Allowed IPs routed to this peer (its /32 + any subnet routes it advertises).
+  repeated string allowed_ips = 5;
+  // Known candidate endpoints for direct connections (host:port).
+  repeated string endpoints = 6;
+  // Region code of the peer's DERP home relay.
+  string derp_home = 7;
+  // MagicDNS label — the node's name, resolved to its overlay IP by the
+  // client-side resolver (MESH.6).
+  string name = 8;
+}
+
+message DERPMap {
+  repeated DERPRegion regions = 1;
+}
+
+message DERPRegion {
+  string code = 1; // e.g. "lax", "sgp"
+  repeated DERPNode nodes = 2;
+}
+
+message DERPNode {
+  string host_name = 1;
+  int32 derp_port = 2;
+  int32 stun_port = 3;
+}
+
+message ReportEndpointsRequest {
+  int64 node_id = 1;
+  repeated string endpoints = 2; // host:port candidates
+  // Region code of the relay the node measured as its LOWEST-latency home
+  // (MESH.4 B2b). The node picks it by probing each region's STUN endpoint from
+  // the DERP map; the coordinator accepts it only if the region exists in the
+  // map it published, and distributes it to peers as this node's derp_home so
+  // they relay via the closest hop. Empty = no change (keep the current home).
+  string home_region = 3;
+}
+
+message ReportEndpointsResponse {}

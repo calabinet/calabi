@@ -1,0 +1,18 @@
+version: v2
+# LOCAL-plugin codegen for the mesh contract (no network, no protoc — just the
+# Go plugins on PATH: protoc-gen-go, protoc-gen-go-grpc). Run from this dir:
+#   cd pkg/mesh-proto && buf generate
+# Output lands next to the .proto (paths=source_relative), so meshpb/coord.proto
+# -> meshpb/coord.pb.go + meshpb/coord_grpc.pb.go (package meshpb).
+plugins:
+  - local: protoc-gen-go
+    out: .
+    opt:
+      - paths=source_relative
+  - local: protoc-gen-go-grpc
+    out: .
+    opt:
+      - paths=source_relative
+      - require_unimplemented_servers=true
+inputs:
+  - directory: .

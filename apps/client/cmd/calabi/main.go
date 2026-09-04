@@ -237,6 +237,9 @@ func main() {
 	case "mode":
 		// platform | standalone — the client's explicit operating mode.
 		os.Exit(runMode(rest))
+	case "mesh":
+		// Connect (WireGuard mesh) subsystem — `calabi mesh up|status|down`.
+		os.Exit(runMesh(rest))
 	case "ui":
 		// Removed: `calabi ui` used to start its own (sessionless, empty)
 		// status server and open a browser, which collided with the daemon
@@ -245,7 +248,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "calabi ui: removed — open http://127.0.0.1:7400 in your browser. The dashboard is served by the daemon (`calabi login` starts one; or run `calabi daemon`).")
 		os.Exit(2)
 	case "version", "--version", "-v":
-		fmt.Printf("calabi %s (%s edition)\n", version, edition)
+		fmt.Printf("calabi %s\n", version)
 	case "help", "--help", "-h":
 		printUsage()
 	default:
@@ -279,6 +282,9 @@ Usage:
   calabi http <local-port> [--name NAME] [--domain DOMAIN]
   calabi tcp  <local-port> [--name NAME] [--remote-port N]
   calabi udp  <local-port> [--name NAME] [--remote-port N]
+  calabi mesh up --coord HOST:PORT --relay HOST:PORT --auth-key KEY
+     (join a private WireGuard mesh — device-to-device Connect; needs a tun
+      device + privileges. See "calabi mesh help".)
   calabi version
   calabi help
 

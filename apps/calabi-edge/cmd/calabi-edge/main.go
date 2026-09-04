@@ -61,17 +61,14 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
-	// Self-hosters often run without a config file; let CALABI_EDGE_MODE override
-	// the top-level `mode` (platform | standalone) without editing YAML. Env wins
-	// over the file when set.
-	if v := strings.TrimSpace(os.Getenv("CALABI_EDGE_MODE")); v != "" {
-		cfg.Mode = v
-	}
-	// The community edition has no control-plane code compiled in, so it can
-	// only run standalone — force the mode so the trust + normalize logic below
-	// agrees with reality regardless of what a stray YAML says.
-	if edition == "community" {
-		cfg.Mode = "standalone"
+	// Self-hosters often run without a config file at all — a relay-only node has
+	// no domain, no certificate and nothing else to configure. Env overrides for
+	// mode / role / the relay block keep that possible now that the standalone
+	// derp-node binary (which was ENTIRELY env-driven) is retired. Env wins over
+	// the file. See internal/config/env.go.
+	cfg, err = config.ApplyEnv(cfg)
+	if err != nil {
+		return err
 	}
 	logger := newLogger(cfg.Log)
 
@@ -84,11 +81,30 @@ func run() error {
 	if byoiRefused {
 		logger.Warn("mode=standalone ignored: edge is configured for bff-edge (BYOI / control-plane cert); keeping platform semantics")
 	}
+	// Role selects which data plane(s) run (edge/derp merge). Reject a typo now
+	// rather than silently run neither. Empty defaults to "edge" (unchanged).
+	if err := cfg.ValidateRole(); err != nil {
+		return err
+	}
+	// CALABI_ENV=production: none of the dev fallbacks (static token table,
+	// the shipped placeholder credential, an ungranted platform relay) may be
+	// active. Checked AFTER NormalizeForMode so "no control plane" reads as the
+	// stated standalone intent rather than a missing dependency.
+	// config/prodguard.go + F0.2.
+	if err := cfg.ValidateProductionPosture(); err != nil {
+		return err
+	}
+	// A relay with no label can run, but it cannot be registered in the org's
+	// DERP map (region code is "self-"+label) and its usage reports have no
+	// self-<label> region to attribute to — so no mesh node will ever home on
+	// it. Warn loudly rather than start a relay nobody can reach.
+	if cfg.RunsRelay() && cfg.Relay.Label == "" {
+		logger.Warn("relay role has no relay.label: the relay runs but cannot be registered in the DERP map or reported for usage — set relay.label")
+	}
 
 	logger.Info("starting calabi-edge",
-		"node_id", cfg.NodeID,
+		"node_label", cfg.NodeLabel,
 		"region", cfg.Region,
-		"edition", edition,
 		"control_addr", cfg.Control.Addr,
 		"http_addr", cfg.HTTP.Addr,
 		"base_domain", cfg.HTTP.BaseDomain,
@@ -167,7 +183,19 @@ func run() error {
 	// dev defaults.
 	edgeID := cfg.Tunnel.EdgeNodeID
 	if edgeID == 0 {
-		edgeID = hashNodeIDForConfig(cfg.NodeID)
+		edgeID = hashNodeIDForConfig(cfg.NodeLabel)
+		// The hash always lands in the >= 1e9 BYOI reserved range, so with a
+		// control plane wired this fallback is never what the operator meant:
+		// in cluster mode the edge registers under an id bff-console's
+		// /v1/edges hides from every client, and in bff-edge mode bff-edge
+		// overwrites the wire id from the cert CN, leaving this node's local
+		// self-id disagreeing with what the control plane recorded. Both boot
+		// clean and fail invisibly. A config-less standalone / dev edge has no
+		// id legitimately, so this warns rather than refusing to start.
+		if cfg.Tunnel.Addr != "" || cfg.MultiRegion.IsBFFEdge() {
+			logger.Warn("edge_node_id not set; derived from a hash of node_label, which lands in the BYOI reserved range — set a small unique edge_node_id",
+				"node_label", cfg.NodeLabel, "derived_edge_node_id", edgeID)
+		}
 	}
 
 	registrar := &routerBridge{r: r, logger: logger, tcpObs: metricsSet, udpObs: metricsSet}
@@ -238,7 +266,7 @@ func run() error {
 	ctrl := listener.NewControl(logger, listener.ControlOptions{
 		Addr:     cfg.Control.Addr,
 		TLS:      tlsCfg,
-		ServerID: cfg.NodeID,
+		ServerID: cfg.NodeLabel,
 		Region:   cfg.Region,
 		// surface base_domain to daemons so they render TCP/UDP
 		// public addrs as `<base>:<port>` instead of the dev-confusing
@@ -321,11 +349,30 @@ func run() error {
 	}, logger)
 
 	errCh := make(chan error, 16)
-	go func() { errCh <- labelErr("control", ctrl.Run(ctx)) }()
-	go func() { errCh <- labelErr("http", http.Run(ctx)) }()
-	go func() { errCh <- labelErr("https", httpsListener.Run(ctx)) }()
-	go func() { errCh <- labelErr("sni", sni.Run(ctx)) }()
-	go func() { errCh <- labelErr("forward", forward.Run(ctx)) }()
+	// Edge (tunnel) datapath — started only for role edge/both. For role=relay
+	// these listeners are built above but never bind a port, so a relay-only node
+	// serves no tunnels. Empty role ⇒ RunsEdge()=true ⇒ every existing edge is
+	// unchanged.
+	if cfg.RunsEdge() {
+		go func() { errCh <- labelErr("control", ctrl.Run(ctx)) }()
+		go func() { errCh <- labelErr("http", http.Run(ctx)) }()
+		go func() { errCh <- labelErr("https", httpsListener.Run(ctx)) }()
+		go func() { errCh <- labelErr("sni", sni.Run(ctx)) }()
+		go func() { errCh <- labelErr("forward", forward.Run(ctx)) }()
+	}
+	// Relay-only: state the isolation claim in the log so it can be checked
+	// against reality (`ss -ltnp` should show ONLY these two ports). Since the
+	// standalone derp-node binary was retired this is what replaces "you can
+	// it is a different process" — see internal/config/roleguard.go.
+	if cfg.RunsRelay() && !cfg.RunsEdge() {
+		logger.Info("relay-only node: NO TLS-terminating listener bound; this process serves the mesh relay data port and the STUN responder only",
+			"derp_port", cfg.Relay.RelayDERPPort(), "stun_port", cfg.Relay.RelaySTUNPort())
+	}
+	// Mesh-relay datapath — started for role relay/both. Ciphertext-only, isolated
+	// from the edge's TLS termination.
+	if cfg.RunsRelay() {
+		go func() { errCh <- labelErr("relay", runRelay(ctx, cfg.Relay, logger, deps.relayReporter)) }()
+	}
 	go func() { errCh <- labelErr("admin", obs.Run(ctx)) }()
 	go func() { errCh <- labelErr("configreload", reloader.Run(ctx)) }()
 	// Platform background goroutines (presence / edge-registrar / usage /
@@ -585,6 +632,25 @@ func labelErr(name string, err error) error {
 
 // hashNodeIDForConfig mirrors tunnelstore.hashToID so the same edge_node_id
 // is used in both tunnel-svc and config-svc registrations.
+// advertisedAddr returns the host:port this edge registers in the edge
+// directory — the address daemons get from /v1/edges and dial directly, and the
+// host a platform relay's DERP endpoint is derived from.
+//
+// control.addr is a BIND address and public.addr an ADVERTISED one; they are
+// not interchangeable, which is why falling back from one to the other is only
+// safe in a specific case. On a single host ":7443" happens to work as a dial
+// string (Go reads it as localhost), so dev configs legitimately omit
+// public.addr. Anywhere the node reaches the control plane through bff-edge it
+// is by definition NOT on the same host as its daemons, and advertising a bind
+// address there registers the edge as reachable when nothing can reach it —
+// that is what the second return value flags.
+func advertisedAddr(cfg config.Config) (addr string, unreachable bool) {
+	if a := strings.TrimSpace(cfg.Public.Addr); a != "" {
+		return a, false
+	}
+	return cfg.Control.Addr, cfg.MultiRegion.IsBFFEdge()
+}
+
 func hashNodeIDForConfig(label string) int64 {
 	if label == "" {
 		return 1

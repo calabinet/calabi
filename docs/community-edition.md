@@ -1,9 +1,9 @@
-# Calabi — Community Edition (standalone data plane)
+# Calabi — self-hosting the data plane
 
 Calabi's **data plane is open source**: `calabi-edge`, the edge that accepts
 public traffic, and the `calabi` client that forwards it to your local services.
 The **control plane** (accounts, orgs, billing, the managed global edge fleet) is
-a separate, closed, hosted product. The Community Edition is the data plane on
+a separate, closed, hosted product. This repository is the data plane on
 its own — it never phones home, needs no account, and runs entirely on
 infrastructure you own.
 
@@ -19,7 +19,7 @@ you need.
 ```
 
 What the hosted Calabi platform adds on top — accounts, a managed global edge
-fleet, billing — is listed under *What the Community Edition does not include*,
+fleet, billing — is listed under *What self-hosting does not give you*,
 below.
 
 ---
@@ -39,7 +39,7 @@ Or directly (on Windows, name the outputs `*.exe`):
 ( cd apps/calabi-edge && go build -o calabi-edge ./cmd/calabi-edge )
 ( cd apps/client      && go build -o calabi      ./cmd/calabi )
 
-calabi version   # → calabi <ver> (community edition)
+calabi version   # → calabi <ver>
 ```
 
 `make build` adds the `.exe` suffix automatically on Windows. A native build on
@@ -117,7 +117,7 @@ accepted_tokens:
     client_id: client-1
 ```
 
-- **`mode`** — always `standalone` here; the Community Edition has no managed
+- **`mode`** — set it to `standalone` for a self-hosted stack; that is what stops the edge from expecting a managed
   platform to connect to. The edge *trusts the security policy the client
   supplies* in `NEW_PROXY` — which is exactly what you want when you own both ends.
 - **`accepted_tokens`** — your auth. Hot-reloadable: edit the file and the edge
@@ -147,9 +147,11 @@ Environment:
 
 ### Per-tunnel security policy
 
-The Community Edition supports two access-control features per tunnel: **IP
-allow/deny** (all tunnel types) and **HTTP Basic auth** (`http` only). Passwords
-are bcrypt-hashed **locally** before they leave your machine:
+Every per-tunnel access control ships in this binary: **IP allow/deny** (all
+tunnel types), **HTTP Basic auth**, **connection rate limiting**,
+**request-header rewrite**, and the **OAuth login wall** (Google / GitHub) —
+the last three are HTTP-only. Passwords are bcrypt-hashed **locally** before
+they leave your machine:
 
 ```bash
 calabi http 8080 --domain app.example.com \
@@ -160,9 +162,11 @@ calabi http 8080 --domain app.example.com \
 
 The edge enforces these (IP allow/deny + Basic auth) for that tunnel.
 
-> Rate limiting, request-header rewrite, and the OAuth login wall are
-> platform-only and not part of the Community Edition — the flags don't exist
-> here, and a community edge ignores those blocks if a config carries them.
+> These used to be platform-only. They are not any more: one binary ships and
+> a self-hosted edge enforces the same policy set as a managed one. On the
+> hosted product the same features are gated by PLAN, and that gate lives in
+> the control plane (tunnel-svc), not in this code — so removing the edition
+> split did not open a paid feature to hosted users.
 
 ---
 
@@ -263,22 +267,19 @@ certificate. Options today:
 
 ---
 
-## What the Community Edition does *not* include
+## What self-hosting does *not* give you
 
-These are control-plane features, not part of the Community Edition (the
-commands print a "platform-only" notice):
+These are control-plane features. The commands exist in the binary but need a
+managed account to do anything:
 
 - `calabi login / logout / org / certs / domains / clients`,
 - the managed presence/CONFIG_PUSH sync daemon (the local supervisor `calabi
   daemon --config …` is the standalone equivalent),
 - managed multi-region edge discovery / a global edge fleet,
-- the advanced per-tunnel access controls — connection rate limiting,
-  request-header rewrite, and the OAuth (Google/GitHub) login wall (IP allow/deny
-  and HTTP Basic auth ARE included),
 - accounts, organizations, billing, the web console at console.\<host\>.
 
-These live in the hosted product. The community client + edge are a complete,
-standalone tunneling stack on their own.
+These live in the hosted product. The client + edge in this repository are a
+complete, standalone tunneling stack on their own.
 
 ---
 

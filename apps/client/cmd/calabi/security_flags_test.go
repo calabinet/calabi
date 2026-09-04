@@ -70,4 +70,3 @@ func TestBuildConfigJSON_BasicAuthMalformed(t *testing.T) {
 		t.Fatal("want error for basic-auth missing ':'")
 	}
 }
-

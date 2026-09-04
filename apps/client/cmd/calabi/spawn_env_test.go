@@ -12,7 +12,7 @@ func TestAbsolutizePathEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	in := []string{
-		"PATH=/usr/bin",                              // untouched (not a target key)
+		"PATH=/usr/bin", // untouched (not a target key)
 		"CALABI_EDGE_CA_FILE=deploy/dev/certs/ca.crt", // relative → absolutized
 		"CALABI_CONFIG=" + absCA,                      // already absolute → untouched
 		"CALABI_SERVER=localhost:7443",                // not a target key → untouched

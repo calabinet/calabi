@@ -19,7 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,6 +82,9 @@ type localConfig struct {
 	// Tunnels has no omitempty: an empty list persists as `tunnels: []`, which is
 	// a valid "connect, create tunnels in the console" config worth keeping explicit.
 	Tunnels []localTunnelConfig `yaml:"tunnels"`
+	// Mesh is the optional Connect (WireGuard mesh) block. Absent/disabled = the
+	// daemon supervises tunnels only. See daemon_local_mesh.go.
+	Mesh meshConfig `yaml:"mesh,omitempty"`
 }
 
 // localTunnelConfig is one tunnel in the local config.
@@ -192,6 +195,9 @@ func runLocalDaemon(args []string) int {
 	// per-day byte totals next to the pidfile so the console's today / month
 	// traffic survive restarts. Started below once we have a context.
 	meter := newUsageMeter(filepath.Join(filepath.Dir(lock.Path()), "usage.json"))
+	// Connect (mesh) traffic meter — the 组网流量 counterpart, per-machine daily
+	// buckets behind the overview's mesh today/month + the chart's second series.
+	meshMeter := newMeshUsageMeter(filepath.Join(filepath.Dir(lock.Path()), "mesh-usage.json"))
 
 	// Per-tunnel upstream health prober: the same loop the platform daemon runs,
 	// reading the live tunnel set from status.State. Without it the console shows
@@ -205,15 +211,34 @@ func runLocalDaemon(args []string) int {
 	// /v1/me reports plan.code="standalone"); create / delete / edit-security
 	// write through the supervisor (live reconcile + YAML persistence).
 	// internal/localweb +
+	// Connect (WireGuard mesh): build the runner now (not started) so the local
+	// API can serve its status; it's launched below once we have a signal context.
+	var meshR *meshRunner
+	if cfg.Mesh.Enabled {
+		if cfg.Mesh.complete() {
+			meshR = newMeshRunner(logger, cfg.Mesh)
+		} else {
+			logger.Warn("mesh: enabled but coord/relay/auth_key incomplete — not starting Connect")
+		}
+	}
+	var meshSrc localweb.MeshSource
+	if meshR != nil {
+		meshSrc = meshR // avoid a non-nil interface wrapping a nil *meshRunner
+	}
+
 	lw := localweb.New(localweb.Config{
 		Lister:    sv,
 		Writer:    sv,
 		Inspector: insp,
 		Usage:     meter,
 		Health:    health,
+		Mesh:      meshSrc,
 		Server:    server,
 	})
-	console := startLocalConsole(logger, state, lw.Register)
+	console := startLocalConsole(logger, state, func(mux *http.ServeMux) {
+		lw.Register(mux)
+		mux.HandleFunc("/v1/usage/mesh", meshMeter.handleMeshUsage)
+	})
 	if console == "" {
 		console = "http://" + envOr("CALABI_STATUS_ADDR", defaultStatusAddr)
 	}
@@ -221,7 +246,26 @@ func runLocalDaemon(args []string) int {
 	ctx, cancel := withSignalContext()
 	defer cancel()
 	go meter.run(ctx, state, 5*time.Second)
+	go meshMeter.run(ctx, func() []meshPeerBytes {
+		if meshR == nil {
+			return nil
+		}
+		st := meshR.MeshStatus()
+		out := make([]meshPeerBytes, 0, len(st.Peers))
+		for _, p := range st.Peers {
+			out = append(out, meshPeerBytes{Key: p.PublicKey, Bytes: p.RxBytes + p.TxBytes, Path: p.Path})
+		}
+		return out
+	}, 5*time.Second)
 	go health.Run(ctx)
+
+	// Connect (WireGuard mesh): bring the node onto its meshnet in the background
+	// alongside the tunnels. Stopped on shutdown before the daemon returns.
+	if meshR != nil {
+		meshR.Start(ctx)
+		defer meshR.Stop()
+		logger.Info("mesh (Connect) started", "coord", cfg.Mesh.Coord, "relay", cfg.Mesh.Relay)
+	}
 
 	logger.Info("local daemon starting",
 		"server", server, "tunnels", len(planned),
@@ -558,79 +602,15 @@ func tokenEnvRef(s string) (string, bool) {
 	return "", false
 }
 
-// isLocalIP reports whether ip is a local/intranet address a tunnel may forward
-// to: loopback, RFC1918/ULA private, link-local, or the unspecified address.
-func isLocalIP(ip net.IP) bool {
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() || ip.IsUnspecified()
-}
-
 // validateLocalUpstream enforces that a tunnel forwards to a LOCAL/intranet
 // upstream, never an arbitrary public address (which would turn the client into
-// an open relay). It requires a host:port, then:
-//   - IP literal  → must be local (loopback / 10. / 172.16. / 192.168. / LL).
-//   - "localhost" or a *.local/.lan/.internal/.home.arpa name → accepted.
-//   - any other hostname → RESOLVED; every resolved IP must be local. This is
-//     what catches "www.google.com" (resolves to a public IP). Unresolvable
-//     names are rejected (can't prove local). Resolution is best-effort with a
-//     short timeout. Mirrors the wizard's client-side check (TunnelWizard.tsx),
-//     which can't resolve DNS so it only catches the missing-port / public-IP
-//     cases and leaves the resolve check to here.
+// an open relay).
+//
+// The rule itself lives in internal/probe (localaddr.go) because the wizard's
+// reachability check needs exactly the same guard before it dials —
+// probe.ValidateLocalTarget for the cases it covers.
 func validateLocalUpstream(local string) error {
-	s := strings.TrimSpace(local)
-	if s == "" {
-		return nil // empty handled by toSessionTunnel ("missing local address")
-	}
-	if isAllDigits(s) {
-		return nil // bare numeric port → implicit loopback host
-	}
-	host, port, err := net.SplitHostPort(s)
-	if err != nil {
-		return fmt.Errorf("local address %q must be host:port (e.g. 127.0.0.1:8080 or localhost:3000)", s)
-	}
-	if !isAllDigits(port) {
-		return fmt.Errorf("local address %q has an invalid port %q", s, port)
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		if isLocalIP(ip) {
-			return nil
-		}
-		return errPublicUpstream(host)
-	}
-	lower := strings.ToLower(host)
-	if lower == "localhost" || hasLocalHostnameSuffix(lower) {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
-	if err != nil || len(ips) == 0 {
-		return fmt.Errorf("local address host %q could not be resolved to a local/intranet IP; "+
-			"use a loopback / private (10./172.16./192.168.) address or a LAN hostname", host)
-	}
-	for _, a := range ips {
-		if !isLocalIP(a.IP) {
-			return errPublicUpstream(host)
-		}
-	}
-	return nil
-}
-
-// hasLocalHostnameSuffix reports whether a (lowercased) hostname uses one of the
-// conventional local-network suffixes, which we trust as intranet without a DNS
-// lookup.
-func hasLocalHostnameSuffix(lower string) bool {
-	for _, suf := range []string{".local", ".lan", ".internal", ".home.arpa"} {
-		if strings.HasSuffix(lower, suf) {
-			return true
-		}
-	}
-	return false
-}
-
-func errPublicUpstream(host string) error {
-	return fmt.Errorf("local address %q points to a public address; a tunnel may only forward to a "+
-		"local/intranet upstream (loopback, 10./172.16./192.168., link-local) or a LAN hostname", host)
+	return probe.ValidateLocalTarget(local)
 }
 
 // resolveSubdomainDomain mirrors the edge's host resolution: an explicit full
@@ -738,34 +718,10 @@ func parseProxyKind(t string) (proto.ProxyKind, error) {
 }
 
 // normalizeLocalAddr accepts "host:port" verbatim or a bare numeric port (→
-// 127.0.0.1:port) so the config can read `local: 8080`. A non-numeric token
-// with no colon (e.g. a hostname like "myhost") is returned AS-IS, not turned
-// into "127.0.0.1:<hostname>" — that bogus host:port (port = the hostname) was
-// the cause of `local=127.0.0.1:www.google.com`. validateLocalUpstream rejects
-// the missing-port form for console creates.
+// 127.0.0.1:port). Delegates to internal/probe so the wizard's check normalizes
+// an address exactly the way the tunnel that follows it will.
 func normalizeLocalAddr(s string) string {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return ""
-	}
-	if isAllDigits(s) {
-		return "127.0.0.1:" + s
-	}
-	return s
-}
-
-// isAllDigits reports whether s is non-empty and made up solely of ASCII
-// digits (a bare port).
-func isAllDigits(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, r := range s {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
+	return probe.NormalizeLocalTarget(s)
 }
 
 // localPublicAddr formats the public address for the /status page (display

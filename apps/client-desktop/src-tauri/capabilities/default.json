@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capabilities for the Calabi desktop shell's LOCAL origin (the bundled shell/index.html loading screen). These permissions are for plugins the Rust side invokes — notifications, updater, shell — not for the WebView itself. Note the window does not stay on this origin: the native side navigates it to the daemon's console at http://127.0.0.1:<port>, which is a REMOTE origin and therefore gets none of these. What the SPA itself is allowed to call lives in daemon-spa.json.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:default",
+    "opener:default",
+    "notification:default",
+    "autostart:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "core:window:allow-close",
+    "core:app:allow-app-show",
+    "core:app:allow-app-hide"
+  ]
+}

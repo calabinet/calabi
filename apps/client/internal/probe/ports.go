@@ -66,6 +66,27 @@ type PortInfo struct {
 	LatencyMs int64         `json:"latency_ms"`
 	Hint      string        `json:"hint,omitempty"`
 	latency   time.Duration `json:"-"`
+	// MeshProbed reports whether we were able to test mesh reachability at all
+	// (false when this machine has no overlay address — i.e. it isn't on the
+	// mesh). It exists so "we couldn't check" never reads as "not reachable":
+	// that distinction is the whole reason this pair of fields is two booleans
+	// rather than one.
+	MeshProbed bool `json:"mesh_probed"`
+	// MeshReachable reports whether the port accepts a connection to this
+	// machine's OVERLAY address, not just to loopback. A service bound only to
+	// 127.0.0.1 is "listening" but unreachable from every other mesh device, and
+	// declaring it as a mesh service would authorize traffic to an endpoint that
+	// always refuses. Meaningless unless MeshProbed.
+	MeshReachable bool `json:"mesh_reachable"`
+	// BindAddrs are the addresses this port is actually bound to (0.0.0.0,
+	// 127.0.0.1, a specific IP, ...), read from the kernel's socket table. Only
+	// the enumeration path can know this — the dial path leaves it empty. It is
+	// the one fact that explains a "loopback only" verdict at a glance.
+	BindAddrs []string `json:"bind_addrs,omitempty"`
+	// Source is "enumerated" (real socket table, carries BindAddrs and every
+	// port) or "dialed" (the curated-list fallback when the platform can't be
+	// enumerated). Lets the UI say which view it is showing.
+	Source string `json:"source,omitempty"`
 }
 
 // Ports returns the dial-probe result for the default port set plus
@@ -76,7 +97,11 @@ type PortInfo struct {
 // ctx bounds the total wall time; per-port deadline is 150ms (any longer
 // and we're probably stuck behind a firewall — report "not listening"
 // and move on).
-func Ports(ctx context.Context) []PortInfo {
+// Ports dial-probes the default port set (plus $CALABI_PROBE_PORTS) on
+// loopback, and — when overlay is a non-empty mesh address for THIS machine —
+// probes each listening port there too, so the caller can tell a service that
+// the mesh can actually reach from one bound to loopback only.
+func Ports(ctx context.Context, overlay string) []PortInfo {
 	wanted := dedup(append(defaultPorts, parseExtraPorts(os.Getenv("CALABI_PROBE_PORTS"))...))
 	results := make([]PortInfo, len(wanted))
 	var wg sync.WaitGroup
@@ -100,6 +125,10 @@ func Ports(ctx context.Context) []PortInfo {
 	out := make([]PortInfo, 0, len(results))
 	for _, r := range results {
 		if r.Listening {
+			if overlay != "" {
+				r.MeshProbed = true
+				r.MeshReachable = dialOK(ctx, net.JoinHostPort(overlay, strconv.Itoa(r.Port)))
+			}
 			out = append(out, r)
 		}
 	}
@@ -112,12 +141,9 @@ func Ports(ctx context.Context) []PortInfo {
 // IPv4-only probe.
 func dialProbe(ctx context.Context, port int) PortInfo {
 	pi := PortInfo{Port: port, Hint: hintFor(port)}
-	d := net.Dialer{Timeout: 150 * time.Millisecond}
 	start := time.Now()
 	for _, host := range []string{"127.0.0.1", "[::1]"} {
-		c, err := d.DialContext(ctx, "tcp", host+":"+strconv.Itoa(port))
-		if err == nil {
-			_ = c.Close()
+		if dialOK(ctx, host+":"+strconv.Itoa(port)) {
 			pi.Listening = true
 			pi.latency = time.Since(start)
 			pi.LatencyMs = pi.latency.Milliseconds()
@@ -125,6 +151,22 @@ func dialProbe(ctx context.Context, port int) PortInfo {
 		}
 	}
 	return pi
+}
+
+// dialOK reports whether something accepts a TCP connection at addr.
+//
+// Probing the machine's own overlay address is what separates "bound to
+// 0.0.0.0" from "bound to 127.0.0.1": the overlay address is assigned locally,
+// so the connection stays on this host, but a loopback-only listener still
+// refuses it — exactly as a remote mesh peer would be refused.
+func dialOK(ctx context.Context, addr string) bool {
+	d := net.Dialer{Timeout: 150 * time.Millisecond}
+	c, err := d.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return false
+	}
+	_ = c.Close()
+	return true
 }
 
 // hintFor returns a one-word hint for well-known ports. Helps the user

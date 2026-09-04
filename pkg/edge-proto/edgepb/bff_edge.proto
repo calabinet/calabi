@@ -1,0 +1,338 @@
+// bff-edge is the public gRPC gateway that multi-region calabi-edges use
+// to reach the control plane. Edges in the same Kubernetes cluster as
+// the control plane can still dial each microservice's ClusterIP
+// directly — bff-edge only matters for cross-region edges (cn-hangzhou
+// ECS → cn-chengdu ACK control plane), where the control-plane svcs
+// stay private and bff-edge fronts them on a single mTLS gRPC port.
+//
+// The wire shape mirrors what calabi-edge already calls on identity-svc /
+// tunnel-svc / cert-svc / quota-svc / config-svc + a handful of
+// NATS-subject pumps wrapped as server-streams (cert events, session
+// evict, usage deny/allow). Reverse direction (edge → NATS publish of
+// usage reports) is collapsed into a regular unary RPC.
+//
+// Authn: mTLS client cert, CN = "edge-{edge_node_id}-{region}". bff-edge
+// parses the CN, looks the edge up in identity-svc, and injects the
+// resolved edge_node_id into the request context. Every RPC handler
+// overwrites the edge_node_id field on incoming requests with the
+// authenticated id — body-supplied values are NEVER trusted, so an
+// edge with a valid cert for edge_id=42 cannot impersonate edge_id=7.
+//
+// Versioning: append-only field tags; no renames. v1 frozen at first
+// release.
+syntax = "proto3";
+
+package calabi.v1.bff_edge;
+
+option go_package = "github.com/calabi/calabi/pkg/edge-proto/edgepb;edgepb";
+
+import "google/protobuf/timestamp.proto";
+// The edge-facing message set, mirrored from control_plane with identical field
+// numbers (see messages.proto). Importing the control_plane protos here would
+// drag their single generated Go package -- all 11 services, every Admin* RPC --
+// into anything that links this contract, which is exactly what F3 removes.
+import "edgepb/messages.proto";
+
+// BFFEdge is the gateway service. RPC names mirror the underlying
+// control-plane RPC where possible so the edge-side adapter is a
+// thin one-liner per call. The exceptions are the four Subscribe*
+// streams, which wrap NATS subjects, and ReportUsage, which wraps
+// a NATS publish (the inverse direction).
+service BFFEdge {
+  // ===== identity-svc proxies =====
+
+  // ValidateToken is hot-path per session.
+  rpc ValidateToken(ValidateTokenRequest)
+    returns (ValidateTokenResponse);
+
+  // RegisterEdgeNode is called by the edge on boot + heartbeat. bff-edge
+  // OVERWRITES edge_node_id from the mTLS cert before forwarding.
+  rpc RegisterEdgeNode(RegisterEdgeNodeRequest)
+    returns (RegisterEdgeNodeResponse);
+
+  // ReportClientPresence — same overwrite rule.
+  rpc ReportClientPresence(ReportClientPresenceRequest)
+    returns (ReportClientPresenceResponse);
+
+  // GetOrgOnlineCount — admit-time check against max_online_clients.
+  rpc GetOrgOnlineCount(GetOrgOnlineCountRequest)
+    returns (GetOrgOnlineCountResponse);
+
+  // ListEdges (M15 mesh) — the edge's mesh resolver polls this to build
+  // its same-region peer address book. bff-edge FORCES the region filter
+  // from the mTLS cert so an edge can only ever enumerate its own region.
+  rpc ListEdges(ListEdgesRequest)
+    returns (ListEdgesResponse);
+
+  // ===== tunnel-svc proxies =====
+
+  // CreateTunnel — edge-internal Persist path. bff-edge OVERWRITES the
+  // request's edge_node_id field with the authenticated edge id.
+  rpc CreateTunnel(CreateTunnelRequest)
+    returns (Tunnel);
+
+  // ClaimTunnel — overwrite edge_node_id.
+  rpc ClaimTunnel(ClaimTunnelRequest)
+    returns (Tunnel);
+
+  // ReportStatus — overwrite edge_node_id.
+  rpc ReportStatus(ReportStatusRequest)
+    returns (ReportStatusResponse);
+
+  // ListTunnels — fan-out queries the edge does to seed its
+  // in-memory route table on boot. Org-scoped via the request,
+  // not edge-scoped, so no overwrite.
+  rpc ListTunnels(ListTunnelsRequest)
+    returns (ListTunnelsResponse);
+
+  // ListEdgeClaimedPorts — overwrite edge_node_id with caller id.
+  rpc ListEdgeClaimedPorts(ListEdgeClaimedPortsRequest)
+    returns (ListEdgeClaimedPortsResponse);
+
+  // DeleteTunnel — used by the edge when a client disconnects with
+  // ephemeral tunnels. No edge_node_id field; row-id authz lives in
+  // tunnel-svc.
+  rpc DeleteTunnel(DeleteTunnelRequest)
+    returns (DeleteTunnelResponse);
+
+  // Resolve — wildcard-DNS cross-edge lookup. No edge_node_id field.
+  rpc Resolve(ResolveRequest)
+    returns (ResolveResponse);
+
+  // ResolveOwners (M15 mesh) — the region's {domain → owner edge} map
+  // the mesh resolver polls to forward a visitor connection to the peer
+  // that owns a subdomain this edge doesn't hold. Read-only, scoped by
+  // base_domain (itself region-specific); no edge_node_id field.
+  // ETag-style conditional poll via known_generation.
+  rpc ResolveOwners(ResolveOwnersRequest)
+    returns (ResolveOwnersResponse);
+
+  // ReclaimTunnel (M4.3) — overwrite edge_node_id.
+  rpc ReclaimTunnel(ReclaimTunnelRequest)
+    returns (ReclaimTunnelResponse);
+
+  // DrainEdge (M4.3) — overwrite edge_node_id with caller id.
+  rpc DrainEdge(DrainEdgeRequest)
+    returns (DrainEdgeResponse);
+
+  // ===== cert-svc proxies =====
+
+  // GetCert is edge-only (returns the decrypted private key). The mTLS
+  // cert is the authz; bff-edge does not gate per-org here.
+  rpc GetCert(GetCertRequest)
+    returns (GetCertResponse);
+
+  // ListCerts — same authz model.
+  rpc ListCerts(ListCertsRequest)
+    returns (ListCertsResponse);
+
+  // RenewEdgeCert rotates the edge's OWN short-lived mTLS client cert before
+  // it expires (F1, byoi-seat-and-cert-lifecycle). Unlike GetCert, bff-edge
+  // GATES this per org: org + edge_node_id come from the authenticated mTLS
+  // cert (never the body), and a fresh bundle is issued only while the org
+  // still has BYOI entitlement (effective edge cap > 0 and org active). A
+  // revoked cert can't reach here at all (mTLS/CRL) → revocation is a hard
+  // cut; losing entitlement (e.g. downgrade to free with no purchased seats)
+  // is a soft landing — renewal is refused and the short cert simply expires.
+  // Reuses the edge's persisted region/public_addr; returns the same bundle
+  // shape as issuance.
+  rpc RenewEdgeCert(RenewEdgeCertRequest)
+    returns (IssueEdgeCertResponse);
+
+  // ===== quota-svc proxies =====
+
+  rpc GetEffectiveQuota(GetEffectiveRequest)
+    returns (EffectiveQuota);
+
+  // ===== config-svc proxy (bidi stream) =====
+  //
+  // SubscribeConfig splices the edge's Subscribe stream to config-svc's
+  // server-side stream. bff-edge does NOT inject ctx-based edge_id here
+  // because HelloEdge (the first frame from the edge) already carries
+  // edge_node_id — bff-edge verifies it matches the mTLS cert and
+  // rejects the stream with PermissionDenied on mismatch.
+  rpc SubscribeConfig(stream EdgeMessage)
+    returns (stream ConfigMessage);
+
+  // ===== NATS-subject bridges =====
+  //
+  // Each Subscribe* RPC opens a NATS subscription on bff-edge's side,
+  // filters messages relevant to the calling edge by edge_node_id /
+  // org_id, and writes them to the server-stream. The edge cancels
+  // the stream when it wants to disconnect.
+  //
+  // Backpressure: bff-edge buffers a small per-stream channel (32). If
+  // the edge can't keep up, messages are DROPPED for that edge; the
+  // edge's existing periodic ListCerts (5min) + boot-time ListTunnels
+  // sweep act as belt-and-suspenders, so missed events self-heal.
+
+  rpc SubscribeCertEvents(SubscribeCertEventsRequest)
+    returns (stream CertEvent);
+
+  rpc SubscribeTunnelEvents(SubscribeTunnelEventsRequest)
+    returns (stream TunnelEvent);
+
+  rpc SubscribeSessionEvictEvents(SubscribeSessionEvictEventsRequest)
+    returns (stream SessionEvictEvent);
+
+  // SubscribeUsageEvents bridges both calabi.usage.deny.> and
+  // calabi.usage.allow.> in one stream. The edge filters on the
+  // contained `kind` field locally.
+  rpc SubscribeUsageEvents(SubscribeUsageEventsRequest)
+    returns (stream UsageEvent);
+
+  // ===== Reverse direction: edge → NATS publish =====
+  //
+  // ReportUsage replaces the edge's direct NATS publish to
+  // calabi.usage.report. bff-edge re-publishes on the cluster NATS
+  // unchanged. Bulk-batched to amortize one mTLS RTT across many rows.
+  rpc ReportUsage(ReportUsageRequest) returns (ReportUsageResponse);
+
+  // ReportRelayUsage mirrors ReportUsage for a merged edge/relay node's OWN
+  // mesh-relay traffic (edge/derp merge). bff-edge re-publishes each report on
+  // the cluster NATS as calabi.usage.relay → metering-svc's relay_usage_raws.
+  // The region carries a "self-<label>" code, which metering keeps OUT of the
+  // plan cap: a customer's own relay is display-only (edge-relay-merge-plan §八).
+  rpc ReportRelayUsage(ReportRelayUsageRequest) returns (ReportRelayUsageResponse);
+
+  // RegisterRelay lets a merged edge/relay node self-register its relay endpoint
+  // into the org's DERP map (edge/derp merge P3-B), mirroring how the edge
+  // self-registers via RegisterEdgeNode. bff-edge derives the org from the mTLS
+  // cert and idempotently upserts into coord (the node re-registers on a
+  // heartbeat). The relay is self-hosted, so it lands under a "self-<label>"
+  // region and never counts toward the plan cap.
+  rpc RegisterRelay(RegisterRelayRequest) returns (RegisterRelayResponse);
+}
+
+// RenewEdgeCertRequest carries no fields on purpose: the edge's identity
+// (org_id + edge_node_id) is taken from its authenticated mTLS client cert,
+// never from the request body. See BFFEdge.RenewEdgeCert.
+message RenewEdgeCertRequest {}
+
+// ===== NATS bridge message types =====
+//
+// Wire shape mirrors the existing certevents / usage / session-evict
+// JSON payloads so the edge-side adapters don't have to reparse — just
+// blit Body through to the existing handlers.
+
+message SubscribeCertEventsRequest {
+  // 0 = subscribe to all orgs (M3 dogfood default; current edge behavior).
+  // Future: per-org scoping when edge knows which orgs it serves.
+  int64 org_id = 1;
+}
+
+message CertEvent {
+  // "upsert" | "delete"
+  string kind = 1;
+  // Cluster-side NATS subject this event came from (e.g.
+  // "calabi.cert.upsert.42"). Useful for edge-side debug logging.
+  string subject = 2;
+  // Body is the raw JSON the NATS subscriber would have received.
+  // The edge passes it straight to certclient.onUpsert / onDelete.
+  bytes body_json = 3;
+}
+
+message SubscribeTunnelEventsRequest {
+  // Edge filter is implicit (taken from the mTLS cert CN). The edge
+  // receives only tunnel events for routes owned by its own edge_node_id
+  // or matching its zone-edge base_domain.
+}
+
+message TunnelEvent {
+  // "created" | "updated" | "deleted"
+  string kind = 1;
+  string subject = 2;
+  bytes body_json = 3;
+}
+
+message SubscribeSessionEvictEventsRequest {
+  // Filter is implicit: bff-edge receives all calabi.session.evict.*
+  // and forwards only those where the encoded edge_node_id matches
+  // this stream's caller.
+}
+
+message SessionEvictEvent {
+  // calabi.session.evict.<client_id> message body. The edge already
+  // parses {client_id, reason}.
+  string subject = 1;
+  bytes body_json = 2;
+}
+
+message SubscribeUsageEventsRequest {
+  // Implicit filter: bff-edge subscribes to calabi.usage.deny.> and
+  // calabi.usage.allow.> on the cluster NATS and forwards every event.
+  // The edge already does its own per-org filtering in usage.go.
+}
+
+message UsageEvent {
+  // "deny" | "allow"
+  string kind = 1;
+  string subject = 2;
+  bytes body_json = 3;
+}
+
+// ===== Reverse: usage report =====
+
+message UsageReport {
+  int64 org_id = 1;
+  int64 bytes_in = 2;
+  int64 bytes_out = 3;
+  // Edge-local timestamp when this 1-minute bucket closed.
+  google.protobuf.Timestamp window_close_at = 4;
+  // tunnel_id the bytes are attributed to (M16). 0 = unattributed
+  // (standalone proxy / session-level fallback). bff-edge passes this
+  // through verbatim onto the NATS report; metering-svc keys on it.
+  int64 tunnel_id = 5;
+}
+
+message ReportUsageRequest {
+  // edge_node_id is OVERWRITTEN by bff-edge from the mTLS cert before
+  // re-publishing — body value is ignored.
+  int64 edge_node_id = 1;
+  repeated UsageReport reports = 2;
+}
+
+message ReportUsageResponse {
+  // count of reports re-published. Diagnostic only.
+  int32 published = 1;
+}
+
+// ===== Reverse: relay usage report (edge/derp merge) =====
+
+message RelayUsageReport {
+  int64 org_id = 1;
+  // Region code the bytes are attributed to, e.g. "self-hk-1". A BYOI node's
+  // relay is self-hosted, so bff-edge requires the "self-" prefix and drops a
+  // report that lacks it (defense against a report that would land in the cap).
+  string region = 2;
+  int64 bytes_in = 3;
+  int64 bytes_out = 4;
+  // Edge-local timestamp of this 1-minute running-total bucket. The reporter
+  // re-sends the running total for the current minute; metering-svc MAX-merges.
+  google.protobuf.Timestamp window_close_at = 5;
+}
+
+message ReportRelayUsageRequest {
+  repeated RelayUsageReport reports = 1;
+}
+
+message ReportRelayUsageResponse {
+  // count of reports re-published. Diagnostic only.
+  int32 published = 1;
+}
+
+// ===== Reverse: relay endpoint self-registration (edge/derp merge P3-B) =====
+
+message RegisterRelayRequest {
+  // org_id is NOT carried — bff-edge derives the org from the mTLS cert, so a
+  // node can only register a relay for its own org.
+  string label = 1;    // region code = "self-"+label
+  string host = 2;     // public host:… mesh nodes dial the relay at
+  int32 derp_port = 3;
+  int32 stun_port = 4;
+}
+
+message RegisterRelayResponse {
+  // Region the relay landed under, e.g. "self-hk-1". Diagnostic.
+  string region = 1;
+}

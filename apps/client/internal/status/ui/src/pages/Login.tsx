@@ -32,6 +32,35 @@ interface LoginForm {
   totp_code?: string;
 }
 
+// classifyLoginError maps a raw login failure — usually a passed-through gRPC
+// status string like "rpc error: code = Unauthenticated desc = totp required"
+// (the daemon forwards bff-console's error body verbatim) — to friendly,
+// translated copy plus the right severity.
+//
+// "totp required" is NOT a failure: it's the server asking for the second
+// factor on a first attempt that omitted it. Showing the raw string in a red
+// alert reads like something went wrong, so we surface it as a calm info
+// banner instead. Genuine failures (wrong code, wrong password) stay red.
+// Anything unrecognised gets the gRPC "…desc = " envelope stripped as a last
+// resort so we never dump the raw wire error on the user.
+function classifyLoginError(
+  raw: string,
+  t: (key: string) => string,
+): { severity: "info" | "error"; message: string } {
+  const m = raw.toLowerCase();
+  if (m.includes("totp required")) {
+    return { severity: "info", message: t("login.totpPrompt") };
+  }
+  if (m.includes("invalid totp")) {
+    return { severity: "error", message: t("login.totpInvalid") };
+  }
+  if (m.includes("invalid credentials")) {
+    return { severity: "error", message: t("login.badCredentials") };
+  }
+  const desc = raw.replace(/^rpc error:.*desc\s*=\s*/i, "").trim();
+  return { severity: "error", message: desc || t("login.failed") };
+}
+
 export default function Login() {
   const { t } = useTranslation();
   const [form] = Form.useForm<LoginForm>();
@@ -82,6 +111,10 @@ export default function Login() {
     return <Navigate to="/overview" replace />;
   }
 
+  const errInfo = login.error
+    ? classifyLoginError((login.error as Error).message || "", t)
+    : null;
+
   return (
     <div
       style={{
@@ -114,12 +147,8 @@ export default function Login() {
             </Text>
           </div>
 
-          {login.error && (
-            <Alert
-              type="error"
-              showIcon
-              message={(login.error as Error).message || t("login.failed")}
-            />
+          {errInfo && (
+            <Alert type={errInfo.severity} showIcon message={errInfo.message} />
           )}
 
           <Form

@@ -186,6 +186,14 @@ func runDaemonService(args []string) int {
 	}
 	switch sub {
 	case "install":
+		// A machine-wide service registers with launchd's system domain /
+		// /etc/systemd/system — root only. Fail fast with a clear message rather
+		// than a cryptic permission error from the service manager. (Windows
+		// elevation is surfaced by explainInstallErr below.)
+		if hasBoolFlag(args[1:], "system") && runtime.GOOS != "windows" && os.Geteuid() != 0 {
+			fmt.Fprintln(os.Stderr, "install --system: a machine-wide service must be installed as root — re-run with sudo.")
+			return 1
+		}
 		if err := svc.Install(); err != nil {
 			fmt.Fprintln(os.Stderr, "install:", explainInstallErr(err))
 			return 1
@@ -196,7 +204,13 @@ func runDaemonService(args []string) int {
 		if isDefault {
 			stopTransientDaemon()
 		}
-		fmt.Printf("  installed (service %q). start with:  calabi daemon start%s\n", name, nameFlag)
+		startCmd := "calabi daemon start" + nameFlag
+		if hasBoolFlag(args[1:], "system") && runtime.GOOS != "windows" {
+			// A system service (root LaunchDaemon / systemd system unit) is managed
+			// as root — mirror that in the hint so start/stop hit the same domain.
+			startCmd = "sudo " + startCmd
+		}
+		fmt.Printf("  installed (service %q). start with:  %s\n", name, startCmd)
 		fmt.Printf("  console: %s  (shifts to the next free port if busy — see the service log for the actual one)\n",
 			installStatusURL(args[1:]))
 		return 0
@@ -381,7 +395,18 @@ func printConsoleHint(since time.Time) {
 // serviceInstallEnv — CALABI_API_KEY plus the user's region/affinity — so the
 // service authenticates without the user's profile. It overrides any same-named
 // var from the shell. nil for non-install callers and the SCM Run path.
+// geteuid is os.Geteuid, overridable in tests. Returns -1 on Windows.
+var geteuid = os.Geteuid
+
 func buildService(installArgs []string, extraEnv map[string]string) (service.Service, error) {
+	prog := &serviceProgram{}
+	return service.New(prog, serviceConfig(installArgs, extraEnv))
+}
+
+// serviceConfig builds the kardianos service.Config (pure — no service.New) so
+// the install-time wiring is unit-testable: service name, per-service env, and
+// the Option-A system-vs-user switch.
+func serviceConfig(installArgs []string, extraEnv map[string]string) *service.Config {
 	// All three service managers honor per-service env vars: systemd writes
 	// Environment= into the unit, launchd an EnvironmentVariables dict, and
 	// Windows a REG_MULTI_SZ "Environment" value under the service key (SCM
@@ -410,6 +435,15 @@ func buildService(installArgs []string, extraEnv map[string]string) (service.Ser
 	// buildService(nil,nil)) resolves the same name and the control dispatcher
 	// matches. EnvVars only takes effect at Install; harmless for other callers.
 	env["CALABI_SERVICE_NAME"] = name
+	// Option A (privileged system service): `--system` installs a machine-wide
+	// service (root LaunchDaemon / LocalSystem / systemd system unit) instead of a
+	// per-user agent. Bake a marker so the boot path (applySystemServiceDataDir,
+	// via the shared maybeRunUnderServiceManager chokepoint — reached on every
+	// platform) anchors the data dir at the machine-wide SystemDataDir.
+	systemMode := hasBoolFlag(installArgs, "system")
+	if systemMode {
+		env["CALABI_SYSTEM_SERVICE"] = "1"
+	}
 	display := "Calabi Tunnel Client"
 	if name != defaultServiceName {
 		display = "Calabi Tunnel Client (" + name + ")"
@@ -434,12 +468,31 @@ func buildService(installArgs []string, extraEnv map[string]string) (service.Ser
 			"OnFailureDelayDuration": "5s",
 		},
 	}
-	if runtime.GOOS == "darwin" {
-		// Per-user LaunchAgent so install needs no sudo.
+	// macOS launchd splits by privilege: root manages /Library/LaunchDaemons, a
+	// normal user ~/Library/LaunchAgents. Drive UserService off euid (NOT the
+	// --system flag) so install AND the later start/stop/status/uninstall target
+	// the SAME domain without repeating a flag — you already need sudo to manage a
+	// system daemon, and launchctl refuses a LaunchAgents path when run as root.
+	// (--system still bakes the SystemDataDir marker above; the preflight in
+	// runDaemonService keeps --system installs root so this lands on a Daemon.)
+	if runtime.GOOS == "darwin" && geteuid() != 0 {
 		cfg.Option["UserService"] = true
 	}
-	prog := &serviceProgram{}
-	return service.New(prog, cfg)
+	return cfg
+}
+
+// hasBoolFlag reports whether a bare boolean flag (--name / -name, or the
+// explicit =true form) appears in a raw arg slice. Like extractFlagValue it
+// scans leniently rather than using a FlagSet, so it composes with the other
+// install flags the daemon-service path pulls out by hand.
+func hasBoolFlag(args []string, name string) bool {
+	dd, sd := "--"+name, "-"+name
+	for _, a := range args {
+		if a == dd || a == sd || a == dd+"=true" || a == sd+"=true" {
+			return true
+		}
+	}
+	return false
 }
 
 // serviceArguments computes the command-line the OS service manager launches
@@ -527,12 +580,16 @@ var inServiceManager bool
 
 func runDaemonBody(args []string) int {
 	inServiceManager = true
-	// As a service the per-user %LOCALAPPDATA% resolves to the SYSTEM account's
-	// hard-to-find systemprofile dir (…\config\systemprofile\AppData\Local\calabi).
-	// Pin creds / local-token / pidfile next to the executable — where the log
-	// already goes — so all of the service's files sit in one readable place.
-	if dir := exeDir(); dir != "" {
-		creds.SetDataDir(dir)
+	// A --system service uses the machine-wide SystemDataDir (also set earlier in
+	// maybeRunUnderServiceManager; idempotent). A legacy Windows service instead
+	// pins data next to the exe — the SYSTEM account's %LOCALAPPDATA% resolves to
+	// the unreadable …\config\systemprofile\AppData\Local\calabi, where the log
+	// already goes.
+	applySystemServiceDataDir()
+	if os.Getenv("CALABI_SYSTEM_SERVICE") != "1" {
+		if dir := exeDir(); dir != "" {
+			creds.SetDataDir(dir)
+		}
 	}
 	return runDaemon(args)
 }
@@ -545,6 +602,17 @@ func exeDir() string {
 		return ""
 	}
 	return filepath.Dir(exe)
+}
+
+// applySystemServiceDataDir points the data dir at the machine-wide SystemDataDir
+// when the CALABI_SYSTEM_SERVICE marker is set — i.e. this process is a --system
+// service (Option A). It's called from the shared boot chokepoint so it applies
+// on launchd / systemd (which start the daemon directly and never reach the
+// Windows-only serviceProgram path) as well as Windows. No-op otherwise.
+func applySystemServiceDataDir() {
+	if os.Getenv("CALABI_SYSTEM_SERVICE") == "1" {
+		creds.SetDataDir(creds.SystemDataDir())
+	}
 }
 
 // maybeRunUnderServiceManager bridges a Windows Service Control Manager (SCM)
@@ -569,6 +637,12 @@ func exeDir() string {
 // from x/sys/windows/svc.IsWindowsService(), so a daemon spawned by a console or
 // by the desktop supervisor (not a registered service) is left untouched.
 func maybeRunUnderServiceManager() (handled bool, code int) {
+	// A --system service anchors its data machine-wide on EVERY platform. This is
+	// the one chokepoint both runDaemon variants hit before boot, and launchd /
+	// systemd start the daemon directly (never reaching the serviceProgram path
+	// below), so the marker MUST be honored here — not just in runDaemonBody,
+	// which only the Windows SCM path reaches.
+	applySystemServiceDataDir()
 	if runtime.GOOS != "windows" || inServiceManager || service.Interactive() {
 		return false, 0
 	}

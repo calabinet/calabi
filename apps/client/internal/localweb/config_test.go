@@ -17,10 +17,10 @@ type fakeStore struct {
 	created []TunnelSpec
 }
 
-func (f *fakeStore) Tunnels() []ConfiguredTunnel               { return f.tunnels }
-func (f *fakeStore) DeleteTunnel(int64) error                  { return nil }
-func (f *fakeStore) UpdateSecurity(int64, string) error        { return nil }
-func (f *fakeStore) UpdateTunnel(int64, string, string) error  { return nil }
+func (f *fakeStore) Tunnels() []ConfiguredTunnel              { return f.tunnels }
+func (f *fakeStore) DeleteTunnel(int64) error                 { return nil }
+func (f *fakeStore) UpdateSecurity(int64, string) error       { return nil }
+func (f *fakeStore) UpdateTunnel(int64, string, string) error { return nil }
 func (f *fakeStore) CreateTunnel(spec TunnelSpec) (int64, error) {
 	f.created = append(f.created, spec)
 	return int64(len(f.created)), nil

@@ -214,15 +214,25 @@ export default function Tunnels() {
   const [takeoverRow, setTakeoverRow] = useState<RemoteTunnel | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const prefillPort = searchParams.get("prefill_port");
+  // Arriving from the Services page's "发布到公网": the query carries the service
+  // name, the local address to forward to, and its proto so the wizard opens
+  // pre-filled and records config_json.origin on create.
+  const publishService = searchParams.get("publish_service") || undefined;
+  const publishAddr = searchParams.get("publish_addr") || undefined;
+  const publishProto = searchParams.get("publish_proto") || undefined;
+  const publish =
+    publishService && publishAddr
+      ? { serviceName: publishService, localAddr: publishAddr, proto: publishProto || "tcp" }
+      : undefined;
 
   // If we arrived via /tunnels?prefill_port=N (from the port-scanner
-  // page), auto-open the wizard with that port baked in. Clean the
-  // query so a refresh doesn't re-trigger.
+  // page) or ?publish_service=... (from Services), auto-open the wizard with
+  // the values baked in. Clean the query so a refresh doesn't re-trigger.
   useEffect(() => {
-    if (prefillPort) {
+    if (prefillPort || publishService) {
       setWizardOpen(true);
     }
-  }, [prefillPort]);
+  }, [prefillPort, publishService]);
 
   const { data: list, isLoading } = useQuery<TunnelList>({
     queryKey: ["tunnels"],
@@ -838,14 +848,18 @@ export default function Tunnels() {
         open={wizardOpen}
         onClose={() => {
           setWizardOpen(false);
-          // Drop the prefill query so a re-open isn't pre-filled again.
-          if (prefillPort) {
+          // Drop the prefill / publish query so a re-open isn't pre-filled again.
+          if (prefillPort || publishService) {
             const next = new URLSearchParams(searchParams);
             next.delete("prefill_port");
+            next.delete("publish_service");
+            next.delete("publish_addr");
+            next.delete("publish_proto");
             setSearchParams(next, { replace: true });
           }
         }}
         prefillPort={prefillPort ? Number(prefillPort) : undefined}
+        publish={publish}
       />
 
       <InspectorDrawer

@@ -1,4 +1,4 @@
-# Calabi — Community Edition
+# Calabi — tunnels + mesh, self-hostable
 
 Calabi is a self-hostable tunneling tool: run an edge (`calabi-edge`) on a host
 with a public IP, and the `calabi` client forwards that public traffic to
@@ -54,19 +54,52 @@ dashboard and no account. The UI ships in 10 languages.
 Requires Go 1.25+.
 
 ```bash
-make build          # → bin/calabi-edge, bin/calabi
+make build          # → bin/calabi, bin/calabi-edge, bin/calabi-coord
 ```
 
 Or directly (on Windows, name the outputs `*.exe`):
 
 ```bash
-( cd apps/calabi-edge && go build -o calabi-edge ./cmd/calabi-edge )
-( cd apps/client      && go build -o calabi      ./cmd/calabi )
+( cd apps/client       && go build -o calabi       ./cmd/calabi )
+( cd apps/calabi-edge  && go build -o calabi-edge  ./cmd/calabi-edge )
+( cd apps/calabi-coord && go build -o calabi-coord ./cmd/calabi-coord )
 ```
+
+Three binaries: **`calabi`** connects, **`calabi-edge`** is the entry point or
+relay depending on its role, **`calabi-coord`** coordinates a mesh.
 
 `make build` already adds the `.exe` suffix automatically on Windows. To
 cross-compile (e.g. a Windows binary from a Linux box):
 `GOOS=windows GOARCH=amd64 go build -o calabi-edge.exe ./cmd/calabi-edge`.
+
+## Verify the binaries you downloaded
+
+The point of publishing this source is that you do not have to take our word for
+what is in the binaries. **The official releases are built from this repository**,
+not from an internal tree, and each release ships a manifest naming the exact
+commit, toolchain and flags. Rebuild them yourself:
+
+```bash
+curl -fsSLO https://download.calabi.net/latest/build-manifest.json
+make verify-build MANIFEST=build-manifest.json
+```
+
+That rebuilds every released binary and compares hashes. It needs the same Go
+version the manifest names; a different one is the usual reason a check fails,
+and the script says so up front.
+
+It compares the **binary**, not the `.zip`/`.tar.gz` you downloaded, because
+archives are not reproducible — tar+gzip and zip both record modification times,
+so the same bytes packaged a second later hash differently. Use `SHA256SUMS` for
+the archive: that answers "did my download arrive intact", which is a different
+question from "was it built from this source".
+
+**Not yet covered**, listed in the manifest itself so it stays honest: the
+Windows desktop installer and the macOS `.pkg` (separate Rust/Tauri toolchains),
+the docker images, and two inputs that ship as committed blobs rather than being
+built here — the local console's compiled web bundle and the third-party
+`wintun.dll`. Those are byte-identical for anyone building a given commit, but
+this repository does not derive them from their own sources.
 
 ## Quick start (one edge, one tunnel)
 

@@ -9,7 +9,7 @@ import (
 // override, and clearing it restores the per-user default. This is what pins a
 // service's files next to its executable.
 func TestDataDir_Override(t *testing.T) {
-	t.Setenv("CALABI_CONFIG", "")     // Path falls through to DataDir
+	t.Setenv("CALABI_CONFIG", "")      // Path falls through to DataDir
 	t.Setenv("CALABI_LOCAL_TOKEN", "") // LocalTokenPath falls through to DataDir
 	SetDataDir("")
 	t.Cleanup(func() { SetDataDir("") })

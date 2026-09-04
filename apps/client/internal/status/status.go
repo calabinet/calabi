@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -124,7 +125,18 @@ type Snapshot struct {
 	ServerAddr    string `json:"server_addr"`
 	SessionID     string `json:"session_id,omitempty"`
 	TenantID      string `json:"tenant_id,omitempty"`
-	ClientID      string `json:"client_id,omitempty"`
+	// ClientID is who AUTHENTICATED this control session, as the edge reports it
+	// in AUTH_RESP — an identity-svc session id for a login daemon, or
+	// "key-<8 hex>" derived from the api-key prefix for an agent. It is NOT a
+	// device: this install's device identity is Fingerprint / DeviceID below.
+	ClientID string `json:"client_id,omitempty"`
+	// Fingerprint + DeviceID are THIS INSTALL's identity on the Publish side —
+	// the pair that decides which row on the console's clients page is this
+	// machine, and which the mesh reports so a mesh device can be linked to it.
+	// Surfaced because when that link doesn't happen there is otherwise nothing
+	// on the machine to look at: an empty fingerprint here is the whole answer.
+	Fingerprint string `json:"fingerprint,omitempty"`
+	DeviceID    int64  `json:"device_id,omitempty"`
 	// edge's HTTPListener.BaseDomain delivered in AUTH_RESP. Used as a
 	// last-resort host for TCP/UDP public addrs when neither server_addr
 	// nor server_ip is available. Empty on old edges.
@@ -186,6 +198,8 @@ type State struct {
 	sessionID       string
 	tenantID        string
 	clientID        string
+	fingerprint     string
+	deviceID        int64
 	baseDomain      string // edge BaseDomain from AUTH_RESP
 	serverIP        string // resolved IP of the edge connection
 	httpPort        uint32 // edge public HTTP listener port (AUTH_RESP); 0 = unknown
@@ -308,6 +322,17 @@ func (s *State) SetEdgeNodeID(id int64) {
 // login / org-switch / logout hooks so the SPA's top-bar Org chip tracks
 // the token within one snapshot poll, instead of the SPA's 60s-cached
 // /v1/orgs which only force-refreshes on a full page reload. 0 = unknown.
+// SetLocalIdentity records this install's Publish-side identity. Called at
+// startup with whatever is on disk and again after a device registration, which
+// is when a fresh install first HAS one — so the overview reflects the change
+// without a daemon restart.
+func (s *State) SetLocalIdentity(fingerprint string, deviceID int64) {
+	s.mu.Lock()
+	s.fingerprint = fingerprint
+	s.deviceID = deviceID
+	s.mu.Unlock()
+}
+
 func (s *State) SetActiveOrgID(id int64) {
 	s.mu.Lock()
 	s.activeOrgID = id
@@ -620,6 +645,8 @@ func (s *State) SnapshotNow() Snapshot {
 		SessionID:       s.sessionID,
 		TenantID:        s.tenantID,
 		ClientID:        s.clientID,
+		Fingerprint:     s.fingerprint,
+		DeviceID:        s.deviceID,
 		BaseDomain:      s.baseDomain,
 		ServerIP:        s.serverIP,
 		HTTPPort:        s.httpPort,
@@ -884,6 +911,17 @@ const blockedPage = `<!DOCTYPE html>
 </html>
 `
 
+// serviceMode reports how this daemon was launched, surfaced in /healthz so the
+// desktop shell can tell the machine-wide system service (Option A) apart from a
+// foreign or dev daemon squatting :7400 before it attaches. "system" iff the
+// service manager baked the CALABI_SYSTEM_SERVICE marker; otherwise "user".
+func serviceMode() string {
+	if os.Getenv("CALABI_SYSTEM_SERVICE") == "1" {
+		return "system"
+	}
+	return "user"
+}
+
 // handleHealthz serves the structured /healthz used by the SPA banner
 // and the Tauri loading shell. Always HTTP 200 — the lifecycle
 // state (including "fatal") is in the body; HTTP status only signals
@@ -919,6 +957,9 @@ func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 		"uptime_seconds": int64(time.Since(started).Seconds()),
 		"version":        s.state.version,
 		"server_addr":    s.state.serverAddr,
+		// F2 attach handshake: lets the desktop shell confirm it's talking to the
+		// machine-wide system service, not a foreign/dev :7400.
+		"service_mode": serviceMode(),
 	}
 	_ = json.NewEncoder(w).Encode(body)
 }
