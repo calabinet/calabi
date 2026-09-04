@@ -179,8 +179,11 @@ while IFS="$(printf '\t')" read -r group platform binary want ldflags archive; d
   case "$archive" in *armv7*) goarm=7 ;; esac
   outbin="${WORK:-${TMPDIR:-/tmp}}/rebuild-$group-$goos-$goarch${goarm:+v$goarm}"
   printf '  building %-34s ' "$archive"
+  # -buildvcs=false must match the release build: with VCS stamping on, the bytes
+  # depend on which git repository the source happens to sit in, so your clone
+  # could never match ours no matter how correct everything else was.
   if ! ( cd "$src" && env CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" ${goarm:+GOARM="$goarm"} \
-           go build -trimpath -ldflags="$ldflags" -o "$outbin" "$cmd" ) 2>"$ERRLOG"; then
+           go build -trimpath -buildvcs=false -ldflags="$ldflags" -o "$outbin" "$cmd" ) 2>"$ERRLOG"; then
     echo "BUILD FAILED"
     sed 's/^/      /' "$ERRLOG"
     fail=$((fail+1)); continue
