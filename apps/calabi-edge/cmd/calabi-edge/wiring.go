@@ -39,7 +39,7 @@ type namedRunner struct {
 }
 
 // platformDeps is everything the platform build wires up and the core run()
-// consumes. Every field is optional: a community build returns an all-nil
+// consumes. Every field is optional: a self-hosted build returns an all-nil
 // bundle (bar a dev-friendly bandwidth resolver) and the data plane runs fully
 // standalone. The interface-typed fields plug straight into the listener
 // options; nil short-circuits to the dev/standalone behaviour already baked
@@ -48,7 +48,7 @@ type platformDeps struct {
 	// controlPlaneWired reports whether a real control plane (identity /
 	// tunnel / bff-edge) was dialed. Feeds cfg.TrustsClientPolicy so a BYOI /
 	// managed edge never trusts client-supplied security policy. Always false
-	// in a community build.
+	// in a self-hosted build.
 	controlPlaneWired bool
 
 	verifier          session.TokenVerifier // nil → run() keeps the static-token verifier
@@ -64,12 +64,12 @@ type platformDeps struct {
 	getCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)
 
 	// acmeChallengeResolver answers ACME http-01 probes on the visitor HTTP
-	// listener (user self-service custom-domain certs). nil in community / no
+	// listener (user self-service custom-domain certs). nil when self-hosted / no
 	// cert-svc, leaving such requests to normal host routing.
 	acmeChallengeResolver func(token string) (keyAuth string, ok bool)
 
 	// relayReporter re-sends a merged edge/relay node's OWN relay usage as a
-	// self-<label> region (edge/derp merge). nil in community, or when the
+	// self-<label> region (edge/derp merge). nil when self-hosted, or when the
 	// node has no single-org identity / no relay label — runRelay then relays
 	// without reporting.
 	relayReporter *relayUsageReporter

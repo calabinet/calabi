@@ -111,7 +111,7 @@ func regionSTUNHostPort(r DERPRegion) (string, bool) {
 type homePref int
 
 const (
-	homeAnyRelay       homePref = iota // no preference — pure latency (default / community)
+	homeAnyRelay       homePref = iota // no preference — pure latency (default / self-hosted)
 	homePreferOwn                      // prefer the org's self-hosted relays (affinity "own")
 	homePreferPlatform                 // prefer the platform's relays (affinity "platform")
 )

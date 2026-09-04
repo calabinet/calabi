@@ -13,7 +13,7 @@ import (
 	"github.com/calabi/calabi/pkg/svcboot"
 )
 
-// wire builds the coordinator for the PLATFORM (SaaS) edition.
+// wire builds the coordinator for the PLATFORM (SaaS) deployment.
 //
 // Auth is REAL when CALABI_COORD_IDENTITY_ADDR is set: a node presents a tk_ auth
 // key, identity-svc verifies it, and the owning org becomes the node's meshnet

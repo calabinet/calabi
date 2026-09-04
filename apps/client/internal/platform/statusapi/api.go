@@ -1463,7 +1463,7 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 	// Dedup: re-importing a backup must not duplicate tunnels. Build the set of
 	// existing tunnels (name+type+local_addr) so an incoming match is skipped
 	// rather than re-created; also dedup repeats within this doc. Mirrors the
-	// standalone localweb import so both editions behave the same. A list
+	// standalone localweb import so both deployments behave the same. A list
 	// failure degrades to "no existing" (we'd rather attempt the import than
 	// silently skip everything).
 	existing := map[string]struct{}{}
@@ -1549,7 +1549,7 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 }
 
 // importKey is the dedup identity for a tunnel on config import: name + type +
-// local_addr, lowercased. Mirrors localweb.importKey so both editions dedup the
+// local_addr, lowercased. Mirrors localweb.importKey so both deployments dedup the
 // same way.
 func importKey(name, typ, local string) string {
 	return strings.ToLower(strings.TrimSpace(name)) + "|" +

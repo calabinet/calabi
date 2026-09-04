@@ -12,7 +12,7 @@ import (
 var ErrNodeQuotaExceeded = errors.New("core: mesh node quota exceeded")
 
 // NodeQuota decides whether a meshnet may enroll one more node. It is the
-// edition-agnostic seam for MESH.8 billing/quota: the community build wires a
+// deployment-agnostic seam for MESH.8 billing/quota: the self-hosted build wires a
 // static (or unlimited) cap; the platform build wraps quota-svc (kind
 // "mesh_node") behind this same interface, so core never imports pkg/api.
 //
@@ -26,7 +26,7 @@ type NodeQuota interface {
 }
 
 // UnlimitedNodeQuota admits everything. Default when no cap is configured (dev,
-// and community self-hosts that don't set CALABI_COORD_NODE_QUOTA).
+// and self-hosted self-hosts that don't set CALABI_COORD_NODE_QUOTA).
 type UnlimitedNodeQuota struct{}
 
 // Admit always allows (limit -1 = unlimited).
@@ -35,7 +35,7 @@ func (UnlimitedNodeQuota) Admit(context.Context, MeshnetID, int) (bool, int, str
 }
 
 // StaticNodeQuota caps every meshnet at the same node count. It's what the
-// community coordinator and local/dev runs use (CALABI_COORD_NODE_QUOTA); the
+// self-hosted coordinator and local/dev runs use (CALABI_COORD_NODE_QUOTA); the
 // multi-tenant per-plan cap is the platform quota-svc impl. Limit <= 0 means
 // unlimited.
 type StaticNodeQuota struct{ Limit int }

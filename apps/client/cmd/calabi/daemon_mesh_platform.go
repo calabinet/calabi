@@ -13,7 +13,7 @@
 // session and the /v1/mesh/enrollment fetch also enrolls the node. coord enforces
 // the per-plan node cap at registration; the web console (MESH.8b/8e) is where a
 // manager disables a node or edits ACLs. This file is the daemon's side: fetch +
-// reconcile + surface status on :7400. Platform edition only.
+// reconcile + surface status on :7400. Platform deployments only.
 package main
 
 import (

@@ -1,13 +1,13 @@
 package main
 
-// wire_platform.go is the control-plane seam. It compiles in
-// the DEFAULT build (no `community` tag) — i.e. the official binary. It
-// dials identity / tunnel / quota / cert / config / usage — directly in cluster
-// mode or through a single bff-edge mTLS gRPC connection in multi-region mode —
-// and returns the platformDeps bundle that run() threads into the data-plane
-// core. All control-plane coupling lives here (and in the //go:build platform
-// sibling files); the community build replaces this with the wire_community.go
-// stub.
+// wire_platform.go is the control-plane seam. It ships in every build,
+// including the open-source one — there is no build tag and no stub twin any
+// more (F1 merged them). It dials identity / tunnel / quota / cert / config /
+// usage — directly in cluster mode or through a single bff-edge mTLS gRPC
+// connection in multi-region mode — and returns the platformDeps bundle that
+// run() threads into the data-plane core. What makes an edge self-hosted is
+// that none of those addresses are configured, so this seam wires nothing;
+// it is a runtime condition, not a compile-time one.
 
 import (
 	"context"

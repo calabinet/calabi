@@ -71,7 +71,7 @@ func runEdgeRegistrar(
 // (edge/derp merge-B): the relay appears automatically, just like the edge.
 // register does one idempotent upsert (coord only re-pushes netmaps when the map
 // actually changes, so a steady-state heartbeat is cheap). nil register =
-// not wired (community / cluster mode / no org / no relay label) → the loop
+// not wired (self-hosted / cluster mode / no org / no relay label) → the loop
 // idles until shutdown.
 func runRelayRegistrar(ctx context.Context, logger *slog.Logger, register func(context.Context) error) error {
 	if register == nil {

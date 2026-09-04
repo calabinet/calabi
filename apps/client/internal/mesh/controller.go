@@ -53,7 +53,7 @@ type Controller struct {
 	// HomePreference biases home-relay selection toward the org's own self-hosted
 	// relays ("own") or the platform's ("platform"), mirroring the edge affinity
 	// so switching "use my node" moves BOTH the edge egress and the mesh relay
-	// home. Empty = no preference (pure latency — the default and the community
+	// home. Empty = no preference (pure latency — the default and the self-hosted
 	// behavior). A soft preference: it never strands a node whose preferred class
 	// has no reachable relay.
 	HomePreference string

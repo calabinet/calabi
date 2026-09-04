@@ -8,7 +8,7 @@ import (
 )
 
 // TestDefaultClientMode pins the single binary's default mode. There is no
-// longer an edition to vary it by (full-oss-plan F1): the binary can reach the
+// longer a build to vary it by (full-oss-plan F1): the binary can reach the
 // managed control plane, so "platform" is what a fresh install gets, and a
 // self-hoster opts out with `calabi mode standalone`.
 func TestDefaultClientMode(t *testing.T) {
@@ -18,8 +18,8 @@ func TestDefaultClientMode(t *testing.T) {
 }
 
 // TestResolveClientMode_FallsToDefault: with no CALABI_MODE and no
-// persisted mode, resolveClientMode returns the edition default. This is what
-// used to make the community binary standalone out of the box; the single
+// persisted mode, resolveClientMode returns the built-in default. This is what
+// used to make the self-hosted binary standalone out of the box; the single
 // binary now defaults to platform and a self-hoster opts out explicitly.
 func TestResolveClientMode_FallsToDefault(t *testing.T) {
 	t.Setenv("CALABI_MODE", "")
@@ -30,7 +30,7 @@ func TestResolveClientMode_FallsToDefault(t *testing.T) {
 }
 
 // TestResolveClientMode_PersistedPlatformOverrides: an explicit persisted
-// "platform" still wins over the edition default (the precedence change must not
+// "platform" still wins over the built-in default (the precedence change must not
 // break the override path — relevant for a self-hoster who deliberately ran
 // `calabi mode platform`).
 func TestResolveClientMode_PersistedPlatformOverrides(t *testing.T) {

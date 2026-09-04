@@ -76,9 +76,9 @@ func LoadACLPolicy(path string) (*ACLPolicy, error) {
 }
 
 // MemPolicy is a PolicyStore backed by a single in-memory ACLPolicy — the
-// community coordinator's policy source (loaded from a file; the platform build
-// swaps a per-org DB-backed policy in MESH.8). It is edition-agnostic and lives
-// in core so the community coordinator ships the real engine.
+// self-hosted coordinator's policy source (loaded from a file; the platform build
+// swaps a per-org DB-backed policy in MESH.8). It is deployment-agnostic and lives
+// in core so the self-hosted coordinator ships the real engine.
 type MemPolicy struct{ Policy ACLPolicy }
 
 // Filter returns the subset of candidates self is allowed to see: a peer is

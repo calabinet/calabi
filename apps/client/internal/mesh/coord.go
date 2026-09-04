@@ -29,7 +29,7 @@ func NewCoordClient(cc grpc.ClientConnInterface) *CoordClient {
 
 // RegisterParams is what a node presents to enroll.
 type RegisterParams struct {
-	AuthKey  string // tk_ auth key (platform) / pre-shared key (community)
+	AuthKey  string // tk_ auth key (platform) / pre-shared key (self-hosted)
 	NodeKey  meshproto.NodeKey
 	DiscoKey meshproto.DiscoKey // optional until MESH.4
 	Name     string

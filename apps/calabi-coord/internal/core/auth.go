@@ -10,7 +10,7 @@ var ErrAuthDenied = errors.New("core: auth key denied")
 
 // Identity is the AUTHORITATIVE result of resolving a node's auth key: the
 // meshnet it joins, plus any tags to stamp on the node for ACL matching. Both
-// come from the key (community config / a tk_ key's grant) — a node NEVER
+// come from the key (self-hosted config / a tk_ key's grant) — a node NEVER
 // self-asserts its meshnet or tags. The RPC layer trusts this and nothing else.
 type Identity struct {
 	Meshnet MeshnetID
@@ -26,14 +26,14 @@ type Identity struct {
 // Authenticator resolves a node's auth key to its Identity.
 //
 // Platform build (MESH.1+): calls identity-svc to verify a tk_ auth key and
-// map it to the acting org. Community build: a StaticAuth backed by the
-// coordinator's config file. The interface keeps the RPC layer edition-agnostic.
+// map it to the acting org. Self-hosted build: a StaticAuth backed by the
+// coordinator's config file. The interface keeps the RPC layer deployment-agnostic.
 type Authenticator interface {
 	Resolve(ctx context.Context, authKey string) (Identity, error)
 }
 
 // StaticAuth maps pre-shared auth keys to identities (meshnet + tags). Used by
-// the community coordinator (keys come from its config file) and by tests/dev.
+// the self-hosted coordinator (keys come from its config file) and by tests/dev.
 // Never used to gate the multi-tenant SaaS — that path resolves keys via
 // identity-svc.
 type StaticAuth struct {

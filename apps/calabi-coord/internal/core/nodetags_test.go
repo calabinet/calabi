@@ -54,7 +54,7 @@ func TestSetNodeTagsSurvivesReRegistration(t *testing.T) {
 	}
 }
 
-// Until an admin sets them, tags still come from the auth key — the community
+// Until an admin sets them, tags still come from the auth key — the self-hosted
 // coordinator's behaviour must not change.
 func TestUnpinnedTagsStillFollowTheAuthKey(t *testing.T) {
 	c := newTestCoord()

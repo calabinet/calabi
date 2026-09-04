@@ -16,7 +16,7 @@ var policyState struct {
 	path       string
 }
 
-// policyStore builds the meshnet ACL PolicyStore, shared by both editions.
+// policyStore builds the meshnet ACL PolicyStore, shared by both deployments.
 //
 //   - CALABI_COORD_POLICY_FILE unset → AllowAllPolicy: every node in a meshnet
 //     reaches every other (the pre-ACL default; unchanged behavior).

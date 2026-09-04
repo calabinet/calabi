@@ -12,7 +12,7 @@ import (
 var ErrNodeNotFound = errors.New("core: node not found")
 
 // NodeStore persists nodes. The platform build backs it with the tenant DB +
-// Device registry; the community build backs it with the in-memory MemNodeStore.
+// Device registry; the self-hosted build backs it with the in-memory MemNodeStore.
 type NodeStore interface {
 	// Upsert inserts or updates a node. On insert, n.ID is assigned by the store.
 	Upsert(ctx context.Context, n *Node) (*Node, error)
@@ -67,7 +67,7 @@ type IPAM interface {
 }
 
 // DERPMapSource supplies the relay directory a given meshnet should use.
-// Platform build sources it from the fleet/config; community build serves a
+// Platform build sources it from the fleet/config; self-hosted build serves a
 // static file.
 //
 // The meshnet parameter is what makes self-hosted relays possible (R1): an org's
@@ -75,7 +75,7 @@ type IPAM interface {
 // org's relays must never appear in another's. A relay sees no plaintext, but it
 // does see the metadata — who talks to whom, how much, when — so handing org B's
 // map an entry from org A would hand A a picture of B's traffic. Implementations
-// that have no per-org relays (StaticDERP, community) ignore the parameter and
+// that have no per-org relays (StaticDERP, self-hosted) ignore the parameter and
 // return the same map to everyone, which is exactly today's behaviour.
 type DERPMapSource interface {
 	DERPMap(ctx context.Context, t MeshnetID) (DERPMap, error)

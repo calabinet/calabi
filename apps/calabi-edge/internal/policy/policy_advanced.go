@@ -5,7 +5,7 @@ package policy
 // login wall.
 //
 // These used to be platform-only, stubbed out to "off"/passthrough by a
-// community-build twin. Since F3 there is no edition split: one edge binary
+// self-hosted-build twin. Since F3 there is no such split: one edge binary
 // ships and a self-hosted edge enforces the same policy set as a managed one.
 // On the hosted product these are gated by PLAN, and that gate lives in the
 // control plane (tunnel-svc), not here.
@@ -273,7 +273,7 @@ func (p *Policy) HasOAuth() bool {
 // true when the edge already handled the request (wrote an IdP redirect /
 // callback / error) — the caller must then NOT open the upstream. No OAuth
 // configured (or nil policy) → false (pass through). Encapsulates the oauth
-// package so the core listeners need no oauth import (the community build's
+// package so the core listeners need no oauth import (the self-hosted build's
 // stub returns false and pulls in nothing).
 func (p *Policy) GateOAuth(w io.Writer, path, host string, https bool, cookie string, now time.Time) bool {
 	if p == nil || p.adv.oauthCfg == nil {

@@ -1,5 +1,5 @@
 // Package rpc adapts the mesh Coordinator gRPC contract (pkg/mesh-proto/meshpb)
-// onto the edition-agnostic core. It owns auth (via core.Authenticator),
+// onto the deployment-agnostic core. It owns auth (via core.Authenticator),
 // core<->wire conversion, and the live netmap push loop (via core.Notifier).
 package rpc
 

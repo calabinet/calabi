@@ -4,7 +4,7 @@ version: v2
 # never open-sourced).
 #
 # Keeping it here is not tidiness, it is the export boundary: scripts/
-# export-community.sh excludes the whole pkg/api MODULE, so a contract that
+# export-public.sh excludes the whole pkg/api MODULE, so a contract that
 # generates into pkg/api can never reach the public tree no matter how few
 # packages it links. Same reasoning, and the same shape, as pkg/mesh-proto.
 # See docs/runbook/full-oss-plan.md F3.

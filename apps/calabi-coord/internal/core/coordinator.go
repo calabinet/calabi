@@ -15,9 +15,9 @@ import (
 // clear refusal and its reconnect loop can't quietly rejoin the mesh.
 var ErrNodeDisabled = errors.New("core: node is disabled")
 
-// Coordinator is the edition-agnostic brain. It is constructed by the wire_*.go
-// seam with either community (in-memory/file) or platform (DB/tenant) stores and
-// is the SAME code the community coordinator ships.
+// Coordinator is the deployment-agnostic brain. It is constructed by the wire_*.go
+// seam with either self-hosted (in-memory/file) or platform (DB/tenant) stores and
+// is the SAME code the self-hosted coordinator ships.
 type Coordinator struct {
 	Nodes  NodeStore
 	Policy PolicyStore
@@ -27,7 +27,7 @@ type Coordinator struct {
 	// (dev/tests). Checked only when admitting a genuinely NEW node.
 	Quota NodeQuota
 	// ACL is the writable per-meshnet ACL store the console editor reads/writes
-	// (MESH.8e-2). Nil on the community build (its single ACL is a file), where
+	// (MESH.8e-2). Nil on the self-hosted build (its single ACL is a file), where
 	// the admin ACL endpoints report NotImplemented. When set, it is normally the
 	// SAME store ACLFilter reads for netmap filtering, so a saved edit takes
 	// effect on the next netmap push (the admin surface bumps after a write).
@@ -42,7 +42,7 @@ type Coordinator struct {
 	Services ServiceStore
 	// ACLRevisions keeps the history of saved ACL documents so the console can
 	// restore a previous one (MESH.8e-3). Nil = no history (ACL editing still
-	// works); the community build can wire the in-memory store.
+	// works); the self-hosted build can wire the in-memory store.
 	ACLRevisions ACLRevisionStore
 	// Presence tracks which nodes hold a live control stream (are online now),
 	// distinct from Disabled (admin) and LastSeen (last register). The RPC layer

@@ -45,7 +45,7 @@ type HTTPOptions struct {
 	// ACMEChallengeResolver, when non-nil, answers ACME http-01 validation
 	// probes (/.well-known/acme-challenge/<token>) served by this edge on
 	// behalf of cert-svc's user-self-service issuance. It maps a token to
-	// its keyAuth. nil (community / no cert-svc) disables interception, so
+	// its keyAuth. nil (self-hosted / no cert-svc) disables interception, so
 	// such a path falls through to normal host routing. Checked BEFORE host
 	// routing and BEFORE any auth / rate-limit gate — the probe is anonymous.
 	ACMEChallengeResolver func(token string) (keyAuth string, ok bool)

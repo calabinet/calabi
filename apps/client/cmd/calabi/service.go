@@ -412,7 +412,10 @@ func serviceConfig(installArgs []string, extraEnv map[string]string) *service.Co
 	// Windows a REG_MULTI_SZ "Environment" value under the service key (SCM
 	// injects it at start — kardianos v1.2.2 does this; an older note that
 	// "Windows ignores" EnvVars was wrong).
-	env := passthroughEnv()
+	// Resolve --system before the passthrough: a production privileged service must
+	// not inherit a stray dev CALABI_INSECURE (see filterCalabiEnv).
+	systemMode := hasBoolFlag(installArgs, "system")
+	env := passthroughEnv(systemMode)
 	for k, v := range extraEnv {
 		env[k] = v
 	}
@@ -440,7 +443,6 @@ func serviceConfig(installArgs []string, extraEnv map[string]string) *service.Co
 	// per-user agent. Bake a marker so the boot path (applySystemServiceDataDir,
 	// via the shared maybeRunUnderServiceManager chokepoint — reached on every
 	// platform) anchors the data dir at the machine-wide SystemDataDir.
-	systemMode := hasBoolFlag(installArgs, "system")
 	if systemMode {
 		env["CALABI_SYSTEM_SERVICE"] = "1"
 	}
@@ -617,7 +619,7 @@ func applySystemServiceDataDir() {
 
 // maybeRunUnderServiceManager bridges a Windows Service Control Manager (SCM)
 // launch into the kardianos service-control dispatcher. Both runDaemon variants
-// (platform + community) call it right after their subcommand routing.
+// (platform and self-hosted alike) call it right after their subcommand routing.
 //
 // Why it's needed: `calabi daemon install` registers a Windows service whose
 // binPath is `calabi.exe daemon …`. When SCM starts it, the process MUST connect
@@ -660,16 +662,45 @@ func maybeRunUnderServiceManager() (handled bool, code int) {
 	return true, 0
 }
 
-// passthroughEnv copies the CALABI_* vars from the current environment
-// into the service config so a user-set CALABI_SERVER survives the
-// service-manager handoff. Skip secrets — those live in the creds file.
-func passthroughEnv() map[string]string {
+// clientIgnoredEnv are CALABI_* vars a client daemon never reads — a server store
+// DSN and a dev source-tree binary path — that only reach the environment through
+// scripts/dev/run.ps1. They are pure leakage in an installed service, so the
+// passthrough always drops them.
+var clientIgnoredEnv = map[string]bool{
+	"CALABI_DB_DSN":      true, // server/store DSN; a client daemon has no database
+	"CALABI_DAEMON_PATH": true, // dev source-tree binary path (run.ps1)
+}
+
+// passthroughEnv copies the CALABI_* vars from the current environment into the
+// service config so a user-set var (e.g. CALABI_BFF_CONSOLE / CALABI_EDGE_CA_FILE)
+// survives the service-manager handoff. Real secrets live in the creds file, not
+// here. systemService is the Option-A --system switch; see filterCalabiEnv for
+// what it drops.
+func passthroughEnv(systemService bool) map[string]string {
+	return filterCalabiEnv(os.Environ(), systemService)
+}
+
+// filterCalabiEnv keeps the CALABI_* entries of environ for the service handoff,
+// dropping the ones that must not ride into an installed service:
+//
+//   - clientIgnoredEnv (server/dev-only vars the client never reads), always;
+//   - CALABI_INSECURE on a --system install. A production privileged service must
+//     NEVER dial the control plane in plaintext. A stray dev CALABI_INSECURE=1
+//     (scripts/dev/run.ps1 tells you to `setx CALABI_INSECURE 1`, which persists at
+//     the USER level) would otherwise ride the passthrough into the install and
+//     make the daemon dial the TLS coordinator in plaintext — every mesh register
+//     then fails with "error reading server preface: EOF" and the node never gets
+//     an overlay IP, while the more tolerant edge :7443 session still comes up, so
+//     the cause looks like anything but this. A non-system (dev) install keeps it:
+//     a local dev stack serves plaintext and needs it.
+func filterCalabiEnv(environ []string, systemService bool) map[string]string {
 	out := map[string]string{}
-	for _, e := range os.Environ() {
+	for _, e := range environ {
 		for i := 0; i < len(e); i++ {
 			if e[i] == '=' {
 				key := e[:i]
-				if hasPrefix(key, "CALABI_") {
+				if hasPrefix(key, "CALABI_") && !clientIgnoredEnv[key] &&
+					!(systemService && key == "CALABI_INSECURE") {
 					out[key] = e[i+1:]
 				}
 				break

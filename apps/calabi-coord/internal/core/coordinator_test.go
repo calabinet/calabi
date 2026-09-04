@@ -617,7 +617,7 @@ func TestDeviceApprovalGrandfathersAndGatesNewDevices(t *testing.T) {
 	}
 }
 
-// With no settings store (community build) nothing gates: devices enroll as they
+// With no settings store (self-hosted build) nothing gates: devices enroll as they
 // always did.
 func TestDeviceApprovalWithoutSettingsStore(t *testing.T) {
 	c := newTestCoord()

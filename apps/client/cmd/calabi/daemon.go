@@ -556,7 +556,7 @@ func runDaemon(args []string) int {
 	})
 	// Connect (mesh) traffic meter: per-machine daily byte buckets behind the
 	// overview's 组网流量 (today / month) and the 7-day chart's second series.
-	// Local in BOTH editions — mesh isn't metered server-side per machine — so
+	// Local in BOTH deployments — mesh isn't metered server-side per machine — so
 	// it's registered on the status mux here rather than proxied like tunnel usage.
 	meshMeter := newMeshUsageMeter(filepath.Join(filepath.Dir(lock.Path()), "mesh-usage.json"))
 	attachAPI := func(mux *http.ServeMux) {

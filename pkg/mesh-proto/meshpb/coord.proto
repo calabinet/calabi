@@ -83,7 +83,7 @@ message RegisterNodeRequest {
   // Human label used for MagicDNS (MESH.6): <name>.<meshnet>.mesh.calabi.net
   string name = 3;
   // Opaque auth-key/token proving the node may join a meshnet (verified by
-  // identity-svc on the platform build; a static file on the community coord).
+  // identity-svc on the platform build; a static file on the self-hosted coord).
   string auth_key = 4;
   // Highest protocol version + capabilities the node speaks (see version.go).
   uint32 protocol_version = 5;

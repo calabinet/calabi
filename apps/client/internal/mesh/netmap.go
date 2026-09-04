@@ -1,7 +1,7 @@
 // Package mesh is the calabi client's Connect (WireGuard mesh) subsystem. It
 // speaks ONLY pkg/mesh-proto (the intentionally-public coordination + relay
-// contract) — never pkg/api — so it links cleanly into the community client
-// (enforced by scripts/export-community.sh).
+// contract) — never pkg/api — so it links cleanly into the self-hosted client
+// (enforced by scripts/export-public.sh).
 //
 // MESH.2 scope in this slice: the control-plane plumbing — the netmap model
 // (this file) and the coordinator client (coord.go). The DERP relay client and

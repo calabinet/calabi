@@ -1,8 +1,8 @@
-// Package core is the coordinator's edition-agnostic brain: netmap computation,
+// Package core is the coordinator's deployment-agnostic brain: netmap computation,
 // the store/policy/IPAM interfaces, and the domain types. It has ZERO
 // control-plane dependencies (no pkg/api) — so this exact package is what the
-// community coordinator (MESH.9) ships. The platform build wraps these
-// interfaces with multi-tenant / billing / SSO stores; the community build
+// self-hosted coordinator (MESH.9) ships. The platform build wraps these
+// interfaces with multi-tenant / billing / SSO stores; the self-hosted build
 // wires the in-memory / file-backed stubs in this file. See the wire_*.go seam
 // in cmd/calabi-coord and
 package core
@@ -57,7 +57,7 @@ type Node struct {
 	// re-registration: whoever installed it last owns it.
 	OwnerUserID int64
 	// Tags group nodes for ACL selectors ("tag:server"). Two sources: the auth
-	// key (community coord's config; the node NEVER self-asserts them) and an
+	// key (self-hosted coord's config; the node NEVER self-asserts them) and an
 	// admin setting them in the console. The platform's identity service
 	// carries none, so on SaaS the console is the only source.
 	Tags []string
@@ -69,7 +69,7 @@ type Node struct {
 	// DeviceFingerprint is the daemon's per-install id, SELF-REPORTED. It is a
 	// display-only hint that lets the console link a mesh device to its client
 	// record; nothing here or downstream authorizes on it. Empty when the
-	// daemon has no device registration (community coord, standalone client).
+	// daemon has no device registration (self-hosted coord, standalone client).
 	DeviceFingerprint string
 	// Approved is device approval (MESH.8e-5): a node enrolled while the meshnet
 	// requires approval starts false and reaches nothing until an admin says yes.

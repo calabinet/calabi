@@ -1,6 +1,6 @@
 package localweb
 
-// features_platform.go — platform-edition local-console capabilities. A
+// features_platform.go — platform-only local-console capabilities. A
 // self-hosted edge has no per-plan gate, so every per-tunnel security section
 // is available in the local console's editor.
 

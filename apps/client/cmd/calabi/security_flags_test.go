@@ -19,7 +19,7 @@ func TestBuildConfigJSON_Empty(t *testing.T) {
 	}
 }
 
-// IP allow/deny is present in every edition.
+// IP allow/deny is present in every deployment.
 func TestBuildConfigJSON_IPOnly(t *testing.T) {
 	sf := &securityFlags{l7: false}
 	sf.ipAllow = stringList{"10.0.0.0/8", "1.2.3.4"}

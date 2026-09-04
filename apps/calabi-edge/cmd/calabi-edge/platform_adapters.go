@@ -3,8 +3,8 @@ package main
 // platform_adapters.go holds the control-plane adapters that bridge the
 // data-plane core interfaces (session.ProxyPersister, configclient.Applier,
 // meshresolver sources) to the platform clients. It compiles in the DEFAULT
-// build but is excluded by `-tags community` — every type here imports an
-// internal/platform/* package, so none of it links into the community binary.
+// build but is the platform-only half of the wiring seam — every type here imports an
+// internal/platform/* package, so none of it links into the self-hosted binary.
 
 import (
 	"context"

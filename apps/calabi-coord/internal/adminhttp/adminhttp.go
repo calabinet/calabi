@@ -49,7 +49,7 @@ func New(coord *core.Coordinator, notif Notifier, logger *slog.Logger) http.Hand
 	mux.HandleFunc("POST /admin/nodes/{id}/disable", h.setDisabled(true))
 	mux.HandleFunc("POST /admin/nodes/{id}/enable", h.setDisabled(false))
 	// Per-org ACL editor (MESH.8e-2). NotImplemented when the build has no
-	// writable ACL store (community — its ACL is a file).
+	// writable ACL store (self-hosted — its ACL is a file).
 	mux.HandleFunc("GET /admin/meshnets/{id}/acl", h.getACL)
 	mux.HandleFunc("PUT /admin/meshnets/{id}/acl", h.putACL)
 	// Pre-save impact + "why can/can't A reach B" (MESH.8e-3).

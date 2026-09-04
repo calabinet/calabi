@@ -1,7 +1,7 @@
 // Package oauth implements the edge-side OAuth/OIDC "login wall" (④): the edge
 // gates an HTTP/HTTPS tunnel behind an identity provider (Google / GitHub).
-// Used to be excluded from the Community Edition build; since F3 there is no
-// edition split and every edge, self-hosted included, can enforce it.
+// Used to be excluded from the open-source build; since F3 one edge binary
+// ships and every edge, self-hosted included, can enforce it.
 //
 // Model (same request-1 / cookie shape as Basic auth — no per-request byte
 // mutation): an unauthenticated visitor is 302-redirected to the IdP; the IdP

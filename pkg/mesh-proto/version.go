@@ -3,7 +3,7 @@ package meshproto
 // ProtocolVersion is the mesh coordination + relay protocol version negotiated
 // between a node, the coordinator, and the DERP relays.
 //
-// It is DRAFT (0) and may change freely until the community coordinator ships
+// It is DRAFT (0) and may change freely until the self-hosted coordinator ships
 // (MESH.9). From that point it is frozen into a backward-compatible contract:
 // a node and a (possibly self-hosted) coordinator negotiate the highest common
 // version via Capabilities. 条件3.

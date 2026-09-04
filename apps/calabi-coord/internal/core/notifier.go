@@ -7,10 +7,10 @@ import "sync"
 // NetMap without the client reconnecting. It carries no data — just a coalescing
 // "something changed" signal per subscriber, keyed by meshnet.
 //
-// Edition-agnostic: the same mechanism serves the SaaS and the community
+// Deployment-agnostic: the same mechanism serves the SaaS and the self-hosted
 // coordinator. (A multi-instance SaaS deployment will later back Bump with a
 // NATS fan-out so a change on one coord instance reaches streams pinned to
-// another; MESH.8. Single-instance — including every community coordinator —
+// another; MESH.8. Single-instance — including every self-hosted coordinator —
 // needs only this in-process notifier.)
 type Notifier struct {
 	mu   sync.Mutex

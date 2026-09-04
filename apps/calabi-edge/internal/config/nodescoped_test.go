@@ -89,7 +89,7 @@ func TestNodeScopedConflictRejected(t *testing.T) {
 	}
 }
 
-// A config-less edge (dev / community) must stay self-consistent too.
+// A config-less edge (dev / self-hosted) must stay self-consistent too.
 func TestNodeScopedDefaultIsConsistent(t *testing.T) {
 	d := Default()
 	if d.BaseDomain != d.HTTP.BaseDomain {

@@ -1,7 +1,7 @@
 // Package store is the PLATFORM (SaaS) NodeStore: an ent/DB-backed
 // implementation of core.NodeStore over a calabi-coord-owned mesh_nodes table
-// (MESH.8c). It lives under internal/platform so the edition-agnostic core and
-// the community coordinator never link ent — community keeps the in-memory
+// (MESH.8c). It lives under internal/platform so the deployment-agnostic core and
+// the self-hosted coordinator never link ent — a self-hosted coordinator keeps the in-memory
 // NodeStore. The DB is the durable registry behind admin visibility, seat
 // billing, and console (MESH.8b/8d/8e).
 package store

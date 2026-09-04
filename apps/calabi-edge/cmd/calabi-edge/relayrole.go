@@ -27,7 +27,7 @@ import (
 // module graph carries no edge/control-plane code (pkg/relay/deps_test.go) — so
 // the tunnel and relay datapaths cannot cross.
 //
-// reporter (optional; nil in community / when the node has no single org)
+// reporter (optional; nil when self-hosted / when the node has no single org)
 // periodically drains the hub and re-sends this node's OWN relay usage as a
 // self-<label> region (edge/derp merge). It is wired only for a platform
 // node with an org identity.

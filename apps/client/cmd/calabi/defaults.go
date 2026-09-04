@@ -2,10 +2,10 @@ package main
 
 // defaults.go — build-wide defaults for the single calabi binary.
 //
-// There is no longer a community/platform EDITION split: one binary ships, and
+// There is no longer a platform-vs-open-source BUILD split: one binary ships, and
 // what it does is decided at runtime.
-// The former edition_platform.go / commands_community.go pair defined an
-// `edition` constant and two different defaults; both are gone.
+// A pair of build-tagged files used to define an `edition` constant and two
+// different sets of defaults; both are gone.
 
 // defaultClientMode is the client mode when nothing else says otherwise (no
 // CALABI_MODE, no persisted creds.Config.Mode). It stays "platform": this

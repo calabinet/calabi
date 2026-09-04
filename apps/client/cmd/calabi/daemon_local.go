@@ -10,7 +10,7 @@
 // Routing: runDaemon hands off here when `--local` is passed or the client is
 // in standalone mode.
 // The local config's security blocks only take effect against an edge running
-// `mode: standalone` (the community edge always does) — a managed/BYOI edge
+// `mode: standalone` (the self-hosted edge always does) — a managed/BYOI edge
 // ignores client-supplied policy by design.
 package main
 
@@ -40,7 +40,7 @@ import (
 // daemonIsLocal decides whether `calabi daemon …` should run the LOCAL
 // supervisor daemon instead of the platform-sync one: true when `--local` is
 // present OR the client is in standalone mode (`calabi mode standalone` /
-// CALABI_MODE=standalone). Shared by both editions' runDaemon. Service
+// CALABI_MODE=standalone). Shared by both deployments' runDaemon. Service
 // subcommands (install/start/…) are routed before this is consulted.
 func daemonIsLocal(args []string) bool {
 	for _, a := range args {

@@ -67,7 +67,7 @@ type BasicAuth struct {
 // rawConfig mirrors the slice of config_json this file parses (IP + Basic
 // auth). Unknown keys are ignored by encoding/json, so the advanced blocks
 // (rate_limit / request_headers / oauth), parsed separately in
-// parseAdvanced, don't appear here and a community edge silently ignores them.
+// parseAdvanced, don't appear here and a self-hosted edge silently ignores them.
 type rawConfig struct {
 	Security struct {
 		IP struct {

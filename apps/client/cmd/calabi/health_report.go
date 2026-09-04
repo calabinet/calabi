@@ -1,4 +1,4 @@
-// health_report.go — platform-edition daemon background reporter that pushes
+// health_report.go — platform-only daemon background reporter that pushes
 // per-tunnel upstream (local_addr) health to bff-console, so the cloud console
 // can show "异常 / upstream unreachable" instead of a misleading "online".
 //

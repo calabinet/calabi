@@ -106,3 +106,51 @@ func TestDefaultMeshKeyPath_SystemService(t *testing.T) {
 		t.Errorf("system-service mesh key must be absolute (never CWD-relative), got %q", got)
 	}
 }
+
+// Regression for the real-machine mesh outage (2026-09-04): a stray dev
+// CALABI_INSECURE=1 (scripts/dev/run.ps1 tells you to `setx CALABI_INSECURE 1`,
+// which persists at the USER level) rode passthroughEnv into a --system production
+// install. The daemon then dialed the TLS coordinator in PLAINTEXT and every mesh
+// register failed with "error reading server preface: EOF" (no overlay IP) — while
+// the more tolerant edge :7443 session still came up, hiding the cause. A --system
+// install must not carry CALABI_INSECURE; server/dev-only vars the client never
+// reads are dropped either way; legitimate config still passes through.
+func TestFilterCalabiEnv_DropsDevAndInsecureOnSystem(t *testing.T) {
+	environ := []string{
+		"PATH=/usr/bin",                              // non-CALABI: never passed through
+		"CALABI_INSECURE=1",                          // security downgrade
+		"CALABI_DB_DSN=postgres://x",                 // server-only; client never reads it
+		"CALABI_DAEMON_PATH=/src/bin/calabi",         // dev source-tree path
+		"CALABI_BFF_CONSOLE=https://api.example.net", // legit config
+		"CALABI_EDGE_CA_FILE=/etc/ca.crt",            // legit config
+	}
+
+	// --system (production privileged) install: drop the downgrade + dev/server vars.
+	sys := filterCalabiEnv(environ, true)
+	for _, k := range []string{"CALABI_INSECURE", "CALABI_DB_DSN", "CALABI_DAEMON_PATH"} {
+		if _, ok := sys[k]; ok {
+			t.Errorf("--system install must NOT carry %s into the service", k)
+		}
+	}
+	if sys["CALABI_BFF_CONSOLE"] != "https://api.example.net" {
+		t.Errorf("--system dropped legit CALABI_BFF_CONSOLE = %q", sys["CALABI_BFF_CONSOLE"])
+	}
+	if sys["CALABI_EDGE_CA_FILE"] != "/etc/ca.crt" {
+		t.Errorf("--system dropped legit CALABI_EDGE_CA_FILE = %q", sys["CALABI_EDGE_CA_FILE"])
+	}
+	if _, ok := sys["PATH"]; ok {
+		t.Error("a non-CALABI var (PATH) must never pass through")
+	}
+
+	// Non-system (dev) install: keep CALABI_INSECURE (a local dev stack serves
+	// plaintext and needs it), still drop the vars the client never reads.
+	dev := filterCalabiEnv(environ, false)
+	if dev["CALABI_INSECURE"] != "1" {
+		t.Errorf("non-system install must keep CALABI_INSECURE for dev; got %q", dev["CALABI_INSECURE"])
+	}
+	for _, k := range []string{"CALABI_DB_DSN", "CALABI_DAEMON_PATH"} {
+		if _, ok := dev[k]; ok {
+			t.Errorf("client-never-reads var %s must be dropped even for a dev install", k)
+		}
+	}
+}

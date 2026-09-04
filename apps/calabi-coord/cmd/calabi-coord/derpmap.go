@@ -46,8 +46,8 @@ type derpMapFile struct {
 //     map; production supplies one of the above.
 //
 // Default home = the file's home_region (or CALABI_COORD_DERP_HOME_REGION) when it
-// names a region present in the map, else the first region's code. Shared by both
-// editions (no build tag).
+// names a region present in the map, else the first region's code. Shared by
+// every deployment.
 func loadDERPMap(logger *slog.Logger) (core.DERPMap, string, error) {
 	envHome := env("DERP_HOME_REGION")
 	if path := env("DERP_MAP_FILE"); path != "" {

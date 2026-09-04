@@ -12,7 +12,7 @@ import (
 // ACLStore holds one ACL document per meshnet — the SaaS per-org policy the
 // console editor reads and writes (MESH.8e-2). meshnet == org, so this is the
 // org's access-control document. The platform build backs it with a DB table
-// (mesh_acls, calabi-coord-owned); the community build leaves it nil (its single
+// (mesh_acls, calabi-coord-owned); the self-hosted build leaves it nil (its single
 // ACL comes from a file — see cmd/calabi-coord/policy.go). A meshnet with no
 // stored doc is "not found" and treated as allow-all by ACLFilter.
 type ACLStore interface {
@@ -49,7 +49,7 @@ type ACLRevisionStore interface {
 	ListRevisions(ctx context.Context, t MeshnetID, limit int) ([]ACLRevision, error)
 }
 
-// MemACLRevisionStore is an in-memory ACLRevisionStore (dev / tests / community).
+// MemACLRevisionStore is an in-memory ACLRevisionStore (dev / tests / self-hosted).
 type MemACLRevisionStore struct {
 	mu   sync.RWMutex
 	next int64
@@ -80,7 +80,7 @@ func (s *MemACLRevisionStore) ListRevisions(_ context.Context, t MeshnetID, limi
 }
 
 // MemACLStore is an in-memory ACLStore (dev / tests / the platform no-DSN
-// fallback). Edition-agnostic — zero control-plane deps.
+// fallback). Deployment-agnostic — zero control-plane deps.
 type MemACLStore struct {
 	mu sync.RWMutex
 	m  map[MeshnetID]ACLPolicy

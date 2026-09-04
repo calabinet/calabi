@@ -16,7 +16,7 @@ import (
 // persists them so the overview's mesh usage (today / this month) and the 7-day
 // chart's second series survive restarts.
 //
-// It runs in BOTH editions and is always LOCAL — mesh traffic is never metered
+// It runs in BOTH deployments and is always LOCAL — mesh traffic is never metered
 // server-side per machine, unlike tunnels (whose daily history the platform
 // pulls from metering-svc). So the daemon serves /v1/usage/mesh from this meter
 // directly rather than proxying it.
@@ -38,7 +38,7 @@ type meshUsageMeter struct {
 }
 
 // meshPathDirect mirrors mesh.PathDirect (internal/mesh/status.go). Kept as a
-// literal so this dual-edition file need not import internal/mesh. Anything that
+// literal so this file need not import internal/mesh. Anything that
 // is NOT this exact value — "relay", or an unknown/empty path — books into the
 // relay bucket, the conservative choice since relay is the billed one.
 const meshPathDirect = "direct"
@@ -198,7 +198,7 @@ func (m *meshUsageMeter) daily(n int) []meshUsageDay {
 //	{"today":{relay,direct},"month":{relay,direct},"daily":[{date,relay,direct}...]}
 //
 // Read-only; registered on the status server's mux in package main (both
-// editions) so it never rides the platform's server-side usage proxy.
+// deployments) so it never rides the platform's server-side usage proxy.
 func (m *meshUsageMeter) handleMeshUsage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

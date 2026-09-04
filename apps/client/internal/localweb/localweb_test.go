@@ -39,7 +39,7 @@ func TestTransformSecurityConfig_KeepsExistingHash(t *testing.T) {
 	}
 }
 
-// IP policy survives the transform untouched in every edition.
+// IP policy survives the transform untouched in every deployment.
 func TestTransformSecurityConfig_PreservesIP(t *testing.T) {
 	in := `{"security":{"ip":{"allow":["10.0.0.0/8"]}}}`
 	out, err := transformSecurityConfig(in)

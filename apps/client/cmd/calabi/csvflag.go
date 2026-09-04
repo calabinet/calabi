@@ -8,8 +8,8 @@ import "strings"
 // rather than as a daemon boot crash.
 //
 // This lives in an UN-tagged file rather than daemon_mesh_platform.go
-// It used to be edition-gated; mesh.go calls it, so keeping it platform-only
-// broke the community build with
+// It used to be build-gated; mesh.go calls it, so keeping it platform-only
+// broke the self-hosted build with
 // "undefined: splitCSV".
 func splitCSV(s string) []string {
 	var out []string

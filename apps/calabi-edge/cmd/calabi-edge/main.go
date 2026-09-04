@@ -226,7 +226,7 @@ func run() error {
 	}
 
 	// Control-plane wiring. The platform build dials identity / tunnel / quota /
-	// cert / config / usage / bff-edge and returns the deps below; the community
+	// cert / config / usage / bff-edge and returns the deps below; a self-hosted node
 	// build returns an all-nil bundle (data plane only). run() never imports a
 	// platform package — it only consumes the returned interfaces.
 	deps, err := wirePlatform(ctx, logger, platformInputs{
@@ -255,7 +255,7 @@ func run() error {
 
 	// Effective "trust client-supplied security policy" decision. Standalone
 	// normalization above already guarantees a standalone edge has no control
-	// plane wired; the community build additionally compiles none in. We still
+	// plane wired; the self-hosted build additionally compiles none in. We still
 	// derive the decision through TrustsClientPolicy(deps.controlPlaneWired) as
 	// defense in depth — if a control plane is wired the guard refuses to trust.
 	trustClientPolicy := cfg.TrustsClientPolicy(deps.controlPlaneWired)
@@ -331,7 +331,7 @@ func run() error {
 	}
 
 	// HTTPS terminator: compose the platform cert-svc source (deps.getCertificate,
-	// nil in community / no cert-svc) with the core self-signed wildcard dev
+	// nil when self-hosted / no cert-svc) with the core self-signed wildcard dev
 	// fallback. Returns an addr-less no-op listener when HTTPS is disabled.
 	httpsListener, err := buildHTTPSListener(logger, cfg, r, metricsSet,
 		deps.getCertificate, deps.meshResolver, edgeID, globalLimiter)
@@ -376,7 +376,7 @@ func run() error {
 	go func() { errCh <- labelErr("admin", obs.Run(ctx)) }()
 	go func() { errCh <- labelErr("configreload", reloader.Run(ctx)) }()
 	// Platform background goroutines (presence / edge-registrar / usage /
-	// deny-sweeper / evict / mesh-resolver). Empty in the community build.
+	// deny-sweeper / evict / mesh-resolver). Empty in the self-hosted build.
 	for _, rn := range deps.runners {
 		rn := rn
 		go func() { errCh <- labelErr(rn.name, rn.run(ctx)) }()
@@ -405,7 +405,7 @@ func run() error {
 // for cfg.HTTP.BaseDomain is the dev/standalone fallback. Mirrors the pre-split
 // inline logic exactly: cert-svc + self-signed (dev), cert-svc only (prod),
 // self-signed only (standalone), or an addr-less no-op listener when HTTPS is
-// disabled. The self-signed path is CORE so a community / standalone edge can
+// disabled. The self-signed path is CORE so a self-hosted / standalone edge can
 // terminate HTTPS without cert-svc.
 func buildHTTPSListener(
 	logger *slog.Logger,
@@ -762,7 +762,7 @@ type bandwidthLookup interface {
 // the string form of org_id wire shape (identity-
 // svc emits numeric org ids); non-numeric tenants resolve to 0 = unlimited.
 //
-// Core type (no platform import): the community build constructs it with a
+// Core type (no platform import): the self-hosted build constructs it with a
 // nil cli, which still honours the EDGE_DEBUG_BANDWIDTH_BPS dev override and
 // otherwise reports "unlimited".
 type quotaBandwidthAdapter struct {
@@ -810,7 +810,7 @@ type connLimitsLookup interface {
 // visitors. SetCap / SetRatePerMin treat 0 as "unlimited for this org".
 //
 // Core type (ratelimit is core); the platform wiring constructs it with the
-// process-global limiters + the quota client. The community build leaves
+// process-global limiters + the quota client. The self-hosted build leaves
 // connGuard nil entirely (no per-org caps without quota-svc).
 type connGuardAdapter struct {
 	conns     *ratelimit.ConnLimiter

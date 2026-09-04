@@ -9,7 +9,7 @@ import (
 	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
 )
 
-// MemNodeStore is an in-memory NodeStore for the community coordinator and for
+// MemNodeStore is an in-memory NodeStore for the self-hosted coordinator and for
 // tests/dev. The platform build swaps in a DB-backed store (MESH.1/MESH.8).
 type MemNodeStore struct {
 	mu     sync.Mutex
@@ -198,11 +198,11 @@ func (AllowAllPolicy) Filter(_ context.Context, _ MeshnetID, _ *Node, candidates
 	return candidates, nil
 }
 
-// StaticDERP is a fixed DERPMapSource — used by the community coordinator (reads
+// StaticDERP is a fixed DERPMapSource — used by the self-hosted coordinator (reads
 // a file) and dev. The platform build sources the map from the live fleet.
 type StaticDERP struct{ Map DERPMap }
 
 // DERPMap ignores the meshnet: a static map has no per-org relays to add. This
-// is the community coordinator's behaviour and the platform's until self-hosted
+// is the self-hosted coordinator's behaviour and the platform's until self-hosted
 // relays land (R2).
 func (s StaticDERP) DERPMap(_ context.Context, _ MeshnetID) (DERPMap, error) { return s.Map, nil }

@@ -1,0 +1,84 @@
+# verify-release.yml — re-derive the published binaries from this source and
+# say, in public, whether they match.
+#
+# GENERATED into the public mirror by scripts/export-public.sh from this
+# source (docs/public-verify-workflow.yml in the private monorepo). Edit it
+# HERE, not in the public repo — the next `sync-public.sh` overwrites the copy.
+#
+# WHY THIS IS NOT A BUILD JOB
+#
+# This repo used to build its own release binaries on a tag (GoReleaser). It no
+# longer does, deliberately. Those artifacts carried the same version number as
+# the official download but different bytes — no version stamp, control-plane
+# defaults pointing at localhost, a placeholder edge CA — and "two different
+# files both called calabi 1.7.0" is exactly the confusion the build manifest
+# exists to prevent.
+#
+# So the GitHub Release now carries the SAME files published at
+# download.calabi.net, and this workflow does the more useful job: it clones
+# this repository at the commit the manifest names, rebuilds every artifact, and
+# fails if any hash differs. The reproducibility claim is then checked by a
+# machine nobody involved in the release controls, on every release, with the
+# result visible to anyone.
+#
+# It runs the verifier the way an outsider does — a real clone, no shortcuts.
+# The `--tree` shortcut was what hid three separate release bugs the first time
+# (see the release runbook); a check that skips the steps a stranger cannot skip
+# is not a check.
+name: verify-release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "release tag to verify (e.g. v1.7.0)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  reproduce:
+    name: Rebuild from source and compare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # for scripts/verify-reproducible-build.sh
+
+      - name: Fetch build-manifest.json from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+                 --pattern build-manifest.json --dir .; then
+            echo "::error::release $TAG has no build-manifest.json — nothing to verify."
+            echo "Releases are published by scripts/publish-github-release.sh, which uploads"
+            echo "the manifest alongside the artifacts. A release without one cannot be checked."
+            exit 1
+          fi
+
+      # The manifest names the toolchain, so take it from there rather than
+      # pinning a version here that drifts out of sync with releases. A
+      # different Go version is the single most common cause of a false
+      # mismatch, and this job's whole value is that a red result means
+      # something.
+      - name: Read the toolchain the release was built with
+        id: toolchain
+        run: |
+          set -euo pipefail
+          go_ver=$(python3 -c 'import io,json; print(json.load(io.open("build-manifest.json", encoding="utf-8"))["toolchain"]["go"].removeprefix("go"))')
+          echo "go=$go_ver" >> "$GITHUB_OUTPUT"
+          echo "manifest asks for Go $go_ver"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ steps.toolchain.outputs.go }}
+          check-latest: false
+
+      # No --tree: this clones the public repo at the manifest's commit, the
+      # same thing a stranger with the manifest would do.
+      - name: Reproduce every released binary
+        run: bash scripts/verify-reproducible-build.sh build-manifest.json

@@ -396,7 +396,7 @@ func (c *Coordinator) ServicesFor(ctx context.Context, t MeshnetID) ([]Service, 
 	return c.Services.ListServices(ctx, t)
 }
 
-// MemServiceStore is an in-memory ServiceStore (dev / tests / community).
+// MemServiceStore is an in-memory ServiceStore (dev / tests / self-hosted).
 type MemServiceStore struct {
 	mu   sync.Mutex
 	next int64
@@ -466,7 +466,7 @@ type SettingsStore interface {
 	SetSettings(ctx context.Context, t MeshnetID, s MeshnetSettings) error
 }
 
-// MemSettingsStore is an in-memory SettingsStore (dev / tests / community).
+// MemSettingsStore is an in-memory SettingsStore (dev / tests / self-hosted).
 type MemSettingsStore struct {
 	mu sync.Mutex
 	m  map[MeshnetID]MeshnetSettings

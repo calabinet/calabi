@@ -11,7 +11,7 @@ import (
 //
 // The edge's fallbacks are deliberate and correct for their intended use: no
 // identity-svc means "verify clients against the static accepted_tokens table"
-// (that IS standalone/community mode), and a relay that does not require grants
+// (that IS standalone/self-hosted mode), and a relay that does not require grants
 // is how the fleet was rolled out before R0′ was switched on. What makes them
 // dangerous is that nothing distinguishes "I meant this" from "my control plane
 // vanished and I silently became a simpler, more trusting server" — and once
@@ -39,7 +39,7 @@ func IsProduction() bool {
 
 // ValidateProductionPosture returns an error naming EVERY active fail-open
 // fallback (not just the first, so one restart shows the whole list). Returns
-// nil outside production, so dev and community deployments are untouched.
+// nil outside production, so dev and self-hosted deployments are untouched.
 //
 // Call it AFTER NormalizeForMode: standalone normalization is what makes
 // "no control plane" a stated intent rather than an accident.

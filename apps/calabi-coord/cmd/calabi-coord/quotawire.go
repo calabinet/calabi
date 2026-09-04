@@ -9,7 +9,7 @@ import (
 
 // staticNodeQuota builds the node cap from CALABI_COORD_NODE_QUOTA:
 // a positive integer caps every meshnet at that many nodes; unset / 0 / negative
-// means unlimited. It's the community/self-host + dev cap, and the platform
+// means unlimited. It's the self-hosted + dev cap, and the platform
 // build's fallback when quota-svc isn't wired (see wire_platform.go). The
 // multi-tenant per-plan cap is the quota-svc-backed NodeQuota.
 func staticNodeQuota(logger *slog.Logger) core.NodeQuota {

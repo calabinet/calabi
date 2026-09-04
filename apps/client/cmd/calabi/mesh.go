@@ -25,7 +25,7 @@ import (
 )
 
 // runMesh is the `calabi mesh` command group — the Connect (WireGuard mesh)
-// subsystem. Available in BOTH editions (mesh is the open data plane).
+// subsystem. Available in BOTH deployments (mesh is the open data plane).
 //
 // ⚠ `mesh up` needs a tun device + privileges (wintun.dll on Windows) and has
 // NOT been validated end to end — MESH.2.
@@ -56,7 +56,7 @@ func runMeshUp(args []string) int {
 	fs := flag.NewFlagSet("mesh up", flag.ContinueOnError)
 	coordAddr := fs.String("coord", "", "coordinator address host:port (in production: your bff-console entrypoint)")
 	relayAddr := fs.String("relay", "", "calabi-derp relay address host:port (this node's DERP home)")
-	authKey := fs.String("auth-key", "", "tk_ auth key (platform) or pre-shared key (community)")
+	authKey := fs.String("auth-key", "", "tk_ auth key (platform) or pre-shared key (self-hosted)")
 	name := fs.String("name", defaultNodeName(), "node name (used for MagicDNS)")
 	keyFile := fs.String("key-file", defaultMeshKeyPath(), "path to the node's WireGuard private key (created if absent)")
 	advertise := fs.String("advertise-routes", "", "comma-separated CIDRs to advertise as a subnet router (e.g. 192.168.1.0/24)")

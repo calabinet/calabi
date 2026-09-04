@@ -108,7 +108,7 @@ func TestToSessionTunnel_L4RejectsHTTPOnlySecurity(t *testing.T) {
 	}
 }
 
-// L4 tunnels accept IP policy from YAML (present in every edition).
+// L4 tunnels accept IP policy from YAML (present in every deployment).
 func TestToSessionTunnel_L4AcceptsIP(t *testing.T) {
 	tc := localTunnelConfig{
 		Name:       "ssh",

@@ -459,7 +459,7 @@ func (c Config) TrustsClientPolicy(controlPlaneWired bool) bool {
 //   - standalone fork: control-plane addresses (Identity / Tunnel / Cert /
 //     Quota / Config) are cleared. config.Default() injects dev-localhost
 //     identity/tunnel addrs for the dev stack; clearing them means a config-
-//     less community edge neither dials dead services nor mis-trips the trust
+//     less self-hosted edge neither dials dead services nor mis-trips the trust
 //     guard into thinking a control plane is wired.
 func (c Config) NormalizeForMode() (cfg Config, byoiRefused bool) {
 	if !c.IsStandaloneMode() {

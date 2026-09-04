@@ -25,10 +25,10 @@ By signing off you certify the [DCO](DCO) (you wrote the code, or otherwise have
 the right to submit it under Apache-2.0). The name/email must be real and match
 the commit author.
 
-> Why a sign-off? The same data-plane core that powers this open-source edition
-> also powers Calabi's hosted product. The DCO is how every contributor confirms
-> they have the right to contribute the code — which keeps the shared core clean
-> for everyone, here and in the hosted edition.
+> Why a sign-off? The code in this repository is the same data plane that powers
+> Calabi's hosted product — not a stripped-down copy of it. The DCO is how every
+> contributor confirms they have the right to contribute the code, which keeps
+> that shared core clean for everyone, self-hosted and hosted alike.
 
 ### Fixing a missing sign-off
 
@@ -54,5 +54,6 @@ is signed off.
 
 ## Reporting issues
 
-Please include the edition (community), OS/arch, the `calabi` / `calabi-edge`
-version (`--version`), and steps to reproduce.
+Please include your OS/arch, the `calabi` / `calabi-edge` / `calabi-coord`
+version (`calabi version`), whether you are self-hosting or on the hosted
+platform, and steps to reproduce.

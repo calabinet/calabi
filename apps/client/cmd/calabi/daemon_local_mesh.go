@@ -6,7 +6,7 @@
 // the node onto its meshnet in the background, and — via `calabi daemon install`
 // — as a boot-start service. Same binary, one daemon, both data planes.
 //
-// Compiled into both editions (mesh is the open data plane). Needs a tun device
+// Compiled into both deployments (mesh is the open data plane). Needs a tun device
 // + privileges, like `calabi mesh up`; the datapath's runtime is verified in
 package main
 
@@ -31,7 +31,7 @@ type meshConfig struct {
 	Enabled bool   `yaml:"enabled,omitempty"`
 	Coord   string `yaml:"coord,omitempty"`    // coordinator host:port (prod: your bff-console entrypoint)
 	Relay   string `yaml:"relay,omitempty"`    // calabi-derp relay host:port (this node's DERP home)
-	AuthKey string `yaml:"auth_key,omitempty"` // tk_ key (platform) or pre-shared key (community)
+	AuthKey string `yaml:"auth_key,omitempty"` // tk_ key (platform) or pre-shared key (self-hosted)
 	Name    string `yaml:"name,omitempty"`     // node name for MagicDNS; defaults to hostname
 	KeyFile string `yaml:"key_file,omitempty"` // WireGuard private key path; default per-OS config dir
 	// AdvertiseRoutes are subnet-router CIDRs this node offers to forward (MESH.7),
@@ -46,7 +46,7 @@ type meshConfig struct {
 	// HomePreference biases mesh relay-home selection to match the edge affinity,
 	// so "use my node" moves BOTH the edge egress and the relay home ("own" =
 	// prefer the org's self-hosted relay, "platform" = prefer the platform's).
-	// Set programmatically from creds in the platform path; empty in community
+	// Set programmatically from creds in the platform path; empty when self-hosted
 	// (no platform-vs-own distinction), hence yaml:"-" — it's never a file knob.
 	HomePreference string `yaml:"-"`
 	// AcceptRoutes decides whether this node installs the subnet routes its PEERS

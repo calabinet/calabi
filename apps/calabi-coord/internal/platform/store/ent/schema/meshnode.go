@@ -12,7 +12,7 @@ import (
 // MeshNode is one device enrolled in a meshnet — the persistent backing for
 // core.Node (MESH.8c). calabi-coord owns this table (chosen over extending the
 // Publish Device registry): the mesh data plane stays self-contained and the
-// community coordinator can ship its own persistence later. Slice/key fields are
+// self-hosted coordinator can ship its own persistence later. Slice/key fields are
 // stored as text/JSON so a row is portable across sqlite (dev/test) and
 // postgres (prod).
 type MeshNode struct{ ent.Schema }

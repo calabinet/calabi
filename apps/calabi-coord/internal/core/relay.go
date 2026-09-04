@@ -337,7 +337,7 @@ func (c *Coordinator) relayInMeshnet(ctx context.Context, t MeshnetID, id int64)
 // connectivity on a machine nobody has checked.
 type CompositeDERP struct {
 	// Platform is the fleet map from config, identical for every org. Used when
-	// PlatformFn is nil — community, dev, and static-config deployments.
+	// PlatformFn is nil — self-hosted, dev, and static-config deployments.
 	Platform DERPMap
 	// PlatformFn, when set, supplies the platform regions LIVE on every call and
 	// takes precedence over Platform. The platform build derives them from the
@@ -387,7 +387,7 @@ func (c CompositeDERP) DERPMap(ctx context.Context, t MeshnetID) (DERPMap, error
 	return out, nil
 }
 
-// MemRelayStore is an in-memory RelayStore (dev / tests / community).
+// MemRelayStore is an in-memory RelayStore (dev / tests / self-hosted).
 type MemRelayStore struct {
 	mu   sync.Mutex
 	next int64

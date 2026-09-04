@@ -38,7 +38,7 @@ func TestProductionPostureAcceptsTheRealDeployment(t *testing.T) {
 	}
 }
 
-// TestProductionPostureIgnoredOutsideProduction: dev and community edges keep
+// TestProductionPostureIgnoredOutsideProduction: dev and self-hosted edges keep
 // every fallback, including the shipped placeholder token.
 func TestProductionPostureIgnoredOutsideProduction(t *testing.T) {
 	broken := Config{AcceptedTokens: []TokenEntry{{Token: PlaceholderToken}}}

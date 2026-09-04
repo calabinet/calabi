@@ -2,12 +2,12 @@ package main
 
 // security_flags_advanced.go — the advanced (platform-only) per-tunnel policy
 // knobs: connection rate limiting, request-header rewrite, and the OAuth login
-// wall. These used to be platform-edition-only; they now ship in the single
+// wall. These used to be platform-platform-only; they now ship in the single
 // binary and apply to self-hosted edges too (full-oss-plan F1). Previously
-// security_flags_community.go stubbed them out,
+// a build-tagged stub file used to replace them,
 // whose registerAdvancedFlags registers nothing and whose applyAdvanced strips
 // these blocks. IP allow/deny + HTTP Basic auth live in security_flags.go and
-// are present in every edition.
+// are present in every deployment.
 
 import (
 	"flag"

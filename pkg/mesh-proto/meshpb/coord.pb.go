@@ -43,7 +43,7 @@ type RegisterNodeRequest struct {
 	// Human label used for MagicDNS (MESH.6): <name>.<meshnet>.mesh.calabi.net
 	Name string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	// Opaque auth-key/token proving the node may join a meshnet (verified by
-	// identity-svc on the platform build; a static file on the community coord).
+	// identity-svc on the platform build; a static file on the self-hosted coord).
 	AuthKey string `protobuf:"bytes,4,opt,name=auth_key,json=authKey,proto3" json:"auth_key,omitempty"`
 	// Highest protocol version + capabilities the node speaks (see version.go).
 	ProtocolVersion uint32   `protobuf:"varint,5,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"`
