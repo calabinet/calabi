@@ -71,9 +71,14 @@ if [ -n "$PY" ]; then
 d=json.load(io.open(sys.argv[1], encoding="utf-8"))
 for k in sys.argv[2].split("."): d=d[k]
 sys.stdout.write(str(d))' "$MANIFEST" "$1"; }
+  # stdout.buffer, NOT stdout: a text stream translates "\n" to "\r\n" on Windows,
+  # which rewrites the PEM this build embeds and makes every client artifact
+  # mismatch for a reason that has nothing to do with the source. That is exactly
+  # what happened on the first real release -- 7 edge artifacts matched and 7
+  # client artifacts did not, because only the client embeds a certificate.
   read_ca()   { "$PY" -c 'import io,json,sys
 d=json.load(io.open(sys.argv[1], encoding="utf-8"))
-sys.stdout.write("\n".join(d["inputs"]["edge_ca"]["pem"]) + "\n")' "$MANIFEST"; }
+sys.stdout.buffer.write(("\n".join(d["inputs"]["edge_ca"]["pem"]) + "\n").encode())' "$MANIFEST"; }
   read_jobs() { "$PY" -c 'import io,json,sys
 d=json.load(io.open(sys.argv[1], encoding="utf-8"))
 for group, items in d["artifacts"].items():
@@ -149,7 +154,21 @@ if [ -f "$TREE/$CA_PATH" ]; then
   CA_BACKUP="$(mktemp)"
   cp "$CA_FILE" "$CA_BACKUP"
   read_ca > "$CA_FILE"
-  echo "applied edge-CA from the manifest -> $CA_PATH (restored on exit)"
+  # Check the input BEFORE trusting the output. This file is compiled into the
+  # client, so if reconstructing it went wrong, every client artifact mismatches
+  # and the report blames the build -- which sends you looking at the compiler
+  # when the fault is one line above. A verifier has to validate its own inputs
+  # or its failures are misdirection.
+  ca_got="$(SHA "$CA_FILE")"
+  ca_want="$(read_field inputs.edge_ca.sha256)"
+  if [ "$ca_got" != "$ca_want" ]; then
+    echo "FAILED to reconstruct the edge-CA from the manifest:" >&2
+    echo "  wrote  $ca_got" >&2
+    echo "  wanted $ca_want" >&2
+    echo "This is a bug in THIS script, not evidence about the release." >&2
+    exit 2
+  fi
+  echo "applied edge-CA from the manifest -> $CA_PATH (sha256 verified, restored on exit)"
 fi
 
 # --- rebuild and compare -----------------------------------------------------
