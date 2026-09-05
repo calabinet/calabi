@@ -457,10 +457,10 @@ func (c Config) TrustsClientPolicy(controlPlaneWired bool) bool {
 //     control-plane-issued cert → REFUSED standalone, downgraded to platform
 //     (byoiRefused=true). The enforced "BYOI = platform semantics" rule.
 //   - standalone fork: control-plane addresses (Identity / Tunnel / Cert /
-//     Quota / Config) are cleared. config.Default() injects dev-localhost
-//     identity/tunnel addrs for the dev stack; clearing them means a config-
-//     less self-hosted edge neither dials dead services nor mis-trips the trust
-//     guard into thinking a control plane is wired.
+//     Quota / Config) are cleared, so an edge that inherited them from a
+//     platform config it was adapted from neither dials dead services nor
+//     mis-trips the trust guard into thinking a control plane is wired.
+//     (Default() no longer seeds any of them — see its comment.)
 func (c Config) NormalizeForMode() (cfg Config, byoiRefused bool) {
 	if !c.IsStandaloneMode() {
 		return c, false
@@ -493,11 +493,16 @@ type LogConfig struct {
 
 // Default returns a config sane for local development without any file.
 //
-// Inter-svc addresses point at the dev-cluster localhost ports; ops in prod
-// override via a YAML file or env. Without these defaults a freshly-launched
-// edge wouldn't report presence (no identity-svc) and wouldn't persist tunnels
-// (no tunnel-svc),
-// silently degrading two big features — see the 2026-05-27 thread.
+// It sets NO inter-service address. It used to seed the dev cluster's localhost
+// identity/tunnel ports so a bare `calabi-edge` would report presence and persist
+// tunnels; a6d97bcf (F3: the edge reaches the control plane only through
+// bff-edge) removed them. So a config-less edge dials nothing, which is also
+// what makes the self-hosting docs' "it never phones home" true of the default
+// build and not just of a hand-written config.
+//
+// Note what this does NOT set: Mode. A config-less edge is therefore not in
+// standalone mode and will not honour a client-supplied security policy —
+// TrustsClientPolicy.
 func Default() Config {
 	return Config{
 		NodeLabel: "edge-dev-1",

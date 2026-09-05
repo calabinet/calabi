@@ -191,7 +191,10 @@ CALABI_EDGE_ROLE=relay CALABI_EDGE_RELAY_LABEL=home \
 
 # 2. 协调器。authkeys.json 把认证密钥映射到某张网（可带 ACL 标签）：
 #      { "my-secret-key": { "meshnet": 1, "tags": ["tag:laptop"] } }
+#    不设 CALABI_COORD_DB_DSN 的话节点注册表在内存里：协调器一重启，
+#    每个节点都会重新入网并换一个 100.64.x.x 地址。
 CALABI_COORD_AUTHKEYS_FILE=./authkeys.json \
+CALABI_COORD_DB_DSN=sqlite:./coord.db \
 CALABI_COORD_DERP_ADDR=relay.example.com:3340 \
 CALABI_COORD_DERP_STUN_PORT=3478 \
 CALABI_COORD_GRPC_ADDR=:7012 \

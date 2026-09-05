@@ -44,7 +44,20 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const edgeVersion = "0.1.0-m3-sprint5"
+// version is the binary's version, stamped at link time with
+// `-X main.version=<v>` - which is what the Dockerfile and
+// scripts/package-release-edge.sh have always passed.
+//
+// It was `const edgeVersion = "0.1.0-m3-sprint5"` until 2026-09-05, and that
+// spelling defeated the flag TWICE OVER: -X only rewrites a package-level
+// string var (a const is compiled in, not linked), and the name did not match
+// the flag anyway. The linker does not warn when -X names a symbol that does
+// not exist, so this failed in total silence - the released binaries carried
+// no version at all, and every edge reported "0.1.0-m3-sprint5" to the control
+// plane for a year. TestVersionIsStampedByLdflags exists so it cannot recur.
+//
+// Keep it a var, keep it named `version`, and keep the test.
+var version = "dev"
 
 func main() {
 	if err := run(); err != nil {
@@ -55,7 +68,14 @@ func main() {
 
 func run() error {
 	configPath := flag.String("config", "", "path to config YAML (optional)")
+	// Until 2026-09-05 the only flag was -config: there was no way to ask an
+	// edge binary which build it was, on a box or in a container.
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println(version)
+		return nil
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
@@ -103,6 +123,7 @@ func run() error {
 	}
 
 	logger.Info("starting calabi-edge",
+		"version", version,
 		"node_label", cfg.NodeLabel,
 		"region", cfg.Region,
 		"control_addr", cfg.Control.Addr,
@@ -128,7 +149,7 @@ func run() error {
 
 	obs := observability.New(logger, observability.Options{
 		Service:   "calabi-edge",
-		Version:   edgeVersion,
+		Version:   version,
 		AdminAddr: cfg.Admin.Addr,
 	})
 	metricsSet := metrics.New(obs.Registry())

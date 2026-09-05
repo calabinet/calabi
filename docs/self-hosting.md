@@ -8,7 +8,7 @@ different ways to reach a machine with no public address:
 - `calabi-edge`, which accepts public traffic, and the `calabi` client that
   forwards it to your local services: **tunnels**;
 - `calabi-coord` plus `calabi-edge` in its relay role: a private WireGuard
-  **mesh** between your own machines. See [The mesh](#the-mesh-connect).
+  **mesh** between your own machines. See [The mesh](#the-mesh).
 
 The **control plane** (accounts, orgs, billing, the managed global edge fleet)
 is a separate, closed, hosted product. This repository is the data plane on its
@@ -30,6 +30,34 @@ What the hosted Calabi platform adds on top — accounts, a managed global edge
 fleet, billing — is listed under *What self-hosting does not give you*,
 below.
 
+## Contents
+
+**Tunnels**
+
+- [Build](#build)
+- [Quick start (one edge, one tunnel)](#quick-start-one-edge-one-tunnel)
+- [The edge config](#the-edge-config)
+- [The client](#the-client) — [per-tunnel security policy](#per-tunnel-security-policy)
+- [The local supervisor daemon](#the-local-supervisor-daemon-recommended)
+- [The local web console (`:7400`)](#the-local-web-console-7400)
+- [HTTPS](#https)
+
+**Mesh**
+
+- [The mesh](#the-mesh) — what the three pieces are
+- [The relay](#the-relay)
+- [The coordinator](#the-coordinator)
+- [Joining a node](#joining-a-node)
+- [ACLs](#acls)
+- [Subnet routers and exit nodes](#subnet-routers-and-exit-nodes)
+- [What isn't automated off Linux yet](#what-isnt-automated-off-linux-yet)
+
+**Then**
+
+- [What self-hosting does *not* give you](#what-self-hosting-does-not-give-you)
+- [Production notes](#production-notes)
+- [License & contributing](#license--contributing)
+
 ---
 
 ## Build
@@ -38,14 +66,15 @@ Requires Go 1.25+.
 
 ```bash
 # from the repo root
-make build       # → bin/calabi-edge, bin/calabi
+make build       # → bin/calabi, bin/calabi-edge, bin/calabi-coord
 ```
 
 Or directly (on Windows, name the outputs `*.exe`):
 
 ```bash
-( cd apps/calabi-edge && go build -o calabi-edge ./cmd/calabi-edge )
-( cd apps/client      && go build -o calabi      ./cmd/calabi )
+( cd apps/client       && go build -o calabi       ./cmd/calabi )
+( cd apps/calabi-edge  && go build -o calabi-edge  ./cmd/calabi-edge )
+( cd apps/calabi-coord && go build -o calabi-coord ./cmd/calabi-coord )
 
 calabi version   # → calabi <ver>
 ```
@@ -54,17 +83,25 @@ calabi version   # → calabi <ver>
 Windows is already a Windows binary; to **cross**-compile for another OS, set
 `GOOS`/`GOARCH` (e.g. `GOOS=windows GOARCH=amd64 go build -o calabi-edge.exe ./cmd/calabi-edge`).
 
+`calabi-coord` is only needed for the mesh; tunnels need the other two.
+
 ---
 
 ## Quick start (one edge, one tunnel)
 
 **1. Run the edge** on a host with a public IP (or just locally to try it). With
-no config file `calabi-edge` runs in `standalone` mode, accepts the demo token,
-and listens on `:7443` (control) and `:8080` (HTTP):
+no config file it accepts the demo token `dev-token-please-change` and listens on
+`:7443` (control), `:8080` (HTTP), `:8443` (HTTPS, self-signed) and `:9101`
+(admin — `/healthz` + `/metrics`, keep it off the public internet). It dials
+nothing: the built-in defaults carry no control-plane addresses at all.
 
 ```bash
 ./calabi-edge           # CTRL-C to stop
 ```
+
+> Enough to try, but not what you want for real: a config-less edge is **not**
+> in standalone mode, so it ignores the per-tunnel security policy your client
+> sends. See [`mode`](#the-edge-config) below.
 
 **2. Run a local service** to expose:
 
@@ -98,9 +135,10 @@ The edge reads an optional YAML file (`./calabi-edge --config edge.yaml`). The
 fields that matter when you run your own edge:
 
 ```yaml
-mode: standalone              # self-hosting is always standalone (forced); see below
-node_id: my-edge
+mode: standalone              # set this — see below; it is not the default
+node_label: my-edge           # this node's name
 region: my-region             # cosmetic in a single-edge setup
+base_domain: tunnel.example.com   # tunnels become <name>.<base_domain>
 
 control:
   addr: ":7443"               # client-facing TLS listener (control + data)
@@ -109,10 +147,12 @@ control:
 
 http:
   addr: ":8080"               # public HTTP entrypoint (visitors)
-  base_domain: tunnel.example.com   # tunnels become <name>.<base_domain>
 
 https:
   addr: ":8443"               # optional HTTPS terminator (see HTTPS below)
+
+admin:
+  addr: ":9101"               # /healthz + /metrics — bind it privately
 
 state:
   dir: ./state                # persists the subdomain counter + self-signed cert
@@ -125,12 +165,23 @@ accepted_tokens:
     client_id: client-1
 ```
 
-- **`mode`** — set it to `standalone` for a self-hosted stack; that is what stops the edge from expecting a managed
-  platform to connect to. The edge *trusts the security policy the client
-  supplies* in `NEW_PROXY` — which is exactly what you want when you own both ends.
+- **`mode`** — **set it to `standalone`.** It is not the default, and the
+  difference is not cosmetic: only a standalone edge honours the per-tunnel
+  security policy the client sends in `NEW_PROXY`. Leave it out and your
+  `--ip-allow` / `--basic-auth` are accepted by the client and then quietly
+  ignored by the edge, because a managed edge takes policy from the control
+  plane instead. `CALABI_EDGE_MODE=standalone` sets it without editing YAML.
+- **`node_label` / `base_domain`** — both are node-scoped, and both used to be
+  written somewhere else: `node_id` (one character from `edge_node_id`, which
+  means something entirely different) and `http.base_domain` (read by far more
+  than the HTTP listener — the subdomain allocator, the TCP endpoint namer, the
+  self-signed wildcard, the control handshake). **The old spellings still
+  load**, so an existing `edge.yaml` keeps working; setting both spellings to
+  *different* values is refused at startup rather than silently picking one.
 - **`accepted_tokens`** — your auth. Hot-reloadable: edit the file and the edge
-  picks it up without a restart (along with `http.base_domain`).
-- **`CALABI_EDGE_MODE`** env overrides `mode` without editing YAML.
+  picks it up without a restart (`base_domain` too). Every other field is
+  restart-only, and a reload that touches one is refused whole, with a log line
+  — so a typo can't half-apply.
 
 ---
 
@@ -264,16 +315,17 @@ certificate. Options today:
 1. **Bring your own cert** — point `control.cert_pem`/`key_pem` (for the control
    listener) and provision the HTTPS cert via `state.dir` or a real cert; good
    for a domain you control.
-2. **Self-signed wildcard** (dev) — with `http.base_domain` set and no cert
+2. **Self-signed wildcard** (dev) — with `base_domain` set and no cert
    source, the edge generates a self-signed wildcard under `state.dir`. Browsers
-   warn unless you import it.
+   warn unless you import it. This is on by default: `https.addr` defaults to
+   `:8443`, so a config-less edge already serves HTTPS with a generated cert.
 
 > **Known gap:** automatic Let's Encrypt (ACME) on a self-hosted edge is not yet
 > implemented — it's on the roadmap. Until then, use one of the options above.
 
 ---
 
-## The mesh (Connect)
+## The mesh
 
 Tunnels bring the public in. The mesh does the opposite: it joins **your own**
 machines into one private WireGuard network — stable `100.64.0.0/10` addresses
@@ -337,11 +389,20 @@ CALABI_COORD_DERP_STUN_PORT=3478 \
 | `CALABI_COORD_DERP_MAP_FILE` | several relays instead: a JSON directory (see `apps/calabi-coord/examples/derp-map.example.json`) |
 | `CALABI_COORD_POLICY_FILE` | the ACL file. Unset = every node in a meshnet reaches every other |
 | `CALABI_COORD_NODE_QUOTA` | cap on nodes per meshnet. Unset = unlimited |
+| `CALABI_COORD_DB_DSN` | where state lives. `sqlite:./coord.db` for a file, or a `postgres://…` URL. **Unset = in memory** — see below |
 | `CALABI_COORD_TLS_CERT_FILE` / `_KEY_FILE` | serve gRPC over TLS. Both or neither |
 | `CALABI_COORD_MESH_ADMIN_ADDR` / `_TOKEN` | the admin HTTP API. **A tokenless admin surface is refused at startup** — it would expose every meshnet's nodes and ACLs |
 
 A `meshnet` is one isolated network. Two keys mapping to different meshnet
 numbers produce two networks on one coordinator that cannot see each other.
+
+> **Give it a database.** With no `CALABI_COORD_DB_DSN` the coordinator keeps
+> the node registry, the ACL document, declared services and the self-hosted
+> relay directory **in memory** — it says so at startup, and it means a restart
+> empties the registry: every node re-enrolls and gets a *different*
+> `100.64.x.x` address. `CALABI_COORD_DB_DSN=sqlite:./coord.db` is enough; there
+> is no Postgres requirement. A DSN that is set but unusable aborts startup
+> rather than falling back to memory.
 
 > Set `CALABI_ENV=production` and the coordinator refuses to start on any
 > fail-open fallback — most importantly the built-in default auth key, which

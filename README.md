@@ -197,7 +197,10 @@ CALABI_EDGE_ROLE=relay CALABI_EDGE_RELAY_LABEL=home \
 
 # 2. the coordinator. authkeys.json maps an auth key to a meshnet (+ ACL tags):
 #      { "my-secret-key": { "meshnet": 1, "tags": ["tag:laptop"] } }
+#    Without CALABI_COORD_DB_DSN the node registry lives in memory: restart
+#    the coordinator and every node re-enrols on a different 100.64.x.x.
 CALABI_COORD_AUTHKEYS_FILE=./authkeys.json \
+CALABI_COORD_DB_DSN=sqlite:./coord.db \
 CALABI_COORD_DERP_ADDR=relay.example.com:3340 \
 CALABI_COORD_DERP_STUN_PORT=3478 \
 CALABI_COORD_GRPC_ADDR=:7012 \

@@ -7,7 +7,7 @@ Calabi 的**数据面是开源的**——三个二进制，它们之间提供两
 
 - `calabi-edge` 收公网流量，`calabi` 客户端把它转发到你本地的服务：**隧道**；
 - `calabi-coord` 加上跑 relay 角色的 `calabi-edge`：你自己机器之间的私有
-  WireGuard **组网**。见[组网（Connect）](#组网connect)。
+  WireGuard **组网**。见[组网](#组网)。
 
 **控制面**（账号、组织、计费、托管在多个地域的边缘节点）是另一个闭源的托管产品。
 本仓库就是数据面本身——它不回连、不需要账号，完全跑在你自己的机器上。
@@ -25,6 +25,34 @@ Calabi 的**数据面是开源的**——三个二进制，它们之间提供两
 托管版 Calabi 在这之上还加了什么——账号、托管的多地域边缘节点、计费——列在下面的
 *自建拿不到什么*。
 
+## 目录
+
+**隧道**
+
+- [编译](#编译)
+- [五分钟上手（一台边缘节点，一条隧道）](#五分钟上手一台边缘节点一条隧道)
+- [边缘节点配置](#边缘节点配置)
+- [客户端](#客户端)——[按隧道的安全策略](#按隧道的安全策略)
+- [本地 supervisor 守护进程](#本地-supervisor-守护进程推荐)
+- [本地 Web 控制台（`:7400`）](#本地-web-控制台7400)
+- [HTTPS](#https)
+
+**组网**
+
+- [组网](#组网)——三个部件分别是什么
+- [中继](#中继)
+- [协调器](#协调器)
+- [节点入网](#节点入网)
+- [ACL](#acl)
+- [子网路由与出口节点](#子网路由与出口节点)
+- [非 Linux 上还没自动化的部分](#非-linux-上还没自动化的部分)
+
+**然后**
+
+- [自建拿不到什么](#自建拿不到什么)
+- [上生产要注意的](#上生产要注意的)
+- [许可证与贡献](#许可证与贡献)
+
 ---
 
 ## 编译
@@ -33,14 +61,15 @@ Calabi 的**数据面是开源的**——三个二进制，它们之间提供两
 
 ```bash
 # 在仓库根目录
-make build       # → bin/calabi-edge, bin/calabi
+make build       # → bin/calabi, bin/calabi-edge, bin/calabi-coord
 ```
 
 或者直接编（Windows 上把输出名写成 `*.exe`）：
 
 ```bash
-( cd apps/calabi-edge && go build -o calabi-edge ./cmd/calabi-edge )
-( cd apps/client      && go build -o calabi      ./cmd/calabi )
+( cd apps/client       && go build -o calabi       ./cmd/calabi )
+( cd apps/calabi-edge  && go build -o calabi-edge  ./cmd/calabi-edge )
+( cd apps/calabi-coord && go build -o calabi-coord ./cmd/calabi-coord )
 
 calabi version   # → calabi <ver>
 ```
@@ -49,17 +78,23 @@ calabi version   # → calabi <ver>
 Windows 二进制；要**交叉**编译到别的系统，设 `GOOS`/`GOARCH`（例如
 `GOOS=windows GOARCH=amd64 go build -o calabi-edge.exe ./cmd/calabi-edge`）。
 
+`calabi-coord` 只有组网才用得上；只要隧道的话另外两个就够。
+
 ---
 
 ## 五分钟上手（一台边缘节点，一条隧道）
 
 **1. 起边缘节点**，放在有公网 IP 的主机上（想先试的话本地跑也行）。没有配置文件时
-`calabi-edge` 以 `standalone` 模式运行，接受演示 token，监听 `:7443`（控制）和
-`:8080`（HTTP）：
+它接受演示 token `dev-token-please-change`，监听 `:7443`（控制）、`:8080`（HTTP）、
+`:8443`（HTTPS，自签）和 `:9101`（管理口 `/healthz` + `/metrics`，别放公网）。它
+不往外拨任何地址：内建默认值里根本没有控制面地址。
 
 ```bash
 ./calabi-edge           # CTRL-C 停止
 ```
+
+> 试一下够用，但别就这么上：没有配置文件的边缘节点**不在** standalone 模式，
+> 会忽略客户端发上来的按隧道安全策略。见下面的 [`mode`](#边缘节点配置)。
 
 **2. 起一个要暴露的本地服务**：
 
@@ -93,9 +128,10 @@ curl http://127.0.0.1:8080/ -H 'Host: app.localtest.me'
 用得上的字段：
 
 ```yaml
-mode: standalone              # 自建永远是 standalone（强制）；见下
-node_id: my-edge
+mode: standalone              # 要自己写上——它不是默认值，见下
+node_label: my-edge           # 这台节点的名字
 region: my-region             # 单节点部署时只是个标签
+base_domain: tunnel.example.com   # 隧道域名形如 <name>.<base_domain>
 
 control:
   addr: ":7443"               # 面向客户端的 TLS 监听（控制 + 数据）
@@ -104,10 +140,12 @@ control:
 
 http:
   addr: ":8080"               # 公网 HTTP 入口（访问者从这进）
-  base_domain: tunnel.example.com   # 隧道域名形如 <name>.<base_domain>
 
 https:
   addr: ":8443"               # 可选的 HTTPS 终止（见下面的 HTTPS）
+
+admin:
+  addr: ":9101"               # /healthz + /metrics——绑在内网
 
 state:
   dir: ./state                # 持久化子域名计数器 + 自签证书
@@ -120,12 +158,18 @@ accepted_tokens:
     client_id: client-1
 ```
 
-- **`mode`**——自建栈就设成 `standalone`；正是这个值让边缘节点不再等一个托管控制面
-  来连它。此时边缘节点会*信任客户端在 `NEW_PROXY` 里带上来的安全策略*——两端都是你
-  自己的，这正是你想要的行为。
-- **`accepted_tokens`**——你的认证。可热加载：改文件即生效，不用重启
-  （`http.base_domain` 同理）。
-- **`CALABI_EDGE_MODE`** 环境变量可以不改 YAML 直接覆盖 `mode`。
+- **`mode`**——**记得设成 `standalone`**。它不是默认值，而且区别不只是好看：只有
+  standalone 的边缘节点才会认客户端在 `NEW_PROXY` 里带上来的按隧道安全策略。不设的
+  话，你的 `--ip-allow` / `--basic-auth` 客户端照收，边缘节点这边**静默忽略**——因为
+  托管形态下策略来自控制面。`CALABI_EDGE_MODE=standalone` 可以不改 YAML 直接设。
+- **`node_label` / `base_domain`**——两个都是节点级字段，也都换过位置：原来叫
+  `node_id`（和意思完全不同的 `edge_node_id` 只差一个字）和 `http.base_domain`
+  （读它的远不止 HTTP 监听——子域名分配器、TCP 端点命名、自签泛域名、控制握手都读）。
+  **旧写法仍然能加载**，现成的 `edge.yaml` 不用动；但两种写法都写、值又不一样的话，
+  启动时会直接报错，而不是悄悄挑一个。
+- **`accepted_tokens`**——你的认证。可热加载：改文件即生效，不用重启（`base_domain`
+  同理）。其余字段都是要重启的；一次改动里只要碰到其中之一，整次热加载会被拒绝并打
+  日志——所以不会出现「改了一半」。
 
 ---
 
@@ -249,15 +293,17 @@ calabi daemon install --config tunnels.yaml   # 然后：calabi daemon start|sto
 
 1. **自带证书**——把 `control.cert_pem`/`key_pem` 指过去（控制监听用），HTTPS 证书
    通过 `state.dir` 或一张真证书提供；适合你自己控制的域名。
-2. **自签泛域名**（开发用）——设了 `http.base_domain` 且没有别的证书来源时，边缘
-   节点会在 `state.dir` 下生成一张自签泛域名证书。浏览器会告警，除非你导入它。
+2. **自签泛域名**（开发用）——设了 `base_domain` 且没有别的证书来源时，边缘节点会
+   在 `state.dir` 下生成一张自签泛域名证书。浏览器会告警，除非你导入它。这条默认就
+   开着：`https.addr` 默认 `:8443`，所以没有配置文件的边缘节点已经在用生成的证书
+   提供 HTTPS。
 
 > **已知缺口**：自建边缘节点上的自动 Let's Encrypt（ACME）还没做——在路线图上。
 > 在那之前用上面两个选项之一。
 
 ---
 
-## 组网（Connect）
+## 组网
 
 隧道是把公网引进来。组网正好相反：它把**你自己的**机器连成一张私有 WireGuard
 网络——稳定的 `100.64.0.0/10` 地址（跟着机器换网络也不变）、NAT 允许时的
@@ -318,11 +364,18 @@ CALABI_COORD_DERP_STUN_PORT=3478 \
 | `CALABI_COORD_DERP_MAP_FILE` | 多台中继：一个 JSON 目录（见 `apps/calabi-coord/examples/derp-map.example.json`） |
 | `CALABI_COORD_POLICY_FILE` | ACL 文件。不设 = 同一张网里的节点互相全通 |
 | `CALABI_COORD_NODE_QUOTA` | 每张网的节点数上限。不设 = 无限 |
+| `CALABI_COORD_DB_DSN` | 状态存哪。`sqlite:./coord.db` 存成一个文件，或者给一个 `postgres://…` URL。**不设 = 存内存里**，见下 |
 | `CALABI_COORD_TLS_CERT_FILE` / `_KEY_FILE` | gRPC 走 TLS。要么都设，要么都不设 |
 | `CALABI_COORD_MESH_ADMIN_ADDR` / `_TOKEN` | 管理 HTTP API。**没有 token 的管理接口会在启动时被拒绝**——它会把每一张网的节点和 ACL 全暴露出去 |
 
 一个 `meshnet` 就是一张互相隔离的网。两把密钥映射到不同的 meshnet 编号，就是同一个
 协调器上两张互相看不见的网。
+
+> **给它一个数据库。** 不设 `CALABI_COORD_DB_DSN` 的话，节点注册表、ACL 文档、
+> 声明的服务、自建中继目录全在**内存**里——启动时它会自己说一声——意思是重启一次注册表
+> 就空了：每个节点重新入网，拿到的是**另一个** `100.64.x.x` 地址。
+> `CALABI_COORD_DB_DSN=sqlite:./coord.db` 就够，不需要 Postgres。DSN 设了但连不上
+> 会直接启动失败，而不是回落到内存。
 
 > 设 `CALABI_ENV=production`，协调器会在任何一个「失败放行」的兜底还生效时拒绝启动
 > ——最重要的是那把内建的默认认证密钥，它会把**任何**调用者放进 meshnet 1。

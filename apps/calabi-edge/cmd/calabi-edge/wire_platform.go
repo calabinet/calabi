@@ -175,7 +175,7 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 			configclient.Options{
 				EdgeNodeID: in.edgeID,
 				Region:     cfg.Region,
-				Version:    edgeVersion,
+				Version:    version,
 				Applier:    applier,
 			})
 		if err != nil {

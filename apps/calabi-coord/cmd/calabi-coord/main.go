@@ -12,6 +12,8 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -25,9 +27,16 @@ import (
 	"github.com/calabi/calabi/pkg/svcboot"
 )
 
+// version is stamped at link time with `-X main.version=<v>` (Dockerfile).
+// It was `serviceVersion = "0.0.0-mesh.1"` inside this const block, which the
+// linker cannot rewrite and which no build flag named - see the long note in
+// apps/calabi-edge/cmd/calabi-edge/main.go; coord had the identical bug. svcboot
+// logs this at startup and reports it on the admin surface, so until now both
+// said "0.0.0-mesh.1" no matter what shipped.
+var version = "dev"
+
 const (
-	serviceName    = "calabi-coord"
-	serviceVersion = "0.0.0-mesh.1"
+	serviceName = "calabi-coord"
 	// Provisional dev ports — the next free slots after config-svc (:7010 /
 	// :9121) and audit-svc (:7011). Overridable via CALABI_COORD_GRPC_ADDR /
 	// CALABI_COORD_ADMIN_ADDR (see env.go).
@@ -36,6 +45,17 @@ const (
 )
 
 func main() {
+	// Before anything else: let the binary say which build it is. coord ships to
+	// people who run it themselves now, and until 2026-09-05 there was no way to
+	// ask it - the version was a const the linker could not stamp (see `version`
+	// above), so even the startup log lied.
+	showVersion := flag.Bool("version", false, "print the version and exit")
+	flag.Parse()
+	if *showVersion {
+		fmt.Println(version)
+		return
+	}
+
 	logger := svcboot.NewLogger()
 
 	// Decide the mesh-admin posture BEFORE anything starts serving: an
@@ -74,7 +94,7 @@ func main() {
 
 	if err := svcboot.Run(svcboot.Options{
 		Name:    serviceName,
-		Version: serviceVersion,
+		Version: version,
 		// State the env namespace instead of letting svcboot derive it from Name.
 		// Name is what the public export renames (calabi-coord -> calabi-coord), so a
 		// derived prefix made the two trees read DIFFERENT variables from the same

@@ -9,8 +9,12 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// coordServerCreds builds the gRPC server options that make coord's :7014 serve
-// TLS (R0′ / hardening).
+// coordServerCreds builds the gRPC server options that make coord's gRPC
+// listener serve TLS (R0′ / hardening).
+//
+// The port is whatever CALABI_COORD_GRPC_ADDR says (default :7012); the hosted
+// deployment happens to publish :7014, which is why this file used to name that
+// number as though it were the listener's own.
 //
 // Coord's gRPC is the ONE control-plane surface a client dials directly over the
 // public internet — the daemon sends its tk_ auth key over it on every enroll —
@@ -35,7 +39,7 @@ func coordServerCreds(logger *slog.Logger) []grpc.ServerOption {
 	key := strings.TrimSpace(os.Getenv("CALABI_COORD_TLS_KEY_FILE"))
 
 	if cert == "" && key == "" {
-		logger.Warn("coord gRPC is PLAINTEXT — the daemon sends its auth key over it. Set CALABI_COORD_TLS_CERT_FILE/_KEY_FILE (an edge-CA server cert) before exposing :7014 publicly, or terminate TLS in front")
+		logger.Warn("coord gRPC is PLAINTEXT — the daemon sends its auth key over it. Set CALABI_COORD_TLS_CERT_FILE/_KEY_FILE (an edge-CA server cert) before exposing the gRPC listener publicly, or terminate TLS in front")
 		return nil
 	}
 	if cert == "" || key == "" {
