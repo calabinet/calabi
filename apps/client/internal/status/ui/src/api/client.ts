@@ -107,6 +107,19 @@ async function jsonOrThrow<T>(r: Response): Promise<T> {
   return parsed as T;
 }
 
+// viewerTZ is this browser's IANA timezone (e.g. "America/New_York",
+// "Asia/Shanghai"). The usage endpoints forward it to metering-svc (via
+// bff-console) so "今日" and the 近7天 chart bucket on the user's OWN wall clock
+// in any country — the server stores UTC and localizes at read time. Empty when
+// the browser can't report a zone; the server then falls back to UTC.
+function viewerTZ(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  } catch {
+    return "";
+  }
+}
+
 // ---- read endpoints --------------------------------------------------------
 
 export const api = {
@@ -128,19 +141,23 @@ export const api = {
   },
   usage: async (): Promise<CurrentUsage> =>
     jsonOrThrow<CurrentUsage>(await fetch("/v1/usage/current")),
-  // /v1/usage/current?period=today returns an UNCAPPED real-time SUM
-  // over [today 00:00 local, now) -- this is what the Overview's "今日
-  // 流量" card wants. NOTE: /v1/usage/daily?n=1 looks like it would
-  // do the same thing but actually returns YESTERDAY's bucket --
-  // metering-svc's daily i=0 = [yesterday 00:00, today 00:00). See
-  // server.go:GetUsageHistory loop in metering-svc.
+  // /v1/usage/current?period=today returns an UNCAPPED real-time SUM over
+  // [today 00:00, now) in the VIEWER's timezone (tz forwarded below), which is
+  // what the Overview's "今日流量" card wants — a live figure that advances every
+  // refresh. /v1/usage/daily?tz=…&n=1 now also starts at today (i=0 = today), but
+  // it settles per-bucket rather than tracking "now", so the card keeps using
+  // this endpoint for the real-time number.
   usageToday: async (): Promise<CurrentUsage> =>
-    jsonOrThrow<CurrentUsage>(await fetch("/v1/usage/current?period=today")),
-  // /v1/usage/daily — defaults to 30 buckets server-side; pass n=N for
-  // the last N completed days (does NOT include today). For today's
-  // real-time figure use usageToday() above.
+    jsonOrThrow<CurrentUsage>(
+      await fetch("/v1/usage/current?period=today&tz=" + encodeURIComponent(viewerTZ())),
+    ),
+  // /v1/usage/daily — one bucket per day, most-recent first. With the viewer tz
+  // forwarded, buckets are the viewer's calendar days and i=0 = TODAY (for n≤7,
+  // served exact from the raw window); defaults to 30 buckets server-side.
   usageDaily: async (n = 30): Promise<UsageHistory> =>
-    jsonOrThrow<UsageHistory>(await fetch("/v1/usage/daily?n=" + n)),
+    jsonOrThrow<UsageHistory>(
+      await fetch("/v1/usage/daily?n=" + n + "&tz=" + encodeURIComponent(viewerTZ())),
+    ),
 
   // This machine's Connect (mesh) traffic — today / month / last-N-days. Served
   // locally by the daemon (both editions), separate from the tunnel usage above.

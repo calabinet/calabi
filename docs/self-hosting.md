@@ -170,11 +170,9 @@ calabi http 8080 --domain app.example.com \
 
 The edge enforces these (IP allow/deny + Basic auth) for that tunnel.
 
-> These used to be platform-only. They are not any more: one binary ships and
-> a self-hosted edge enforces the same policy set as a managed one. On the
-> hosted product the same features are gated by PLAN, and that gate lives in
-> the control plane (tunnel-svc), not in this code — so removing the edition
-> split did not open a paid feature to hosted users.
+> A self-hosted edge enforces the same policy set as a managed one. On the
+> hosted product these features are gated by plan, and that gate lives in the
+> control plane rather than in this code.
 
 ---
 

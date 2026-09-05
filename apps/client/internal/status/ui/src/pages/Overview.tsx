@@ -101,10 +101,10 @@ export default function Overview() {
     retry: false,
   });
 
-  // /v1/usage/current?period=today gives an UNCAPPED real-time SUM
-  // over [today 00:00 local, now). The earlier attempt used
-  // /v1/usage/daily?n=1 -- that's wrong: metering-svc's daily i=0 is
-  // [yesterday 00:00, today 00:00), so it returned YESTERDAY's total.
+  // /v1/usage/current?period=today gives an UNCAPPED real-time SUM over
+  // [today 00:00, now) in the viewer's own timezone (api.usageToday forwards the
+  // browser tz), so "今日" matches the user's wall clock in any country and keeps
+  // advancing between the daily chart's per-bucket settles.
   const { data: usageTodayResp } = useQuery<CurrentUsage>({
     queryKey: ["usage-today"],
     queryFn: api.usageToday,

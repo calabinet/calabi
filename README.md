@@ -25,9 +25,10 @@
 
 ---
 
-Two different ways to reach a machine that has no public address, in one
-codebase, running entirely on infrastructure you own — no account, no
-phone-home, no telemetry.
+## What is Calabi?
+
+Calabi makes a machine reachable when it has no public address — a laptop
+behind NAT, a server behind CGNAT, a box inside a corporate network. Two ways:
 
 - **Tunnels** — put `calabi-edge` on a host with a public IP. The `calabi`
   client opens one outbound TLS + yamux connection to it, and the edge forwards
@@ -61,6 +62,18 @@ phone-home, no telemetry.
 
 Nothing here opens an inbound port on your laptop. In both modes the client
 dials out.
+
+### What is in this repository
+
+The data plane: the `calabi` client, the `calabi-edge` data node, and the
+`calabi-coord` mesh coordinator. Everything needed to run tunnels and a mesh on
+your own machines is here, and self-hosted it needs no account and calls no
+service of ours.
+
+The hosted platform at [calabi.net](https://calabi.net) runs this same data
+plane and adds the control plane around it: accounts and organizations, a
+managed edge fleet across regions, team access control, usage and billing, and
+a web console. That part is a separate product and is not in this repository.
 
 ---
 
