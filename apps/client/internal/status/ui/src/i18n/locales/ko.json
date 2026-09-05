@@ -499,6 +499,7 @@
     "overlay": "Overlay 주소",
     "pathDirect": "직접",
     "pathRelay": "릴레이",
+    "rtt": "왕복 지연",
     "pausedDesc": "이 기기에서 메시가 중지되었습니다.",
     "pausedHint": "이 기기는 메시에서 나갔습니다. 다시 참여하려면 \"메시 시작\"을 클릭하세요.",
     "peers": "피어",

@@ -3,12 +3,24 @@ package mesh
 // prober_path_test.go — which endpoint a peer's direct path settles on when MORE
 // THAN ONE of them works.
 //
-// onPong used to take the last pong unconditionally. Two reachable endpoints —
-// two container networks between the same pair of hosts, a machine on two LANs,
-// v4 and v6 — then overwrote each other once per probe round: the transport
-// choice churned, and the "direct path found" line (which only prints on a
-// change) repeated every 5s forever. pathSticky keeps the path that is already
-// carrying traffic, without stranding a peer on an endpoint that went quiet.
+// Two things have to hold at once, and they pull in opposite directions.
+//
+// DON'T CHURN. onPong used to take the last pong unconditionally. Two reachable
+// endpoints — two container networks between the same pair of hosts, a machine
+// on two LANs, v4 and v6 — then overwrote each other once per probe round: the
+// transport choice churned, and the "direct path found" line (which only prints
+// on a change) repeated every 5s forever. pathSticky keeps the path that is
+// already carrying traffic, without stranding a peer on an endpoint that went
+// quiet.
+//
+// DO MOVE WHEN IT MATTERS. "Direct" means "not through the relay", not "over the
+// LAN". Two machines on one LAN advertise both their private address and the
+// public one their NAT maps them to, and both answer — the public one because
+// the router hairpins the packet back in. Both are direct; measured on a home
+// LAN, one does ~500 MB/s and the other ~0.3 MB/s. Keeping whichever answered
+// first was how a peer ended up pinned to the hairpin for good, so a sibling
+// that is quicker BY A WIDE MARGIN (pathFasterRatio + pathFasterFloor) takes
+// over — the margin being what keeps this from re-introducing the churn above.
 
 import (
 	"bytes"
@@ -22,12 +34,19 @@ import (
 )
 
 // seedProbe registers a ping as if Probe had just sent it, so onPong accepts the
-// answer. Returns the tx id to answer with.
+// answer. Returns the tx id to answer with. The answer measures as instant.
 func seedProbe(p *discoProber, peer meshproto.DiscoKey, ep netip.AddrPort, tx byte) discoTxID {
+	return seedProbeRTT(p, peer, ep, tx, 0)
+}
+
+// seedProbeRTT is seedProbe with a chosen round-trip: it backdates the ping so
+// the pong that answers it measures as rtt. Endpoints that differ by orders of
+// magnitude are the whole point here and a loopback pair can't produce them.
+func seedProbeRTT(p *discoProber, peer meshproto.DiscoKey, ep netip.AddrPort, tx byte, rtt time.Duration) discoTxID {
 	id := discoTxID{tx}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.pending[id] = pendingProbe{peer: peer, ep: ep, sent: time.Now()}
+	p.pending[id] = pendingProbe{peer: peer, ep: ep, sent: time.Now().Add(-rtt)}
 	return id
 }
 
@@ -155,5 +174,93 @@ func TestDiscoProberInvalidateBeatsStickiness(t *testing.T) {
 
 	if got, ok := p.bestPath(peer); !ok || got != epB {
 		t.Fatalf("path = %s (ok=%v), want %s immediately after invalidatePath", got, ok, epB)
+	}
+}
+
+// The reported case (2026-09-05): a Windows box and a Linux box on one LAN, the
+// Linux one publishing a subnet route to the LAN's NAS. The mesh settled on the
+// peer's PUBLIC endpoint, so every NAS request left for the ISP and hairpinned
+// back — 0.3 MB/s, and `stat` on an SMB share took 27ms.
+//
+// Both endpoints answer, so the prober has to land on the quick one whichever
+// pong arrives first. Delete the `case quicker(...)` arm from onPong and the
+// "public answers first" subtest fails (verified).
+func TestDiscoProberPrefersTheQuickerOfTwoWorkingEndpoints(t *testing.T) {
+	lan := netip.MustParseAddrPort("192.168.1.23:41641")
+	public := netip.MustParseAddrPort("171.222.188.176:22237")
+
+	for _, tc := range []struct {
+		name      string
+		first     netip.AddrPort
+		firstRTT  time.Duration
+		second    netip.AddrPort
+		secondRTT time.Duration
+	}{
+		{"public answers first", public, 8 * time.Millisecond, lan, 400 * time.Microsecond},
+		{"lan answers first", lan, 400 * time.Microsecond, public, 8 * time.Millisecond},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			key, _ := GenerateDiscoKey()
+			peer := key.Public()
+			p, _ := newLoggedProber(t)
+
+			p.onPong(peer, seedProbeRTT(p, peer, tc.first, 1, tc.firstRTT), tc.first)
+			p.onPong(peer, seedProbeRTT(p, peer, tc.second, 2, tc.secondRTT), tc.second)
+
+			got, ok := p.bestPath(peer)
+			if !ok {
+				t.Fatal("no direct path, though two endpoints answered")
+			}
+			if got != lan {
+				t.Fatalf("path = %s, want the LAN endpoint %s — the hairpinned public path is "+
+					"three orders of magnitude slower", got, lan)
+			}
+		})
+	}
+}
+
+// The margin, from the other side: a sibling that answers a little sooner is not
+// a reason to move. Two endpoints on one LAN differ by scheduling jitter, and
+// every move costs a fresh handshake. Without pathFasterFloor this flaps.
+func TestDiscoProberKeepsPathWhenSiblingIsBarelyQuicker(t *testing.T) {
+	key, _ := GenerateDiscoKey()
+	peer := key.Public()
+	incumbent := netip.MustParseAddrPort("192.168.1.23:41641")
+	sibling := netip.MustParseAddrPort("10.8.0.4:41641")
+
+	p, log := newLoggedProber(t)
+	p.onPong(peer, seedProbeRTT(p, peer, incumbent, 1, 5*time.Millisecond), incumbent)
+	p.onPong(peer, seedProbeRTT(p, peer, sibling, 2, 4*time.Millisecond), sibling)
+
+	got, _ := p.bestPath(peer)
+	if got != incumbent {
+		t.Fatalf("path = %s, want it to stay on %s — 4ms against 5ms is churn, not an improvement", got, incumbent)
+	}
+	if n := strings.Count(log.String(), "mesh direct path changed"); n != 0 {
+		t.Fatalf("logged %d path changes, want 0:\n%s", n, log.String())
+	}
+}
+
+// Speed never outranks liveness: once the path in use goes quiet, an endpoint
+// that still answers takes over however slow it is, because the alternative is
+// the relay.
+func TestDiscoProberTakesASlowerPathWhenTheQuickOneGoesQuiet(t *testing.T) {
+	key, _ := GenerateDiscoKey()
+	peer := key.Public()
+	quick := netip.MustParseAddrPort("192.168.1.23:41641")
+	slow := netip.MustParseAddrPort("171.222.188.176:22237")
+
+	p, _ := newLoggedProber(t)
+	p.onPong(peer, seedProbeRTT(p, peer, quick, 1, 400*time.Microsecond), quick)
+	agePath(p, peer, pathSticky+time.Second)
+
+	p.onPong(peer, seedProbeRTT(p, peer, slow, 2, 8*time.Millisecond), slow)
+
+	got, ok := p.bestPath(peer)
+	if !ok {
+		t.Fatal("dropped to the relay instead of taking the endpoint that still answers")
+	}
+	if got != slow {
+		t.Fatalf("path = %s, want %s — a slow path beats no path", got, slow)
 	}
 }

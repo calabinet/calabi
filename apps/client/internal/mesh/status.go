@@ -41,6 +41,12 @@ type PeerStatus struct {
 	// Path is PathDirect, otherwise the address of the relay the peer homes at
 	// (which, in a fleet, is not necessarily our own).
 	Endpoint string
+	// RTTMicros is the round-trip of that direct path, in microseconds; 0 when the
+	// path is the relay (nothing measures that hop). Microseconds because the two
+	// cases worth telling apart — a LAN path and one hairpinning out through the
+	// ISP — differ by a factor of ~20, and rounding to whole milliseconds would
+	// print both LAN endpoints of an interesting pair as "0".
+	RTTMicros int64
 }
 
 // parseUAPI turns a wireguard-go IpcGet() dump into per-peer status. The dump is

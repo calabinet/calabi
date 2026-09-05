@@ -20,12 +20,13 @@ const probeInterval = 5 * time.Second
 // dead one expires (the transport slice falls back to relay when it does).
 const pathTTL = 15 * time.Second
 
-// pathSticky is how long an already-validated path is preferred over a DIFFERENT
-// endpoint that also answers. Without it the last pong of each round wins, so a
-// peer reachable at two endpoints at once — two container networks between the
-// same pair of hosts, a machine on two LANs, v4 and v6 — flips its path every
-// probe round: the transport choice churns and the "direct path found" line
-// (which only prints on a change) repeats forever.
+// pathSticky is how long an already-validated path is kept while it stays QUIET
+// — after this much silence any sibling that answers takes over, whatever its
+// round-trip. Without it the last pong of each round wins, so a peer reachable at
+// two endpoints at once — two container networks between the same pair of hosts,
+// a machine on two LANs, v4 and v6 — flips its path every probe round: the
+// transport choice churns and the "direct path found" line (which only prints on
+// a change) repeats forever.
 //
 // Deliberately BELOW pathTTL: a path that stops answering must be replaced by a
 // working sibling endpoint while bestPath still trusts it, not after bestPath has
@@ -33,6 +34,31 @@ const pathTTL = 15 * time.Second
 // wait for it at all — the bind calls invalidatePath, and the next pong takes
 // over immediately.
 const pathSticky = 2 * probeInterval
+
+// How much quicker a sibling endpoint has to answer before traffic moves onto it
+// while the current path is still perfectly alive.
+//
+// Why this exists. "Direct" means "not through the relay" — it does NOT mean
+// "over the LAN". Two machines on one LAN advertise both their private address
+// and the public one their NAT maps them to, and BOTH answer: the public one
+// works because the router hairpins the packet back in. They are not remotely
+// equivalent. Measured on a home LAN: the private path does ~500 MB/s, the
+// hairpinned one ~0.3 MB/s — the packet leaves for the ISP and comes back, over
+// an uplink sized for upload, on a router that usually hairpins in software.
+// First-pong-wins would lock onto whichever answered first and pathSticky would
+// then keep it there forever.
+//
+// Round-trip is the discriminator rather than "is it an RFC1918 address": a
+// private address is a poor proxy for a short path once docker bridges, VPN
+// adapters, hypervisor NATs and multi-homed hosts are in play, and RTT also
+// separates two PUBLIC paths of very different quality, which no address
+// heuristic can.
+//
+// Both conditions must hold, so the two guards cover different failure modes:
+// the ratio ignores a sibling that is merely a bit quicker, and the floor stops
+// two sub-millisecond LAN endpoints from trading the path on scheduling jitter.
+const pathFasterRatio = 2
+const pathFasterFloor = 3 * time.Millisecond
 
 // pendingTTL caps how long an unanswered ping stays pending before it's reaped.
 const pendingTTL = 10 * time.Second
@@ -74,6 +100,17 @@ type pendingProbe struct {
 type peerPath struct {
 	ep        netip.AddrPort
 	confirmed time.Time
+	// rtt is how long the pong that last confirmed this endpoint took to come
+	// back. Refreshed every probe round (the path we're on is probed like any
+	// other), so a path that degrades is compared at its current cost, not the
+	// one it had when it was adopted.
+	rtt time.Duration
+}
+
+// quicker reports whether a sibling endpoint answered fast enough to justify
+// moving traffic off the path already carrying it. See pathFasterRatio.
+func quicker(candidate, incumbent time.Duration) bool {
+	return candidate*pathFasterRatio < incumbent && incumbent-candidate >= pathFasterFloor
 }
 
 func newDiscoProber(ms *magicSock, logger *slog.Logger) *discoProber {
@@ -100,30 +137,42 @@ func (p *discoProber) onPong(peer meshproto.DiscoKey, tx discoTxID, _ netip.Addr
 	}
 	delete(p.pending, tx)
 	now := time.Now()
+	rtt := now.Sub(pp.sent)
 	prev, had := p.paths[peer]
 	switch {
 	case !had:
-		p.paths[peer] = peerPath{ep: pp.ep, confirmed: now}
+		p.paths[peer] = peerPath{ep: pp.ep, confirmed: now, rtt: rtt}
 		if p.logger != nil {
-			p.logger.Info("mesh direct path found", "peer_disco", peer.String(), "endpoint", pp.ep.String())
+			p.logger.Info("mesh direct path found", "peer_disco", peer.String(),
+				"endpoint", pp.ep.String(), "rtt", rtt.Round(time.Microsecond).String())
 		}
 	case prev.ep == pp.ep:
-		// The path we're on answered again: refresh it, say nothing.
-		prev.confirmed = now
-		p.paths[peer] = prev
+		// The path we're on answered again: refresh it (and its cost), say nothing.
+		p.paths[peer] = peerPath{ep: pp.ep, confirmed: now, rtt: rtt}
 	case now.Sub(prev.confirmed) > pathSticky:
 		// The path we're on has gone quiet for longer than a couple of probe
 		// rounds while this sibling answers — move before bestPath expires the
-		// peer to the relay.
-		p.paths[peer] = peerPath{ep: pp.ep, confirmed: now}
-		if p.logger != nil {
-			p.logger.Info("mesh direct path changed", "peer_disco", peer.String(),
-				"endpoint", pp.ep.String(), "was", prev.ep.String(),
-				"quiet_for", now.Sub(prev.confirmed).Round(time.Second).String())
-		}
+		// peer to the relay. Liveness beats speed here: any working path is
+		// better than dropping to the relay.
+		p.adopt(peer, pp.ep, rtt, prev, now, "quiet_for", now.Sub(prev.confirmed).Round(time.Second).String())
+	case quicker(rtt, prev.rtt):
+		// Both answer, but this one is in a different league — the LAN path
+		// against the hairpinned public one, most often. Move.
+		p.adopt(peer, pp.ep, rtt, prev, now, "was_rtt", prev.rtt.Round(time.Microsecond).String())
 	default:
-		// A sibling endpoint works too. Keep the one already carrying traffic:
-		// both are direct, and swapping buys nothing but churn.
+		// A sibling endpoint works too, and is no quicker in any way that
+		// matters. Keep the one already carrying traffic rather than churn.
+	}
+}
+
+// adopt moves the peer onto ep and logs why. Callers hold p.mu.
+func (p *discoProber) adopt(peer meshproto.DiscoKey, ep netip.AddrPort, rtt time.Duration,
+	prev peerPath, now time.Time, whyKey, whyVal string) {
+	p.paths[peer] = peerPath{ep: ep, confirmed: now, rtt: rtt}
+	if p.logger != nil {
+		p.logger.Info("mesh direct path changed", "peer_disco", peer.String(),
+			"endpoint", ep.String(), "rtt", rtt.Round(time.Microsecond).String(),
+			"was", prev.ep.String(), whyKey, whyVal)
 	}
 }
 
@@ -156,7 +205,11 @@ func (p *discoProber) Probe(peers []Peer) {
 				return
 			}
 			p.mu.Lock()
-			p.pending[tx] = pendingProbe{peer: peer.DiscoKey, ep: ep, sent: now}
+			// Stamped per send, not from the round's `now`: every ping in a round
+			// would otherwise share one start time, and an endpoint probed 20th
+			// would measure slower than one probed 1st by the length of the send
+			// loop — a bias that decides which path wins now that RTT does.
+			p.pending[tx] = pendingProbe{peer: peer.DiscoKey, ep: ep, sent: time.Now()}
 			p.mu.Unlock()
 		}
 		for _, ep := range peer.Endpoints {
@@ -183,6 +236,21 @@ func (p *discoProber) bestPath(peer meshproto.DiscoKey) (netip.AddrPort, bool) {
 		return netip.AddrPort{}, false
 	}
 	return pp.ep, true
+}
+
+// pathRTT reports the round-trip of the peer's current direct path — the same
+// number bestPath's choice is made on. Reported state only: the console shows it
+// so that "direct, and a public address" (a LAN pair whose traffic is hairpinning
+// through the ISP) can be told apart from "direct, over the LAN" at a glance,
+// which was exactly what nobody could see when that shipped.
+func (p *discoProber) pathRTT(peer meshproto.DiscoKey) (time.Duration, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	pp, ok := p.paths[peer]
+	if !ok || time.Since(pp.confirmed) > pathTTL {
+		return 0, false
+	}
+	return pp.rtt, true
 }
 
 // invalidatePath retires a peer's validated path — called by the bind when a

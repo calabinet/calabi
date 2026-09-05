@@ -123,6 +123,11 @@ type MeshPeer struct {
 	// UDP address in the former case.
 	Path     string `json:"path,omitempty"`
 	Endpoint string `json:"endpoint,omitempty"`
+	// RTTMicros is the direct path's round-trip in microseconds (0 over the
+	// relay). "direct" says only that the relay is out of the picture — this says
+	// whether the path is any good, which for two machines on one LAN is the
+	// difference between the LAN and a hairpin through the ISP.
+	RTTMicros int64 `json:"rtt_micros,omitempty"`
 }
 
 // TunnelSpec is a create request. ConfigJSON is the already-transformed

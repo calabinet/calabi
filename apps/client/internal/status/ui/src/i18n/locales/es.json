@@ -499,6 +499,7 @@
     "overlay": "IP overlay",
     "pathDirect": "Directo",
     "pathRelay": "Relay",
+    "rtt": "ida y vuelta",
     "pausedDesc": "La malla está detenida en este equipo.",
     "pausedHint": "Este dispositivo salió de la malla. Haz clic en «Iniciar Malla» para que vuelva a unirse.",
     "peers": "Pares",

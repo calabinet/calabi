@@ -480,6 +480,12 @@ export interface MeshPeer {
   tx_bytes: number;
   path?: string; // "direct" once hole punching found a peer-to-peer path, else "relay"
   endpoint?: string; // the direct UDP endpoint carrying it (empty over the relay)
+  // Round-trip of that direct path, in microseconds; absent over the relay.
+  // "direct" only means the relay is out of the picture — this is what says
+  // whether the path is any good. Two machines on one LAN can be "direct" over a
+  // public address, hairpinning out through the ISP and back: ~8ms and 0.3 MB/s
+  // where the LAN path is ~0.4ms and 500 MB/s.
+  rtt_micros?: number;
 }
 
 export interface MeshStatus {

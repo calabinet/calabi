@@ -499,6 +499,7 @@
     "overlay": "IP overlay",
     "pathDirect": "Direct",
     "pathRelay": "Relais",
+    "rtt": "aller-retour",
     "pausedDesc": "Le Maillage est arrêté sur cette machine.",
     "pausedHint": "Cet appareil a quitté le Maillage. Cliquez sur « Démarrer le Maillage » pour le rejoindre.",
     "peers": "Pairs",

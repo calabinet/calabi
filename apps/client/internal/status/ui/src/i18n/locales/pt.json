@@ -499,6 +499,7 @@
     "overlay": "IP overlay",
     "pathDirect": "Direto",
     "pathRelay": "Relay",
+    "rtt": "ida e volta",
     "pausedDesc": "A Malha está parada nesta máquina.",
     "pausedHint": "Este dispositivo saiu da Malha. Clique em “Iniciar Malha” para entrar de novo.",
     "peers": "Pares",

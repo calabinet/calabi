@@ -58,6 +58,7 @@ func (f *fakeRelay) count() int {
 type fakePaths struct {
 	mu      sync.Mutex
 	path    map[meshproto.DiscoKey]netip.AddrPort
+	rtt     map[meshproto.DiscoKey]time.Duration
 	retired []meshproto.DiscoKey
 	learned []learnedCand
 }
@@ -68,13 +69,29 @@ type learnedCand struct {
 }
 
 func newFakePaths() *fakePaths {
-	return &fakePaths{path: map[meshproto.DiscoKey]netip.AddrPort{}}
+	return &fakePaths{
+		path: map[meshproto.DiscoKey]netip.AddrPort{},
+		rtt:  map[meshproto.DiscoKey]time.Duration{},
+	}
 }
 
 func (f *fakePaths) set(peer meshproto.DiscoKey, ap netip.AddrPort) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.path[peer] = ap
+}
+
+func (f *fakePaths) setRTT(peer meshproto.DiscoKey, d time.Duration) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.rtt[peer] = d
+}
+
+func (f *fakePaths) pathRTT(peer meshproto.DiscoKey) (time.Duration, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, ok := f.rtt[peer]
+	return d, ok
 }
 
 func (f *fakePaths) bestPath(peer meshproto.DiscoKey) (netip.AddrPort, bool) {
@@ -533,5 +550,59 @@ func TestLooksLikeWireGuard(t *testing.T) {
 		if looksLikeWireGuard(pkt) {
 			t.Errorf("%s accepted as WireGuard", name)
 		}
+	}
+}
+
+// The console prints a direct path's round-trip next to the word "direct",
+// because the word on its own is not the good news it reads as: two machines on
+// one LAN can be direct over a PUBLIC address, hairpinning out to the ISP and
+// back at ~20x the latency of the LAN path that was available all along.
+//
+// The number has to survive the same node-key -> disco-key lookup the send path
+// makes, and has to be absent — not zero — when there is no direct path at all,
+// so the console doesn't print a confident "0.0 ms" for a relayed peer.
+func TestMeshBindDirectRTT(t *testing.T) {
+	peerKey := meshproto.NodeKey{9}
+	peerDisco := meshproto.DiscoKey{8}
+	peerAddr := netip.MustParseAddrPort("192.168.1.23:41641")
+
+	disco, _ := GenerateDiscoKey()
+	ms, err := newMagicSock(disco, slog.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ms.Close()
+
+	paths := newFakePaths()
+	b := testBind()
+	b.attach(&fakeRelay{})
+
+	// Nothing attached yet: no path, so no round-trip to report.
+	if _, ok := b.directRTT(peerKey); ok {
+		t.Fatal("reported a round-trip with no direct transport attached")
+	}
+
+	b.attachDirect(ms, paths)
+	b.setPeers(WGConfig{Peers: []WGPeer{{PublicKey: peerKey, DiscoKey: peerDisco}}})
+
+	// Attached, but hole punching hasn't validated anything: still nothing.
+	if _, ok := b.directRTT(peerKey); ok {
+		t.Fatal("reported a round-trip before any path was validated")
+	}
+
+	paths.set(peerDisco, peerAddr)
+	paths.setRTT(peerDisco, 412*time.Microsecond)
+	got, ok := b.directRTT(peerKey)
+	if !ok {
+		t.Fatal("no round-trip for a peer on a validated direct path")
+	}
+	if got != 412*time.Microsecond {
+		t.Fatalf("rtt = %s, want 412µs", got)
+	}
+
+	// A peer the bind has never been told about resolves to no disco key, so
+	// there is nothing to look up — and nothing to show.
+	if _, ok := b.directRTT(meshproto.NodeKey{77}); ok {
+		t.Fatal("reported a round-trip for an unknown peer")
 	}
 }

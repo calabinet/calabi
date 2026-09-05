@@ -178,6 +178,9 @@ func (d *WGDatapath) annotatePaths(peers []PeerStatus) {
 		if ap, ok := d.bind.directPath(key); ok {
 			peers[i].Path = PathDirect
 			peers[i].Endpoint = ap.String()
+			if rtt, ok := d.bind.directRTT(key); ok {
+				peers[i].RTTMicros = rtt.Microseconds()
+			}
 		}
 	}
 }

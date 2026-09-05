@@ -499,6 +499,7 @@
     "overlay": "Overlay-IP",
     "pathDirect": "Direkt",
     "pathRelay": "Relay",
+    "rtt": "Round-Trip",
     "pausedDesc": "Mesh ist auf diesem Gerät gestoppt.",
     "pausedHint": "Dieses Gerät hat das Meshnet verlassen. Klicken Sie auf „Mesh starten“, um wieder beizutreten.",
     "peers": "Peers",

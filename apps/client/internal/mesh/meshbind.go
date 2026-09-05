@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/netip"
 	"sync"
+	"time"
 
 	"golang.zx2c4.com/wireguard/conn"
 
@@ -88,6 +89,9 @@ type relaySender interface {
 // currently reaches a peer, and a way to retire one that turns out to be dead.
 type pathFinder interface {
 	bestPath(peer meshproto.DiscoKey) (netip.AddrPort, bool)
+	// pathRTT is the round-trip of that path. Reported, never used to route —
+	// Send asks bestPath, which already picked on it.
+	pathRTT(peer meshproto.DiscoKey) (time.Duration, bool)
 	invalidatePath(peer meshproto.DiscoKey)
 	// learnCandidate offers an endpoint a peer's DISCO traffic arrived from as a
 	// probe target — the only way to reach a symmetric-NAT peer, whose netmap
@@ -420,6 +424,23 @@ func sendAllDirect(ms *magicSock, bufs [][]byte, to netip.AddrPort) error {
 func (b *meshBind) directPath(key meshproto.NodeKey) (netip.AddrPort, bool) {
 	_, ap, _, ok := b.directTarget(&meshEndpoint{b: b, key: key})
 	return ap, ok
+}
+
+// directRTT reports the round-trip of the peer's direct path, for the console.
+// Deliberately separate from directPath rather than folded into it: the send path
+// calls directPath on every packet and has no use for the number. The pair is
+// therefore read non-atomically — a path that changes between the two calls shows
+// the new endpoint with the old round-trip for one poll, which is a display
+// artefact and nothing more.
+func (b *meshBind) directRTT(key meshproto.NodeKey) (time.Duration, bool) {
+	b.dmu.Lock()
+	paths := b.paths
+	disco, ok := b.discoOf[key]
+	b.dmu.Unlock()
+	if paths == nil || !ok {
+		return 0, false
+	}
+	return paths.pathRTT(disco)
 }
 
 // ParseEndpoint decodes the peer node key (base64) the UAPI carries in

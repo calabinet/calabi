@@ -473,6 +473,7 @@
     "colPath": "路徑",
     "pathDirect": "直連",
     "pathRelay": "中繼",
+    "rtt": "往返延遲",
     "never": "從未",
     "ago": "{{d}}前",
     "noPeers": "暫無對端。",

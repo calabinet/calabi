@@ -477,6 +477,7 @@
     "colPath": "Path",
     "pathDirect": "Direct",
     "pathRelay": "Relay",
+    "rtt": "round-trip",
     "never": "never",
     "ago": "{{d}} ago",
     "noPeers": "No peers yet.",

@@ -506,6 +506,7 @@ func (r *meshRunner) MeshStatus() localweb.MeshStatus {
 				TxBytes:          p.TxBytes,
 				Path:             p.Path,
 				Endpoint:         p.Endpoint,
+				RTTMicros:        p.RTTMicros,
 			})
 		}
 	}

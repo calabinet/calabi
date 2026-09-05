@@ -1,0 +1,48 @@
+# syntax=docker/dockerfile:1.7
+#
+# RELEASE image for the edge / relay data plane, published as
+# docker.io/calabinet/calabi-edge (the public tree calls the binary
+# `calabi-edge`; internally the dir is still apps/calabi-edge).
+#
+# Like apps/client/Dockerfile.release, this compiles NOTHING: it puts in the
+# binary that was already built from the public tree, published and checksummed
+# — the file behind `calabi-edge-linux-<arch>.tar.gz`. See that file for the
+# full reasoning; the short version is that the root Dockerfile's `COPY apps/
+# pkg/` compiles the PRIVATE tree, which produced a second binary under the same
+# version number (measured at 1.7.0: 15,159,480 in the image vs 15,397,026
+# released, and the image's copy still said "starting calabi-edge" because only
+# the public tree is renamed).
+#
+# The root Dockerfile stays as-is for every OTHER service and for dev builds of
+# this one; only the published edge image comes from here.
+#
+# Not buildable on its own — scripts/package-release-edge.sh stages the context
+# and verifies the binary's sha256 against dist/release/edge/BINSUMS.
+
+FROM alpine:3.20
+
+# Filled in by BuildKit from --platform; selects which staged binary goes in.
+ARG TARGETARCH
+
+LABEL org.opencontainers.image.title="calabi-edge" \
+      org.opencontainers.image.description="Calabi data plane (role: edge for tunnels, role: relay for mesh)" \
+      org.opencontainers.image.source="https://github.com/calabinet/calabi" \
+      org.opencontainers.image.vendor="Calabi"
+
+# tzdata is needed because the services pin display timezone to Asia/Shanghai
+# (see commit 00e38f4). ca-certificates is needed for outbound HTTPS.
+RUN apk add --no-cache ca-certificates tzdata && \
+    cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo "Asia/Shanghai" > /etc/timezone && \
+    addgroup -S calabi && adduser -S -G calabi calabi
+
+ENV TZ=Asia/Shanghai \
+    CALABI_TZ=Asia/Shanghai
+
+# Kept at /usr/local/bin/app so the ENTRYPOINT matches every other service image
+# built from the root Dockerfile — deploy/compose and any `command:` overrides
+# don't have to special-case this one.
+COPY --chmod=0755 ${TARGETARCH}/calabi-edge /usr/local/bin/app
+
+USER calabi:calabi
+ENTRYPOINT ["/usr/local/bin/app"]

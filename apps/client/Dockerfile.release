@@ -1,0 +1,73 @@
+# syntax=docker/dockerfile:1.7
+#
+# RELEASE image for the `calabi` client. Unlike apps/client/Dockerfile (which
+# compiles from source and is the DEV path), this one compiles nothing: it puts
+# in the binary that was already built, published and checksummed — literally the
+# file behind `calabi-linux-<arch>.tar.gz` on the download page.
+#
+# WHY (docs/runbook/full-oss-plan.md 8.7, the debt recorded at v1.7.0)
+#
+# The release archives are built from the PUBLIC tree by release-official.sh, and
+# build-manifest.json says which commit they came from. The image used to be a
+# second, independent compile from the PRIVATE tree — same version number, same
+# flags, DIFFERENT bytes (measured at 1.7.0: 19,194,040 vs 19,468,450 for the
+# client, 15,159,480 vs 15,397,026 for the edge). "Same version, two binaries" is
+# exactly the failure mode that got GoReleaser dropped in 8.6.
+#
+# Making two compiles agree is possible but has to be RE-ARGUED on every release
+# (Go version, flags, tree, build context). Not compiling at all makes it true by
+# construction: there is only ever one binary, and scripts/build-release-image.sh
+# checks its sha256 against dist/release/BINSUMS before and after this build.
+#
+# So this Dockerfile is not buildable on its own — it needs a context staged by
+# that script. That is the point, and the script is the only supported entry.
+#
+# Everything below the COPY mirrors apps/client/Dockerfile's runtime stage; keep
+# the two in step when either changes.
+
+FROM alpine:3.20
+
+# Filled in by BuildKit from --platform; selects which staged binary goes in.
+ARG TARGETARCH
+
+LABEL org.opencontainers.image.title="calabi" \
+      org.opencontainers.image.description="Calabi tunnel client (calabi CLI + local daemon)" \
+      org.opencontainers.image.source="https://github.com/calabinet/calabi" \
+      org.opencontainers.image.vendor="Calabi"
+
+# ca-certificates: outbound HTTPS to api.calabi.net / the edge TLS handshake.
+# tzdata: correct local-time rendering in logs (no forced TZ — this is a
+# worldwide end-user CLI, unlike the server images that pin Asia/Shanghai).
+# iproute2: `calabi mesh up` shells out to `ip` to assign the tun's overlay /32
+# + route 100.64.0.0/10 (mesh/linkconfig_linux.go).
+# wireguard-tools: `wg show <ifname>` reads the mesh device's UAPI socket — the
+# primary handshake/transfer diagnostic.
+# iptables: subnet-router NAT (MESH.7) MASQUERADEs mesh traffic to advertised
+# LAN CIDRs. All unused by the http/tcp tunnel path; kept in the single client
+# image so mesh works + is debuggable out of the box.
+RUN apk add --no-cache ca-certificates tzdata iproute2 wireguard-tools iptables && \
+    addgroup -S calabi && adduser -S -G calabi -h /home/calabi calabi
+
+# HOME must point at a writable dir for the non-root `calabi` user — the daemon
+# stores its config / credentials / pidfile / device id under $HOME (Docker does
+# NOT set HOME from the passwd entry, so without this it defaults to "/" and the
+# daemon can't persist anything).
+ENV HOME=/home/calabi
+# Tell the binary it's running in a container: `daemon install` is meaningless
+# here (no OS service manager), so the daemon runs in the FOREGROUND instead.
+ENV CALABI_IN_CONTAINER=1
+
+EXPOSE 7400
+
+# The released binary, staged per-arch by scripts/build-release-image.sh. It
+# already carries the production edge-CA root, the production endpoints and the
+# version string — they were baked in when the archive was built, so there is no
+# CA swap and no --build-arg here. One fewer way to ship a dev CA by accident.
+COPY --chmod=0755 ${TARGETARCH}/calabi /usr/local/bin/calabi
+
+USER calabi:calabi
+# `calabi` is the entrypoint, so image args are calabi subcommands. The default
+# command runs the long-lived daemon as an API-key AGENT:
+#   docker run -d -e CALABI_API_KEY=tk_… calabinet/calabi:latest
+ENTRYPOINT ["/usr/local/bin/calabi"]
+CMD ["daemon"]

@@ -44,6 +44,14 @@ import type {
 
 const { Title, Text } = Typography;
 
+// A direct path's round-trip. Sub-millisecond IS the interesting case — that is
+// what a LAN path looks like — so it keeps a decimal that whole milliseconds
+// would round away to "0 ms"; past 10ms the decimal is noise.
+function fmtRtt(micros: number): string {
+  const ms = micros / 1000;
+  return ms < 10 ? `${ms.toFixed(1)} ms` : `${Math.round(ms)} ms`;
+}
+
 function fmtBytes(n: number): string {
   if (!n) return "0 B";
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -177,15 +185,43 @@ export default function Mesh() {
         // How this peer's traffic is actually flowing right now: straight to it
         // (hole punching succeeded) or through the relay. The endpoint is the
         // punched address — worth showing, it's the proof the path is real.
+        //
+        // The round-trip rides alongside the tag rather than only in the tooltip,
+        // because "direct" alone is not the good news it reads as: two machines
+        // on one LAN can be direct over a PUBLIC address, hairpinning out to the
+        // ISP and back. That looks identical to a LAN path here and runs ~20x the
+        // latency, and nobody hovers a tag that already says the reassuring word.
         title: t("mesh.colPath"),
         key: "path",
         render: (_: unknown, p: MeshPeer) => {
           const direct = p.path === "direct";
+          const rtt = direct && p.rtt_micros ? fmtRtt(p.rtt_micros) : "";
           return (
-            <Tooltip title={p.endpoint || undefined}>
-              <Tag color={direct ? "green" : "default"}>
-                {direct ? t("mesh.pathDirect") : t("mesh.pathRelay")}
-              </Tag>
+            <Tooltip
+              title={
+                p.endpoint ? (
+                  <>
+                    {p.endpoint}
+                    {rtt ? (
+                      <>
+                        <br />
+                        {t("mesh.rtt")}: {rtt}
+                      </>
+                    ) : null}
+                  </>
+                ) : undefined
+              }
+            >
+              <span>
+                <Tag color={direct ? "green" : "default"} style={{ marginInlineEnd: rtt ? 4 : undefined }}>
+                  {direct ? t("mesh.pathDirect") : t("mesh.pathRelay")}
+                </Tag>
+                {rtt ? (
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {rtt}
+                  </Text>
+                ) : null}
+              </span>
             </Tooltip>
           );
         },

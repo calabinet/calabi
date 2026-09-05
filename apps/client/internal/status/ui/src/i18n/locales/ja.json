@@ -499,6 +499,7 @@
     "overlay": "Overlay アドレス",
     "pathDirect": "直接",
     "pathRelay": "中継",
+    "rtt": "往復遅延",
     "pausedDesc": "このマシンのメッシュは停止しています。",
     "pausedHint": "このデバイスはメッシュから離脱しました。「メッシュを開始」をクリックすると再参加します。",
     "peers": "ピア",

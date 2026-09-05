@@ -499,6 +499,7 @@
     "overlay": "IP overlay",
     "pathDirect": "Diretto",
     "pathRelay": "Relay",
+    "rtt": "andata e ritorno",
     "pausedDesc": "La Mesh è arrestata su questa macchina.",
     "pausedHint": "Questo dispositivo ha lasciato la Mesh. Clicca «Avvia Mesh» per rientrare.",
     "peers": "Peer",
