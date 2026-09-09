@@ -180,6 +180,12 @@ type MeshPeer struct {
 	// whether the path is any good, which for two machines on one LAN is the
 	// difference between the LAN and a hairpin through the ISP.
 	RTTMicros int64 `json:"rtt_micros,omitempty"`
+	// RelayRTTMicros is the round trip to the RELAY carrying this peer, in
+	// microseconds; 0 when the path is direct or the link has not answered. ONE
+	// LEG (this node to that relay), never end-to-end to the peer — a separate
+	// field from RTTMicros on purpose, because they are different quantities and
+	// one field would make the shorter measurement look like the better path.
+	RelayRTTMicros int64 `json:"relay_rtt_micros,omitempty"`
 }
 
 // handleMesh serves GET /v1/mesh. Read-only (loopback bind = trust boundary).
@@ -190,11 +196,18 @@ func (s *Server) handleMesh(w http.ResponseWriter, _ *http.Request) {
 	}
 	st := s.cfg.Mesh.MeshStatus()
 	if !st.Enabled && !st.Paused {
-		// Not enrolled AND not locally paused: the org isn't entitled, or the
-		// platform hasn't wired a coordinator. Report "unavailable" (404) instead
-		// of the local-daemon "add a mesh: block" hint, which doesn't apply here.
-		// A locally-paused node returns 200 (below) so the SPA can offer Start.
-		writeError(w, http.StatusNotFound, "mesh not enabled for this daemon")
+		// Not enrolled AND not locally paused. This used to be a 404 as well, and
+		// the SPA — which only reads the status code — rendered it as "this daemon
+		// does not support mesh". But EVERY daemon passes through this state at
+		// boot: MeshStatus reports Enabled=false until the enrollment poll lands,
+		// and that poll is on a 30s ticker, so a first attempt that misses leaves
+		// the console telling the user their build has no mesh for half a minute.
+		//
+		// 503 says the difference the 404 could not: the endpoint exists, this
+		// daemon does mesh, it just has no answer YET. Retry-After carries the
+		// poll interval so the caller does not have to guess it.
+		w.Header().Set("Retry-After", "30")
+		writeError(w, http.StatusServiceUnavailable, "mesh not enrolled yet on this daemon")
 		return
 	}
 	if st.Peers == nil {
@@ -304,7 +317,7 @@ func (s *Server) handleMeshAdvertiseGet(w http.ResponseWriter, _ *http.Request) 
 			excludes = c.MeshRouteExcludes
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	out := map[string]any{
 		"routes":              adv.Routes,
 		"advertise_exit_node": adv.ExitNode,
 		"exit_node":           adv.ExitPeer,
@@ -315,10 +328,21 @@ func (s *Server) handleMeshAdvertiseGet(w http.ResponseWriter, _ *http.Request) 
 		// used to pick was a prediction about OTHER people's LANs that they had no
 		// way to make. The assigned mapping is read back from /v1/mesh.
 		"forwarding_supported": subnetRouterSupported(),
-		"alias_supported":      mesh.SubnetAliasSupported(),
 		"accept_routes":        accept,
 		"route_excludes":       excludes,
-	})
+	}
+	// alias_supported is OMITTED when the daemon could not find out, which the SPA
+	// already reads as "no answer" and draws nothing for — the same shape an older
+	// daemon that never sent the field produces.
+	//
+	// Sending `false` for "could not find out" is the bug this replaces: a machine
+	// with a live NETMAP rule in PREROUTING was shown "this machine cannot install
+	// alias rules", because the probe ran head-on into the daemon's own iptables
+	// work and read the lost race as a missing kernel feature.
+	if support, _ := mesh.SubnetAliasSupport(s.logger); support != mesh.AliasSupportUnknown {
+		out["alias_supported"] = support == mesh.AliasSupportYes
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // handleMeshAdvertiseSet serves POST /v1/mesh/advertise (local-token gated): set

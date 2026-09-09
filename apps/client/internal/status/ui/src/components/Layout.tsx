@@ -395,14 +395,28 @@ export default function Layout() {
     return m;
   }, [tunnelList, edgeRegionById]);
 
+  // What a region / egress-affinity switch actually invalidates.
+  //
+  // These two used to call window.location.reload(), which threw away the WHOLE
+  // react-query cache and made every page cold-start: /v1/edges in particular is
+  // a straight proxy to bff-console on the daemon, so the visible lag after a
+  // switch was a full page boot plus a control-plane round trip. Nothing about
+  // either switch changes the auth scope, so there is nothing a reload buys.
+  //
+  // (The ORG switch above still reloads, and should: it swaps the bearer, so
+  // every cached response belongs to a different tenant.)
+  const refetchAfterEgressSwitch = () =>
+    Promise.all(
+      ["snapshot", "edges", "edge-affinity", "tunnels", "mesh", "usage", "usage-today", "usage-mesh"].map(
+        (k) => qc.invalidateQueries({ queryKey: [k] }),
+      ),
+    );
+
   const switchRegionMu = useMutation({
     mutationFn: (region: string) => api.switchRegion(region),
     onSuccess: (_d, region) => {
       message.success(t("region.switchedTo", { region }));
-      // Full reload — the daemon re-anchored + kicked the session; every
-      // page should re-query against the new region cleanly. Same shape as
-      // the Org switcher.
-      window.location.reload();
+      void refetchAfterEgressSwitch();
     },
     onError: (e: any) => {
       message.error((e as Error)?.message || t("region.failed"));
@@ -449,8 +463,7 @@ export default function Layout() {
           ? t("affinity.switchedOwn")
           : t("affinity.switchedPlatform"),
       );
-      // Daemon re-anchored + kicked the session — reload like the region switch.
-      window.location.reload();
+      void refetchAfterEgressSwitch();
     },
     onError: (e: unknown) => {
       message.error((e as Error)?.message || t("affinity.failed"));

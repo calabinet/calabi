@@ -127,7 +127,9 @@
     "selfHostedNotBilled": "自建節點 · 流量不計入套餐",
     "sessionCaller": "工作階段 / 呼叫方",
     "deviceIdentity": "客戶端指紋",
-    "noFingerprint": "尚未註冊"
+    "noFingerprint": "尚未註冊",
+    "meshDatapathPending": "啟動中",
+    "meshDatapathPendingTip": "中繼位址已確定，組網資料面還在啟動。"
   },
   "tunnels": {
     "newTunnel": "新建隧道",
@@ -557,6 +559,8 @@
       "remove": "移除",
       "removeConfirm": "移除服務 {{name}}？",
       "targetTip": "本機自我檢測時連線的位址，也是把這個服務發布成隧道時的本地位址。組網流量不會經過它 —— 對端的封包會直接送到本機的組網位址。"
-    }
+    },
+    "relayRtt": "到中繼",
+    "relayRttHint": "單腿：本機到中繼。與直連的端到端 RTT 不是同一個量，不可直接比較。"
   }
 }

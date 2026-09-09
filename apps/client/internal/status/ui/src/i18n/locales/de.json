@@ -127,7 +127,9 @@
     "selfHostedNotBilled": "Selbst gehosteter Knoten · zählt nicht zum Tarif",
     "sessionCaller": "Sitzung / Aufrufer",
     "deviceIdentity": "Geräteidentität",
-    "noFingerprint": "noch nicht registriert"
+    "noFingerprint": "noch nicht registriert",
+    "meshDatapathPending": "startet",
+    "meshDatapathPendingTip": "Das Relay steht fest; der Mesh-Datenpfad startet noch."
   },
   "tunnels": {
     "newTunnel": "Neuer Tunnel",
@@ -557,6 +559,8 @@
       "targetTip": "Die Adresse, die dieses Gerät bei der Selbstprüfung anwählt – und die lokale Adresse, wenn der Dienst als Tunnel veröffentlicht wird. Der Mesh-Verkehr läuft NICHT darüber: Das Paket eines Peers kommt an der Mesh-Adresse dieses Geräts an."
     },
     "title": "Mesh",
-    "unavailable": "Der Mesh-Status ist für diesen Daemon nicht verfügbar."
+    "unavailable": "Der Mesh-Status ist für diesen Daemon nicht verfügbar.",
+    "relayRtt": "Zum Relay",
+    "relayRttHint": "Nur ein Teilstück: dieser Rechner zum Relay. Nicht mit der Ende-zu-Ende-RTT einer Direktverbindung vergleichbar."
   }
 }

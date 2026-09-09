@@ -568,11 +568,24 @@ export default function Overview() {
                     <Text type="secondary" style={{ fontSize: 12 }}>{t("overview.meshOff")}</Text>
                   ) : mesh?.paused ? (
                     <Text type="secondary" style={{ fontSize: 12 }}>{t("overview.meshPaused")}</Text>
-                  ) : !mesh?.up ? (
+                  ) : !mesh?.relay ? (
+                    // Gate on the ADDRESS, not on `up`. `up` means the datapath is
+                    // carrying packets; the relay address is known earlier, as soon
+                    // as enrollment returns a netmap. Gating on `up` meant the panel
+                    // said "connecting" while it already held the answer — and the
+                    // calabi-edge row above, which reads a different and faster
+                    // source, showed its address the whole time.
                     <Text type="secondary" style={{ fontSize: 12 }}>{t("overview.meshConnecting")}</Text>
                   ) : (
                     <Space size={4} wrap>
-                      <code style={{ fontSize: 12 }}>{mesh.relay || "—"}</code>
+                      <code style={{ fontSize: 12 }}>{mesh.relay}</code>
+                      {!mesh.up && (
+                        <Tooltip title={t("overview.meshDatapathPendingTip")}>
+                          <Tag color="orange" style={{ marginInlineEnd: 0 }}>
+                            {t("overview.meshDatapathPending")}
+                          </Tag>
+                        </Tooltip>
+                      )}
                       {mesh.derp_home?.startsWith("self-") && (
                         <Tooltip title={t("overview.relaySelfTip")}>
                           <Tag color="green" style={{ marginInlineEnd: 0 }}>

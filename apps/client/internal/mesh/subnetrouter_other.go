@@ -39,6 +39,10 @@ func EnableSubnetAliases(aliases []SubnetAlias) (func(), error) {
 	return nil, errSubnetRouterUnsupported
 }
 
-// SubnetAliasSupported is false off Linux for the same reason EnableSubnetAliases
-// is unavailable: the rewrite is an iptables NETMAP rule.
-func SubnetAliasSupported() bool { return false }
+// probeSubnetAlias is a definite "no" off Linux, for the same reason
+// EnableSubnetAliases is unavailable: the rewrite is an iptables NETMAP rule.
+// Definite, not unknown — there is nothing here that could later turn out to
+// work, so this is an answer rather than a failure to look.
+func probeSubnetAlias() (AliasSupport, string) {
+	return AliasSupportNo, "subnet alias rewrites are Linux-only (they are `iptables` NETMAP rules)"
+}

@@ -66,6 +66,16 @@ type PeerStatus struct {
 	// ISP — differ by a factor of ~20, and rounding to whole milliseconds would
 	// print both LAN endpoints of an interesting pair as "0".
 	RTTMicros int64
+	// RelayRTTMicros is the round trip to the RELAY carrying this peer, in
+	// microseconds; 0 when the path is direct or the link has not answered yet.
+	//
+	// It is deliberately a DIFFERENT field from RTTMicros rather than "RTTMicros,
+	// but measured differently when relayed". The two are not the same quantity:
+	// RTTMicros is end-to-end to the peer, this is one leg to the relay in the
+	// middle. Putting them in one field would make a smaller number look like a
+	// better path when it is only a shorter measurement, which is exactly the
+	// class of error the throughput chart made by dividing by the wrong clock.
+	RelayRTTMicros int64
 }
 
 // parseUAPI turns a wireguard-go IpcGet() dump into per-peer status. The dump is

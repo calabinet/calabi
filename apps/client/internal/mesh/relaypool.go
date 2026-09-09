@@ -480,6 +480,25 @@ func (p *relayPool) Home() string {
 	return p.home
 }
 
+// RTTTo reports the last keepalive round trip to the relay at addr, and whether
+// there is one. Keyed by ADDRESS rather than just answering for home, because in
+// a fleet a relayed peer can ride a relay that is not this node's home — and the
+// number shown next to that peer has to be the leg that actually carries it.
+//
+// Note what this is NOT: it is one leg (this node to that relay), never the
+// end-to-end path to the peer. Every caller that renders it has to say so, or it
+// reads as comparable to the direct path's RTT, which it is not.
+func (p *relayPool) RTTTo(addr string) (time.Duration, bool) {
+	p.mu.Lock()
+	c := p.clients[addr]
+	p.mu.Unlock()
+	if c == nil {
+		return 0, false
+	}
+	rtt := c.RTT()
+	return rtt, rtt > 0
+}
+
 // Close tears down every link and stops the liveness sweep. Idempotent: the
 // datapath's own error paths can reach it more than once.
 func (p *relayPool) Close() error {

@@ -127,7 +127,9 @@
     "selfHostedNotBilled": "자체 호스팅 노드 · 트래픽이 요금제에 포함되지 않음",
     "sessionCaller": "세션 / 호출자",
     "deviceIdentity": "기기 식별자",
-    "noFingerprint": "아직 등록되지 않음"
+    "noFingerprint": "아직 등록되지 않음",
+    "meshDatapathPending": "시작 중",
+    "meshDatapathPendingTip": "릴레이는 확인되었고, 메시 데이터 플레인은 아직 시작 중입니다."
   },
   "tunnels": {
     "newTunnel": "새 터널",
@@ -557,6 +559,8 @@
       "targetTip": "이 기기가 자체 점검할 때 연결하는 주소이자, 이 서비스를 터널로 게시할 때 쓰는 로컬 주소입니다. 메시 트래픽은 이 주소를 거치지 않습니다 — 피어가 보낸 패킷은 이 기기의 메시 주소로 바로 도착합니다."
     },
     "title": "메시",
-    "unavailable": "이 daemon에서는 메시 상태를 사용할 수 없습니다."
+    "unavailable": "이 daemon에서는 메시 상태를 사용할 수 없습니다.",
+    "relayRtt": "릴레이까지",
+    "relayRttHint": "한 구간만: 이 컴퓨터에서 릴레이까지입니다. 직접 연결의 종단 간 RTT와는 다른 값이라 비교할 수 없습니다."
   }
 }

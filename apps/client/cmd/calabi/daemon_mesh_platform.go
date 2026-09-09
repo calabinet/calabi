@@ -158,6 +158,15 @@ func meshRoutePolicySettings() (*bool, []string) {
 	return c.MeshAcceptRoutes, c.MeshRouteExcludes
 }
 
+// magicDNSEnabled reports whether this node opted into MagicDNS. Default OFF,
+// including when creds cannot be read: the failure mode of guessing wrong here
+// is the machine losing DNS entirely, so an unreadable config must land on the
+// side that touches nothing. See creds.Config.MeshMagicDNS.
+func magicDNSEnabled() bool {
+	c, err := creds.Load()
+	return err == nil && c != nil && c.MeshMagicDNS
+}
+
 // routePolicySignature renders the policy for change detection. nil (undecided)
 // is distinct from an explicit false: the seed runs once and writing it must not
 // look like a policy change and bounce the session.
@@ -389,6 +398,7 @@ func (c *platformMeshController) reconcile(ctx context.Context, enr meshEnrollme
 		PinnedHomeRegion:  pin,
 		AcceptRoutes:      accept,
 		RouteExcludes:     excludes,
+		MagicDNS:          magicDNSEnabled(),
 	}
 	if fpArrived {
 		c.logger.Info("mesh: could not report the fingerprint in place; re-enrolling so the console can link this node to its client record")
@@ -720,6 +730,7 @@ func toStatusapiMesh(m localweb.MeshStatus) statusapi.MeshStatus {
 			Path:             p.Path,
 			Endpoint:         p.Endpoint,
 			RTTMicros:        p.RTTMicros,
+			RelayRTTMicros:   p.RelayRTTMicros,
 		})
 	}
 	aliases := make([]statusapi.MeshSubnetAlias, 0, len(m.SubnetAliases))

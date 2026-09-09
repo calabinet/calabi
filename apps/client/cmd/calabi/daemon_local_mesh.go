@@ -55,6 +55,19 @@ type meshConfig struct {
 	// ExitNode routes THIS node's default traffic through the named exit-node peer
 	// (name or overlay IP). Opt-in: an advertised exit node is never used unless set.
 	ExitNode string `yaml:"exit_node,omitempty"`
+	// MagicDNS opts this node into rewriting the SYSTEM resolver config so mesh
+	// node names resolve (`ssh web-01.mesh`). Default OFF, and the default is the
+	// decision: MagicDNS was withdrawn from every piece of customer-facing
+	// documentation on 2026-09-07 because the machines that
+	// want to type such an address are overwhelmingly Windows and macOS, where it
+	// was never implemented. The code kept running on Linux anyway, so the feature
+	// carried its whole downside — it takes over /etc/resolv.conf, and an
+	// ungraceful exit leaves the host with NO DNS AT ALL — in exchange for a
+	// benefit we had stopped promising. Field report 2026-09-09.
+	//
+	// Left as a switch rather than deleted: the implementation is fine, the
+	// product decision is what changed, and A1 (split-horizon DNS) will want it.
+	MagicDNS bool `yaml:"magic_dns,omitempty"`
 	// HomePreference biases mesh relay-home selection to match the edge affinity,
 	// so "use my node" moves BOTH the edge egress and the relay home ("own" =
 	// prefer the org's self-hosted relay, "platform" = prefer the platform's).
@@ -324,11 +337,17 @@ func (r *meshRunner) startDataPlane() (*meshDataPlane, error) {
 	// CIDRs, exactly as before aliases existed.
 	var aliasRoutes []netip.Prefix
 	if len(routes) > 0 {
-		if mesh.SubnetAliasSupported() {
-			aliasRoutes = routes
+		// Not-a-no, rather than a yes: an inconclusive probe (iptables could not
+		// run just now) must not silently drop this node back to publishing real
+		// CIDRs. Asking for the alias and failing to install it logs a warning
+		// naming the reason; declining to ask logs nothing and looks like a
+		// deliberate configuration.
+		support, why := mesh.SubnetAliasSupport(r.logger)
+		if support == mesh.AliasSupportNo {
+			r.logger.Warn("mesh: this host cannot install subnet-alias rules; subnets are published under their "+
+				"real addresses, so peers whose own LAN collides with them cannot reach them", "why", why)
 		} else {
-			r.logger.Warn("mesh: this host cannot install subnet-alias rules (needs iptables with the xt_NETMAP target); " +
-				"subnets are published under their real addresses, so peers whose own LAN collides with them cannot reach them")
+			aliasRoutes = routes
 		}
 	}
 	if r.cfg.AdvertiseExitNode {
@@ -341,13 +360,17 @@ func (r *meshRunner) startDataPlane() (*meshDataPlane, error) {
 	}
 	stops := []func(){func() { dp.Close() }}
 
-	// MagicDNS: best-effort name resolution for peers (mesh still works without it).
+	// MagicDNS: opt-in name resolution for peers. Mesh works without it, and NOT
+	// running it is what keeps this daemon out of /etc/resolv.conf entirely — the
+	// one file whose breakage costs the whole machine rather than the mesh.
 	var dnsSink mesh.DNSSink
-	if sink, cleanup, err := mesh.StartMagicDNS(r.logger); err != nil {
-		logMagicDNSUnavailable(r.logger, err)
-	} else {
-		stops = append(stops, cleanup)
-		dnsSink = sink
+	if r.cfg.MagicDNS {
+		if sink, cleanup, err := mesh.StartMagicDNS(r.logger); err != nil {
+			logMagicDNSUnavailable(r.logger, err)
+		} else {
+			stops = append(stops, cleanup)
+			dnsSink = sink
+		}
 	}
 
 	if len(routes) > 0 {
@@ -560,6 +583,7 @@ func (r *meshRunner) MeshStatus() localweb.MeshStatus {
 				Path:             p.Path,
 				Endpoint:         p.Endpoint,
 				RTTMicros:        p.RTTMicros,
+				RelayRTTMicros:   p.RelayRTTMicros,
 			})
 		}
 	}

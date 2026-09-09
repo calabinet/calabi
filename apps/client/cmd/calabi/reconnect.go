@@ -6,32 +6,45 @@ import (
 	"time"
 )
 
-// errNoUsableEdge marks the one failure class where a human is genuinely needed:
-// the control plane ANSWERED, and the answer was "there is no edge for you in
-// the region you are anchored to". Cross-region auto-switch is deliberately
-// disabled, so nothing the daemon can do on its own resolves that — the user
-// picks another region from the top bar.
+// errOperatorMustSwitchRegion marks the ONE failure whose only remedy is a human
+// picking a different region: the control plane ANSWERED, and the answer was
+// "there is no healthy edge in the region you are anchored to". Cross-region
+// auto-switch is deliberately disabled, so the daemon cannot resolve that alone.
 //
-// Everything else — dial refused, DNS dead, handshake timed out, no route to
-// host — means we could not reach ANYTHING, which is the machine's network being
-// down. That fixes itself, and needs no one.
+// It is named for the REMEDY, not for the symptom. It used to be called
+// errNoUsableEdge, and that name described both this and "we could not reach the
+// control plane at all" — which is how the second one came to be wrapped in it.
 //
-// The distinction is free: reaching bff-console at all is what produces this
-// error, so its presence proves the network works.
-var errNoUsableEdge = errors.New("no usable edge in the anchored region")
+// THE COST OF GETTING THAT WRONG, measured in the field 2026-09-09: a plain
+// network outage made every /v1/edges query time out, which lands on
+// edgepicker's tier-4 fall-through (NoUsableEdge). Classified as
+// operator-actionable, the loop showed the manual-region prompt after three
+// failures and dropped to the 5-minute cadence — so the tunnel came back 5
+// minutes after the network did, while the mesh took seconds. The previous
+// behaviour, the one this policy replaced, would have retried every 15s.
+//
+// The precondition is checked in edgepicker, not asserted here: RegionUnavailable
+// is only set when attemptListEdges saw reached=true, i.e. bff-console answered.
+// NoUsableEdge is the reached=false path. They are opposites.
+var errOperatorMustSwitchRegion = errors.New("no healthy edge in the anchored region")
 
-// The two — and only two — places that failure comes from. They live here, next
-// to the sentinel and the policy that reads it, so a third one cannot be added
-// without seeing that the classification exists: forgetting the wrap silently
-// demotes an actionable failure to "network is down", which retries forever and
-// never tells the user the one thing they could do about it.
+// errRegionHasNoEdge: bff-console answered and the anchored region is empty.
+// A person has to choose another region, so this one carries the sentinel.
 func errRegionHasNoEdge(region string) error {
 	return fmt.Errorf("no healthy edge in region %q; cross-region auto-switch disabled — switch region manually: %w",
-		region, errNoUsableEdge)
+		region, errOperatorMustSwitchRegion)
 }
 
+// errEdgeDiscoveryFailed: we could not reach the control plane at all, so there
+// is nothing to fall back to.
+//
+// It deliberately does NOT carry the sentinel. This is a NETWORK failure — it
+// heals by itself and needs nobody — and treating it as operator-actionable both
+// slowed recovery to a 5-minute cadence and offered a remedy that does not even
+// apply: switching region cannot help when /v1/edges is unreachable in every
+// region.
 func errEdgeDiscoveryFailed(reason string) error {
-	return fmt.Errorf("%s: %w", reason, errNoUsableEdge)
+	return errors.New(reason)
 }
 
 const (
@@ -70,7 +83,7 @@ const (
 // The fix is to split "tell the user" from "give up". We keep the first and drop
 // the second: this function never returns a delay that means stop.
 func reconnectDelay(err error, fails int) (wait time.Duration, needsOperator bool) {
-	if errors.Is(err, errNoUsableEdge) {
+	if errors.Is(err, errOperatorMustSwitchRegion) {
 		if fails >= operatorHintAfter {
 			return parkedRetryInterval, true
 		}

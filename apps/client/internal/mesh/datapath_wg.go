@@ -251,6 +251,15 @@ func (d *WGDatapath) annotatePaths(peers []PeerStatus) {
 		} else {
 			peers[i].Endpoint = home
 		}
+		// The leg that actually carries this peer, which in a fleet is the peer's
+		// relay and not necessarily our home. Measured only for links we hold, so
+		// a relay we do not connect to simply reports nothing rather than
+		// borrowing home's number.
+		if d.bind.client != nil {
+			if rtt, ok := d.bind.client.RTTTo(peers[i].Endpoint); ok {
+				peers[i].RelayRTTMicros = rtt.Microseconds()
+			}
+		}
 		if ap, ok := d.bind.directPath(key); ok {
 			peers[i].Path = PathDirect
 			peers[i].Endpoint = ap.String()

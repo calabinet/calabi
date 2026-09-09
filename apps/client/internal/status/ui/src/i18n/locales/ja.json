@@ -127,7 +127,9 @@
     "selfHostedNotBilled": "自己ホストノード · トラフィックはプランに計上されません",
     "sessionCaller": "セッション / 呼び出し元",
     "deviceIdentity": "デバイス識別子",
-    "noFingerprint": "未登録"
+    "noFingerprint": "未登録",
+    "meshDatapathPending": "起動中",
+    "meshDatapathPendingTip": "中継は確定済みです。メッシュのデータプレーンはまだ起動中です。"
   },
   "tunnels": {
     "newTunnel": "トンネルを新規作成",
@@ -557,6 +559,8 @@
       "targetTip": "このマシンが自己チェック時に接続する先であり、このサービスをトンネルとして公開するときのローカルアドレスでもあります。メッシュの通信はここを経由しません。ピアのパケットはこのマシンのメッシュアドレスに直接届きます。"
     },
     "title": "メッシュ",
-    "unavailable": "このデーモンではメッシュの状態を取得できません。"
+    "unavailable": "このデーモンではメッシュの状態を取得できません。",
+    "relayRtt": "中継まで",
+    "relayRttHint": "片側のみ：このマシンから中継まで。直接接続のエンドツーエンド RTT とは別の量で、比較できません。"
   }
 }

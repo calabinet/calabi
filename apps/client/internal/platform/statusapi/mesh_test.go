@@ -61,15 +61,32 @@ func TestMesh_NoSource_404(t *testing.T) {
 	}
 }
 
-// A source that reports not-enrolled AND not-paused 404s — the platform daemon
-// renders that as "unavailable", NOT the local "add a mesh: block" hint.
-func TestMesh_Disabled_404(t *testing.T) {
+// Not-enrolled-yet is 503, NOT 404, and the difference is the whole point.
+//
+// THE BUG: both answered 404, and the console reads only the status code, so it
+// rendered "this daemon does not support mesh" during the ordinary startup
+// window. Every daemon passes through this state — MeshStatus reports
+// Enabled=false until the enrollment poll lands, and that poll is on a 30s
+// ticker, so one missed attempt kept the wrong message up for half a minute
+// while the user watched a page that offered to STOP the mesh it claimed was
+// unsupported.
+//
+// 404 has to keep meaning "this build has no mesh", because that is the one a
+// user cannot wait out.
+func TestMesh_NotEnrolledYet_503_NotConfusedWithUnsupported(t *testing.T) {
 	h := meshServer(t, &fakeMeshSource{st: MeshStatus{Enabled: false}})
 	req := httptest.NewRequest("GET", "/v1/mesh", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
-	if rr.Code != http.StatusNotFound {
-		t.Fatalf("disabled: got %d, want 404", rr.Code)
+	if rr.Code == http.StatusNotFound {
+		t.Fatal("not-enrolled answered 404, the same code as a daemon with no mesh at all; the console cannot tell 'wait' from 'never'")
+	}
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("not enrolled: got %d, want 503", rr.Code)
+	}
+	// Retry-After carries the poll interval so a caller need not guess it.
+	if ra := rr.Header().Get("Retry-After"); ra == "" {
+		t.Error("503 carries no Retry-After; the caller has to guess how long 'not yet' lasts")
 	}
 }
 

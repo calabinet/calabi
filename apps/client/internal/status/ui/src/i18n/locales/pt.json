@@ -127,7 +127,9 @@
     "selfHostedNotBilled": "Nó auto-hospedado · não conta para o plano",
     "sessionCaller": "Sessão / Chamador",
     "deviceIdentity": "Identidade do dispositivo",
-    "noFingerprint": "ainda não registrado"
+    "noFingerprint": "ainda não registrado",
+    "meshDatapathPending": "iniciando",
+    "meshDatapathPendingTip": "O relay já é conhecido; o plano de dados da malha ainda está subindo."
   },
   "tunnels": {
     "newTunnel": "Novo túnel",
@@ -557,6 +559,8 @@
       "targetTip": "É o endereço que esta máquina acessa ao verificar a si mesma e também o endereço local usado quando este serviço é publicado como túnel. O tráfego da Malha NÃO passa por ele — o pacote de um par chega no endereço de Malha desta máquina."
     },
     "title": "Malha",
-    "unavailable": "O estado da Malha não está disponível neste daemon."
+    "unavailable": "O estado da Malha não está disponível neste daemon.",
+    "relayRtt": "Até o relay",
+    "relayRttHint": "Apenas um trecho: desta máquina até o relay. Não é comparável ao RTT ponta a ponta de um caminho direto."
   }
 }

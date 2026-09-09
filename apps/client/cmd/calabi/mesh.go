@@ -62,6 +62,7 @@ func runMeshUp(args []string) int {
 	name := fs.String("name", defaultNodeName(), "node name (how this machine is labelled in the console)")
 	mtu := fs.Int("mtu", mesh.DefaultMTU, "tun MTU (576-1500); LOWER it to test a path that black-holes full-size packets")
 	keyFile := fs.String("key-file", defaultMeshKeyPath(), "path to the node's WireGuard private key (created if absent)")
+	magicDNS := fs.Bool("magic-dns", false, "resolve mesh node names by REWRITING this machine's /etc/resolv.conf (Linux only; off by default — an ungraceful exit leaves the host with no DNS)")
 	advertise := fs.String("advertise-routes", "", "comma-separated subnets to advertise as a subnet router, /24 or smaller (e.g. 192.168.1.0/24). A bare address is a single host: 192.168.1.22")
 	aliasRoutes := fs.String("alias-routes", "", "DEPRECATED and ignored: every advertised route is aliased where the host supports it")
 	advertiseExit := fs.Bool("advertise-exit-node", false, "advertise this node as an exit node (offer to forward peers' default route to the internet)")
@@ -115,14 +116,19 @@ func runMeshUp(args []string) int {
 	}
 	defer dp.Close()
 
-	// MagicDNS: resolve peer names to overlay IPs. Best-effort — mesh still works
+	// MagicDNS: resolve peer names to overlay IPs. Opt-in, because the cost of
+	// having it on is paid by the whole machine and not just the mesh — it takes
+	// over /etc/resolv.conf, and an ungraceful exit leaves nothing listening on
+	// the address it wrote there. Best-effort even when asked for: mesh works
 	// without it (e.g. on platforms whose OS integration isn't wired yet).
 	var dnsSink mesh.DNSSink
-	if sink, cleanup, err := mesh.StartMagicDNS(logger); err != nil {
-		logMagicDNSUnavailable(logger, err)
-	} else {
-		defer cleanup()
-		dnsSink = sink
+	if *magicDNS {
+		if sink, cleanup, err := mesh.StartMagicDNS(logger); err != nil {
+			logMagicDNSUnavailable(logger, err)
+		} else {
+			defer cleanup()
+			dnsSink = sink
+		}
 	}
 
 	// Subnet router / exit node: if advertising CIDRs (or 0.0.0.0/0 via
@@ -452,6 +458,7 @@ type meshStatusResp struct {
 		Path             string   `json:"path"`
 		Endpoint         string   `json:"endpoint"`
 		RTTMicros        int64    `json:"rtt_micros"`
+		RelayRTTMicros   int64    `json:"relay_rtt_micros"`
 	} `json:"peers"`
 	// Datapath is the node's own packet accounting. Decoded structurally rather
 	// than by embedding localweb's type: this command talks to a daemon that may
@@ -539,6 +546,12 @@ func runMeshStatus(_ []string) int {
 		// through the ISP both read "direct", and differ by a factor of ~20.
 		if p.RTTMicros > 0 {
 			path += fmt.Sprintf(" %.1fms", float64(p.RTTMicros)/1000)
+		} else if p.RelayRTTMicros > 0 {
+			// Marked "->relay" because it is NOT the same measurement as the direct
+			// case above: that one is end-to-end to the peer, this is one leg to the
+			// relay in the middle. Printing it bare would invite comparing a relayed
+			// 12ms against a direct 30ms and concluding the relay is faster.
+			path += fmt.Sprintf(" ->relay %.1fms", float64(p.RelayRTTMicros)/1000)
 		}
 		fmt.Printf("    - %s  allowed=%s  path=%s  handshake=%s  rx=%dB tx=%dB\n",
 			shortKey(p.PublicKey), strings.Join(p.AllowedIPs, ","), path, hs, p.RxBytes, p.TxBytes)

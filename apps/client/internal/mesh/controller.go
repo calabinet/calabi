@@ -274,7 +274,13 @@ func (c *Controller) Run(ctx context.Context) error {
 			dropAliases()
 			dropAliases, aliasFP = func() {}, fp
 			if len(nm.SubnetAliases) > 0 {
-				if cleanup, err := EnableSubnetAliases(nm.SubnetAliases); err != nil {
+				cleanup, err := EnableSubnetAliases(nm.SubnetAliases)
+				// Record the outcome either way: having actually installed the
+				// rules (or been refused) is far better evidence of what this host
+				// can do than the console's separate probe, which used to be asked
+				// the same question a second time and could answer it wrongly.
+				noteAliasInstall(c.Logger, err)
+				if err != nil {
 					c.Logger.Warn("mesh: subnet aliases not installed; peers routing to the alias will not reach the LAN behind this node",
 						"aliases", len(nm.SubnetAliases), "err", err)
 				} else {

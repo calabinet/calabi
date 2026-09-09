@@ -162,6 +162,12 @@ type Config struct {
 	// one (start safe). resolveAcceptRoutes seeds it once and it is never nil
 	// again.
 	MeshAcceptRoutes *bool `json:"mesh_accept_routes,omitempty"`
+	// MeshMagicDNS opts this node into MagicDNS, which rewrites the system
+	// resolver config so mesh names resolve. Default OFF (absent = off): it is
+	// Linux-only, it was withdrawn from all customer-facing documentation on
+	// 2026-09-07, and its failure mode is the host losing DNS entirely rather
+	// than merely losing name resolution for the mesh. Set it deliberately.
+	MeshMagicDNS bool `json:"mesh_magic_dns,omitempty"`
 	// MeshRouteExcludes are prefixes to refuse even while accepting routes — the
 	// surgical case, where one advertised prefix collides with this machine's own
 	// traffic and the rest are wanted.

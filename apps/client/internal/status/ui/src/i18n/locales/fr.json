@@ -127,7 +127,9 @@
     "selfHostedNotBilled": "Nœud auto-hébergé · non décompté du forfait",
     "sessionCaller": "Session / Appelant",
     "deviceIdentity": "Identité de l'appareil",
-    "noFingerprint": "pas encore enregistré"
+    "noFingerprint": "pas encore enregistré",
+    "meshDatapathPending": "démarrage",
+    "meshDatapathPendingTip": "Le relais est connu ; le plan de données du maillage démarre encore."
   },
   "tunnels": {
     "newTunnel": "Nouveau tunnel",
@@ -557,6 +559,8 @@
       "targetTip": "L'adresse que cette machine contacte lors de son auto-vérification, et l'adresse locale utilisée si ce service est publié comme tunnel. Le trafic du Maillage ne passe PAS par elle — le paquet d'un pair arrive sur l'adresse de cette machine dans le Maillage."
     },
     "title": "Maillage",
-    "unavailable": "L'état du Maillage n'est pas disponible sur ce daemon."
+    "unavailable": "L'état du Maillage n'est pas disponible sur ce daemon.",
+    "relayRtt": "Vers le relais",
+    "relayRttHint": "Un seul segment : cette machine vers le relais. Non comparable au RTT de bout en bout d'un chemin direct."
   }
 }

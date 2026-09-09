@@ -127,7 +127,9 @@
     "notifQuota80Body": "已用 {{pct}}%,接近月度上限。",
     "sessionCaller": "会话 / 调用方",
     "deviceIdentity": "客户端指纹",
-    "noFingerprint": "尚未注册"
+    "noFingerprint": "尚未注册",
+    "meshDatapathPending": "启动中",
+    "meshDatapathPendingTip": "中继地址已确定，组网数据面还在启动。"
   },
   "tunnels": {
     "newTunnel": "新建隧道",
@@ -557,6 +559,8 @@
       "fromConsole": "后台登记",
       "fromConsoleTip": "这条是管理员在网页后台登记的。本机照样会自检它，但改和删都要回后台 —— 在这里再加一条同名的，只会变成两条记录里只有一条有授权。",
       "nameInvalid": "名称只能用 a-z、0-9 和 -，不能有空格，也不能以 - 开头或结尾"
-    }
+    },
+    "relayRtt": "到中继",
+    "relayRttHint": "单腿：本机到中继。与直连的端到端 RTT 不是同一个量，不可直接比较。"
   }
 }

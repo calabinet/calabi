@@ -127,7 +127,9 @@
     "notifQuota80Body": "{{pct}}% used, approaching the monthly limit.",
     "sessionCaller": "Session / Caller",
     "deviceIdentity": "Device identity",
-    "noFingerprint": "not registered yet"
+    "noFingerprint": "not registered yet",
+    "meshDatapathPending": "starting",
+    "meshDatapathPendingTip": "The relay is known; the mesh datapath is still coming up."
   },
   "tunnels": {
     "newTunnel": "New tunnel",
@@ -557,6 +559,8 @@
       "fromConsole": "from the web console",
       "fromConsoleTip": "A manager registered this one in the web console. This machine still self-checks it, but editing and removing it belong there — adding another one here under the same name would just leave two records, only one of them authorized.",
       "nameInvalid": "Use a-z, 0-9 and - only — no spaces, and not starting or ending with -"
-    }
+    },
+    "relayRtt": "To relay",
+    "relayRttHint": "One leg: this machine to the relay. Not comparable to a direct path's end-to-end RTT."
   }
 }

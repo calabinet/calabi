@@ -92,6 +92,16 @@ type Client struct {
 	// the buffer controller cannot tolerate (see sndbuf.go), so a contaminated
 	// sample is worth less than no sample.
 	pingAt atomic.Int64
+
+	// rttMicros is the most recent keepalive round trip, in microseconds, or 0
+	// before the first Pong. It is a LINK measurement — this node to THIS relay —
+	// not the end-to-end path to a peer, and whatever displays it has to say so.
+	//
+	// Stored here rather than only inside the send-buffer controller because that
+	// controller is off by default (see sndbuf.go), and its nil check used to drop
+	// the sample on the floor: the round trip was measured every 15s and then
+	// discarded on every machine running the default configuration.
+	rttMicros atomic.Int64
 }
 
 // Dial connects to the relay at addr (host:port), announces self via ClientInfo,
@@ -172,10 +182,23 @@ func (c *Client) Ping(payload []byte) error {
 // duplicate) is ignored rather than timed from nothing.
 func (c *Client) observeKeepalivePong() {
 	sent := c.pingAt.Swap(0)
-	if sent == 0 || c.sndbuf == nil {
+	if sent == 0 {
 		return
 	}
-	c.sndbuf.observeRTT(time.Since(time.Unix(0, sent)))
+	rtt := time.Since(time.Unix(0, sent))
+	// Record it FIRST, and unconditionally. The controller is an optional consumer
+	// of this number, not its owner — bundling the two meant turning the
+	// controller off also turned the measurement off.
+	c.rttMicros.Store(rtt.Microseconds())
+	if c.sndbuf != nil {
+		c.sndbuf.observeRTT(rtt)
+	}
+}
+
+// RTT is the last measured round trip to THIS relay, or 0 if none yet. One leg:
+// this node to the relay, not this node to a peer through it.
+func (c *Client) RTT() time.Duration {
+	return time.Duration(c.rttMicros.Load()) * time.Microsecond
 }
 
 // TxSockBuf is the kernel send-buffer size this link is currently asking for, or

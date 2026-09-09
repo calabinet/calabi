@@ -12,6 +12,7 @@ import (
 	"net"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/calabi/calabi/apps/client/internal/transport"
@@ -104,6 +105,20 @@ type Client struct {
 	token    string
 	clientNm string
 	deviceID int64 // identity-svc clients.id; 0 = unknown
+
+	// lastInbound is the unix-nano time of the last frame READ from the edge.
+	//
+	// It exists because a dropped network does not make a TCP connection return
+	// an error: the control loop parks in Read() and the heartbeat's writes are
+	// accepted by the local socket buffer, so BOTH look healthy while nothing is
+	// getting through. The session then survives until the kernel gives up
+	// retransmitting — minutes, and on Linux's defaults potentially far longer.
+	//
+	// The mesh already solved this: relayPool.sweep reaps a link that has gone
+	// relayDeadAfter without a single inbound frame. This is the same idea for
+	// the edge session, and the reason the two planes recovered minutes apart
+	// from one outage.
+	lastInbound atomic.Int64
 
 	mu                sync.Mutex
 	heartbeatInterval time.Duration
@@ -510,8 +525,15 @@ func (c *Client) Run(ctx context.Context, proxiesByID func(string) (Tunnel, bool
 		c.mux.Close()
 	}()
 
-	// Heartbeat.
-	go c.heartbeat(ctx)
+	// Heartbeat, and the deadline that makes its silence mean something.
+	//
+	// Both are handed `cancel` rather than being left to return quietly: the only
+	// two signals this session gets that the link is gone are "a write failed"
+	// and "nothing has arrived in a long time", and until now the first exited a
+	// goroutine nobody watched while the second was not checked at all.
+	c.lastInbound.Store(time.Now().UnixNano())
+	go c.heartbeat(ctx, cancel)
+	go c.linkWatchdog(ctx, cancel)
 
 	// Control loop.
 	for {
@@ -527,6 +549,11 @@ func (c *Client) Run(ctx context.Context, proxiesByID func(string) (Tunnel, bool
 			}
 			return fmt.Errorf("control read: %w", err)
 		}
+		// Any frame counts as proof of life, not just the Pong: a busy tunnel is
+		// carrying control traffic anyway, and on an idle one the edge answers
+		// every Ping with a Pong unconditionally, so the deadline below always has
+		// something to be reset by on a healthy link.
+		c.lastInbound.Store(time.Now().UnixNano())
 		switch f.Type {
 		case proto.FrameNewConn:
 			var req proto.NewConnRequest
@@ -613,7 +640,7 @@ func isTerminalServerError(code int) bool {
 	return false
 }
 
-func (c *Client) heartbeat(ctx context.Context) {
+func (c *Client) heartbeat(ctx context.Context, kill context.CancelFunc) {
 	tk := time.NewTicker(c.heartbeatInterval)
 	defer tk.Stop()
 	for {
@@ -625,9 +652,56 @@ func (c *Client) heartbeat(ctx context.Context) {
 				ClientSendNs: time.Now().UnixNano(),
 			})
 			if err != nil {
-				c.logger.Warn("heartbeat write failed", "err", err)
+				// Tear the session DOWN, do not just stop beating. This used to be a
+				// bare return: the goroutine exited, nobody was watching it, and the
+				// session carried on with no heartbeat at all until the control read
+				// happened to fail. The one early warning we get was being discarded.
+				c.logger.Warn("heartbeat write failed; dropping the session", "err", err)
+				kill()
 				return
 			}
+		}
+	}
+}
+
+// linkWatchdog ends the session when nothing has arrived from the edge for
+// longer than the deadline, so a network that went away is noticed in seconds
+// instead of whenever the kernel stops retransmitting.
+//
+// Cancelling is what unblocks the parked control read (see the long note in Run
+// about closing the mux) — the same machinery a Ctrl+C or a session-kill uses.
+//
+// The deadline is DERIVED from the heartbeat interval rather than being a second
+// constant: the edge sets that interval in AUTH_RESP, and a hard-coded 45s would
+// start killing healthy sessions the moment a server chose a slower beat.
+func (c *Client) linkWatchdog(ctx context.Context, kill context.CancelFunc) {
+	every := c.heartbeatInterval
+	if every <= 0 {
+		every = 15 * time.Second
+	}
+	// Three missed beats. Two would fire on a single lost packet plus a late
+	// retransmit; three is the same ratio the mesh's relay sweep uses.
+	dead := 3 * every
+	// Announced once per session, at Info, on purpose. A silent mechanism cannot
+	// be told apart from an absent one: the first field report on this watchdog
+	// was a log with no watchdog line in it, and nothing in the log could say
+	// whether the build even had it. One line makes every future log
+	// self-diagnosing.
+	c.logger.Info("session link watchdog armed", "beat", every.String(), "deadline", dead.String())
+	tk := time.NewTicker(every)
+	defer tk.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tk.C:
+		}
+		idle := time.Since(time.Unix(0, c.lastInbound.Load()))
+		if idle > dead {
+			c.logger.Warn("no frame from the edge within the deadline; dropping the session",
+				"idle", idle.Round(time.Second).String(), "deadline", dead.String())
+			kill()
+			return
 		}
 	}
 }

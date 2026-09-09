@@ -120,6 +120,10 @@ type relaySender interface {
 	// and a depth we chose is exactly as reportable as a drop we chose.
 	TxSockBuf() int
 	TxRate() float64
+	// RTTTo is the last keepalive round trip to the relay at that address, and
+	// whether there is one. ONE LEG — this node to that relay — never the
+	// end-to-end path to a peer riding it.
+	RTTTo(relayAddr string) (time.Duration, bool)
 }
 
 // pathFinder is the DISCO prober's view the bind consumes: which direct endpoint

@@ -106,15 +106,18 @@ func TestTheClassificationSurvivesWrapping(t *testing.T) {
 		want bool
 	}{
 		{"region has no edge", errRegionHasNoEdge("us-west"), true},
-		{"discovery failed with nothing to fall back to", errEdgeDiscoveryFailed("bff-console unreachable and no default"), true},
+		// This row said `true` and that is how the bug shipped: the test pinned
+		// what the code did instead of what was required. Unreachable is a
+		// NETWORK failure and must never ask for an operator.
+		{"discovery failed because the control plane was unreachable", errEdgeDiscoveryFailed("bff-console unreachable and no default"), false},
 		{"wrapped again by a caller", fmt.Errorf("session: %w", errRegionHasNoEdge("eu-central")), true},
 		{"a dead link", netErr, false},
 		{"a plain string that merely mentions a region", errors.New("no healthy edge in region \"us-west\""), false},
 		{"nothing at all", nil, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := errors.Is(tc.err, errNoUsableEdge); got != tc.want {
-				t.Fatalf("errors.Is(%v, errNoUsableEdge) = %v, want %v", tc.err, got, tc.want)
+			if got := errors.Is(tc.err, errOperatorMustSwitchRegion); got != tc.want {
+				t.Fatalf("errors.Is(%v, errOperatorMustSwitchRegion) = %v, want %v", tc.err, got, tc.want)
 			}
 		})
 	}
@@ -144,5 +147,46 @@ func contains(s, sub string) bool {
 func TestWorstCaseRecoveryLagStaysUnderAMinute(t *testing.T) {
 	if maxRetryDelay > time.Minute {
 		t.Errorf("maxRetryDelay is %v: a machine can stay dark that long after its network is back", maxRetryDelay)
+	}
+}
+
+// THE FIELD REGRESSION, timed to the second from the user's log 2026-09-09.
+//
+//	17:19:33  session ended; reconnecting
+//	17:19:51  connect failed; retrying  fails=1  next_try_in=15s
+//	17:20:09  connect failed; retrying  fails=2  next_try_in=15s
+//	17:20:27  no healthy edge in the anchored region ... fails=3  next_try_in=5m0s
+//	17:25:28  edge selected            <- 17:20:27.975 + 5m00 = 17:25:27.975
+//
+// The failure underneath every one of those was
+//
+//	edgepicker: GET /v1/edges failed ... err="context deadline exceeded"
+//
+// i.e. the control plane was UNREACHABLE because the machine had no network —
+// edgepicker's tier-4 fall-through, which sets NoUsableEdge. Routing that into
+// the operator class made a plain outage cost five minutes of downtime after the
+// link was already back, while the mesh recovered in seconds.
+//
+// Reaching bff-console is what distinguishes the two, and only the daemon's
+// RegionUnavailable path implies it.
+func TestAnUnreachableControlPlaneIsNetworkFailureNotAnOperatorProblem(t *testing.T) {
+	// The exact error the field build produced.
+	err := errEdgeDiscoveryFailed("edge discovery failed and the only fallback is the dev default (); " +
+		"not dialling it — set CALABI_SERVER to pin an edge, or fix reachability to https://api.calabi.net")
+
+	for _, fails := range []int{1, 3, 4, 10, 100} {
+		wait, needsOperator := reconnectDelay(err, fails)
+		if needsOperator {
+			t.Errorf("after %d unreachable-control-plane failures the daemon asked for an operator; "+
+				"switching region cannot fix a link that reaches nothing", fails)
+		}
+		if wait > maxRetryDelay {
+			t.Errorf("after %d failures the wait is %v, past the %v network cap — an outage would "+
+				"again outlast the network it was caused by", fails, wait, maxRetryDelay)
+		}
+	}
+	// Specifically: it must not land on the parked cadence that caused this.
+	if wait, _ := reconnectDelay(err, operatorHintAfter); wait >= parkedRetryInterval {
+		t.Errorf("waits %v at the operator threshold — this is the 5-minute park that shipped", wait)
 	}
 }

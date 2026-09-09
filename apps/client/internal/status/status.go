@@ -791,7 +791,13 @@ func (s *Server) Run(ctx context.Context) error {
 		handler = browserGuard(mux)
 	}
 	s.srv = &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second}
-	if s.addr != requested {
+	// Compare PORTS, not the two address strings. net.Listen("tcp",
+	// "0.0.0.0:7500") on a dual-stack host hands back an IPv6 socket whose
+	// Addr() prints "[::]:7500" — same port, different text — so a string
+	// comparison announced "requested port busy — fell back" on a machine where
+	// nothing was busy at all, and sent an operator looking for a second daemon
+	// that did not exist (field report 2026-09-09).
+	if boundPort(s.addr) != boundPort(requested) {
 		s.logger.Info("status page up (requested port busy — fell back)",
 			"url", "http://"+s.addr, "requested", requested)
 	} else {
@@ -832,6 +838,16 @@ func (s *Server) Run(ctx context.Context) error {
 // platform-specific "address in use" matching — Windows and Linux word it
 // differently); if every candidate fails it returns the FIRST error, which is
 // the most informative. An addr with no parseable port is tried once as-is.
+// boundPort is the port of a host:port string, or the string itself when it has
+// no port to take. Only the port carries the meaning here: which INTERFACE the
+// kernel expressed the bind as is not something the operator asked for.
+func boundPort(addr string) string {
+	if _, port, err := net.SplitHostPort(addr); err == nil {
+		return port
+	}
+	return addr
+}
+
 func listenWithFallback(addr string) (net.Listener, error) {
 	host, portStr, err := net.SplitHostPort(addr)
 	if err != nil {

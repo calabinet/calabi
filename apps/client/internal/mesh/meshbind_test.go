@@ -22,6 +22,10 @@ func testBind() *meshBind {
 type fakeRelay struct {
 	mu   sync.Mutex
 	sent []relayed
+	// rttTo: relay address -> the leg RTT that link would report. Absent = the
+	// link has not answered a keepalive yet, which callers must render as "no
+	// measurement" rather than zero.
+	rttTo map[string]time.Duration
 }
 
 type relayed struct {
@@ -36,6 +40,13 @@ func (f *fakeRelay) TxDropped() uint64        { return 0 }
 func (f *fakeRelay) TxBlocked() time.Duration { return 0 }
 func (f *fakeRelay) TxSockBuf() int           { return 0 }
 func (f *fakeRelay) TxRate() float64          { return 0 }
+
+// rttTo lets a test hand back a relay-leg RTT per address; nil = never measured,
+// which is the state a link reports before its first Pong.
+func (f *fakeRelay) RTTTo(addr string) (time.Duration, bool) {
+	d, ok := f.rttTo[addr]
+	return d, ok
+}
 
 func (f *fakeRelay) Send(via string, dst meshproto.NodeKey, ciphertext []byte) error {
 	f.mu.Lock()

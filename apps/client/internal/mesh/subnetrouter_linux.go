@@ -3,12 +3,54 @@
 package mesh
 
 import (
+	"context"
 	"fmt"
 	"net/netip"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
+
+// How long ONE iptables invocation may take. These exist because the -w below
+// waits for the xtables lock without a deadline of its own on the iptables
+// versions we must support; these are that deadline.
+const (
+	// iptablesTimeout applies to installing and removing real rules. Generous:
+	// nobody is waiting on it, and giving up early leaves the node advertising a
+	// route it does not rewrite.
+	iptablesTimeout = 10 * time.Second
+	// iptablesProbeTimeout applies to the capability probe, which runs inside a
+	// console request. Three shell-outs at the rule timeout would make a
+	// contended machine look like a hung page, and the probe has somewhere good
+	// to fall back to that rule installation does not: it can answer "unknown".
+	iptablesProbeTimeout = 3 * time.Second
+)
+
+// runIptables runs one iptables command with the xtables lock WAIT enabled.
+//
+// -w is not optional, and its absence was a live bug. Without it iptables exits
+// 4 the instant another process holds the lock, and that other process is
+// routinely THIS daemon: a route change restarts the mesh session, which
+// reinstalls the MASQUERADE and NETMAP rules, while the console refetches
+// /v1/mesh/advertise and probes for the NETMAP capability. That is how a machine
+// carrying a live `-j NETMAP` rule came to be told it could not install one
+// (field report 2026-09-09), and the same race could equally have failed the
+// real rule installation, which is a silent black hole rather than a wrong
+// label.
+//
+// Bare -w, never `-w <seconds>`: the seconds argument needs iptables 1.6 (2016)
+// and is a parse error on the 1.4.21 that RHEL 7 and Debian 8 ship. The
+// unbounded wait that leaves is bounded by ctx instead.
+func runIptables(args ...string) ([]byte, error) {
+	return runIptablesWithin(iptablesTimeout, args...)
+}
+
+func runIptablesWithin(d time.Duration, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), d)
+	defer cancel()
+	return exec.CommandContext(ctx, "iptables", append([]string{"-w"}, args...)...).CombinedOutput()
+}
 
 // SubnetRouterSupported reports whether this build can actually forward for the
 // routes it advertises. It lives beside each backend rather than as a
@@ -103,7 +145,7 @@ type iptablesNAT struct{}
 func (iptablesNAT) masquerade(routes []netip.Prefix) (func(), error) {
 	var added [][]string
 	for _, rule := range iptablesMasqueradeRules(routes) {
-		if out, err := exec.Command("iptables", rule...).CombinedOutput(); err != nil {
+		if out, err := runIptables(rule...); err != nil {
 			cleanupIptablesRules(added)
 			return nil, fmt.Errorf("iptables masquerade %v: %v: %s", rule, err, strings.TrimSpace(string(out)))
 		}
@@ -115,7 +157,7 @@ func (iptablesNAT) masquerade(routes []netip.Prefix) (func(), error) {
 func (iptablesNAT) aliasRewrite(aliases []SubnetAlias) (func(), error) {
 	var added [][]string
 	for _, rule := range iptablesAliasRules(aliases) {
-		if out, err := exec.Command("iptables", rule...).CombinedOutput(); err != nil {
+		if out, err := runIptables(rule...); err != nil {
 			cleanupIptablesRules(added)
 			return nil, fmt.Errorf("iptables alias rewrite %v: %v: %s (the NETMAP target needs the xt_NETMAP module)",
 				rule, err, strings.TrimSpace(string(out)))
@@ -129,7 +171,7 @@ func cleanupIptablesRules(rules [][]string) {
 	for _, rule := range rules {
 		del := append([]string(nil), rule...)
 		del[2] = "-D" // -A -> -D
-		_ = exec.Command("iptables", del...).Run()
+		_, _ = runIptables(del...)
 	}
 }
 
@@ -177,51 +219,64 @@ func (nftNAT) aliasRewrite(aliases []SubnetAlias) (func(), error) {
 	return nil, fmt.Errorf("subnet aliases need the `iptables` NAT backend (NETMAP target); this host has only `nft` — install iptables (e.g. `apt install iptables`) and restart the daemon")
 }
 
-// SubnetAliasSupported reports whether THIS host can actually install the 1:1
-// alias rewrite. It is a property of the machine, not a preference: aliasing is
-// applied to every published route, so there is nothing for an operator to
-// choose — the only question is whether the kernel and userland can do it.
+// probeSubnetAlias answers "can this host install the 1:1 alias rewrite" by
+// TRYING it, in a chain of our own that nothing jumps to. It is a property of
+// the machine, not a preference: aliasing is applied to every published route,
+// so there is nothing for an operator to choose.
 //
-// It is answered by TRYING, in a chain of our own that nothing jumps to. The
-// cheaper tests are all wrong: `iptables` being on PATH says nothing about the
-// xt_NETMAP module, which is packaged separately on several distributions and
-// autoloads only when a rule references it, and parsing `iptables -m netmap -h`
+// The cheaper tests are all wrong. `iptables` being on PATH says nothing about
+// the xt_NETMAP module, which is packaged separately on several distributions
+// and autoloads only when a rule references it; parsing `iptables -m netmap -h`
 // or /proc/modules guesses at the answer the kernel will give. Guessing here
 // costs a silently unreachable subnet: the coordinator hands out the alias, the
 // rule fails to install, and peers route to an address that goes nowhere.
 //
+// It returns a TRI-STATE. The bool it replaced could not distinguish "the
+// kernel refused" from "iptables could not run just now", and reported both as
+// "unsupported" — see aliassupport.go for what that cost. Callers should reach
+// this through SubnetAliasSupport, which prefers an observed install over a
+// probe and caches the verdict.
+//
 // The probe chain is never hooked into PREROUTING, and both addresses are
 // RFC 5737 documentation space, so a leftover chain from a killed daemon
 // forwards nothing.
-func SubnetAliasSupported() bool {
+func probeSubnetAlias() (AliasSupport, string) {
 	be, err := pickNATBackend()
 	if err != nil {
-		return false
+		return AliasSupportNo, err.Error()
 	}
 	ipt, ok := be.(iptablesNAT)
 	if !ok {
-		return false // the nft backend deliberately does not implement aliases
+		return AliasSupportNo, "only the `nft` backend is available; the 1:1 rewrite needs `iptables` with the NETMAP target"
 	}
 	return ipt.netmapUsable()
 }
 
 // aliasProbeChain is a nat-table chain with no jump into it: creating and
 // filling it exercises the NETMAP target without touching packet flow.
+//
+// One fixed name, not one per process: a name carrying a pid would leak a chain
+// every time a daemon was killed mid-probe, with nothing left to recognise it
+// by. Two probes racing over the shared name is handled a level up instead —
+// SubnetAliasSupport holds a mutex across the whole probe — which also stops one
+// probe's cleanup from deleting the chain another is still filling.
 const aliasProbeChain = "CALABI-ALIAS-PROBE"
 
-func (iptablesNAT) netmapUsable() bool {
-	if err := exec.Command("iptables", "-t", "nat", "-N", aliasProbeChain).Run(); err != nil {
+func (iptablesNAT) netmapUsable() (AliasSupport, string) {
+	if _, err := runIptablesWithin(iptablesProbeTimeout, "-t", "nat", "-N", aliasProbeChain); err != nil {
 		// Most likely left behind by a daemon that was killed mid-probe. Reuse it
 		// if we can empty it; if even that fails, we have no working iptables.
-		if exec.Command("iptables", "-t", "nat", "-F", aliasProbeChain).Run() != nil {
-			return false
+		if fout, ferr := runIptablesWithin(iptablesProbeTimeout, "-t", "nat", "-F", aliasProbeChain); ferr != nil {
+			return aliasProbeVerdict("create or reuse the probe chain", fout, ferr)
 		}
 	}
 	defer func() {
-		_ = exec.Command("iptables", "-t", "nat", "-F", aliasProbeChain).Run()
-		_ = exec.Command("iptables", "-t", "nat", "-X", aliasProbeChain).Run()
+		_, _ = runIptablesWithin(iptablesProbeTimeout, "-t", "nat", "-F", aliasProbeChain)
+		_, _ = runIptablesWithin(iptablesProbeTimeout, "-t", "nat", "-X", aliasProbeChain)
 	}()
-	err := exec.Command("iptables", "-t", "nat", "-A", aliasProbeChain,
-		"-d", "192.0.2.0/32", "-j", "NETMAP", "--to", "198.51.100.0/32").Run()
-	return err == nil
+	if out, err := runIptablesWithin(iptablesProbeTimeout, "-t", "nat", "-A", aliasProbeChain,
+		"-d", "192.0.2.0/32", "-j", "NETMAP", "--to", "198.51.100.0/32"); err != nil {
+		return aliasProbeVerdict("install a NETMAP rule", out, err)
+	}
+	return AliasSupportYes, "a NETMAP rule installed cleanly in a probe chain"
 }

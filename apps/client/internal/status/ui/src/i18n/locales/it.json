@@ -127,7 +127,9 @@
     "selfHostedNotBilled": "Nodo self-hosted · non conteggiato nel piano",
     "sessionCaller": "Sessione / Chiamante",
     "deviceIdentity": "Identità del dispositivo",
-    "noFingerprint": "non ancora registrato"
+    "noFingerprint": "non ancora registrato",
+    "meshDatapathPending": "avvio",
+    "meshDatapathPendingTip": "Il relay è noto; il piano dati della rete si sta ancora avviando."
   },
   "tunnels": {
     "newTunnel": "Nuovo tunnel",
@@ -557,6 +559,8 @@
       "targetTip": "L'indirizzo che questa macchina contatta quando esegue il controllo automatico, e l'indirizzo locale usato se il servizio viene pubblicato come tunnel. Il traffico Mesh NON passa da qui — il pacchetto di un peer arriva all'indirizzo Mesh di questa macchina."
     },
     "title": "Mesh",
-    "unavailable": "Lo stato Mesh non è disponibile su questo daemon."
+    "unavailable": "Lo stato Mesh non è disponibile su questo daemon.",
+    "relayRtt": "Al relay",
+    "relayRttHint": "Solo una tratta: da questa macchina al relay. Non confrontabile con l'RTT end-to-end di un percorso diretto."
   }
 }

@@ -486,6 +486,12 @@ export interface MeshPeer {
   // public address, hairpinning out through the ISP and back: ~8ms and 0.3 MB/s
   // where the LAN path is ~0.4ms and 500 MB/s.
   rtt_micros?: number;
+  // relay_rtt_micros is the round trip to the RELAY carrying this peer — ONE LEG
+  // (this node to that relay), not end-to-end to the peer the way rtt_micros is.
+  // A separate field, and rendered with its own label, because a relayed 12ms and
+  // a direct 30ms are not comparable and one column of bare numbers invites
+  // exactly that comparison.
+  relay_rtt_micros?: number;
 }
 
 export interface MeshStatus {

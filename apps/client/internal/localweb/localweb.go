@@ -160,6 +160,12 @@ type MeshPeer struct {
 	// whether the path is any good, which for two machines on one LAN is the
 	// difference between the LAN and a hairpin through the ISP.
 	RTTMicros int64 `json:"rtt_micros,omitempty"`
+	// RelayRTTMicros is the round trip to the RELAY carrying this peer, in
+	// microseconds; 0 when the path is direct or the link has not answered. ONE
+	// LEG (this node to that relay), never end-to-end to the peer — a separate
+	// field from RTTMicros on purpose, because they are different quantities and
+	// one field would make the shorter measurement look like the better path.
+	RelayRTTMicros int64 `json:"relay_rtt_micros,omitempty"`
 }
 
 // TunnelSpec is a create request. ConfigJSON is the already-transformed

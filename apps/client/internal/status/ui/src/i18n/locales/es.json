@@ -127,7 +127,9 @@
     "selfHostedNotBilled": "Nodo autoalojado · no cuenta para el plan",
     "sessionCaller": "Sesión / Llamante",
     "deviceIdentity": "Identidad del dispositivo",
-    "noFingerprint": "aún sin registrar"
+    "noFingerprint": "aún sin registrar",
+    "meshDatapathPending": "iniciando",
+    "meshDatapathPendingTip": "El relay ya se conoce; el plano de datos de la malla aún está arrancando."
   },
   "tunnels": {
     "newTunnel": "Nuevo túnel",
@@ -557,6 +559,8 @@
       "targetTip": "La dirección a la que se conecta este equipo cuando se comprueba a sí mismo, y la dirección local que se usa si el servicio se publica como túnel. El tráfico de la malla NO pasa por ella: el paquete de un par llega a la dirección de malla de este equipo."
     },
     "title": "Malla",
-    "unavailable": "El estado de la malla no está disponible en este daemon."
+    "unavailable": "El estado de la malla no está disponible en este daemon.",
+    "relayRtt": "Al relay",
+    "relayRttHint": "Solo un tramo: de esta máquina al relay. No es comparable con el RTT de extremo a extremo de una ruta directa."
   }
 }

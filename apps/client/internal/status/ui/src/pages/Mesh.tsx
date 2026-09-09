@@ -142,7 +142,14 @@ export default function Mesh() {
 
   // A 404 (older daemon, or a platform daemon that doesn't serve /v1/mesh) is
   // "unavailable"; a clean enabled:false response is "not configured".
+  //
+  // A 503 is NOT unavailable: the daemon does mesh and has simply not enrolled
+  // yet. That used to be a 404 too, so the console told people their build had no
+  // mesh support during the ordinary startup window — and because enrollment
+  // polls on a 30s ticker, a first attempt that missed left the wrong message up
+  // for far longer than any grace window would cover.
   const unavailable = error instanceof ApiError && error.status === 404;
+  const enrolling = error instanceof ApiError && error.status === 503;
 
   // Startup grace window. Right after the daemon boots, /v1/mesh 404s until
   // enrollment + the datapath come up (a couple seconds). Flashing "unavailable"
@@ -155,7 +162,9 @@ export default function Mesh() {
     const id = setTimeout(() => setGraceOver(true), 8000);
     return () => clearTimeout(id);
   }, []);
-  const settling = data === undefined && (isLoading || (unavailable && !graceOver));
+  // Enrolling keeps the calm state for as long as it lasts — it is a definite
+  // answer ("not yet"), not a guess that runs out with a timer.
+  const settling = data === undefined && (isLoading || enrolling || (unavailable && !graceOver));
 
   const columns = useMemo(
     () => [
@@ -196,6 +205,11 @@ export default function Mesh() {
         render: (_: unknown, p: MeshPeer) => {
           const direct = p.path === "direct";
           const rtt = direct && p.rtt_micros ? fmtRtt(p.rtt_micros) : "";
+          // The relay leg, shown ONLY when relayed. Prefixed with "→" and labelled
+          // separately in the tooltip: it is this node to the relay, while the
+          // direct figure is this node to the peer. Same column, deliberately not
+          // the same presentation.
+          const relayRtt = !direct && p.relay_rtt_micros ? fmtRtt(p.relay_rtt_micros) : "";
           return (
             <Tooltip
               title={
@@ -208,17 +222,30 @@ export default function Mesh() {
                         {t("mesh.rtt")}: {rtt}
                       </>
                     ) : null}
+                    {relayRtt ? (
+                      <>
+                        <br />
+                        {t("mesh.relayRtt")}: {relayRtt}
+                        <br />
+                        <span style={{ opacity: 0.75 }}>{t("mesh.relayRttHint")}</span>
+                      </>
+                    ) : null}
                   </>
                 ) : undefined
               }
             >
               <span>
-                <Tag color={direct ? "green" : "default"} style={{ marginInlineEnd: rtt ? 4 : undefined }}>
+                <Tag color={direct ? "green" : "default"} style={{ marginInlineEnd: rtt || relayRtt ? 4 : undefined }}>
                   {direct ? t("mesh.pathDirect") : t("mesh.pathRelay")}
                 </Tag>
                 {rtt ? (
                   <Text type="secondary" style={{ fontSize: 12 }}>
                     {rtt}
+                  </Text>
+                ) : null}
+                {relayRtt ? (
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    &rarr;{relayRtt}
                   </Text>
                 ) : null}
               </span>
@@ -244,7 +271,11 @@ export default function Mesh() {
       <Title level={4} style={{ margin: 0 }}>
         {t("mesh.title")}
       </Title>
-      {data?.paused ? (
+      {/* Gated on the SAME condition the body uses. These used to disagree: the
+          header read the last successful `data` while the body read `error`, so a
+          daemon that started 404ing after a good fetch rendered "Stop mesh" in the
+          header above "this daemon does not support mesh" in the body. */}
+      {unavailable || settling ? null : data?.paused ? (
         <Button
           type="primary"
           icon={<PlayCircleOutlined />}
@@ -759,7 +790,15 @@ function MeshAdvertiseCard() {
                           {t("mesh.adv.aliasHelp")}
                         </Text>
                       </div>
-                      {aliasSupported === false ? (
+                      {/* The capability warning and the assigned mapping are
+                          INDEPENDENT, not an either/or. They used to be branches of
+                          one ternary, so a host reported as incapable had its
+                          mapping hidden — and when that report was wrong (see the
+                          daemon-side tri-state in mesh/aliassupport.go) the operator
+                          lost sight of a rewrite that was working. When it is right,
+                          seeing "the coordinator assigned 100.96.0.0/24" next to
+                          "this machine cannot install it" is the whole diagnosis. */}
+                      {aliasSupported === false && (
                         <Alert
                           type="warning"
                           showIcon
@@ -767,7 +806,8 @@ function MeshAdvertiseCard() {
                           message={t("mesh.adv.aliasUnsupported")}
                           description={t("mesh.adv.aliasUnsupportedHelp")}
                         />
-                      ) : assignedAliases.length > 0 ? (
+                      )}
+                      {assignedAliases.length > 0 ? (
                         <div style={{ marginTop: 8 }}>
                           <Text type="secondary" style={{ fontSize: 12 }}>
                             {t("mesh.adv.aliasAssigned")}
@@ -780,7 +820,10 @@ function MeshAdvertiseCard() {
                             ))}
                           </div>
                         </div>
-                      ) : refusedAliases.length === 0 ? (
+                      ) : aliasSupported !== false && refusedAliases.length === 0 ? (
+                        // "waiting for an address" is only true while one is
+                        // coming. A host that cannot install the rewrite is not
+                        // waiting for anything.
                         <div style={{ marginTop: 8 }}>
                           <Text type="secondary" style={{ fontSize: 12 }}>
                             {t("mesh.adv.aliasPending")}

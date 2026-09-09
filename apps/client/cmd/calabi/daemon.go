@@ -972,7 +972,7 @@ func runOneSession(
 	state.SetPreferredRegion(pr)
 
 	// Region locked + no healthy edge in it: do NOT dial (cross-region
-	// auto-switch is disabled). Wrap errNoUsableEdge so the reconnect loop can
+	// auto-switch is disabled). Carries the operator sentinel so the reconnect loop can
 	// tell this apart from "this machine has no network" — it is the one failure
 	// that surfaces "服务器不可用，可手动切换地域", because it is the one a user
 	// can actually act on (pick another region from the top bar). The loop keeps
