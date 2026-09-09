@@ -39,6 +39,10 @@ type MeshNode struct {
 	AdvertisedRoutesJSON string `json:"advertised_routes_json,omitempty"`
 	// the subset an admin approved; only these are routed to the node
 	ApprovedRoutesJSON string `json:"approved_routes_json,omitempty"`
+	// JSON array of advertised CIDRs the node ASKS to publish under a unique stand-in prefix (overlapping-LAN case)
+	AliasedRoutesJSON string `json:"aliased_routes_json,omitempty"`
+	// JSON array of {real,alias} — the stand-in prefix allocated for each aliased route. Consumers are told the alias; the node itself is told both, to install the 1:1 rewrite
+	RouteAliasesJSON string `json:"route_aliases_json,omitempty"`
 	// an admin has managed this node's routes; until then claims are honoured (grandfathering)
 	RoutesReviewed bool `json:"routes_reviewed,omitempty"`
 	// the human whose key enrolled this node (0 = unattributed)
@@ -69,7 +73,7 @@ func (*MeshNode) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case meshnode.FieldID, meshnode.FieldMeshnetID, meshnode.FieldOwnerUserID:
 			values[i] = new(sql.NullInt64)
-		case meshnode.FieldNodeKey, meshnode.FieldName, meshnode.FieldHostName, meshnode.FieldDiscoKey, meshnode.FieldOverlay, meshnode.FieldDerpHome, meshnode.FieldEndpointsJSON, meshnode.FieldAdvertisedRoutesJSON, meshnode.FieldApprovedRoutesJSON, meshnode.FieldDeviceFingerprint, meshnode.FieldTagsJSON:
+		case meshnode.FieldNodeKey, meshnode.FieldName, meshnode.FieldHostName, meshnode.FieldDiscoKey, meshnode.FieldOverlay, meshnode.FieldDerpHome, meshnode.FieldEndpointsJSON, meshnode.FieldAdvertisedRoutesJSON, meshnode.FieldApprovedRoutesJSON, meshnode.FieldAliasedRoutesJSON, meshnode.FieldRouteAliasesJSON, meshnode.FieldDeviceFingerprint, meshnode.FieldTagsJSON:
 			values[i] = new(sql.NullString)
 		case meshnode.FieldCreatedAt, meshnode.FieldLastSeen:
 			values[i] = new(sql.NullTime)
@@ -159,6 +163,18 @@ func (_m *MeshNode) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field approved_routes_json", values[i])
 			} else if value.Valid {
 				_m.ApprovedRoutesJSON = value.String
+			}
+		case meshnode.FieldAliasedRoutesJSON:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field aliased_routes_json", values[i])
+			} else if value.Valid {
+				_m.AliasedRoutesJSON = value.String
+			}
+		case meshnode.FieldRouteAliasesJSON:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field route_aliases_json", values[i])
+			} else if value.Valid {
+				_m.RouteAliasesJSON = value.String
 			}
 		case meshnode.FieldRoutesReviewed:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -282,6 +298,12 @@ func (_m *MeshNode) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("approved_routes_json=")
 	builder.WriteString(_m.ApprovedRoutesJSON)
+	builder.WriteString(", ")
+	builder.WriteString("aliased_routes_json=")
+	builder.WriteString(_m.AliasedRoutesJSON)
+	builder.WriteString(", ")
+	builder.WriteString("route_aliases_json=")
+	builder.WriteString(_m.RouteAliasesJSON)
 	builder.WriteString(", ")
 	builder.WriteString("routes_reviewed=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RoutesReviewed))

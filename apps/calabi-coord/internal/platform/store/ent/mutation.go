@@ -1049,6 +1049,8 @@ type MeshNodeMutation struct {
 	endpoints_json         *string
 	advertised_routes_json *string
 	approved_routes_json   *string
+	aliased_routes_json    *string
+	route_aliases_json     *string
 	routes_reviewed        *bool
 	owner_user_id          *int64
 	addowner_user_id       *int64
@@ -1579,6 +1581,78 @@ func (m *MeshNodeMutation) ResetApprovedRoutesJSON() {
 	m.approved_routes_json = nil
 }
 
+// SetAliasedRoutesJSON sets the "aliased_routes_json" field.
+func (m *MeshNodeMutation) SetAliasedRoutesJSON(s string) {
+	m.aliased_routes_json = &s
+}
+
+// AliasedRoutesJSON returns the value of the "aliased_routes_json" field in the mutation.
+func (m *MeshNodeMutation) AliasedRoutesJSON() (r string, exists bool) {
+	v := m.aliased_routes_json
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAliasedRoutesJSON returns the old "aliased_routes_json" field's value of the MeshNode entity.
+// If the MeshNode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshNodeMutation) OldAliasedRoutesJSON(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAliasedRoutesJSON is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAliasedRoutesJSON requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAliasedRoutesJSON: %w", err)
+	}
+	return oldValue.AliasedRoutesJSON, nil
+}
+
+// ResetAliasedRoutesJSON resets all changes to the "aliased_routes_json" field.
+func (m *MeshNodeMutation) ResetAliasedRoutesJSON() {
+	m.aliased_routes_json = nil
+}
+
+// SetRouteAliasesJSON sets the "route_aliases_json" field.
+func (m *MeshNodeMutation) SetRouteAliasesJSON(s string) {
+	m.route_aliases_json = &s
+}
+
+// RouteAliasesJSON returns the value of the "route_aliases_json" field in the mutation.
+func (m *MeshNodeMutation) RouteAliasesJSON() (r string, exists bool) {
+	v := m.route_aliases_json
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRouteAliasesJSON returns the old "route_aliases_json" field's value of the MeshNode entity.
+// If the MeshNode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshNodeMutation) OldRouteAliasesJSON(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRouteAliasesJSON is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRouteAliasesJSON requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRouteAliasesJSON: %w", err)
+	}
+	return oldValue.RouteAliasesJSON, nil
+}
+
+// ResetRouteAliasesJSON resets all changes to the "route_aliases_json" field.
+func (m *MeshNodeMutation) ResetRouteAliasesJSON() {
+	m.route_aliases_json = nil
+}
+
 // SetRoutesReviewed sets the "routes_reviewed" field.
 func (m *MeshNodeMutation) SetRoutesReviewed(b bool) {
 	m.routes_reviewed = &b
@@ -1957,7 +2031,7 @@ func (m *MeshNodeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *MeshNodeMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 22)
 	if m.meshnet_id != nil {
 		fields = append(fields, meshnode.FieldMeshnetID)
 	}
@@ -1990,6 +2064,12 @@ func (m *MeshNodeMutation) Fields() []string {
 	}
 	if m.approved_routes_json != nil {
 		fields = append(fields, meshnode.FieldApprovedRoutesJSON)
+	}
+	if m.aliased_routes_json != nil {
+		fields = append(fields, meshnode.FieldAliasedRoutesJSON)
+	}
+	if m.route_aliases_json != nil {
+		fields = append(fields, meshnode.FieldRouteAliasesJSON)
 	}
 	if m.routes_reviewed != nil {
 		fields = append(fields, meshnode.FieldRoutesReviewed)
@@ -2048,6 +2128,10 @@ func (m *MeshNodeMutation) Field(name string) (ent.Value, bool) {
 		return m.AdvertisedRoutesJSON()
 	case meshnode.FieldApprovedRoutesJSON:
 		return m.ApprovedRoutesJSON()
+	case meshnode.FieldAliasedRoutesJSON:
+		return m.AliasedRoutesJSON()
+	case meshnode.FieldRouteAliasesJSON:
+		return m.RouteAliasesJSON()
 	case meshnode.FieldRoutesReviewed:
 		return m.RoutesReviewed()
 	case meshnode.FieldOwnerUserID:
@@ -2097,6 +2181,10 @@ func (m *MeshNodeMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldAdvertisedRoutesJSON(ctx)
 	case meshnode.FieldApprovedRoutesJSON:
 		return m.OldApprovedRoutesJSON(ctx)
+	case meshnode.FieldAliasedRoutesJSON:
+		return m.OldAliasedRoutesJSON(ctx)
+	case meshnode.FieldRouteAliasesJSON:
+		return m.OldRouteAliasesJSON(ctx)
 	case meshnode.FieldRoutesReviewed:
 		return m.OldRoutesReviewed(ctx)
 	case meshnode.FieldOwnerUserID:
@@ -2200,6 +2288,20 @@ func (m *MeshNodeMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetApprovedRoutesJSON(v)
+		return nil
+	case meshnode.FieldAliasedRoutesJSON:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAliasedRoutesJSON(v)
+		return nil
+	case meshnode.FieldRouteAliasesJSON:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRouteAliasesJSON(v)
 		return nil
 	case meshnode.FieldRoutesReviewed:
 		v, ok := value.(bool)
@@ -2372,6 +2474,12 @@ func (m *MeshNodeMutation) ResetField(name string) error {
 		return nil
 	case meshnode.FieldApprovedRoutesJSON:
 		m.ResetApprovedRoutesJSON()
+		return nil
+	case meshnode.FieldAliasedRoutesJSON:
+		m.ResetAliasedRoutesJSON()
+		return nil
+	case meshnode.FieldRouteAliasesJSON:
+		m.ResetRouteAliasesJSON()
 		return nil
 	case meshnode.FieldRoutesReviewed:
 		m.ResetRoutesReviewed()
@@ -4126,6 +4234,8 @@ type MeshSettingMutation struct {
 	id                      *int
 	meshnet_id              *int64
 	addmeshnet_id           *int64
+	alias_addr_budget       *int
+	addalias_addr_budget    *int
 	require_device_approval *bool
 	updated_at              *time.Time
 	clearedFields           map[string]struct{}
@@ -4288,6 +4398,62 @@ func (m *MeshSettingMutation) ResetMeshnetID() {
 	m.addmeshnet_id = nil
 }
 
+// SetAliasAddrBudget sets the "alias_addr_budget" field.
+func (m *MeshSettingMutation) SetAliasAddrBudget(i int) {
+	m.alias_addr_budget = &i
+	m.addalias_addr_budget = nil
+}
+
+// AliasAddrBudget returns the value of the "alias_addr_budget" field in the mutation.
+func (m *MeshSettingMutation) AliasAddrBudget() (r int, exists bool) {
+	v := m.alias_addr_budget
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAliasAddrBudget returns the old "alias_addr_budget" field's value of the MeshSetting entity.
+// If the MeshSetting object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshSettingMutation) OldAliasAddrBudget(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAliasAddrBudget is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAliasAddrBudget requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAliasAddrBudget: %w", err)
+	}
+	return oldValue.AliasAddrBudget, nil
+}
+
+// AddAliasAddrBudget adds i to the "alias_addr_budget" field.
+func (m *MeshSettingMutation) AddAliasAddrBudget(i int) {
+	if m.addalias_addr_budget != nil {
+		*m.addalias_addr_budget += i
+	} else {
+		m.addalias_addr_budget = &i
+	}
+}
+
+// AddedAliasAddrBudget returns the value that was added to the "alias_addr_budget" field in this mutation.
+func (m *MeshSettingMutation) AddedAliasAddrBudget() (r int, exists bool) {
+	v := m.addalias_addr_budget
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAliasAddrBudget resets all changes to the "alias_addr_budget" field.
+func (m *MeshSettingMutation) ResetAliasAddrBudget() {
+	m.alias_addr_budget = nil
+	m.addalias_addr_budget = nil
+}
+
 // SetRequireDeviceApproval sets the "require_device_approval" field.
 func (m *MeshSettingMutation) SetRequireDeviceApproval(b bool) {
 	m.require_device_approval = &b
@@ -4394,9 +4560,12 @@ func (m *MeshSettingMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *MeshSettingMutation) Fields() []string {
-	fields := make([]string, 0, 3)
+	fields := make([]string, 0, 4)
 	if m.meshnet_id != nil {
 		fields = append(fields, meshsetting.FieldMeshnetID)
+	}
+	if m.alias_addr_budget != nil {
+		fields = append(fields, meshsetting.FieldAliasAddrBudget)
 	}
 	if m.require_device_approval != nil {
 		fields = append(fields, meshsetting.FieldRequireDeviceApproval)
@@ -4414,6 +4583,8 @@ func (m *MeshSettingMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case meshsetting.FieldMeshnetID:
 		return m.MeshnetID()
+	case meshsetting.FieldAliasAddrBudget:
+		return m.AliasAddrBudget()
 	case meshsetting.FieldRequireDeviceApproval:
 		return m.RequireDeviceApproval()
 	case meshsetting.FieldUpdatedAt:
@@ -4429,6 +4600,8 @@ func (m *MeshSettingMutation) OldField(ctx context.Context, name string) (ent.Va
 	switch name {
 	case meshsetting.FieldMeshnetID:
 		return m.OldMeshnetID(ctx)
+	case meshsetting.FieldAliasAddrBudget:
+		return m.OldAliasAddrBudget(ctx)
 	case meshsetting.FieldRequireDeviceApproval:
 		return m.OldRequireDeviceApproval(ctx)
 	case meshsetting.FieldUpdatedAt:
@@ -4448,6 +4621,13 @@ func (m *MeshSettingMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetMeshnetID(v)
+		return nil
+	case meshsetting.FieldAliasAddrBudget:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAliasAddrBudget(v)
 		return nil
 	case meshsetting.FieldRequireDeviceApproval:
 		v, ok := value.(bool)
@@ -4474,6 +4654,9 @@ func (m *MeshSettingMutation) AddedFields() []string {
 	if m.addmeshnet_id != nil {
 		fields = append(fields, meshsetting.FieldMeshnetID)
 	}
+	if m.addalias_addr_budget != nil {
+		fields = append(fields, meshsetting.FieldAliasAddrBudget)
+	}
 	return fields
 }
 
@@ -4484,6 +4667,8 @@ func (m *MeshSettingMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case meshsetting.FieldMeshnetID:
 		return m.AddedMeshnetID()
+	case meshsetting.FieldAliasAddrBudget:
+		return m.AddedAliasAddrBudget()
 	}
 	return nil, false
 }
@@ -4499,6 +4684,13 @@ func (m *MeshSettingMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddMeshnetID(v)
+		return nil
+	case meshsetting.FieldAliasAddrBudget:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAliasAddrBudget(v)
 		return nil
 	}
 	return fmt.Errorf("unknown MeshSetting numeric field %s", name)
@@ -4529,6 +4721,9 @@ func (m *MeshSettingMutation) ResetField(name string) error {
 	switch name {
 	case meshsetting.FieldMeshnetID:
 		m.ResetMeshnetID()
+		return nil
+	case meshsetting.FieldAliasAddrBudget:
+		m.ResetAliasAddrBudget()
 		return nil
 	case meshsetting.FieldRequireDeviceApproval:
 		m.ResetRequireDeviceApproval()

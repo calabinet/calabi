@@ -30,6 +30,11 @@ type NodeStore interface {
 	// UpdateApprovedRoutes records which advertised routes an admin allowed, and
 	// marks the node reviewed.
 	UpdateApprovedRoutes(ctx context.Context, id int64, routes []netip.Prefix) error
+	// UpdateRouteAliases records the stand-in prefixes allocated for this node's
+	// aliased subnet routes. Separate from UpdateApprovedRoutes because an
+	// approval change reconciles them as a consequence, and the two writes must
+	// not be able to disagree about which routes the aliases belong to.
+	UpdateRouteAliases(ctx context.Context, id int64, aliases []RouteAlias) error
 	// UpdateName sets an ADMIN-chosen node name and pins it, so re-registration
 	// stops following the node's hostname. Validated + uniqueness-checked by
 	// Coordinator.RenameNode before it gets here.
@@ -60,10 +65,24 @@ type PolicyStore interface {
 	Filter(ctx context.Context, t MeshnetID, self *Node, candidates []*Node) ([]*Node, error)
 }
 
-// IPAM allocates stable overlay addresses from 100.64.0.0/10 per meshnet.
+// IPAM allocates stable overlay addresses from the node half of 100.64.0.0/10
+// per meshnet.
 type IPAM interface {
 	Allocate(ctx context.Context, t MeshnetID) (netip.Addr, error)
 	Release(ctx context.Context, addr netip.Addr) error
+}
+
+// AliasIPAM allocates stand-in PREFIXES for subnet routes whose real addresses
+// would collide with a consumer's own LAN — the same shape as IPAM, one level
+// up. The returned prefix is the same size as real, so the subnet router can
+// rewrite 1:1. See core.MemAliasIPAM and
+//
+// Optional on the Coordinator: a nil AliasIPAM means this deployment does not
+// offer aliasing, and every alias request is simply not granted (the route is
+// still published under its real CIDR, exactly as before the feature existed).
+type AliasIPAM interface {
+	Allocate(ctx context.Context, t MeshnetID, real netip.Prefix) (netip.Prefix, error)
+	Release(ctx context.Context, alias netip.Prefix) error
 }
 
 // DERPMapSource supplies the relay directory a given meshnet should use.

@@ -55,7 +55,7 @@ func TestParseBindingResponseWrongTx(t *testing.T) {
 func TestIsSTUNRejectsGarbage(t *testing.T) {
 	for _, b := range [][]byte{
 		nil,
-		make([]byte, 4),                        // too short
+		make([]byte, 4), // too short
 		append([]byte{0, 1, 0, 0}, make([]byte, 16)...), // no magic cookie
 	} {
 		if IsSTUN(b) {

@@ -7,7 +7,7 @@ import (
 	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
 )
 
-func TestExactLocalCollision(t *testing.T) {
+func TestLocalSubnetWins(t *testing.T) {
 	locals := []netip.Prefix{
 		netip.MustParsePrefix("192.168.1.0/24"),
 		netip.MustParsePrefix("10.0.0.0/8"),
@@ -15,30 +15,61 @@ func TestExactLocalCollision(t *testing.T) {
 	cases := []struct {
 		name string
 		pfx  string
-		want bool // whether it is an EXACT same-subnet collision (local wins)
+		want bool // whether this machine is already attached to that space
 		hit  string
 	}{
 		{"identical /24", "192.168.1.0/24", true, "192.168.1.0/24"},
 		{"unmasked but same subnet", "192.168.1.5/24", true, "192.168.1.0/24"},
-		{"more-specific host is NOT a collision", "192.168.1.222/32", false, ""},
-		{"more-specific sub-range is NOT a collision", "192.168.1.128/25", false, ""},
-		{"broader is NOT a collision", "192.168.0.0/16", false, ""},
-		{"identical 10/8", "10.0.0.0/8", true, "10.0.0.0/8"},
-		{"host inside 10/8 is NOT a collision", "10.1.2.3/32", false, ""},
+		// The three that changed. A host or sub-range inside a network we are on
+		// is reachable on the wire; routing it into the mesh is the bug.
+		{"host inside our own LAN", "192.168.1.222/32", true, "192.168.1.0/24"},
+		{"our OWN address", "192.168.1.22/32", true, "192.168.1.0/24"},
+		{"sub-range inside our own LAN", "192.168.1.128/25", true, "192.168.1.0/24"},
+		{"host inside 10/8 we are on", "10.1.2.3/32", true, "10.0.0.0/8"},
+		// Broader is still kept: longest-prefix means it never wins locally.
+		{"broader is NOT covered", "192.168.0.0/16", false, ""},
 		{"disjoint private", "172.16.0.0/12", false, ""},
 		{"public", "8.8.8.0/24", false, ""},
 		{"ipv6 never matches ipv4 local", "fd00::/8", false, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, ok := exactLocalCollision(netip.MustParsePrefix(c.pfx), locals)
+			got, ok := localSubnetWins(netip.MustParsePrefix(c.pfx), locals)
 			if ok != c.want {
-				t.Fatalf("exactLocalCollision(%s) ok=%v, want %v", c.pfx, ok, c.want)
+				t.Fatalf("localSubnetWins(%s) ok=%v, want %v", c.pfx, ok, c.want)
 			}
 			if ok && got != netip.MustParsePrefix(c.hit) {
-				t.Fatalf("exactLocalCollision(%s) hit=%s, want %s", c.pfx, got, c.hit)
+				t.Fatalf("localSubnetWins(%s) hit=%s, want %s", c.pfx, got, c.hit)
 			}
 		})
+	}
+}
+
+// The shape that shipped: a subnet router on the SAME LAN advertising the NAS
+// beside it (and, as it happens, this very machine). Both must be refused — the
+// NAS is on the wire, and routing our own address into the tun is incoherent in
+// every reading.
+func TestLocalSubnetWinsRefusesASameLanSubnetRouter(t *testing.T) {
+	locals := []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24")}
+	overlay := netip.MustParsePrefix("100.64.0.0/10")
+	router := meshproto.NodeKey{9}
+	peers := []WGPeer{{PublicKey: router, AllowedIPs: []netip.Prefix{
+		netip.MustParsePrefix("100.64.0.4/32"),    // the router's own overlay IP
+		netip.MustParsePrefix("192.168.1.222/32"), // the NAS, on our wire
+		netip.MustParsePrefix("192.168.1.22/32"),  // us
+	}}}
+
+	keep, dropped := selectSubnetRoutes(peers, overlay, locals)
+	if len(keep) != 0 {
+		t.Fatalf("keep=%v, want nothing routed into the mesh", keep)
+	}
+	if len(dropped) != 2 {
+		t.Fatalf("dropped=%v, want both /32s", dropped)
+	}
+	for _, d := range dropped {
+		if d.Local != locals[0] || !d.Peer.Equal(router) {
+			t.Errorf("dropped %+v: want local %s from the router peer", d, locals[0])
+		}
 	}
 }
 
@@ -52,24 +83,23 @@ func TestSelectSubnetRoutes(t *testing.T) {
 		{PublicKey: keyA, AllowedIPs: []netip.Prefix{
 			netip.MustParsePrefix("100.64.0.5/32"),    // overlay /32 -> covered by /10, skipped
 			netip.MustParsePrefix("10.99.0.0/16"),     // remote subnet-router, not local -> keep
-			netip.MustParsePrefix("192.168.1.222/32"), // remote host INSIDE our LAN -> more specific, KEEP
-			netip.MustParsePrefix("192.168.1.0/24"),   // IDENTICAL to local LAN -> dropped (local wins)
+			netip.MustParsePrefix("192.168.1.222/32"), // host on a LAN we are ON -> dropped
+			netip.MustParsePrefix("192.168.1.0/24"),   // IDENTICAL to local LAN -> dropped
 		}},
 		{PublicKey: keyB, AllowedIPs: []netip.Prefix{
-			netip.MustParsePrefix("0.0.0.0/0"),     // default route -> exit step, skipped here
-			netip.MustParsePrefix("172.20.0.0/16"), // keep
-			netip.MustParsePrefix("10.99.0.0/16"),  // dup of keyA's -> skipped
+			netip.MustParsePrefix("0.0.0.0/0"),      // default route -> exit step, skipped here
+			netip.MustParsePrefix("172.20.0.0/16"),  // keep
+			netip.MustParsePrefix("10.99.0.0/16"),   // dup of keyA's -> skipped
+			netip.MustParsePrefix("192.168.0.0/16"), // BROADER than our /24 -> keep
 		}},
 	}
 
 	keep, dropped := selectSubnetRoutes(peers, overlay, locals)
 
-	// A more-specific host route (192.168.1.222/32) inside the local /24 is kept:
-	// longest-prefix diverts only that address, the rest of the LAN stays local.
 	wantKeep := []netip.Prefix{
 		netip.MustParsePrefix("10.99.0.0/16"),
-		netip.MustParsePrefix("192.168.1.222/32"),
 		netip.MustParsePrefix("172.20.0.0/16"),
+		netip.MustParsePrefix("192.168.0.0/16"),
 	}
 	if len(keep) != len(wantKeep) {
 		t.Fatalf("keep=%v, want %v", keep, wantKeep)
@@ -80,15 +110,13 @@ func TestSelectSubnetRoutes(t *testing.T) {
 		}
 	}
 
-	// Only the exact same-subnet advertisement is dropped.
-	if len(dropped) != 1 {
-		t.Fatalf("dropped=%v, want exactly one (the identical subnet)", dropped)
+	if len(dropped) != 2 {
+		t.Fatalf("dropped=%v, want the host and the identical subnet", dropped)
 	}
-	d := dropped[0]
-	if d.Advertised != netip.MustParsePrefix("192.168.1.0/24") ||
-		d.Local != netip.MustParsePrefix("192.168.1.0/24") ||
-		!d.Peer.Equal(keyA) {
-		t.Fatalf("dropped[0]=%+v, want advertised/local 192.168.1.0/24 from peer A", d)
+	for _, d := range dropped {
+		if d.Local != locals[0] || !d.Peer.Equal(keyA) {
+			t.Errorf("dropped %+v: want local %s from peer A", d, locals[0])
+		}
 	}
 }
 

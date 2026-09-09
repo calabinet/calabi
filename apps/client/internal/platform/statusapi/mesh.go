@@ -1,30 +1,31 @@
 package statusapi
 
-// Connect (WireGuard mesh) status for the PLATFORM daemon's :7400 console.
+// WireGuard mesh status for the PLATFORM daemon's :7400 console.
 //
 // The local/standalone daemon serves /v1/mesh from internal/localweb (a `mesh:`
 // YAML block drives it). The platform daemon has no such block — it AUTO-ENROLLS
 // from the control plane (see cmd/calabi/daemon_mesh_platform.go) and reports the
 // resulting node state here, so the SAME embedded SPA (internal/status/ui) renders
-// Connect on both daemon kinds. Management (disable a node, ACL) stays in the web
+// the mesh on both daemon kinds. Management (disable a node, ACL) stays in the web
 // console (MESH.8b/8e); this surface is read-only status plus a local pause.
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/netip"
-	"runtime"
 	"strings"
 
 	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabi/calabi/apps/client/internal/mesh"
 )
 
-// MeshStatusSource is the platform daemon's live Connect state. The mesh
+// MeshStatusSource is the platform daemon's live mesh state. The mesh
 // enrollment controller implements it; nil = this daemon has no mesh subsystem
 // wired (the endpoint 404s → the SPA shows "unavailable on this daemon").
 type MeshStatusSource interface {
-	// MeshStatus is the node's current Connect state. Enabled=false with
+	// MeshStatus is the node's current mesh state. Enabled=false with
 	// Paused=false means the org isn't enrolled (not entitled, or the platform
 	// hasn't configured a coordinator) — the handler renders that as
 	// 404/"unavailable". Paused=true means the operator stopped mesh locally
@@ -49,16 +50,30 @@ type MeshStatusSource interface {
 	// SetAdvertise updates the role (routes / exit-node) and restarts the mesh
 	// session so the change takes effect. The caller persists it to creds first.
 	SetAdvertise(MeshAdvertise) error
+	// ProbeRelayLeg drives one segment of the relay path and reports what came
+	// back (see MeshRelayProbe). relay names which link; empty means this node's
+	// home relay. It measures the LIVE link rather than dialing its own, because
+	// a second connection would need either an identity the coordinator has not
+	// granted or this node's own key, and the relay hands a key to the newest
+	// connection claiming it -- the probe would evict the link it came to measure.
+	// oneWay drives the send direction alone (no return traffic), which is what
+	// separates a slow network from the relay stalling its own read loop.
+	ProbeRelayLeg(ctx context.Context, relay string, size int, rateMbps float64, seconds int, oneWay bool) (MeshRelayProbe, error)
 }
 
 // MeshAdvertise is this node's subnet-router / exit-node role — the editable part
-// of the Connect page. Routes are the CIDRs it advertises as a subnet router;
+// of the mesh page. Routes are the CIDRs it advertises as a subnet router;
 // ExitNode advertises it AS an exit node; ExitPeer routes THIS node's default
 // traffic through the named exit peer.
 type MeshAdvertise struct {
-	Routes   []string `json:"routes"`
-	ExitNode bool     `json:"advertise_exit_node"`
-	ExitPeer string   `json:"exit_node"`
+	Routes []string `json:"routes"`
+	// AliasRoutes is the subset of Routes to publish under a unique stand-in
+	// prefix, for a LAN that collides with consumers' own. Like the consumer-side
+	// fields below it is "leave unchanged" when omitted, so a save from a page
+	// that predates it cannot silently give the role up.
+	AliasRoutes []string `json:"alias_routes,omitempty"`
+	ExitNode    bool     `json:"advertise_exit_node"`
+	ExitPeer    string   `json:"exit_node"`
 	// --- the CONSUMER side: what this node accepts FROM peers ---
 	//
 	// AcceptRoutes is a POINTER so an omitted field means "leave unchanged". The
@@ -124,6 +139,28 @@ type MeshStatus struct {
 	// operator most needs to see it.
 	OrgID int64      `json:"org_id,omitempty"`
 	Peers []MeshPeer `json:"peers"`
+	// SubnetAliases is the stand-in mapping for this node's OWN subnet routes,
+	// when it publishes a LAN that collides with consumers' own.
+	SubnetAliases []MeshSubnetAlias `json:"subnet_aliases,omitempty"`
+	// UnaliasedRoutes are routes that asked for a stand-in prefix and did not get
+	// one. They still work for consumers that do not collide with them; the ones
+	// that DO collide cannot reach them, silently — which is why this is shown.
+	UnaliasedRoutes []string `json:"unaliased_routes,omitempty"`
+	// AliasBudgetAddrs / AliasUsedAddrs explain WHY, in addresses (a /24 is 256).
+	AliasBudgetAddrs int `json:"alias_budget_addrs,omitempty"`
+	AliasUsedAddrs   int `json:"alias_used_addrs,omitempty"`
+	// Datapath is this node's own packet accounting — where traffic goes missing
+	// (see MeshDatapath). Always emitted, zeroed while the mesh is down.
+	Datapath MeshDatapath `json:"datapath"`
+}
+
+// MeshSubnetAlias is one subnet behind THIS node and the unique prefix the mesh
+// reaches it by. Shown because nobody can dial an address they cannot see: the
+// alias scheme deliberately asks a person to use a different address than the
+// one written on the machine, so the mapping has to be somewhere they look.
+type MeshSubnetAlias struct {
+	Alias string `json:"alias"`
+	Real  string `json:"real"`
 }
 
 // MeshPeer is one peer's live WireGuard state.
@@ -134,10 +171,15 @@ type MeshPeer struct {
 	RxBytes          int64    `json:"rx_bytes"`
 	TxBytes          int64    `json:"tx_bytes"`
 	// Path is "direct" when hole punching found a working peer-to-peer path,
-	// "relay" when traffic goes through calabi-derp. Endpoint carries the direct
+	// "relay" when traffic goes through the relay. Endpoint carries the direct
 	// UDP address in the former case.
 	Path     string `json:"path,omitempty"`
 	Endpoint string `json:"endpoint,omitempty"`
+	// RTTMicros is the direct path's round-trip in microseconds (0 over the
+	// relay). "direct" says only that the relay is out of the picture — this says
+	// whether the path is any good, which for two machines on one LAN is the
+	// difference between the LAN and a hairpin through the ISP.
+	RTTMicros int64 `json:"rtt_micros,omitempty"`
 }
 
 // handleMesh serves GET /v1/mesh. Read-only (loopback bind = trust boundary).
@@ -189,9 +231,59 @@ func (s *Server) handleMeshUp(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "up"})
 }
 
+// subnetRouterSupported answers "can this build actually forward?". It is a
+// variable, not a direct call, so a test can pin the answer: the handler must
+// behave identically on a Windows dev box and on the Linux CI, and the host's
+// GOOS is exactly the kind of hidden input that makes a test pass in one place
+// and fail in the other.
+var subnetRouterSupported = mesh.SubnetRouterSupported
+
+// newAdvertisementRefused reports whether a requested role change must be turned
+// down because this node cannot forward, and why.
+//
+// Advertising a subnet route is a promise to OTHER machines: they install a route
+// pointing here and send traffic into it. Off Linux the daemon has no forwarding
+// or NAT backend (mesh.EnableSubnetRouter is a stub), so that promise is a
+// blackhole — the peers' packets enter the tun and die, and, being a route, it
+// also takes those destinations away from whatever path used to carry them.
+// Strictly worse than never advertising.
+//
+// The rule is "no NEW advertisement", not "no advertisement". Turning a role OFF,
+// or saving an unrelated tab while an existing one stays exactly as it is, must
+// always go through: a node configured by --advertise-routes or the config file
+// (the deliberate escape hatch for an operator who wired up forwarding by hand)
+// would otherwise be locked out of the console entirely, unable even to retract
+// what it advertises. Pure, so the decision is testable on any OS — including the
+// Linux CI where SubnetRouterSupported() is true.
+func newAdvertisementRefused(canForward bool, cur, want MeshAdvertise) (string, bool) {
+	if canForward {
+		return "", false
+	}
+	had := make(map[string]bool, len(cur.Routes))
+	for _, r := range cur.Routes {
+		if p, err := netip.ParsePrefix(strings.TrimSpace(r)); err == nil {
+			had[p.Masked().String()] = true
+		}
+	}
+	for _, r := range want.Routes {
+		p, err := netip.ParsePrefix(strings.TrimSpace(r))
+		if err != nil || had[p.Masked().String()] {
+			continue // unparseable is the caller's business; unchanged is fine
+		}
+		return "this device cannot forward traffic (subnet routing is Linux-only), " +
+			"so it cannot advertise " + p.Masked().String() + " — peers would route to a dead end", true
+	}
+	if want.ExitNode && !cur.ExitNode {
+		return "this device cannot forward traffic (exit nodes are Linux-only), " +
+			"so it cannot offer itself as an exit node", true
+	}
+	return "", false
+}
+
 // handleMeshAdvertiseGet serves GET /v1/mesh/advertise: the node's current
-// subnet-router / exit-node role, plus forwarding_supported (true only on Linux,
-// where the daemon can actually forward — elsewhere it advertises but doesn't).
+// subnet-router / exit-node role, plus forwarding_supported (true only where the
+// daemon can actually forward — see newAdvertisementRefused for what the console
+// does with it).
 func (s *Server) handleMeshAdvertiseGet(w http.ResponseWriter, _ *http.Request) {
 	if s.cfg.Mesh == nil {
 		writeError(w, http.StatusNotFound, "mesh not available on this daemon")
@@ -213,10 +305,17 @@ func (s *Server) handleMeshAdvertiseGet(w http.ResponseWriter, _ *http.Request) 
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"routes":               adv.Routes,
-		"advertise_exit_node":  adv.ExitNode,
-		"exit_node":            adv.ExitPeer,
-		"forwarding_supported": runtime.GOOS == "linux",
+		"routes":              adv.Routes,
+		"advertise_exit_node": adv.ExitNode,
+		"exit_node":           adv.ExitPeer,
+		// Two capabilities, not two settings. forwarding_supported is whether this
+		// host can forward at all; alias_supported is whether it can install the
+		// 1:1 rewrite that every published route now gets. Neither is a choice —
+		// there is no "alias_routes" here any more, because the subset an operator
+		// used to pick was a prediction about OTHER people's LANs that they had no
+		// way to make. The assigned mapping is read back from /v1/mesh.
+		"forwarding_supported": subnetRouterSupported(),
+		"alias_supported":      mesh.SubnetAliasSupported(),
 		"accept_routes":        accept,
 		"route_excludes":       excludes,
 	})
@@ -250,14 +349,30 @@ func (s *Server) handleMeshAdvertiseSet(w http.ResponseWriter, r *http.Request) 
 		if raw == "" {
 			continue
 		}
-		p, perr := netip.ParsePrefix(raw)
+		// mesh.ParseRoute, not netip.ParsePrefix: it also takes a bare address as
+		// a host route and refuses anything wider than a /24, which is the same
+		// rule the CLI and the config file get. The message it returns is written
+		// to be read by the person who typed the route.
+		p, perr := mesh.ParseRoute(raw)
 		if perr != nil {
-			writeError(w, http.StatusBadRequest, "invalid route "+raw+": "+perr.Error())
+			writeError(w, http.StatusBadRequest, "invalid route: "+perr.Error())
 			return
 		}
-		routes = append(routes, p.Masked().String())
+		routes = append(routes, p.String())
 	}
+	// in.AliasRoutes is accepted by the decoder and deliberately DROPPED: which
+	// routes get a stand-in prefix is no longer anyone's choice (every advertised
+	// route does, where the host can install the rewrite), so honouring a subset
+	// posted by an older console would silently un-alias the rest.
 	adv := MeshAdvertise{Routes: routes, ExitNode: in.ExitNode, ExitPeer: strings.TrimSpace(in.ExitPeer)}
+
+	// Refuse to take on a forwarding role this platform cannot honour. Checked
+	// here and not only in the SPA: the switch being greyed out is a courtesy to
+	// the person reading the page, this is the actual rule.
+	if why, no := newAdvertisementRefused(subnetRouterSupported(), s.cfg.Mesh.Advertise(), adv); no {
+		writeError(w, http.StatusBadRequest, why)
+		return
+	}
 
 	// Persist to creds so the role survives a daemon restart.
 	cfg, _ := creds.Load()
@@ -280,12 +395,16 @@ func (s *Server) handleMeshAdvertiseSet(w http.ResponseWriter, r *http.Request) 
 			if raw == "" {
 				continue
 			}
-			p, perr := netip.ParsePrefix(raw)
+			// ParseExclude, not ParseRoute: a bare address is still a host route
+			// here, but the publish width limit deliberately does NOT apply —
+			// naming a whole /16 to keep OUT of this machine's routing table is
+			// cheap and reasonable, and costs the alias pool nothing.
+			p, perr := mesh.ParseExclude(raw)
 			if perr != nil {
-				writeError(w, http.StatusBadRequest, "invalid excluded route "+raw+": "+perr.Error())
+				writeError(w, http.StatusBadRequest, "invalid excluded route: "+perr.Error())
 				return
 			}
-			excludes = append(excludes, p.Masked().String())
+			excludes = append(excludes, p.String())
 		}
 		cfg.MeshRouteExcludes = excludes
 	}
@@ -297,12 +416,16 @@ func (s *Server) handleMeshAdvertiseSet(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	s.logger.Info("mesh advertise updated", "routes", routes, "exit_node", adv.ExitNode, "exit_peer", adv.ExitPeer,
-		"accept_routes", cfg.MeshAcceptRoutes, "route_excludes", cfg.MeshRouteExcludes)
 	acceptOut := false
 	if cfg.MeshAcceptRoutes != nil {
 		acceptOut = *cfg.MeshAcceptRoutes
 	}
+	// acceptOut, not cfg.MeshAcceptRoutes: that one is a *bool, and slog prints a
+	// pointer as its address — this line logged `accept_routes=0x1dd02ce109ac` for
+	// the whole life of the field, i.e. it recorded nothing about the one setting
+	// it exists to record.
+	s.logger.Info("mesh advertise updated", "routes", routes, "exit_node", adv.ExitNode, "exit_peer", adv.ExitPeer,
+		"accept_routes", acceptOut, "route_excludes", cfg.MeshRouteExcludes)
 	excludesOut := cfg.MeshRouteExcludes
 	if excludesOut == nil {
 		excludesOut = []string{}
@@ -311,7 +434,7 @@ func (s *Server) handleMeshAdvertiseSet(w http.ResponseWriter, r *http.Request) 
 		"routes":               routes,
 		"advertise_exit_node":  adv.ExitNode,
 		"exit_node":            adv.ExitPeer,
-		"forwarding_supported": runtime.GOOS == "linux",
+		"forwarding_supported": subnetRouterSupported(),
 		"accept_routes":        acceptOut,
 		"route_excludes":       excludesOut,
 	})

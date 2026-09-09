@@ -1,6 +1,6 @@
 [package]
 name = "calabi-desktop"
-version = "1.7.0"
+version = "1.7.1"
 description = "Calabi tunnel client — desktop shell"
 authors = ["Calabi Team"]
 license = "Proprietary"

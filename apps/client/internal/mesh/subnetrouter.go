@@ -44,3 +44,34 @@ func nftMasqueradeRules(routes []netip.Prefix) []string {
 	}
 	return rules
 }
+
+// iptablesAliasRules returns the `iptables` arg lists that rewrite each alias
+// prefix to its real one on the way IN — the other half of what makes an aliased
+// subnet reachable, the MASQUERADE rules above being the way back out.
+//
+//	iptables -t nat -A PREROUTING -d 100.96.5.0/24 -j NETMAP --to 192.168.1.0/24
+//
+// NETMAP is a 1:1 block rewrite: it maps the network part and leaves the host
+// part alone, which is exactly the alias contract (alias.222 is real.222) and
+// is why no state or lookup table is involved. The reply direction needs no rule
+// of its own — conntrack reverses this automatically, so the consumer sees the
+// answer coming from the alias it dialled.
+//
+// Ordering with the MASQUERADE rules matters and is free: PREROUTING runs before
+// the routing decision, so by the time POSTROUTING sees the packet its
+// destination is already the real LAN address and the existing
+// `-s 100.64/10 -d <real cidr>` rule matches unchanged.
+func iptablesAliasRules(aliases []SubnetAlias) [][]string {
+	var rules [][]string
+	for _, a := range aliases {
+		if !a.Alias.Addr().Is4() || !a.Real.Addr().Is4() || a.Alias.Bits() != a.Real.Bits() {
+			continue // v0: IPv4, same size — anything else is not a 1:1 rewrite
+		}
+		rules = append(rules, []string{
+			"-t", "nat", "-A", "PREROUTING",
+			"-d", a.Alias.Masked().String(),
+			"-j", "NETMAP", "--to", a.Real.Masked().String(),
+		})
+	}
+	return rules
+}

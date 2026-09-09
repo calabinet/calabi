@@ -189,6 +189,34 @@ func (_u *MeshNodeUpdate) SetNillableApprovedRoutesJSON(v *string) *MeshNodeUpda
 	return _u
 }
 
+// SetAliasedRoutesJSON sets the "aliased_routes_json" field.
+func (_u *MeshNodeUpdate) SetAliasedRoutesJSON(v string) *MeshNodeUpdate {
+	_u.mutation.SetAliasedRoutesJSON(v)
+	return _u
+}
+
+// SetNillableAliasedRoutesJSON sets the "aliased_routes_json" field if the given value is not nil.
+func (_u *MeshNodeUpdate) SetNillableAliasedRoutesJSON(v *string) *MeshNodeUpdate {
+	if v != nil {
+		_u.SetAliasedRoutesJSON(*v)
+	}
+	return _u
+}
+
+// SetRouteAliasesJSON sets the "route_aliases_json" field.
+func (_u *MeshNodeUpdate) SetRouteAliasesJSON(v string) *MeshNodeUpdate {
+	_u.mutation.SetRouteAliasesJSON(v)
+	return _u
+}
+
+// SetNillableRouteAliasesJSON sets the "route_aliases_json" field if the given value is not nil.
+func (_u *MeshNodeUpdate) SetNillableRouteAliasesJSON(v *string) *MeshNodeUpdate {
+	if v != nil {
+		_u.SetRouteAliasesJSON(*v)
+	}
+	return _u
+}
+
 // SetRoutesReviewed sets the "routes_reviewed" field.
 func (_u *MeshNodeUpdate) SetRoutesReviewed(v bool) *MeshNodeUpdate {
 	_u.mutation.SetRoutesReviewed(v)
@@ -399,6 +427,12 @@ func (_u *MeshNodeUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.ApprovedRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldApprovedRoutesJSON, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.AliasedRoutesJSON(); ok {
+		_spec.SetField(meshnode.FieldAliasedRoutesJSON, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.RouteAliasesJSON(); ok {
+		_spec.SetField(meshnode.FieldRouteAliasesJSON, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.RoutesReviewed(); ok {
 		_spec.SetField(meshnode.FieldRoutesReviewed, field.TypeBool, value)
 	}
@@ -603,6 +637,34 @@ func (_u *MeshNodeUpdateOne) SetApprovedRoutesJSON(v string) *MeshNodeUpdateOne 
 func (_u *MeshNodeUpdateOne) SetNillableApprovedRoutesJSON(v *string) *MeshNodeUpdateOne {
 	if v != nil {
 		_u.SetApprovedRoutesJSON(*v)
+	}
+	return _u
+}
+
+// SetAliasedRoutesJSON sets the "aliased_routes_json" field.
+func (_u *MeshNodeUpdateOne) SetAliasedRoutesJSON(v string) *MeshNodeUpdateOne {
+	_u.mutation.SetAliasedRoutesJSON(v)
+	return _u
+}
+
+// SetNillableAliasedRoutesJSON sets the "aliased_routes_json" field if the given value is not nil.
+func (_u *MeshNodeUpdateOne) SetNillableAliasedRoutesJSON(v *string) *MeshNodeUpdateOne {
+	if v != nil {
+		_u.SetAliasedRoutesJSON(*v)
+	}
+	return _u
+}
+
+// SetRouteAliasesJSON sets the "route_aliases_json" field.
+func (_u *MeshNodeUpdateOne) SetRouteAliasesJSON(v string) *MeshNodeUpdateOne {
+	_u.mutation.SetRouteAliasesJSON(v)
+	return _u
+}
+
+// SetNillableRouteAliasesJSON sets the "route_aliases_json" field if the given value is not nil.
+func (_u *MeshNodeUpdateOne) SetNillableRouteAliasesJSON(v *string) *MeshNodeUpdateOne {
+	if v != nil {
+		_u.SetRouteAliasesJSON(*v)
 	}
 	return _u
 }
@@ -846,6 +908,12 @@ func (_u *MeshNodeUpdateOne) sqlSave(ctx context.Context) (_node *MeshNode, err 
 	}
 	if value, ok := _u.mutation.ApprovedRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldApprovedRoutesJSON, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.AliasedRoutesJSON(); ok {
+		_spec.SetField(meshnode.FieldAliasedRoutesJSON, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.RouteAliasesJSON(); ok {
+		_spec.SetField(meshnode.FieldRouteAliasesJSON, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.RoutesReviewed(); ok {
 		_spec.SetField(meshnode.FieldRoutesReviewed, field.TypeBool, value)

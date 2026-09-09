@@ -19,5 +19,9 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": ["src"],
+  // Tests run under `npm test` (node --test, which strips types rather than
+  // checking them) and import node: builtins. Typechecking them here would mean
+  // adding @types/node to the app build for files the app never bundles.
+  "exclude": ["src/**/*.test.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

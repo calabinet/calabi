@@ -27,6 +27,7 @@ import type {
   TunnelList,
 } from "../api/types";
 import TrafficChart from "../components/TrafficChart";
+import { freshRate, useCounterRate } from "../hooks/use-counter-rate";
 import DailyTrafficChart from "../components/DailyTrafficChart";
 import {
   notify,
@@ -67,7 +68,7 @@ function fmtUptime(sec: number | undefined, justStarted: string): string {
 export default function Overview() {
   const { t } = useTranslation();
 
-  const { data: snap } = useQuery<Snapshot>({
+  const { data: snap, dataUpdatedAt: snapAt } = useQuery<Snapshot>({
     queryKey: ["snapshot"],
     queryFn: api.snapshot,
     refetchInterval: 2_000,
@@ -133,7 +134,7 @@ export default function Overview() {
   // is scoped by the RELAY HOME (platform vs the org's own "self-…" relay), which
   // is a SEPARATE axis from the tunnel edge. Also feeds the "中继节点" block in
   // 本机信息. retry:false so a daemon without a mesh block (404) leaves it empty.
-  const { data: mesh } = useQuery<MeshStatus>({
+  const { data: mesh, dataUpdatedAt: meshAt } = useQuery<MeshStatus>({
     queryKey: ["mesh"],
     queryFn: api.mesh,
     refetchInterval: 5_000,
@@ -250,27 +251,36 @@ export default function Overview() {
     }
   }, [usage]);
 
-  // Kept around: TrafficChart still consumes totalBytes (session-scoped
-  // bytes counter is the right input for "实时吞吐" — it's the only
-  // sampled-per-second source we have). The Overview top cards used to
-  // also surface this as "会话流量" + "累计连接" but those reset on
-  // every daemon restart and meant little to the end user; we replaced
-  // them with 在线时长 + 今日流量 (see UI below).
-  // Tunnel session bytes (sampled ~2s) PLUS this machine's mesh peer bytes
-  // (sampled 5s), so 实时吞吐 reflects Connect traffic too — otherwise a
-  // mesh-only machine shows a flat 0 B/s despite active transfer. A counter
-  // reset (daemon/mesh reconnect) makes the delta negative, which TrafficChart
-  // clamps to 0, so a reset costs one 0 sample rather than a spurious spike.
-  const tunnelBytes =
-    (snap?.tunnels ?? []).reduce(
-      (sum, t) => sum + (t.bytes_in || 0) + (t.bytes_out || 0),
-      0,
-    ) ?? 0;
-  const meshPeerBytes = (mesh?.peers ?? []).reduce(
-    (sum, p) => sum + (p.rx_bytes || 0) + (p.tx_bytes || 0),
-    0,
+  // The session-scoped byte counters are the only per-second-sampled source we
+  // have, so they are what "实时吞吐" is built from. The Overview top cards used
+  // to surface them raw as "会话流量" + "累计连接", but those reset on every
+  // daemon restart and meant little to the end user; they were replaced with
+  // 在线时长 + 今日流量 (see UI below).
+  // 实时吞吐 = tunnel sessions + this machine's mesh peers, so a mesh-only
+  // machine doesn't show a flat 0 B/s during an active transfer.
+  //
+  // The two come from DIFFERENT POLLERS (snapshot 2s, mesh 5s) and are measured
+  // SEPARATELY, each against its own clock, then added as rates. Adding the byte
+  // counters first — what this page used to do — divided one source's delta by
+  // the other source's poll gap whenever the two schedules coincided, which put
+  // spikes of several GB/s on a link that tops out near 20 Mbit/s. lib/rate.ts
+  // carries the full account and the tests.
+  const tunnelRate = useCounterRate(
+    snap?.tunnels,
+    snapAt,
+    (t) => t.proxy_id,
+    (t) => (t.bytes_in || 0) + (t.bytes_out || 0),
   );
-  const totalBytes = tunnelBytes + meshPeerBytes;
+  const meshRate = useCounterRate(
+    mesh?.peers,
+    meshAt,
+    (p) => p.public_key,
+    (p) => (p.rx_bytes || 0) + (p.tx_bytes || 0),
+  );
+  // A source whose poll has stopped answering (mesh 404 on an older daemon, or a
+  // daemon that went away) must stop contributing rather than pin its last rate
+  // to the total forever. Three poll intervals is late enough not to flap.
+  const throughput = freshRate(tunnelRate, 6_000) + freshRate(meshRate, 15_000);
   // M11.19.1: "活跃隧道 N / M" should compare apples to apples — M is
   // plan.max_tunnels (Org-wide cap), so N has to be the Org-wide count.
   // The daemon ships team_total alongside the filtered items list so
@@ -486,7 +496,7 @@ export default function Overview() {
             />
           </div>
           <div style={{ flex: 1, minHeight: 200, display: "flex" }}>
-            <TrafficChart totalBytes={totalBytes} />
+            <TrafficChart rate={throughput} sampleAt={snapAt} />
           </div>
         </Col>
         <Col flex="320px" style={{ display: "flex", minHeight: 0, paddingRight: 0 }}>

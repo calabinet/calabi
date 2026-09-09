@@ -313,7 +313,7 @@ calabi daemon install --config tunnels.yaml   # 然后：calabi daemon start|sto
 
 | | | |
 |---|---|---|
-| `calabi-coord` | 协调器 | 节点注册、地址分配、ACL、MagicDNS、中继目录 |
+| `calabi-coord` | 协调器 | 节点注册、地址分配、ACL、中继目录 |
 | `calabi-edge` 配 `role: relay` | 中继 | 按节点公钥转发**已经加密好的**报文，并响应 STUN 让节点找到自己的公网端点 |
 | `calabi mesh up` | 节点 | 本地生成 WireGuard 密钥、入网、拉起 tun 设备 |
 
@@ -435,12 +435,6 @@ calabi mesh up ... --exit-node home-server             # 把「我」的默认�
 **通告**在所有平台都能用。真正做转发的那一半——打开 IP 转发和 NAT 让包能穿过去
 ——**只在 Linux 上是自动配好的**；其他平台上节点照样通告，但操作系统那边要你自己配。
 作为出口节点*客户端*接管默认路由，在 Linux、Windows、macOS 上都可以。
-
-### 非 Linux 上还没自动化的部分
-
-MagicDNS 的操作系统集成（分配解析器地址 + 改写系统 resolver 配置）目前只有 Linux。
-组网本身在所有平台都能用——节点**地址**各平台都正常——但节点**名字**只有在 Linux
-上才能通过操作系统解析。
 
 ---
 

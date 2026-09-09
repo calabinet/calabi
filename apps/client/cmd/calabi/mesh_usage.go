@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// meshUsageMeter is the Connect (mesh) counterpart of usageMeter: it books mesh
+// meshUsageMeter is the mesh counterpart of usageMeter: it books mesh
 // PEER traffic into per-day buckets by sampling MeshStatus's byte counters, and
 // persists them so the overview's mesh usage (today / this month) and the 7-day
 // chart's second series survive restarts.

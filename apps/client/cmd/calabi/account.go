@@ -111,7 +111,7 @@ func runLogin(args []string) int {
 	totpCode := fs.String("totp", "", "TOTP code (if account has 2FA enabled)")
 	startDaemon := fs.Bool("start-daemon", true, "auto-start the local daemon after a successful login")
 	noStartDaemon := fs.Bool("no-start-daemon", false, "shortcut for --start-daemon=false (CI / scripted)")
-	if err := fs.Parse(reorderArgs(args, []string{"email", "password", "totp"})); err != nil {
+	if err := fs.Parse(reorderArgs(args, valueFlagsOf(fs))); err != nil {
 		return 2
 	}
 	if *email == "" {

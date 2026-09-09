@@ -16,11 +16,11 @@ import (
 )
 
 // registerAdvancedFlags wires --rate (all tunnel types) plus the HTTP-only
-// --set-header / --del-header / --oauth-* knobs (l7), appending their names so
-// reorderArgs accepts them after the positional port.
-func (sf *securityFlags) registerAdvancedFlags(fs *flag.FlagSet, names *[]string) {
+// --set-header / --del-header / --oauth-* knobs (l7). Names no longer have to be
+// reported anywhere: reorderArgs reads them off the FlagSet (valueFlagsOf), so
+// registering a flag is the whole of adding one.
+func (sf *securityFlags) registerAdvancedFlags(fs *flag.FlagSet) {
 	fs.IntVar(&sf.rate, "rate", 0, "max NEW connections per minute (0 = unlimited)")
-	*names = append(*names, "rate")
 	if sf.l7 {
 		fs.Var(&sf.setHeader, "set-header", `set/replace an upstream request header "Name: Value" (repeatable)`)
 		fs.Var(&sf.delHeader, "del-header", "strip an upstream request header by name (repeatable)")
@@ -29,9 +29,6 @@ func (sf *securityFlags) registerAdvancedFlags(fs *flag.FlagSet, names *[]string
 		fs.StringVar(&sf.oauthClientSecret, "oauth-client-secret", "", "OAuth client secret")
 		fs.Var(&sf.oauthEmail, "oauth-allow-email", "OAuth: allowed email address (repeatable; empty = any)")
 		fs.Var(&sf.oauthDomain, "oauth-allow-domain", "OAuth: allowed email domain (repeatable; empty = any)")
-		*names = append(*names, "set-header", "del-header",
-			"oauth-provider", "oauth-client-id", "oauth-client-secret",
-			"oauth-allow-email", "oauth-allow-domain")
 	}
 }
 

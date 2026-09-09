@@ -60,13 +60,17 @@ type securityFlags struct {
 
 // registerSecurityFlags wires the policy flags onto fs. l7=true adds the
 // HTTP-only knobs (basic-auth / headers / oauth); L4 tunnels (tcp/udp/sni) get
-// IP only. It returns the collector plus the value-flag names to feed
-// reorderArgs so the flags parse even when typed after the positional port.
+// IP only.
+//
+// It used to also return the value-flag names for reorderArgs. It no longer
+// needs to: reorderArgs reads them off the FlagSet. A returned list is a second
+// place to remember, and a list that is merely INCOMPLETE fails quietly — the
+// unlisted flag swallows the next token as its value.
 //
 // IP allow/deny and HTTP Basic auth are always available. The advanced knobs
 // (--rate / --set-header / --del-header / --oauth-*) are wired by
 // registerAdvancedFlags and folded in by applyAdvanced, which are build-tagged.
-func registerSecurityFlags(fs *flag.FlagSet, l7 bool) (*securityFlags, []string) {
+func registerSecurityFlags(fs *flag.FlagSet, l7 bool) *securityFlags {
 	sf := &securityFlags{l7: l7}
 	// Default follows the client mode (`calabi mode standalone` / CALABI_MODE);
 	// the flag is a per-command override for a one-off standalone target.
@@ -75,13 +79,11 @@ func registerSecurityFlags(fs *flag.FlagSet, l7 bool) (*securityFlags, []string)
 	fs.Var(&sf.ipAllow, "ip-allow", "allowlist CIDR/IP (repeatable); only these may connect")
 	fs.Var(&sf.ipDeny, "ip-deny", "denylist CIDR/IP (repeatable); always blocked, wins over allow")
 	fs.StringVar(&sf.file, "security-file", "", `JSON file with a full {"security":{…}} block; flags merge on top`)
-	names := []string{"ip-allow", "ip-deny", "security-file"}
 	if l7 {
 		fs.Var(&sf.basicAuth, "basic-auth", "HTTP Basic credential user:pass (repeatable; password is bcrypt-hashed locally)")
-		names = append(names, "basic-auth")
 	}
-	sf.registerAdvancedFlags(fs, &names)
-	return sf, names
+	sf.registerAdvancedFlags(fs)
+	return sf
 }
 
 // --- config_json `security` block, mirroring policy.rawConfig on the edge ----

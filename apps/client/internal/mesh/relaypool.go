@@ -46,6 +46,11 @@ type relayPool struct {
 	clients map[string]*derp.Client
 	dialing map[string]bool
 	closed  bool
+	// txDroppedGone carries the drop tally of links that have been reaped, so the
+	// total never goes down when a link is re-dialed.
+	txDroppedGone uint64
+	// txBlockedGone does the same for the writers' blocked time.
+	txBlockedGone time.Duration
 }
 
 // relayDialTimeout bounds one background relay dial.
@@ -289,6 +294,10 @@ func (p *relayPool) drop(addr string, c *derp.Client) { p.reap(addr, c, "send fa
 func (p *relayPool) reap(addr string, c *derp.Client, reason string) {
 	p.mu.Lock()
 	if p.clients[addr] == c {
+		// Carry the link's drop tally forward before losing the handle to it, or
+		// the reported total drops back to whatever the replacement link has sent.
+		p.txDroppedGone += c.TxDropped()
+		p.txBlockedGone += c.TxBlocked()
 		delete(p.clients, addr)
 	} else {
 		c = nil
@@ -392,6 +401,79 @@ func (p *relayPool) Addrs() []string {
 }
 
 // Home is the address of the node's current home relay (reported in status).
+// TxDropped is how many frames the relay links discarded rather than send late
+// (see derp/sendq.go). Summed across live links, plus the tally carried over
+// from links that have been reaped — a counter that resets when a link is
+// re-dialed would walk backwards, which is exactly the failure the socket
+// counters already had once.
+func (p *relayPool) TxDropped() uint64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	n := p.txDroppedGone
+	for _, c := range p.clients {
+		n += c.TxDropped()
+	}
+	return n
+}
+
+// TxBlocked is the total time the relay writers have spent inside conn.Write,
+// summed the same way and for the same reason. Read against the wall clock of a
+// transfer it says whether the link refused to take more (blocked ~ the whole
+// time) or whether the writer was idle while frames were dropped — which would
+// put the throttle somewhere else entirely. See derp/sendq.go.
+func (p *relayPool) TxBlocked() time.Duration {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	d := p.txBlockedGone
+	for _, c := range p.clients {
+		d += c.TxBlocked()
+	}
+	return d
+}
+
+// TxSockBuf and TxRate report the adaptive send-buffer controller's current
+// state across the pool's links (derp/sndbuf.go).
+//
+// These are GAUGES, not counters, and that changes the arithmetic in two ways
+// against TxDropped/TxBlocked directly above:
+//
+//   - They are not summed. Two links each holding a 512 KB buffer are not one
+//     link holding 1 MB, and the figure a reader wants is "how much queue is
+//     behind the leg carrying my traffic".
+//   - There is no carry-over for departed links. A counter has to survive a
+//     reconnect or the total goes backwards; a gauge for a link that no longer
+//     exists is not a fact about now, and reporting it would keep a stale size
+//     on screen long after the socket it described was closed.
+//
+// The maximum is taken because in the normal case there is exactly one live
+// link, where max is simply that link, and where there are several it names the
+// one doing the most work rather than averaging it away.
+func (p *relayPool) TxSockBuf() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var n int
+	for _, c := range p.clients {
+		if v := c.TxSockBuf(); v > n {
+			n = v
+		}
+	}
+	return n
+}
+
+// TxRate is the windowed-maximum send rate across the pool's links, in bytes per
+// second. See TxSockBuf for why it is a maximum and not a sum.
+func (p *relayPool) TxRate() float64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var r float64
+	for _, c := range p.clients {
+		if v := c.TxRate(); v > r {
+			r = v
+		}
+	}
+	return r
+}
+
 func (p *relayPool) Home() string {
 	p.mu.Lock()
 	defer p.mu.Unlock()

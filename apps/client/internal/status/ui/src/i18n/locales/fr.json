@@ -76,7 +76,7 @@
     "switchBody2": "Les tunnels de la région d'origine (leur adresse publique est épinglée à cette région) ne seront plus joignables via ce client ; vous devrez les recréer dans la nouvelle région (l'adresse publique changera). Le changement de nœud au sein d'une même région est automatique et sans impact.",
     "switchedTo": "Basculé vers la région « {{region}} »",
     "failed": "Échec du changement de région",
-    "parkedNote": "Les nœuds edge de la région actuelle sont injoignables ; la reconnexion est arrêtée. Vous pouvez changer de région manuellement en haut à droite."
+    "parkedNote": "Les nœuds edge de la région actuelle sont injoignables. Le client continue de réessayer en arrière-plan ; changer de région en haut à droite reconnecte immédiatement."
   },
   "affinity": {
     "header": "Nœud de données",
@@ -458,7 +458,14 @@
       "egressSection": "Sortie Internet de cet appareil",
       "exitNode": "Proposer cet appareil comme nœud de sortie",
       "exitNodeHelp": "Les autres appareils peuvent faire sortir leur trafic Internet par cette machine.",
-      "noForward": "Le transfert ne fonctionne que sous Linux. Cette machine annoncera ces paramètres, mais ne transmettra réellement le trafic que sur un appareil Linux.",
+      "noForward": "Cet appareil annonce ces rôles mais ne peut pas relayer le trafic : le routage de sous-réseaux et les nœuds de sortie ne sont configurés automatiquement que sous Linux, donc le trafic envoyé par les pairs est perdu. Désactivez-les ou faites tourner le routeur sur un appareil Linux.",
+      "noForwardLocked": "Indisponible sur cet appareil : le routage de sous-réseaux et les nœuds de sortie nécessitent le transfert de paquets, configuré automatiquement sous Linux uniquement. Les annoncer sans cela enverrait le trafic des pairs dans une impasse.",
+      "alias": "Adresses de substitution",
+      "aliasHelp": "Chaque sous-réseau publié reçoit automatiquement un préfixe de substitution unique, la dernière partie restant inchangée : .222 reste .222. Les pairs y accèdent, donc un pair dont le réseau utilise les mêmes adresses passe quand même. Nécessite l'approbation de la route par un administrateur.",
+      "aliasAssigned": "Les pairs atteignent ces sous-réseaux à :",
+      "aliasPending": "En attente de l'attribution des adresses par le coordinateur.",
+      "aliasRefused": "Certains sous-réseaux n'ont pas pu recevoir d'adresse",
+      "aliasBudget": "Votre organisation utilise {{used}} adresses d'alias sur {{total}}. Ces routes fonctionnent toujours pour les pairs dont le réseau n'entre pas en conflit ; ceux en conflit ne peuvent pas les atteindre. Demandez à un administrateur d'augmenter la limite.",
       "offerSection": "Proposer au Maillage",
       "routes": "Annoncer des routes de sous-réseau",
       "routesHelp": "CIDR du réseau local de cette machine à exposer au Maillage, p. ex. 192.168.1.0/24. Les pairs y accèdent via cet appareil.",
@@ -474,10 +481,13 @@
       "excludesHelp": "Accepter les autres, sauf celles-ci. Exclure une plage refuse aussi les préfixes plus spécifiques qu'elle contient.",
       "add": "Ajouter",
       "invalidCidr": "Ce n'est pas un CIDR — par ex. 192.168.1.0/24",
+      "routeTooBroad": "Les réseaux plus larges qu'un /24 ne peuvent pas être publiés — publiez les sous-réseaux /24 dont vous avez besoin, par ex. {{suggest}}.",
       "dupCidr": "Déjà dans la liste",
       "emptyList": "Rien pour l'instant",
       "remove": "Retirer",
-      "unsaved": "Modifications non enregistrées dans cet onglet"
+      "unsaved": "Modifications non enregistrées dans cet onglet",
+      "aliasUnsupported": "Cette machine ne peut pas installer les règles de substitution",
+      "aliasUnsupportedHelp": "Elles nécessitent iptables avec la cible xt_NETMAP. Les sous-réseaux sont publiés sous leurs adresses réelles, donc les pairs dont le réseau entre en conflit ne peuvent pas les atteindre."
     },
     "ago": "il y a {{d}}",
     "colAllowed": "IP autorisées",

@@ -59,6 +59,11 @@ func MeshnetID(v int64) predicate.MeshSetting {
 	return predicate.MeshSetting(sql.FieldEQ(FieldMeshnetID, v))
 }
 
+// AliasAddrBudget applies equality check predicate on the "alias_addr_budget" field. It's identical to AliasAddrBudgetEQ.
+func AliasAddrBudget(v int) predicate.MeshSetting {
+	return predicate.MeshSetting(sql.FieldEQ(FieldAliasAddrBudget, v))
+}
+
 // RequireDeviceApproval applies equality check predicate on the "require_device_approval" field. It's identical to RequireDeviceApprovalEQ.
 func RequireDeviceApproval(v bool) predicate.MeshSetting {
 	return predicate.MeshSetting(sql.FieldEQ(FieldRequireDeviceApproval, v))
@@ -107,6 +112,46 @@ func MeshnetIDLT(v int64) predicate.MeshSetting {
 // MeshnetIDLTE applies the LTE predicate on the "meshnet_id" field.
 func MeshnetIDLTE(v int64) predicate.MeshSetting {
 	return predicate.MeshSetting(sql.FieldLTE(FieldMeshnetID, v))
+}
+
+// AliasAddrBudgetEQ applies the EQ predicate on the "alias_addr_budget" field.
+func AliasAddrBudgetEQ(v int) predicate.MeshSetting {
+	return predicate.MeshSetting(sql.FieldEQ(FieldAliasAddrBudget, v))
+}
+
+// AliasAddrBudgetNEQ applies the NEQ predicate on the "alias_addr_budget" field.
+func AliasAddrBudgetNEQ(v int) predicate.MeshSetting {
+	return predicate.MeshSetting(sql.FieldNEQ(FieldAliasAddrBudget, v))
+}
+
+// AliasAddrBudgetIn applies the In predicate on the "alias_addr_budget" field.
+func AliasAddrBudgetIn(vs ...int) predicate.MeshSetting {
+	return predicate.MeshSetting(sql.FieldIn(FieldAliasAddrBudget, vs...))
+}
+
+// AliasAddrBudgetNotIn applies the NotIn predicate on the "alias_addr_budget" field.
+func AliasAddrBudgetNotIn(vs ...int) predicate.MeshSetting {
+	return predicate.MeshSetting(sql.FieldNotIn(FieldAliasAddrBudget, vs...))
+}
+
+// AliasAddrBudgetGT applies the GT predicate on the "alias_addr_budget" field.
+func AliasAddrBudgetGT(v int) predicate.MeshSetting {
+	return predicate.MeshSetting(sql.FieldGT(FieldAliasAddrBudget, v))
+}
+
+// AliasAddrBudgetGTE applies the GTE predicate on the "alias_addr_budget" field.
+func AliasAddrBudgetGTE(v int) predicate.MeshSetting {
+	return predicate.MeshSetting(sql.FieldGTE(FieldAliasAddrBudget, v))
+}
+
+// AliasAddrBudgetLT applies the LT predicate on the "alias_addr_budget" field.
+func AliasAddrBudgetLT(v int) predicate.MeshSetting {
+	return predicate.MeshSetting(sql.FieldLT(FieldAliasAddrBudget, v))
+}
+
+// AliasAddrBudgetLTE applies the LTE predicate on the "alias_addr_budget" field.
+func AliasAddrBudgetLTE(v int) predicate.MeshSetting {
+	return predicate.MeshSetting(sql.FieldLTE(FieldAliasAddrBudget, v))
 }
 
 // RequireDeviceApprovalEQ applies the EQ predicate on the "require_device_approval" field.

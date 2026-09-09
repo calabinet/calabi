@@ -1,10 +1,22 @@
 package mesh
 
 import (
+	"errors"
 	"log/slog"
 
 	"github.com/calabi/calabi/apps/client/internal/mesh/magicdns"
 )
+
+// ErrMagicDNSUnsupported means the OS integration (assign the resolver IP +
+// rewrite the system resolver config) isn't wired on this platform — today,
+// anything but Linux. Mesh itself is unaffected; only OS-level name resolution
+// is missing.
+//
+// It is declared here rather than in the !linux shim so callers can tell this
+// apart from a genuine failure on EVERY platform: "not implemented here" and
+// "it broke" deserve different volumes in the log, and a caller that cannot
+// distinguish them ends up warning about the expected case on every start.
+var ErrMagicDNSUnsupported = errors.New("mesh: MagicDNS OS integration not supported on this platform")
 
 const (
 	// magicDNSIP is where the resolver listens (Tailscale-style; kept off the tun

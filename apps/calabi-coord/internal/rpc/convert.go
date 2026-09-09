@@ -40,6 +40,19 @@ func toProtoNetMap(nm *core.NetMap) *meshpb.NetMap {
 			Name: s.Name, Proto: s.Proto, Port: uint32(s.Port), Note: s.Note, Target: s.Target,
 		})
 	}
+	// The node's OWN alias mapping, sent only to itself. Peers see the alias in
+	// this node's allowed_ips and nothing else; the node needs both halves to
+	// install the 1:1 rewrite between them.
+	for _, ra := range nm.Self.RouteAliases {
+		out.SubnetAliases = append(out.SubnetAliases, &meshpb.SubnetAlias{
+			Alias: ra.Alias.String(), Real: ra.Real.String(),
+		})
+	}
+	for _, r := range nm.UnaliasedRoutes {
+		out.UnaliasedRoutes = append(out.UnaliasedRoutes, r.String())
+	}
+	out.AliasBudgetAddrs = uint32(nm.AliasBudgetAddrs)
+	out.AliasUsedAddrs = uint32(nm.AliasUsedAddrs)
 	return out
 }
 
@@ -59,7 +72,13 @@ func toProtoPeer(n *core.Node) *meshpb.Peer {
 	}
 	// Only APPROVED routes are routed to this node: an unapproved claim must not
 	// pull anyone's traffic here (MESH.7 + admin approval).
-	for _, r := range n.ApprovedRoutes {
+	//
+	// PublishedRoutes, not ApprovedRoutes: a route with a subnet alias rides under
+	// the ALIAS and never its real CIDR. Peers must not learn the real one — it is
+	// the address that collides with their own LAN, which is the entire reason the
+	// alias exists. It also has to be this list specifically, because allowed_ips
+	// is cryptokey routing: whatever is not here cannot be sent OR received.
+	for _, r := range core.PublishedRoutes(n) {
 		p.AllowedIps = append(p.AllowedIps, r.String())
 	}
 	for _, ep := range n.Endpoints {

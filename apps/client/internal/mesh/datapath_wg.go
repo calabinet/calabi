@@ -20,9 +20,42 @@ import (
 	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
 )
 
-// wgMTU is a conservative tunnel MTU that leaves room for the WireGuard + relay
-// framing overhead over most paths.
-const wgMTU = 1280
+// DefaultMTU is a conservative tunnel MTU that leaves room for the WireGuard +
+// relay framing overhead over most paths. 1280 inner bytes become ~1340 on the
+// wire (WireGuard header + tag + UDP + IPv4), which clears PPPoE and most
+// tunnels.
+//
+// It is a DEFAULT rather than a constant because "most paths" is not "this
+// path": a link whose real MTU sits below that black-holes every full-size
+// packet while small ones sail through — pings fine, transfers dead — and the
+// only way to confirm that diagnosis is to try a lower value. Until this was
+// overridable, testing the hypothesis meant recompiling the client.
+const DefaultMTU = 1280
+
+// MTU bounds.
+//
+// The floor is NOT 1280. It was, briefly, and that was a mistake worth naming:
+// 1280 is also DefaultMTU, so the override could only ever raise the MTU —
+// while the entire reason it exists is to LOWER it and see whether a path stops
+// black-holing full-size packets. An escape hatch that cannot do the one thing
+// it was built for is worse than none, because it looks like it works.
+//
+// 1280 is IPv6's minimum link MTU, and it does not apply here: this overlay is
+// IPv4-only (100.64.0.0/10, the alias pool, and the router's NETMAP rules all
+// are), so nothing on the tun needs an IPv6-legal MTU. 576 is IPv4's guaranteed
+// reassembly size — small enough to clear anything, large enough that the
+// validation still catches a typo. The ceiling is plain Ethernet: above it the
+// outer UDP datagram fragments and the point of a conservative inner MTU is lost.
+const (
+	MinMTU = 576
+	MaxMTU = 1500
+)
+
+// ValidMTU reports whether n is a usable tun MTU. Callers differ in what they do
+// with a no: a value typed on the command line should fail loudly, a value found
+// in a config file must not take the whole mesh session down with it (one bad
+// field killing every other route is a worse outcome than one ignored field).
+func ValidMTU(n int) bool { return n >= MinMTU && n <= MaxMTU }
 
 // tunName is the requested mesh interface name; it is platform-specific because
 // macOS only accepts "utun"/"utunN" (see tunname_*.go). The OS may still adjust
@@ -38,7 +71,7 @@ const meshOverlayCIDR = "100.64.0.0/10"
 var errLinkConfigManual = errors.New("mesh: automatic tun link configuration is not supported on this platform")
 
 // WGDatapath is the REAL Datapath: a wireguard-go device on a tun interface whose
-// transport is meshBind — the calabi-derp relay, upgraded to a direct UDP path
+// transport is meshBind — the relay, upgraded to a direct UDP path
 // per peer wherever hole punching finds one. It requires a tun device and
 // elevated privileges (wintun.dll on Windows), so it can only run on a real
 // machine — NOT in CI.
@@ -51,6 +84,10 @@ type WGDatapath struct {
 	self   meshproto.NodeKey
 	ifname string
 	tun    tun.Device
+	// ftun is the same device wrapped in the inbound access-rule filter — the
+	// thing actually handed to WireGuard. Held separately only so Snapshot can
+	// read its drop counter; everything else goes through dev.
+	ftun   *filteredTUN
 	dev    *device.Device
 	bind   *meshBind
 	relays *relayPool
@@ -65,6 +102,14 @@ type WGDatapath struct {
 	// Guarded by statMu (written on SetConfig's goroutine, read by Snapshot).
 	statMu     sync.Mutex
 	curOverlay netip.Addr
+	// curAliases is the stand-in mapping the coordinator published for THIS
+	// node's subnet routes, reported by Snapshot. Same guard, same reason.
+	// curUnaliased / aliasBudget / aliasUsed are the other half of that report:
+	// what could NOT be aliased, and the org's budget picture that explains it.
+	curAliases   []SubnetAlias
+	curUnaliased []SubnetAlias
+	aliasBudget  int
+	aliasUsed    int
 
 	// lastPeerConf is the canonical UAPI peer string last written to the device.
 	// SetConfig compares against it and skips the write — and its replace_peers
@@ -79,6 +124,13 @@ type WGDatapath struct {
 	// (diffSubnetRoutes) so a CIDR a peer STOPPED advertising loses its route
 	// instead of blackholing traffic to it. SetConfig goroutine only.
 	curSubnets []netip.Prefix
+
+	// curDroppedFP fingerprints the local-wins drops last logged. The netmap is
+	// re-pushed several times a minute (grant refresh, endpoint reports), and
+	// none of those pushes change this — logging per apply turned one standing
+	// fact into an endless WARN stream, which is how a log stops being read.
+	// SetConfig goroutine only.
+	curDroppedFP string
 
 	// Exit-node (MESH.7b) state, all touched only on SetConfig's goroutine.
 	// bypassHosts are the control-plane endpoints (coord + relay, host:port) that
@@ -99,6 +151,21 @@ func (d *WGDatapath) SetExitBypassHosts(hosts []string) {
 	d.bypassHosts = hosts
 }
 
+func (d *WGDatapath) setAliasReport(cfg WGConfig) {
+	d.statMu.Lock()
+	d.curAliases = append([]SubnetAlias(nil), cfg.SubnetAliases...)
+	d.curUnaliased = append([]SubnetAlias(nil), cfg.UnaliasedRoutes...)
+	d.aliasBudget, d.aliasUsed = cfg.AliasBudgetAddrs, cfg.AliasUsedAddrs
+	d.statMu.Unlock()
+}
+
+func (d *WGDatapath) aliasReport() (aliases, unaliased []SubnetAlias, budget, used int) {
+	d.statMu.Lock()
+	defer d.statMu.Unlock()
+	return append([]SubnetAlias(nil), d.curAliases...),
+		append([]SubnetAlias(nil), d.curUnaliased...), d.aliasBudget, d.aliasUsed
+}
+
 func (d *WGDatapath) setOverlay(a netip.Addr) {
 	d.statMu.Lock()
 	d.curOverlay = a
@@ -116,6 +183,7 @@ func (d *WGDatapath) overlay() netip.Addr {
 // goroutine.
 func (d *WGDatapath) Snapshot() Status {
 	st := Status{Relay: d.relays.Home()}
+	st.SubnetAliases, st.UnaliasedRoutes, st.AliasBudgetAddrs, st.AliasUsedAddrs = d.aliasReport()
 	if o := d.overlay(); o.IsValid() {
 		st.Overlay = o.String()
 	}
@@ -123,6 +191,14 @@ func (d *WGDatapath) Snapshot() Status {
 		st.Peers = parseUAPI(dump)
 		d.annotatePaths(st.Peers)
 		sortPeersByOverlay(st.Peers)
+	}
+	// Per-peer rx/tx above is WireGuard's own accounting of what it encrypted and
+	// decrypted. The datapath counters are the layer BELOW that — what reached
+	// the socket, what our queue discarded, what the filter refused — which is
+	// where the difference between "the network lost it" and "we lost it" lives.
+	d.bind.stats(&st.Datapath)
+	if d.ftun != nil {
+		d.ftun.stats(&st.Datapath)
 	}
 	return st
 }
@@ -207,8 +283,9 @@ func (d *WGDatapath) detachDirect() {
 }
 
 // NewWGDatapath brings up the tun + WireGuard device + relay transport. relayAddr
-// is the calabi-derp endpoint (host:port) this node uses as its DERP home.
-func NewWGDatapath(priv PrivateKey, relayAddr string, logger *slog.Logger) (*WGDatapath, error) {
+// is the relay endpoint (host:port) this node uses as its DERP home. mtu is the
+// tun MTU; 0 means DefaultMTU.
+func NewWGDatapath(priv PrivateKey, relayAddr string, mtu int, logger *slog.Logger) (*WGDatapath, error) {
 	self := priv.Public()
 
 	// On Windows, stage + pre-load the bundled wintun.dll so CreateTUN finds the
@@ -217,7 +294,10 @@ func NewWGDatapath(priv PrivateKey, relayAddr string, logger *slog.Logger) (*WGD
 	if err := ensureWintun(logger); err != nil {
 		return nil, err
 	}
-	tunDev, err := tun.CreateTUN(tunName, wgMTU)
+	if mtu <= 0 {
+		mtu = DefaultMTU
+	}
+	tunDev, err := tun.CreateTUN(tunName, mtu)
 	if err != nil {
 		return nil, fmt.Errorf("mesh: create tun (needs privileges / wintun): %w", err)
 	}
@@ -250,7 +330,8 @@ func NewWGDatapath(priv PrivateKey, relayAddr string, logger *slog.Logger) (*WGD
 	// reach the OS. Until a netmap arrives the filter is disabled (= pass-through),
 	// so this changes nothing for a coordinator that doesn't compile filters.
 	filter := &PacketFilter{}
-	dev := device.NewDevice(newFilteredTUN(tunDev, filter, logger), bind, device.NewLogger(wgLogLevel(), "calabi-mesh: "))
+	ftun := newFilteredTUN(tunDev, filter, logger)
+	dev := device.NewDevice(ftun, bind, device.NewLogger(wgLogLevel(), "calabi-mesh: "))
 	if err := dev.IpcSet(fmt.Sprintf("private_key=%s\nlisten_port=0\n", priv.Hex())); err != nil {
 		dev.Close()
 		_ = relays.Close()
@@ -276,7 +357,7 @@ func NewWGDatapath(priv PrivateKey, relayAddr string, logger *slog.Logger) (*WGD
 		go serveUAPI(ln, dev, logger)
 	}
 
-	return &WGDatapath{priv: priv, self: self, ifname: ifname, tun: tunDev, dev: dev, bind: bind, relays: relays, filter: filter, uapi: uapiLn, logger: logger}, nil
+	return &WGDatapath{priv: priv, self: self, ifname: ifname, tun: tunDev, ftun: ftun, dev: dev, bind: bind, relays: relays, filter: filter, uapi: uapiLn, logger: logger}, nil
 }
 
 // wgLogLevel maps CALABI_MESH_WG_LOG to a wireguard-go device log level.
@@ -319,6 +400,11 @@ func (d *WGDatapath) SetConfig(cfg WGConfig) error {
 	// first direct packet from a newly-added peer is already attributable and the
 	// first relayed one already takes that peer's own relay.
 	d.bind.setPeers(cfg)
+	// Reported state only: the datapath routes nothing on these (the rewrite is
+	// the kernel's, installed by the controller). It carries them because
+	// Snapshot is what the console reads, and an alias nobody can see is an
+	// address nobody can dial.
+	d.setAliasReport(cfg)
 	// Access rules for INBOUND traffic. Applied before the peers go live so a
 	// packet can't slip in during the window between the two.
 	if d.filter.SetRules(cfg.FilterEnabled, cfg.Filter) {
@@ -401,18 +487,31 @@ func (d *WGDatapath) SetConfig(cfg WGConfig) error {
 	// outside the overlay range; add an OS route for each at the tun so
 	// overlay-external destinations flow into WireGuard. Default routes are
 	// handled separately (exit node, below) — never as a plain tun route. An
-	// advertised subnet IDENTICAL to a local directly-connected network is dropped
-	// (local wins) so it can't hijack the machine's own LAN; more-specific/broader
-	// overlaps are kept — longest-prefix match resolves them safely.
+	// advertisement covered by a local directly-connected network — the whole
+	// subnet, or one host inside it — is dropped (local wins) so it can't route
+	// wire-adjacent traffic through WireGuard; a BROADER overlap is kept, since
+	// longest-prefix match means it never wins for local addresses.
 	overlayPfx := netip.MustParsePrefix(meshOverlayCIDR)
 	locals, err := localDirectSubnets(d.ifname)
 	if err != nil {
 		d.logger.Warn("mesh: enumerate local subnets failed; advertised routes not filtered against local networks", "err", err)
 	}
 	extra, dropped := selectSubnetRoutes(cfg.Peers, overlayPfx, locals)
-	for _, dr := range dropped {
-		d.logger.Warn("mesh: advertised subnet is identical to a local network; not routing into mesh (local wins — reach the remote copy via address translation)",
-			"advertised", dr.Advertised, "local", dr.Local, "peer", dr.Peer.String())
+	// On CHANGE only. What is dropped is a standing property of this machine's
+	// wiring, not an event: it holds for as long as the peer advertises the
+	// prefix and this box sits on that LAN. Saying so once per netmap buries
+	// everything else in the log.
+	if fp := droppedFingerprint(dropped); fp != d.curDroppedFP {
+		for _, dr := range dropped {
+			d.logger.Warn("mesh: this machine is already on that network; not routing the advertised prefix into the mesh (local wins — it is reachable on the wire)",
+				"advertised", dr.Advertised, "local", dr.Local, "peer", dr.Peer.String())
+		}
+		// The transition back is worth exactly one line: without it, a log that
+		// went quiet is indistinguishable from a daemon that stopped checking.
+		if len(dropped) == 0 && d.curDroppedFP != "" {
+			d.logger.Info("mesh: no advertised prefix is being dropped for a local network any more")
+		}
+		d.curDroppedFP = fp
 	}
 	// Diff against what we installed last time instead of re-adding the whole
 	// selection: new prefixes get a route, VANISHED ones get theirs removed. The

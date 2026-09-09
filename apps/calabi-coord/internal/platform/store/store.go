@@ -57,6 +57,14 @@ func (s *Store) Upsert(ctx context.Context, n *core.Node) (*core.Node, error) {
 	if err != nil {
 		return nil, err
 	}
+	aliasReq, err := marshalStrings(prefixesToStrings(n.AliasedRoutes))
+	if err != nil {
+		return nil, err
+	}
+	aliases, err := marshalRouteAliases(n.RouteAliases)
+	if err != nil {
+		return nil, err
+	}
 
 	if n.ID == 0 {
 		row, err := s.client.MeshNode.Create().
@@ -71,6 +79,8 @@ func (s *Store) Upsert(ctx context.Context, n *core.Node) (*core.Node, error) {
 			SetEndpointsJSON(eps).
 			SetAdvertisedRoutesJSON(routes).
 			SetApprovedRoutesJSON(approved).
+			SetAliasedRoutesJSON(aliasReq).
+			SetRouteAliasesJSON(aliases).
 			SetRoutesReviewed(n.RoutesReviewed).
 			SetOwnerUserID(n.OwnerUserID).
 			SetDeviceFingerprint(n.DeviceFingerprint).
@@ -98,6 +108,8 @@ func (s *Store) Upsert(ctx context.Context, n *core.Node) (*core.Node, error) {
 		SetEndpointsJSON(eps).
 		SetAdvertisedRoutesJSON(routes).
 		SetApprovedRoutesJSON(approved).
+		SetAliasedRoutesJSON(aliasReq).
+		SetRouteAliasesJSON(aliases).
 		SetRoutesReviewed(n.RoutesReviewed).
 		SetOwnerUserID(n.OwnerUserID).
 		// The node re-reports this on every enrolment, and core.Register decides
@@ -209,6 +221,28 @@ func (s *Store) AllOverlays(ctx context.Context) ([]netip.Addr, error) {
 		}
 		if a, err := netip.ParseAddr(r.Overlay); err == nil {
 			out = append(out, a)
+		}
+	}
+	return out, nil
+}
+
+// AllRouteAliases returns every stand-in prefix currently allocated, so the
+// in-memory alias allocator can be warmed past them after a restart — the same
+// hazard AllOverlays exists for, one level up: re-handing a live alias would
+// point some consumer's route at a different site's LAN.
+func (s *Store) AllRouteAliases(ctx context.Context) ([]netip.Prefix, error) {
+	rows, err := s.client.MeshNode.Query().Select(meshnode.FieldRouteAliasesJSON).All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []netip.Prefix
+	for _, r := range rows {
+		as, err := parseRouteAliases(r.RouteAliasesJSON)
+		if err != nil {
+			continue // a node whose blob won't parse holds no alias we can honour
+		}
+		for _, a := range as {
+			out = append(out, a.Alias)
 		}
 	}
 	return out, nil
@@ -450,7 +484,10 @@ func (s *Store) GetSettings(ctx context.Context, t core.MeshnetID) (core.Meshnet
 	if err != nil {
 		return core.MeshnetSettings{}, err
 	}
-	return core.MeshnetSettings{RequireDeviceApproval: row.RequireDeviceApproval}, nil
+	return core.MeshnetSettings{
+		RequireDeviceApproval: row.RequireDeviceApproval,
+		AliasAddrBudget:       row.AliasAddrBudget,
+	}, nil
 }
 
 // SetSettings upserts a meshnet's switches (one row per meshnet).
@@ -460,6 +497,7 @@ func (s *Store) SetSettings(ctx context.Context, t core.MeshnetID, in core.Meshn
 		return s.client.MeshSetting.Create().
 			SetMeshnetID(int64(t)).
 			SetRequireDeviceApproval(in.RequireDeviceApproval).
+			SetAliasAddrBudget(in.AliasAddrBudget).
 			Exec(ctx)
 	}
 	if err != nil {
@@ -467,6 +505,7 @@ func (s *Store) SetSettings(ctx context.Context, t core.MeshnetID, in core.Meshn
 	}
 	return s.client.MeshSetting.UpdateOneID(existing.ID).
 		SetRequireDeviceApproval(in.RequireDeviceApproval).
+		SetAliasAddrBudget(in.AliasAddrBudget).
 		Exec(ctx)
 }
 
@@ -481,6 +520,20 @@ func (s *Store) UpdateApprovedRoutes(ctx context.Context, id int64, routes []net
 		SetApprovedRoutesJSON(blob).
 		SetRoutesReviewed(true).
 		Exec(ctx)
+	if ent.IsNotFound(err) {
+		return core.ErrNodeNotFound
+	}
+	return err
+}
+
+// UpdateRouteAliases records the stand-in prefixes allocated for this node's
+// aliased routes. Called after an approval change reconciles them.
+func (s *Store) UpdateRouteAliases(ctx context.Context, id int64, aliases []core.RouteAlias) error {
+	blob, err := marshalRouteAliases(aliases)
+	if err != nil {
+		return err
+	}
+	err = s.client.MeshNode.UpdateOneID(int(id)).SetRouteAliasesJSON(blob).Exec(ctx)
 	if ent.IsNotFound(err) {
 		return core.ErrNodeNotFound
 	}
@@ -540,6 +593,12 @@ func toNode(m *ent.MeshNode) (*core.Node, error) {
 	}
 	if n.AdvertisedRoutes, err = parsePrefixes(m.AdvertisedRoutesJSON); err != nil {
 		return nil, fmt.Errorf("coord store: advertised_routes: %w", err)
+	}
+	if n.AliasedRoutes, err = parsePrefixes(m.AliasedRoutesJSON); err != nil {
+		return nil, err
+	}
+	if n.RouteAliases, err = parseRouteAliases(m.RouteAliasesJSON); err != nil {
+		return nil, err
 	}
 	if n.ApprovedRoutes, err = parsePrefixes(m.ApprovedRoutesJSON); err != nil {
 		return nil, fmt.Errorf("coord store: approved_routes: %w", err)
@@ -634,4 +693,51 @@ func unmarshalStrings(blob string) ([]string, error) {
 		return nil, err
 	}
 	return ss, nil
+}
+
+// routeAliasRow is the stored shape of a core.RouteAlias: netip.Prefix has no
+// stable JSON form we want to depend on across versions, so both halves ride as
+// text and are re-parsed, exactly like every other prefix in this table.
+type routeAliasRow struct {
+	Real  string `json:"real"`
+	Alias string `json:"alias"`
+}
+
+func marshalRouteAliases(as []core.RouteAlias) (string, error) {
+	rows := make([]routeAliasRow, 0, len(as))
+	for _, a := range as {
+		rows = append(rows, routeAliasRow{Real: a.Real.String(), Alias: a.Alias.String()})
+	}
+	b, err := json.Marshal(rows)
+	if err != nil {
+		return "", fmt.Errorf("coord store: marshal route aliases: %w", err)
+	}
+	return string(b), nil
+}
+
+// parseRouteAliases drops entries it cannot parse rather than failing the whole
+// node load: a row written by a future version, or corrupted, must not make the
+// node unreadable — losing an alias republishes that route under its real CIDR,
+// which is a visible degradation, while losing the node is an outage.
+func parseRouteAliases(blob string) ([]core.RouteAlias, error) {
+	if blob == "" {
+		return nil, nil
+	}
+	var rows []routeAliasRow
+	if err := json.Unmarshal([]byte(blob), &rows); err != nil {
+		return nil, fmt.Errorf("coord store: parse route aliases: %w", err)
+	}
+	out := make([]core.RouteAlias, 0, len(rows))
+	for _, r := range rows {
+		real, err := netip.ParsePrefix(r.Real)
+		if err != nil {
+			continue
+		}
+		alias, err := netip.ParsePrefix(r.Alias)
+		if err != nil {
+			continue
+		}
+		out = append(out, core.RouteAlias{Real: real.Masked(), Alias: alias.Masked()})
+	}
+	return out, nil
 }

@@ -30,6 +30,13 @@ type relayed struct {
 	pkt []byte
 }
 
+// TxDropped/TxBlocked: a recorder never drops and never blocks. Present so the
+// fake satisfies relaySender.
+func (f *fakeRelay) TxDropped() uint64        { return 0 }
+func (f *fakeRelay) TxBlocked() time.Duration { return 0 }
+func (f *fakeRelay) TxSockBuf() int           { return 0 }
+func (f *fakeRelay) TxRate() float64          { return 0 }
+
 func (f *fakeRelay) Send(via string, dst meshproto.NodeKey, ciphertext []byte) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

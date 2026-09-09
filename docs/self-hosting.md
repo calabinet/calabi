@@ -336,7 +336,7 @@ Three pieces:
 
 | | | |
 |---|---|---|
-| `calabi-coord` | the coordinator | node registry, address allocation, ACLs, MagicDNS, the relay directory |
+| `calabi-coord` | the coordinator | node registry, address allocation, ACLs, the relay directory |
 | `calabi-edge` with `role: relay` | the relay | forwards **already-encrypted** packets between node keys, and answers STUN so nodes can find their own public endpoint |
 | `calabi mesh up` | a node | generates its own WireGuard key, enrolls, brings up a tun device |
 
@@ -469,13 +469,6 @@ Advertising works on every platform. The forwarding half — turning on IP
 forwarding and NAT so packets actually cross — **is automated on Linux only**;
 elsewhere the node advertises and you configure the OS yourself. Taking the
 default route as an exit-node *client* works on Linux, Windows and macOS.
-
-### What isn't automated off Linux yet
-
-MagicDNS's OS integration (assigning the resolver and rewriting the system
-resolver config) is Linux-only. The mesh works everywhere — node **addresses**
-are fine on every platform — but node **names** only resolve through the OS on
-Linux.
 
 ---
 

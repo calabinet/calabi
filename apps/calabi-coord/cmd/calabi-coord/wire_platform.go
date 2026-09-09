@@ -44,6 +44,32 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 			logger.Info("ipam warmed from persisted nodes", "count", len(used))
 		}
 	}
+	// Subnet aliases (overlapping-LAN case) draw from the OTHER half of the
+	// overlay, and carry the same restart hazard as node addresses: re-handing a
+	// live alias would point a consumer's existing route at a different site's
+	// LAN. Warm it the same way.
+	aliasIPAM := core.NewMemAliasIPAM()
+	if av, ok := nodes.(interface {
+		AllRouteAliases(context.Context) ([]netip.Prefix, error)
+	}); ok {
+		used, err := av.AllRouteAliases(context.Background())
+		if err != nil {
+			return nil, nil, fmt.Errorf("warm alias ipam: %w", err)
+		}
+		aliasIPAM.Warm(used)
+		// Log the LEVEL, not just the count. The pool is a /11 shared by every
+		// meshnet on the platform and nothing else reports on it: a leak here
+		// shows up as "some org's routes stopped getting aliases", months later
+		// and three layers from the cause. One line per start is the cheapest
+		// thing that would have caught it.
+		free := aliasIPAM.FreeAddrs()
+		total := uint64(1) << uint(32-11) // overlayAliasPool is a /11
+		logger.Info("subnet-alias ipam warmed from persisted nodes",
+			"aliases_held", len(used),
+			"pool_free_addrs", free, "pool_total_addrs", total,
+			"pool_used_pct", float64(total-free)*100/float64(total),
+			"free_24_blocks", free/256)
+	}
 	derpMap, derpHome, err := loadDERPMap(logger)
 	if err != nil {
 		return nil, nil, err
@@ -71,7 +97,8 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 		}
 	}
 	coord := &core.Coordinator{
-		Nodes: nodes,
+		AliasIPAM: aliasIPAM,
+		Nodes:     nodes,
 		// Per-org ACL (MESH.8e-2): the meshnet's stored doc governs its netmap;
 		// a meshnet with no doc falls back to the global default (allow-all, or
 		// CALABI_COORD_POLICY_FILE if set — preserving the MESH.5 file behavior).

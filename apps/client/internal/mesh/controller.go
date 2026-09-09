@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/calabi/calabi/apps/client/internal/wake"
 )
 
 // directTransport is implemented by datapaths that can carry WireGuard over the
@@ -230,6 +232,10 @@ func (c *Controller) Run(ctx context.Context) error {
 	// Session-local: the refused set last logged. Owned by the callback below,
 	// which Watch invokes sequentially, so it needs no lock.
 	lastRefused := ""
+	// Session-local too: the alias rewrite rules currently installed, and a
+	// fingerprint of the set they came from. Same ownership, same reason.
+	dropAliases, aliasFP := func() {}, ""
+	defer func() { dropAliases() }()
 	return c.Coord.Watch(ctx, reg.NodeID, func(nm NetMap) {
 		c.setOverlay(nm.Self.Overlay)
 		c.setSelfServices(nm.SelfServices)
@@ -254,6 +260,30 @@ func (c *Controller) Run(ctx context.Context) error {
 		}
 		if err := c.Datapath.SetConfig(cfg); err != nil {
 			c.Logger.Warn("mesh: datapath SetConfig failed", "err", err)
+		}
+		// Subnet aliases (this node's own, assigned by the coordinator): install the
+		// 1:1 rewrite so traffic arriving for the stand-in prefix reaches the real
+		// LAN. Only when the SET changes — the coordinator re-pushes an unchanged
+		// netmap every 15 minutes, and re-running iptables on each would churn the
+		// NAT table for nothing.
+		//
+		// The fingerprint advances even when installing FAILED, so a host missing
+		// the NETMAP target logs once per set rather than every quarter hour. The
+		// retry is a session restart, which any reconnect already does.
+		if fp := aliasFingerprint(nm.SubnetAliases); fp != aliasFP {
+			dropAliases()
+			dropAliases, aliasFP = func() {}, fp
+			if len(nm.SubnetAliases) > 0 {
+				if cleanup, err := EnableSubnetAliases(nm.SubnetAliases); err != nil {
+					c.Logger.Warn("mesh: subnet aliases not installed; peers routing to the alias will not reach the LAN behind this node",
+						"aliases", len(nm.SubnetAliases), "err", err)
+				} else {
+					dropAliases = cleanup
+					for _, a := range nm.SubnetAliases {
+						c.Logger.Info("mesh subnet alias active", "alias", a.Alias.String(), "real", a.Real.String())
+					}
+				}
+			}
 		}
 		if c.DNS != nil {
 			c.DNS.SetRecords(dnsRecords(nm))
@@ -516,57 +546,16 @@ func appendUniqueAddrPort(eps []netip.AddrPort, ap netip.AddrPort) []netip.AddrP
 	return append(eps, ap)
 }
 
-const (
-	// wakeCheckInterval is how often the wake detector looks for a gap in time.
-	// Short, because the entire point is to react before the user does.
-	wakeCheckInterval = 5 * time.Second
-	// wakeGap is how much longer than one interval a tick has to be before the
-	// machine counts as having been asleep rather than merely busy.
-	wakeGap = 30 * time.Second
-)
-
 // wakeLoop watches for the machine having been suspended, and rebuilds what a
-// suspend invalidates.
-//
-// Why a clock heuristic and not an OS power event: the symptom is the same on
-// every platform (a laptop lid, Windows standby, a paused VM, a frozen
-// container) and so is the recovery, so one portable detector is worth more than
-// three platform-specific ones. BOTH clocks are read because neither is reliable
-// on its own — whether a monotonic source keeps running across a suspend depends
-// on the platform and the sleep state, and the wall clock is the one an NTP step
-// can move.
-//
-// A false positive costs one relay re-dial and one endpoint report. That is the
-// right way round: missing a real wake costs the user a meshnet that looks up
-// and carries nothing.
+// suspend invalidates. The detection is shared with the edge session
+// internal/wake); what a resume costs, and how it is repaired, differs per
+// datapath and lives in onWake.
 func (c *Controller) wakeLoop(ctx context.Context, nodeID int64, ms *magicSock, prober *discoProber) {
-	t := time.NewTicker(wakeCheckInterval)
-	defer t.Stop()
-	mono, wall := time.Now(), time.Now().Round(0)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-		monoGap, wallGap := time.Since(mono), time.Now().Round(0).Sub(wall)
-		if wokeUp(monoGap, wallGap) {
-			c.Logger.Info("mesh: machine resumed from sleep; re-establishing the session",
-				"gap", max(monoGap, wallGap).Round(time.Second).String())
-			c.onWake(ctx, nodeID, ms, prober)
-		}
-		// Re-read AFTER the recovery, never before: onWake can take seconds, and
-		// measuring the next gap from before it would report that work as a sleep.
-		mono, wall = time.Now(), time.Now().Round(0)
-	}
-}
-
-// wokeUp reads the two clock gaps between consecutive checks and says whether
-// the machine was asleep. Either clock alone is enough: on some platforms and
-// sleep states the monotonic source stops, on others it keeps running and only
-// the wall clock shows the jump.
-func wokeUp(monoGap, wallGap time.Duration) bool {
-	return max(monoGap, wallGap) >= wakeCheckInterval+wakeGap
+	wake.Loop(ctx, func(gap time.Duration) {
+		c.Logger.Info("mesh: machine resumed from sleep; re-establishing the session",
+			"gap", gap.Round(time.Second).String())
+		c.onWake(ctx, nodeID, ms, prober)
+	})
 }
 
 // onWake redoes the three things a suspend invalidated, in the order that gets

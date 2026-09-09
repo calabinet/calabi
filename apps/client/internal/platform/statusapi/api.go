@@ -74,7 +74,7 @@ type Config struct {
 	HealthMonitor *probe.Monitor
 	Inspector     InspectorSource
 
-	// Mesh is the platform daemon's Connect (WireGuard mesh) status source,
+	// Mesh is the platform daemon's WireGuard mesh status source,
 	// backing GET /v1/mesh + POST /v1/mesh/down on the :7400 console. Wired by
 	// main to the mesh enrollment controller (daemon_mesh_platform.go). Nil = no
 	// mesh subsystem → the endpoints 404 (the SPA renders "unavailable on this
@@ -316,7 +316,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	// data-plane routing (own vs platform edge), not identity.
 	mux.HandleFunc("POST /v1/edge-affinity", s.requireLocalToken(s.handleEdgeAffinitySwitch))
 
-	// Connect (WireGuard mesh) — the node's live status for the SPA's Connect
+	// The WireGuard mesh — the node's live status for the SPA's mesh
 	// page. Read open (loopback bind). `down` is a guarded LOCAL pause (until
 	// daemon restart); it is NOT agent-blocked because mesh participation is
 	// data-plane, not identity — same posture as edge-region/affinity. The
@@ -324,6 +324,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/mesh", s.handleMesh)
 	mux.HandleFunc("POST /v1/mesh/down", s.requireLocalToken(s.handleMeshDown))
 	mux.HandleFunc("POST /v1/mesh/up", s.requireLocalToken(s.handleMeshUp))
+	mux.HandleFunc("POST /v1/mesh/relaytest", s.requireLocalToken(s.handleMeshRelayProbe))
 	// Subnet-router / exit-node role. Read open; the write is local-token gated
 	// but NOT agent-blocked (data-plane routing config, like edge-region).
 	mux.HandleFunc("GET /v1/mesh/advertise", s.handleMeshAdvertiseGet)

@@ -1,6 +1,7 @@
 package statusapi
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -17,9 +18,16 @@ type fakeMeshSource struct {
 	upCall   int
 	adv      MeshAdvertise
 	services []MeshServiceDecl
+	probe    MeshRelayProbe
+	probeErr error
 }
 
-func (f *fakeMeshSource) MeshStatus() MeshStatus   { return f.st }
+func (f *fakeMeshSource) MeshStatus() MeshStatus { return f.st }
+
+// A recorder has no relay link. Present so the fake satisfies MeshStatusSource.
+func (f *fakeMeshSource) ProbeRelayLeg(context.Context, string, int, float64, int, bool) (MeshRelayProbe, error) {
+	return f.probe, f.probeErr
+}
 func (f *fakeMeshSource) MeshDown() error          { f.downCall++; return nil }
 func (f *fakeMeshSource) MeshUp() error            { f.upCall++; return nil }
 func (f *fakeMeshSource) Advertise() MeshAdvertise { return f.adv }
@@ -163,6 +171,9 @@ func TestMeshAdvertiseSet(t *testing.T) {
 	}
 	src := &fakeMeshSource{}
 	h := meshServer(t, src)
+	// Pinned: this test is about validation and persistence, and it must give the
+	// same answer on the Windows dev box as on the Linux CI.
+	pinForwarding(t, true)
 
 	// No token → 401.
 	req := httptest.NewRequest("POST", "/v1/mesh/advertise", strings.NewReader(`{"routes":["10.0.0.0/8"]}`))
@@ -311,5 +322,109 @@ func TestSetMeshServicesDoesNotAdoptForeignRows(t *testing.T) {
 	}
 	if len(src.services) != 1 || src.services[0].Name != "mine" {
 		t.Fatalf("stored %+v, want only the locally-added one", src.services)
+	}
+}
+
+// A node that cannot forward must not take on a role that promises forwarding:
+// peers would install a route pointing at it and their packets would die in the
+// tun. But it must always be able to RETRACT one, or the escape hatch
+// (--advertise-routes on a hand-configured box) locks its owner out of the page.
+func TestNewAdvertisementRefused(t *testing.T) {
+	adv := func(routes []string, exit bool) MeshAdvertise {
+		return MeshAdvertise{Routes: routes, ExitNode: exit}
+	}
+	lan := []string{"192.168.1.0/24"}
+
+	cases := []struct {
+		name       string
+		canForward bool
+		cur, want  MeshAdvertise
+		refuse     bool
+	}{
+		{"linux may advertise anything", true, adv(nil, false), adv(lan, true), false},
+
+		{"turning routes on is refused", false, adv(nil, false), adv(lan, false), true},
+		{"turning exit node on is refused", false, adv(nil, false), adv(nil, true), true},
+		{"adding a route to an existing set is refused", false,
+			adv(lan, false), adv([]string{"192.168.1.0/24", "10.0.0.0/8"}, false), true},
+
+		{"keeping an existing role is allowed", false, adv(lan, true), adv(lan, true), false},
+		{"retracting routes is allowed", false, adv(lan, false), adv(nil, false), false},
+		{"retracting the exit node is allowed", false, adv(nil, true), adv(nil, false), false},
+		{"retracting one of two is allowed", false,
+			adv([]string{"192.168.1.0/24", "10.0.0.0/8"}, false), adv(lan, false), false},
+		{"an unmasked restatement is not a new route", false,
+			adv(lan, false), adv([]string{"192.168.1.7/24"}, false), false},
+		{"changing nothing at all is allowed", false, adv(nil, false), adv(nil, false), false},
+		// Using an exit node is the consumer side — pure routing-table work, which
+		// the daemon does automate on Windows and macOS. Never gated.
+		{"using an exit peer is allowed", false, adv(nil, false),
+			MeshAdvertise{ExitPeer: "100.64.0.2"}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			why, no := newAdvertisementRefused(c.canForward, c.cur, c.want)
+			if no != c.refuse {
+				t.Fatalf("refused=%v (%q), want %v", no, why, c.refuse)
+			}
+			if no && why == "" {
+				t.Fatal("refused with no reason to show the operator")
+			}
+		})
+	}
+}
+
+// pinForwarding fixes the "can this build forward?" answer for one test, so the
+// handler's behaviour does not depend on which machine runs it.
+func pinForwarding(t *testing.T, ok bool) {
+	t.Helper()
+	prev := subnetRouterSupported
+	subnetRouterSupported = func() bool { return ok }
+	t.Cleanup(func() { subnetRouterSupported = prev })
+}
+
+// The gate is the API's rule, not just a greyed-out switch: a node that cannot
+// forward refuses to take the role on, and nothing reaches SetAdvertise or creds.
+func TestMeshAdvertiseSetRefusesAForwardingRoleItCannotHonour(t *testing.T) {
+	t.Setenv("CALABI_CONFIG", filepath.Join(t.TempDir(), "creds.json"))
+	tok, err := creds.MintLocalToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := &fakeMeshSource{}
+	h := meshServer(t, src)
+	pinForwarding(t, false)
+
+	post := func(body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", "/v1/mesh/advertise", strings.NewReader(body))
+		req.Header.Set("X-Local-Token", tok)
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		return rr
+	}
+
+	for _, body := range []string{
+		`{"routes":["192.168.1.0/24"]}`,
+		`{"advertise_exit_node":true}`,
+	} {
+		rr := post(body)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("%s: %d, want 400 (body %s)", body, rr.Code, rr.Body.String())
+		}
+		if len(src.adv.Routes) != 0 || src.adv.ExitNode {
+			t.Fatalf("%s: role must not be taken on, got %+v", body, src.adv)
+		}
+		if c, _ := creds.Load(); c != nil && (len(c.MeshAdvertiseRoutes) != 0 || c.MeshAdvertiseExitNode) {
+			t.Fatalf("%s: must not persist, got %+v", body, c)
+		}
+	}
+
+	// Using an exit node is the CONSUMER side — routing-table work the daemon
+	// does automate here — so it must still go through.
+	if rr := post(`{"exit_node":"100.64.0.2"}`); rr.Code != http.StatusOK {
+		t.Fatalf("using an exit peer: %d, want 200 (body %s)", rr.Code, rr.Body.String())
+	}
+	if src.adv.ExitPeer != "100.64.0.2" {
+		t.Fatalf("exit peer not applied: %+v", src.adv)
 	}
 }

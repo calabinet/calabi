@@ -148,13 +148,30 @@ func runDaemonService(args []string) int {
 			return 1
 		}
 		extraEnv = e
-		// Pin the local console port for THIS service. The port is otherwise
-		// decided at runtime (the daemon scans from :7400 for a free one), which
-		// is nondeterministic across restarts and invisible unless you read the
-		// log. --status-port bakes a fixed CALABI_STATUS_ADDR into the service
-		// env so each service client owns a known port; the runtime still shifts
-		// to the next free port if that one is busy.
-		if pr := strings.TrimSpace(extractFlagValue(args[1:], "status-port")); pr != "" {
+		// Pin the local console address for THIS service. It is otherwise decided
+		// at runtime (the daemon scans from :7400 for a free port), which is
+		// nondeterministic across restarts and invisible unless you read the log.
+		// Either flag bakes a fixed CALABI_STATUS_ADDR into the service env so
+		// each service client owns a known address; the runtime still shifts to
+		// the next free port if that one is busy.
+		//
+		// --status-addr is the full address and matches the flag on `calabi
+		// daemon`. --status-port is the older port-only form, kept working; if
+		// both are given the more specific one wins.
+		if sa := strings.TrimSpace(extractFlagValue(args[1:], "status-addr")); sa != "" {
+			warning, serr := applyStatusAddr(sa)
+			if serr != nil {
+				fmt.Fprintln(os.Stderr, "calabi daemon install:", serr)
+				return 1
+			}
+			if warning != "" {
+				fmt.Fprintln(os.Stderr, "calabi daemon install: warning:", warning)
+			}
+			if extraEnv == nil {
+				extraEnv = map[string]string{}
+			}
+			extraEnv["CALABI_STATUS_ADDR"] = sa
+		} else if pr := strings.TrimSpace(extractFlagValue(args[1:], "status-port")); pr != "" {
 			if _, err := strconv.Atoi(pr); err != nil {
 				fmt.Fprintf(os.Stderr, "calabi daemon install: --status-port must be a number, got %q\n", pr)
 				return 1
@@ -213,6 +230,10 @@ func runDaemonService(args []string) int {
 		fmt.Printf("  installed (service %q). start with:  %s\n", name, startCmd)
 		fmt.Printf("  console: %s  (shifts to the next free port if busy — see the service log for the actual one)\n",
 			installStatusURL(args[1:]))
+		// Last, so it is the thing still on screen: the unit is written and looks
+		// fine, but on an SELinux host it may point at a binary the service domain
+		// cannot execute. No-op on every other OS.
+		warnIfServiceCannotExec()
 		return 0
 	case "uninstall":
 		// Try to stop first — uninstall on a running service fails on
@@ -330,6 +351,12 @@ func resolveServiceName(args []string) string {
 // else the :7400 default. (The actual bound port is resolved at runtime and may
 // shift on a conflict; the daemon logs the real one.)
 func installStatusURL(installArgs []string) string {
+	if a := strings.TrimSpace(extractFlagValue(installArgs, "status-addr")); a != "" {
+		if strings.EqualFold(a, "disabled") || strings.EqualFold(a, "off") {
+			return ""
+		}
+		return "http://" + a
+	}
 	if p := strings.TrimSpace(extractFlagValue(installArgs, "status-port")); p != "" {
 		return "http://127.0.0.1:" + p
 	}
@@ -433,6 +460,22 @@ func serviceConfig(installArgs []string, extraEnv map[string]string) *service.Co
 			}
 		}
 	}
+	// HOME, on the platforms whose service managers do not provide one.
+	//
+	// systemd starts a unit with a nearly empty environment and no HOME; launchd
+	// is no better. The client resolves its credentials through
+	// XDG_CONFIG_HOME/HOME (creds.configDir), so without this the installed
+	// service cannot read the file `calabi login` just wrote — it fails with
+	// "$HOME is not defined", enrols without its device fingerprint, and the
+	// console cannot link the node to its client record.
+	//
+	// Only the Windows SCM path pins the data dir next to the exe
+	// (runDaemonBody), and only a --system install carries the machine-wide
+	// marker; a plain `daemon install` on Linux has neither, which is exactly the
+	// case that broke. Baking the INSTALLING user's HOME keeps the service
+	// reading the same credentials that user logged in with — the continuity a
+	// relocation would break for every existing install.
+	applyServiceHome(env, runtime.GOOS, userHomeDir())
 	name := resolveServiceName(installArgs)
 	// Bake the name into the service env so the in-service Run path (which calls
 	// buildService(nil,nil)) resolves the same name and the control dispatcher
@@ -832,4 +875,25 @@ func containsAny(s string, subs ...string) bool {
 		}
 	}
 	return false
+}
+
+// applyServiceHome gives the installed service a HOME on the platforms whose
+// service manager does not provide one. Pure (goos and home are passed in) so it
+// is tested on the machine we develop on, not only on the one it matters for.
+//
+// An existing HOME in env is left alone: it came from the install shell through
+// the passthrough and is a deliberate choice.
+func applyServiceHome(env map[string]string, goos, home string) {
+	if goos == "windows" || home == "" || env["HOME"] != "" {
+		return
+	}
+	env["HOME"] = home
+}
+
+func userHomeDir() string {
+	h, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return h
 }

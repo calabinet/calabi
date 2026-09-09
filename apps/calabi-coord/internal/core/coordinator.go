@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/netip"
 
 	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
@@ -22,7 +23,12 @@ type Coordinator struct {
 	Nodes  NodeStore
 	Policy PolicyStore
 	IPAM   IPAM
-	DERP   DERPMapSource
+	// AliasIPAM hands out stand-in prefixes for subnet routes that would collide
+	// with consumers' own LANs. Nil = this deployment does not offer aliasing:
+	// requests are simply not granted and routes publish under their real CIDRs,
+	// exactly as before the feature existed.
+	AliasIPAM AliasIPAM
+	DERP      DERPMapSource
 	// Quota caps how many nodes a meshnet may enroll (MESH.8). Nil = unlimited
 	// (dev/tests). Checked only when admitting a genuinely NEW node.
 	Quota NodeQuota
@@ -97,6 +103,10 @@ type RegisterInput struct {
 	// AdvertisedRoutes are subnet-router CIDRs the node offers to forward (MESH.7).
 	// A claim; approval is the admin's (see Node.ApprovedRoutes).
 	AdvertisedRoutes []netip.Prefix
+	// AliasedRoutes are the advertised CIDRs the node asks to publish under a
+	// unique stand-in prefix, because it expects them to collide with consumers'
+	// own LANs. A request, like the claim above; see Node.AliasedRoutes.
+	AliasedRoutes []netip.Prefix
 	// Auth (auth_key verification, meshnet + tag resolution) happens in the RPC
 	// layer BEFORE calling Register — the core trusts the resolved Identity.
 }
@@ -108,6 +118,20 @@ type RegisterInput struct {
 func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, error) {
 	if in.NodeKey.IsZero() {
 		return nil, fmt.Errorf("core: register: node_key is zero")
+	}
+	// One gate, ahead of BOTH the re-enrollment and the fresh-node path below: a
+	// route too wide to ever be aliased never enters the node's state, so nothing
+	// downstream (approval, publication, alias reconciliation, ACL selectors) has
+	// to remember to filter it. Applied to AliasedRoutes too — it is a subset of
+	// the advertisement, and leaving a request behind for a route that no longer
+	// exists would show the console a request that can never be granted.
+	// See routelimits.go for why the width limit exists.
+	keptRoutes, refusedRoutes := splitAdvertised(in.AdvertisedRoutes)
+	in.AdvertisedRoutes = keptRoutes
+	in.AliasedRoutes, _ = splitAdvertised(in.AliasedRoutes)
+	if len(refusedRoutes) > 0 && c.Logger != nil {
+		c.Logger.Warn("refusing subnet routes: wider than the publishable maximum",
+			"meshnet", in.Meshnet, "refused", refusedRoutes, "max_prefix_bits", advertiseMinBitsV4)
 	}
 	// Re-enrollment: reuse the existing node (same id + overlay), just refresh the
 	// mutable fields. No new IPAM allocation.
@@ -153,6 +177,11 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 			// feature doesn't silently cut subnet routers that work today.
 			existing.ApprovedRoutes = in.AdvertisedRoutes
 		}
+		// A daemon restart with an edited config is how an alias request changes,
+		// so reconcile on the re-enrollment path too — and AFTER the approval
+		// lines above, because an alias needs both halves.
+		existing.AliasedRoutes = in.AliasedRoutes
+		c.applyAliases(ctx, existing)
 		if existing.DERPHome == "" { // backfill a home for nodes enrolled before MESH.4
 			existing.DERPHome = c.DefaultDERPHome
 		}
@@ -230,11 +259,13 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 		OwnerUserID:       in.OwnerUserID,
 		AdvertisedRoutes:  in.AdvertisedRoutes,
 		ApprovedRoutes:    in.AdvertisedRoutes, // not yet reviewed; see RoutesReviewed
+		AliasedRoutes:     in.AliasedRoutes,
 		Overlay:           addr,
 		DeviceFingerprint: in.DeviceFingerprint,
 		Approved:          approved,
 		DERPHome:          c.DefaultDERPHome, // deployment home region until the node reports its own
 	}
+	c.applyAliases(ctx, n)
 	stored, err := c.Nodes.Upsert(ctx, n)
 	if err != nil {
 		// Best-effort: return the address to the pool so a store failure doesn't
@@ -319,6 +350,14 @@ func (c *Coordinator) NetMapFor(ctx context.Context, nodeID int64) (*NetMap, err
 		DERP:         derp,
 		PacketFilter: c.packetFilterFor(self, peers, doc),
 		RelayGrant:   c.relayGrantFor(ctx, self),
+	}
+	// Alias accounting for Self. `all` is already in hand, so totalling the
+	// meshnet costs nothing here — unlike in Register, where it would mean an
+	// extra scan on every reconnect.
+	nm.UnaliasedRoutes = unaliasedRoutes(self)
+	nm.AliasBudgetAddrs = c.aliasBudgetOf(ctx, self.Meshnet)
+	for _, n := range all {
+		nm.AliasUsedAddrs += AliasSpend(n.RouteAliases)
 	}
 	for _, p := range peers {
 		nm.Peers = append(nm.Peers, *p)
@@ -560,6 +599,14 @@ func (c *Coordinator) DeleteNode(ctx context.Context, t MeshnetID, nodeID int64)
 			c.Logger.Warn("node deleted but releasing its overlay failed", "node_id", nodeID, "overlay", node.Overlay, "err", err)
 		}
 	}
+	if c.AliasIPAM != nil {
+		for _, ra := range node.RouteAliases {
+			if err := c.AliasIPAM.Release(ctx, ra.Alias); err != nil && c.Logger != nil {
+				c.Logger.Warn("node deleted but releasing its subnet alias failed",
+					"node_id", nodeID, "alias", ra.Alias, "real", ra.Real, "err", err)
+			}
+		}
+	}
 	if c.Logger != nil {
 		c.Logger.Info("node deleted", "node_id", nodeID, "meshnet", t, "name", node.Name, "overlay", node.Overlay)
 	}
@@ -607,6 +654,14 @@ func (c *Coordinator) ApproveRoutes(ctx context.Context, t MeshnetID, nodeID int
 	}
 	node.ApprovedRoutes = approved
 	node.RoutesReviewed = true
+	// Withdrawing approval must also take the alias back: it is an address other
+	// nodes hold routes for, and leaving it allocated to a route nobody may use
+	// leaks the block until the next restart re-warms the pool.
+	if c.applyAliases(ctx, node) {
+		if err := c.Nodes.UpdateRouteAliases(ctx, nodeID, node.RouteAliases); err != nil {
+			return nil, fmt.Errorf("core: persist route aliases: %w", err)
+		}
+	}
 	if c.Logger != nil {
 		c.Logger.Info("node routes reviewed", "node_id", nodeID, "meshnet", t, "approved", len(approved), "advertised", len(node.AdvertisedRoutes))
 	}
@@ -782,4 +837,106 @@ func (c *Coordinator) UpdateDeclarations(ctx context.Context, in UpdateDeclarati
 			"node_id", stored.ID, "meshnet", stored.Meshnet, "services", len(in.DeclaredServices))
 	}
 	return stored, nil
+}
+
+// applyAliases brings node.RouteAliases in line with what the node asks for and
+// an admin approved, releasing whatever falls out. Reports whether the set
+// changed, so a caller that must persist it separately can skip a no-op write.
+//
+// Failures are logged, never returned: a subnet too large to alias, or an
+// exhausted pool, must not keep a node off the mesh. That route simply publishes
+// under its real CIDR — which is where it was before this feature existed.
+func (c *Coordinator) applyAliases(ctx context.Context, node *Node) bool {
+	keep, release, err := reconcileAliases(ctx, c.AliasIPAM, node.Meshnet, node, c.aliasBudgetFor(ctx, node))
+	if err != nil && c.Logger != nil {
+		c.Logger.Warn("could not alias every requested subnet; those routes publish under their real CIDR",
+			"node_id", node.ID, "meshnet", node.Meshnet, "err", err)
+	}
+	for _, alias := range release {
+		if c.AliasIPAM == nil {
+			break
+		}
+		if rerr := c.AliasIPAM.Release(ctx, alias); rerr != nil && c.Logger != nil {
+			c.Logger.Warn("releasing a subnet alias failed", "node_id", node.ID, "alias", alias, "err", rerr)
+		}
+	}
+	changed := len(release) > 0 || !sameAliases(node.RouteAliases, keep)
+	node.RouteAliases = keep
+	return changed
+}
+
+func sameAliases(a, b []RouteAlias) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// aliasBudgetFor is how much alias pool space THIS node may occupy: the
+// meshnet's budget less what its OTHER nodes already hold.
+//
+// Skips both reads when the node needs nothing new. A daemon re-registering with
+// unchanged routes is the overwhelmingly common call, and it must not cost a
+// settings read plus a scan of every node in the meshnet.
+func (c *Coordinator) aliasBudgetFor(ctx context.Context, node *Node) int {
+	if c.AliasIPAM == nil || !needsNewAlias(node) {
+		return math.MaxInt // nothing will be allocated; the budget cannot bind
+	}
+	budget := c.aliasBudgetOf(ctx, node.Meshnet)
+	// What the meshnet's OTHER nodes hold. A store that cannot list is not a
+	// reason to refuse service, but it IS a reason not to hand out more: fall
+	// back to the node's current spend, which grants nothing new.
+	peers, err := c.Nodes.ListMeshnet(ctx, node.Meshnet)
+	if err != nil {
+		if c.Logger != nil {
+			c.Logger.Warn("cannot total the meshnet's alias usage; granting no new aliases this round",
+				"meshnet", node.Meshnet, "err", err)
+		}
+		return AliasSpend(node.RouteAliases)
+	}
+	others := 0
+	for _, p := range peers {
+		if p == nil || p.ID == node.ID {
+			continue
+		}
+		others += AliasSpend(p.RouteAliases)
+	}
+	if remaining := budget - others; remaining > 0 {
+		return remaining
+	}
+	return 0
+}
+
+// needsNewAlias reports whether any route this node wants aliased does not
+// already have one.
+func needsNewAlias(node *Node) bool {
+	held := make(map[netip.Prefix]bool, len(node.RouteAliases))
+	for _, ra := range node.RouteAliases {
+		held[ra.Real.Masked()] = true
+	}
+	for _, real := range wantedAliases(node) {
+		if !held[real] {
+			return true
+		}
+	}
+	return false
+}
+
+// aliasBudgetOf is a meshnet's alias budget in addresses: its own setting, or
+// the built-in default when unset or unreadable. Never returns 0 by accident —
+// a settings hiccup must not look like "you may have no aliases".
+func (c *Coordinator) aliasBudgetOf(ctx context.Context, t MeshnetID) int {
+	if c.Settings == nil {
+		return DefaultAliasAddrBudget
+	}
+	s, err := c.Settings.GetSettings(ctx, t)
+	if err != nil || s.AliasAddrBudget <= 0 {
+		return DefaultAliasAddrBudget
+	}
+	return s.AliasAddrBudget
 }

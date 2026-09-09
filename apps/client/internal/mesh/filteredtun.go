@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"log/slog"
+	"sync/atomic"
 
 	"golang.zx2c4.com/wireguard/tun"
 )
@@ -25,6 +26,12 @@ type filteredTUN struct {
 	filter *PacketFilter
 	flows  *flowTable
 	logger *slog.Logger
+
+	// dropped counts refusals (see dpstats.go). The Debug log below is fine for
+	// watching a filter work, but it cannot answer "how many did we refuse over
+	// the last hour" — and a legitimate refusal and a policy bug look identical
+	// from a packet capture, which only shows the hole.
+	dropped atomic.Uint64
 }
 
 func newFilteredTUN(inner tun.Device, filter *PacketFilter, logger *slog.Logger) *filteredTUN {
@@ -80,6 +87,9 @@ func (t *filteredTUN) Write(bufs [][]byte, offset int) (int, error) {
 		}
 		dropped++
 	}
+	if dropped > 0 {
+		t.dropped.Add(uint64(dropped))
+	}
 	if dropped > 0 && t.logger != nil {
 		// Debug, not warn: a filter doing its job drops packets continuously, and
 		// a warn here would be a self-inflicted log flood.
@@ -93,4 +103,10 @@ func (t *filteredTUN) Write(bufs [][]byte, offset int) (int, error) {
 		return n, err
 	}
 	return n + dropped, nil
+}
+
+// stats fills in the filter's half of DatapathStats.
+func (t *filteredTUN) stats(st *DatapathStats) {
+	st.FilterDropped = t.dropped.Load()
+	st.Flows = t.flows.len()
 }

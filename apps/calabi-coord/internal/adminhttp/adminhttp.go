@@ -146,7 +146,25 @@ type nodeView struct {
 	AdvertisedRoutes []string `json:"advertised_routes"`
 	ApprovedRoutes   []string `json:"approved_routes"`
 	RoutesReviewed   bool     `json:"routes_reviewed"`
-	LastSeen         string   `json:"last_seen"`
+	// RouteAliases is the stand-in prefix each approved route is actually
+	// PUBLISHED as. Peers reach the subnet there and not at its real address, so
+	// without this the console shows the one address that does not work — it
+	// existed only in the netmap, which is to say only on the publishing machine
+	// itself, and the person who has to type it is on a different machine.
+	RouteAliases []routeAliasView `json:"route_aliases,omitempty"`
+	// AliasAddrs is how much of the shared alias pool this node holds, in
+	// addresses. Counted HERE and not by each caller: host routes out of one /24
+	// share a block, so the honest number is per allocated BLOCK, and that rule
+	// belongs beside the allocator (core.AliasSpend) rather than reimplemented in
+	// every console that wants to total it up.
+	AliasAddrs int    `json:"alias_addrs,omitempty"`
+	LastSeen   string `json:"last_seen"`
+}
+
+// routeAliasView is one real→alias mapping.
+type routeAliasView struct {
+	Real  string `json:"real"`
+	Alias string `json:"alias"`
 }
 
 func (h *handler) listNodes(w http.ResponseWriter, r *http.Request) {
@@ -742,6 +760,10 @@ func toView(n *core.Node, online bool) nodeView {
 	if v.ApprovedRoutes == nil {
 		v.ApprovedRoutes = []string{}
 	}
+	for _, ra := range n.RouteAliases {
+		v.RouteAliases = append(v.RouteAliases, routeAliasView{Real: ra.Real.String(), Alias: ra.Alias.String()})
+	}
+	v.AliasAddrs = core.AliasSpend(n.RouteAliases)
 	v.RoutesReviewed = n.RoutesReviewed
 	if v.Services == nil {
 		v.Services = []serviceView{}

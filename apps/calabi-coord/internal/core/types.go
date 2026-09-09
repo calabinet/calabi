@@ -18,6 +18,15 @@ import (
 // meshnet.
 type MeshnetID int64
 
+// RouteAlias pairs one advertised subnet with the unique prefix that stands in
+// for it on the mesh. Same size, so host bits are positional: alias.222 IS real
+// .222, which is what lets the subnet router rewrite with a single stateless
+// NETMAP rule rather than a lookup table.
+type RouteAlias struct {
+	Real  netip.Prefix `json:"real"`
+	Alias netip.Prefix `json:"alias"`
+}
+
 // Node is a device enrolled in a meshnet.
 type Node struct {
 	ID      int64
@@ -48,6 +57,20 @@ type Node struct {
 	// are honoured), so shipping approval doesn't cut every subnet router that
 	// works today — see Coordinator.Register.
 	RoutesReviewed bool
+	// AliasedRoutes are the advertised CIDRs this node ASKS to be published under
+	// a unique stand-in prefix instead of their own addresses, because it expects
+	// them to collide with consumers' own LANs (192.168.1.0/24 is everywhere).
+	// A request, like AdvertisedRoutes: it takes approval to become RouteAliases.
+	// Off by default — the coordinator cannot see a consumer's local subnets and
+	// so cannot guess whether a collision exists, and aliasing a route that does
+	// not collide only costs everyone a change of address for nothing.
+	AliasedRoutes []netip.Prefix
+	// RouteAliases is the allocation: the stand-in prefix this coordinator gave
+	// each aliased route. Assigned when the route is both approved and requested,
+	// released when either stops being true. Consumers are told the ALIAS and
+	// never the real CIDR; the node itself is told both, so it can install the
+	// 1:1 rewrite.
+	RouteAliases []RouteAlias
 	// Services are what this node declares it offers (MESH.8e-4). Populated when
 	// a netmap / ACL evaluation is computed (see nodesWithServices) — NOT stored
 	// on the node row; the registry is its own table.
@@ -99,6 +122,25 @@ type NetMap struct {
 	// everyone between here and the relay. Empty when this coordinator issues no
 	// grants — relays must then not require them. See relaygrant.go.
 	RelayGrant []byte
+	// UnaliasedRoutes are Self's routes that asked for an alias, were approved,
+	// and did NOT get one — because the meshnet is at its budget, the subnet is
+	// too large to alias, or the platform pool is full.
+	//
+	// They are published under their real CIDR, so nothing is broken for the
+	// consumers that do not collide with them; the ones that DO collide simply
+	// cannot reach them, silently. That silence is the problem this field exists
+	// to end: the operator who asked for the alias is the only person who can act
+	// (ask an admin to raise the budget, or advertise a narrower subnet), and
+	// until now the only trace was a line in the coordinator's own log.
+	//
+	// Derived, never stored: "wanted" minus "allocated" is exactly the set.
+	UnaliasedRoutes []netip.Prefix
+	// AliasBudgetAddrs / AliasUsedAddrs are the meshnet's alias budget and what
+	// it currently holds, in addresses. Sent so the node can say WHY rather than
+	// just THAT — "your org's budget is 256 and all of it is in use" is
+	// actionable; "no alias" is not.
+	AliasBudgetAddrs int
+	AliasUsedAddrs   int
 	// MagicDNS records land here in MESH.6.
 }
 

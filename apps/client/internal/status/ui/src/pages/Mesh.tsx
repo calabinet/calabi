@@ -31,7 +31,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { useTranslation } from "react-i18next";
 
 import { api, ApiError } from "../api/client";
-import { normalizeCidr } from "../lib/cidr";
+import { parseRoute, formatRoute } from "../lib/cidr";
 import { useSearchParams } from "react-router-dom";
 
 import type {
@@ -414,12 +414,14 @@ function SettingRow({
   desc,
   checked,
   onChange,
+  disabled,
   children,
 }: {
   title: string;
   desc: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
   children?: React.ReactNode;
 }) {
   return (
@@ -431,7 +433,7 @@ function SettingRow({
             {desc}
           </Text>
         </div>
-        <Switch checked={checked} onChange={onChange} style={{ flexShrink: 0, marginTop: 2 }} />
+        <Switch checked={checked} onChange={onChange} disabled={disabled} style={{ flexShrink: 0, marginTop: 2 }} />
       </div>
       {checked && children && <div style={{ marginTop: 10 }}>{children}</div>}
     </div>
@@ -450,21 +452,31 @@ function CidrListEditor({
   value,
   onChange,
   placeholder,
+  enforceWidth = true,
 }: {
   value: string[];
   onChange: (v: string[]) => void;
   placeholder: string;
+  /** Apply the publish-side width limit. Off for the exclusion list. */
+  enforceWidth?: boolean;
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState("");
   const [err, setErr] = useState("");
 
   const add = () => {
-    const norm = normalizeCidr(draft);
-    if (!norm) {
-      setErr(t("mesh.adv.invalidCidr"));
+    const parsed = parseRoute(draft, enforceWidth);
+    if (!parsed.ok) {
+      // "too broad" gets its own message naming a /24 to use instead: the
+      // generic "invalid" would leave the reader retyping the same thing.
+      setErr(
+        parsed.reason === "tooBroad"
+          ? t("mesh.adv.routeTooBroad", { suggest: parsed.suggest })
+          : t("mesh.adv.invalidCidr"),
+      );
       return;
     }
+    const norm = parsed.cidr;
     if (value.includes(norm)) {
       setErr(t("mesh.adv.dupCidr"));
       return;
@@ -521,14 +533,14 @@ function CidrListEditor({
                 background: "rgba(255,255,255,0.04)",
               }}
             >
-              <Text style={{ fontFamily: "monospace", fontSize: 13 }}>{cidr}</Text>
+              <Text style={{ fontFamily: "monospace", fontSize: 13 }}>{formatRoute(cidr)}</Text>
               <Tooltip title={t("mesh.adv.remove")}>
                 <Button
                   type="text"
                   size="small"
                   danger
                   icon={<DeleteOutlined />}
-                  aria-label={`${t("mesh.adv.remove")} ${cidr}`}
+                  aria-label={`${t("mesh.adv.remove")} ${formatRoute(cidr)}`}
                   onClick={() => onChange(value.filter((v) => v !== cidr))}
                 />
               </Tooltip>
@@ -564,6 +576,22 @@ function MeshAdvertiseCard() {
     queryFn: api.meshAdvertise,
     retry: false,
   });
+  // The ASSIGNED mapping, as opposed to the request above: the coordinator picks
+  // the stand-in prefix, so it can only be read back from live status. Same query
+  // key the page already polls, so this costs no extra fetch.
+  const { data: live } = useQuery<MeshStatus>({
+    queryKey: ["mesh"],
+    queryFn: api.mesh,
+    retry: false,
+  });
+  const assignedAliases = live?.subnet_aliases || [];
+  // A capability of this machine, not a setting: every advertised route is
+  // aliased where the host can install the rewrite. undefined = an older daemon
+  // that does not report it, which must not render as "unsupported".
+  const aliasSupported = data?.alias_supported;
+  const refusedAliases = live?.unaliased_routes || [];
+  const aliasBudget = live?.alias_budget_addrs || 0;
+  const aliasUsed = live?.alias_used_addrs || 0;
 
   // Each switch gates its own inputs; the values persist while a switch is off
   // so toggling back doesn't lose what you typed.
@@ -590,9 +618,13 @@ function MeshAdvertiseCard() {
     advertise_exit_node: exitNodeOn,
     exit_node: useExitOn ? exitPeer.trim() : "",
     accept_routes: acceptOn,
-    // Exclusions only mean anything while accepting; sending them when the whole
-    // switch is off would quietly keep a list the UI no longer shows.
-    route_excludes: acceptOn ? excludes : [],
+    // Kept even while accepting is off. The switch is a master toggle, not a
+    // delete button: the exclusions are typed by hand, they are inert while the
+    // switch is off, and they must come back intact when it goes on again.
+    // Sending [] here meant flicking the switch off and on again silently lost
+    // every exception — which is how a 192.168.1.0/24 exclusion disappeared and
+    // put a LAN's traffic back out through the ISP.
+    route_excludes: excludes,
   };
 
   const save = useMutation({
@@ -622,9 +654,20 @@ function MeshAdvertiseCard() {
 
   // Only the "offer to the mesh" roles need OS packet forwarding (Linux-only for
   // now). Accepting routes and routing THIS node's own egress through an exit are
-  // pure routing-table work, automated on Windows/macOS too, so neither must trip
-  // the no-forwarding warning.
-  const forwardingRoleActive = routesOn || exitNodeOn;
+  // pure routing-table work, automated on Windows/macOS too, so neither is gated.
+  //
+  // Where forwarding is unavailable the two offer switches are locked OFF rather
+  // than merely warned about: advertising without forwarding is not a degraded
+  // mode, it is a blackhole — peers install a route pointing here and their
+  // packets die in the tun, having also lost whatever path used to carry them.
+  //
+  // Locked on the SERVER's state, not the form's, so a role that is already on
+  // (set by --advertise-routes, or on an older build) can still be switched OFF.
+  // Otherwise this page would show a promise it cannot let anyone withdraw. The
+  // API applies the same rule for real; see statusapi.newAdvertisementRefused.
+  const alreadyAdvertising = (data.routes || []).length > 0 || data.advertise_exit_node;
+  const routesLocked = !data.forwarding_supported && (data.routes || []).length === 0;
+  const exitNodeLocked = !data.forwarding_supported && !data.advertise_exit_node;
 
   const label = (text: string, isDirty: boolean) => (
     <span>
@@ -667,7 +710,12 @@ function MeshAdvertiseCard() {
                   {t("mesh.adv.excludes")}
                 </Text>
                 <div style={{ marginTop: 4 }}>
-                  <CidrListEditor value={excludes} onChange={setExcludes} placeholder="192.168.1.22/32" />
+                  <CidrListEditor
+                    value={excludes}
+                    onChange={setExcludes}
+                    placeholder="192.168.1.22"
+                    enforceWidth={false}
+                  />
                 </div>
                 <div style={{ marginTop: 6 }}>
                   <Text type="secondary" style={{ fontSize: 12 }}>
@@ -682,22 +730,92 @@ function MeshAdvertiseCard() {
             label: label(t("mesh.adv.offerSection"), offerDirty),
             children: (
               <Space direction="vertical" size={16} style={{ width: "100%" }}>
-                {forwardingRoleActive && !data.forwarding_supported && (
-                  <Alert type="warning" showIcon message={t("mesh.adv.noForward")} />
+                {!data.forwarding_supported && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message={t(alreadyAdvertising ? "mesh.adv.noForward" : "mesh.adv.noForwardLocked")}
+                  />
                 )}
                 <SettingRow
                   title={t("mesh.adv.routes")}
                   desc={t("mesh.adv.routesHelp")}
                   checked={routesOn}
                   onChange={setRoutesOn}
+                  disabled={routesLocked}
                 >
-                  <CidrListEditor value={routes} onChange={setRoutes} placeholder="192.168.1.0/24" />
+                  <CidrListEditor
+                    value={routes}
+                    onChange={setRoutes}
+                    placeholder="192.168.1.0/24 · 192.168.1.22"
+                  />
+                  {routesOn && routes.length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      <Text strong style={{ fontSize: 13 }}>
+                        {t("mesh.adv.alias")}
+                      </Text>
+                      <div style={{ marginTop: 2 }}>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {t("mesh.adv.aliasHelp")}
+                        </Text>
+                      </div>
+                      {aliasSupported === false ? (
+                        <Alert
+                          type="warning"
+                          showIcon
+                          style={{ marginTop: 8 }}
+                          message={t("mesh.adv.aliasUnsupported")}
+                          description={t("mesh.adv.aliasUnsupportedHelp")}
+                        />
+                      ) : assignedAliases.length > 0 ? (
+                        <div style={{ marginTop: 8 }}>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {t("mesh.adv.aliasAssigned")}
+                          </Text>
+                          <div style={{ marginTop: 4 }}>
+                            {assignedAliases.map((a) => (
+                              <div key={a.alias} style={{ fontFamily: "monospace", fontSize: 12 }}>
+                                {formatRoute(a.real)} → {formatRoute(a.alias)}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : refusedAliases.length === 0 ? (
+                        <div style={{ marginTop: 8 }}>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {t("mesh.adv.aliasPending")}
+                          </Text>
+                        </div>
+                      ) : null}
+                      {refusedAliases.length > 0 && (
+                        <Alert
+                          type="warning"
+                          showIcon
+                          style={{ marginTop: 8 }}
+                          message={t("mesh.adv.aliasRefused")}
+                          description={
+                            <div>
+                              <div style={{ fontFamily: "monospace", fontSize: 12 }}>
+                                {refusedAliases.map(formatRoute).join("  ")}
+                              </div>
+                              {aliasBudget > 0 && (
+                                <div style={{ marginTop: 6, fontSize: 12 }}>
+                                  {t("mesh.adv.aliasBudget", { used: aliasUsed, total: aliasBudget })}
+                                </div>
+                              )}
+                            </div>
+                          }
+                        />
+                      )}
+                    </div>
+                  )}
                 </SettingRow>
                 <SettingRow
                   title={t("mesh.adv.exitNode")}
                   desc={t("mesh.adv.exitNodeHelp")}
                   checked={exitNodeOn}
                   onChange={setExitNodeOn}
+                  disabled={exitNodeLocked}
                 />
               </Space>
             ),

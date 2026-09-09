@@ -1,4 +1,4 @@
-// Package mesh is the calabi client's Connect (WireGuard mesh) subsystem. It
+// Package mesh is the calabi client's WireGuard mesh subsystem. It
 // speaks ONLY pkg/mesh-proto (the intentionally-public coordination + relay
 // contract) — never pkg/api — so it links cleanly into the self-hosted client
 // (enforced by scripts/export-public.sh).
@@ -29,6 +29,16 @@ type Peer struct {
 	DERPHome   string
 }
 
+// SubnetAlias is one real subnet behind this node and the unique prefix the mesh
+// reaches it by, because the real one collides with consumers' own LANs.
+//
+// Same size, always: host bits are positional, so alias.222 IS real.222. That
+// is what makes the rewrite a single stateless rule instead of a table.
+type SubnetAlias struct {
+	Alias netip.Prefix
+	Real  netip.Prefix
+}
+
 // NetMap is the client-side view of the meshnet: self + the ACL-filtered peers
 // + the relay directory. Built from a meshpb.NetMap via FromNetMap.
 type NetMap struct {
@@ -44,6 +54,22 @@ type NetMap struct {
 	// cases are indistinguishable from the list alone, and guessing either way is
 	// an outage for the other.
 	FilterEnabled bool
+	// SubnetAliases are the stand-in prefixes the coordinator published for THIS
+	// node's aliased subnet routes, sent only to this node. Peers see the alias
+	// in this node's allowed-ips and never the real CIDR; this node needs both to
+	// install the 1:1 rewrite between them. Empty for every node that is not an
+	// aliased subnet router, which is nearly all of them.
+	SubnetAliases []SubnetAlias
+	// UnaliasedRoutes are this node's own routes that asked for a stand-in prefix
+	// and did not get one (the org is at its alias budget, the subnet is too
+	// large, or the pool is full). They publish under their real CIDR, so only
+	// consumers whose own LAN collides with them lose access — silently, which is
+	// why this is surfaced rather than left in the coordinator's log.
+	UnaliasedRoutes []netip.Prefix
+	// AliasBudgetAddrs / AliasUsedAddrs let the console say WHY: "your org's
+	// budget is 256 addresses and all of it is in use", rather than "no alias".
+	AliasBudgetAddrs int
+	AliasUsedAddrs   int
 	// RelayGrant is the coordinator's signed authorization for this node to use
 	// relays (R0'). Opaque: the node hands the bytes to a relay, which verifies
 	// them offline against the coordinator's public key. Empty from a coordinator
@@ -157,6 +183,25 @@ func FromNetMap(pb *meshpb.NetMap) (NetMap, error) {
 			Note:   ps.GetNote(),
 		})
 	}
+	for _, pa := range pb.GetSubnetAliases() {
+		alias, aerr := netip.ParsePrefix(pa.GetAlias())
+		real, rerr := netip.ParsePrefix(pa.GetReal())
+		// Both halves or neither: half a mapping would install a rewrite to
+		// nowhere, which is worse than not aliasing that subnet at all. Same
+		// sizes for the same reason the coordinator allocates them that way — a
+		// mismatched pair cannot be expressed as a 1:1 rewrite.
+		if aerr != nil || rerr != nil || alias.Bits() != real.Bits() {
+			continue
+		}
+		nm.SubnetAliases = append(nm.SubnetAliases, SubnetAlias{Alias: alias.Masked(), Real: real.Masked()})
+	}
+	for _, raw := range pb.GetUnaliasedRoutes() {
+		if p, err := netip.ParsePrefix(raw); err == nil {
+			nm.UnaliasedRoutes = append(nm.UnaliasedRoutes, p.Masked())
+		}
+	}
+	nm.AliasBudgetAddrs = int(pb.GetAliasBudgetAddrs())
+	nm.AliasUsedAddrs = int(pb.GetAliasUsedAddrs())
 	for _, pp := range pb.GetPeers() {
 		p, err := peerFromProto(pp)
 		if err != nil {

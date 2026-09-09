@@ -31,6 +31,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"sort"
 	"strings"
@@ -140,6 +141,13 @@ type Result struct {
 	// switch is deliberately disabled). Distinct from "bff-console
 	// unreachable", which falls through to DefaultAddr as before.
 	RegionUnavailable bool
+	// NoUsableEdge is true when discovery failed AND the compile-time default is
+	// not something that could be a real edge (a loopback address in a build that
+	// HAS a control-plane URL). Addr is empty: the daemon must not dial, it counts
+	// this toward the park-after-N cap like RegionUnavailable, and the Reason says
+	// what to fix. Without it the daemon dials localhost and reports a refusal
+	// from a machine that was never meant to serve anything.
+	NoUsableEdge bool
 	// PreviousEdgeNodeID echoes Input.StickyEdgeNodeID only when
 	// Switched is true, so the daemon can show "switched from edge #X
 	// to edge #Y" without re-reading creds.
@@ -267,12 +275,53 @@ func Pick(ctx context.Context, logger *slog.Logger, in Input) Result {
 		}
 	}
 
-	// Tier 4: default. We get here when no bff-console URL or all
-	// region queries failed.
+	// Tier 4: the compile-time default. We get here when there is no
+	// bff-console URL, or every region query failed.
+	//
+	// But a LOOPBACK default is the dev stack's address, and dialling it
+	// because the control plane happened to be unreachable is worse than not
+	// dialling at all: the operator is shown `connection refused to
+	// localhost:7443` for a machine that was never meant to run an edge, which
+	// reads as "a dev build shipped by mistake" and sends them looking for a bug
+	// that isn't there. Observed 2026-09-06 on a host whose DNS had stopped
+	// resolving — the real fault was three layers up and this message hid it.
+	//
+	// Only refused when a control plane WAS configured: both conditions together
+	// are what make the default unusable. A build with no bff-console URL is a
+	// dev/self-hosted one where localhost is exactly right.
+	if in.BFFConsoleURL != "" && isLoopbackAddr(in.DefaultAddr) {
+		return Result{
+			NoUsableEdge: true,
+			Reason: "edge discovery failed and the only fallback is the dev default (" +
+				in.DefaultAddr + "); not dialling it — set CALABI_SERVER to pin an edge, " +
+				"or fix reachability to " + in.BFFConsoleURL,
+		}
+	}
 	return Result{
 		Addr:   in.DefaultAddr,
 		Reason: "compile-time default (no bff-console URL or /v1/edges unreachable)",
 	}
+}
+
+// isLoopbackAddr reports whether addr ("host:port", or a bare host) names this
+// machine. Unparseable or empty counts as loopback-ish: there is nothing usable
+// to dial either way, and the caller's question is "can this be a real edge?".
+func isLoopbackAddr(addr string) bool {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return true
+	}
+	host := addr
+	if h, _, err := net.SplitHostPort(addr); err == nil {
+		host = h
+	}
+	if host == "" || strings.EqualFold(host, "localhost") {
+		return true
+	}
+	if ip, err := netip.ParseAddr(host); err == nil {
+		return ip.IsLoopback() || ip.IsUnspecified()
+	}
+	return false
 }
 
 // pickByListEdges issues GET /v1/edges?region=<r> and, on miss, retries

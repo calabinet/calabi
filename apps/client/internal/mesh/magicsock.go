@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
@@ -24,6 +25,18 @@ type magicSock struct {
 	port   uint16
 	disco  DiscoPrivateKey // authenticates the DISCO exchange (never the traffic key)
 	logger *slog.Logger
+
+	// Accounting (see dpstats.go). rx counts EVERY datagram read off this
+	// socket — WireGuard, DISCO and STUN alike — because its job is to be
+	// comparable with what the far side says it sent. bufs is what the kernel
+	// gave us for buffers; a small rx buffer drops packets before this counter
+	// ever sees them, which is exactly why it is reported next to them.
+	rxPackets atomic.Uint64
+	rxBytes   atomic.Uint64
+	txPackets atomic.Uint64
+	txBytes   atomic.Uint64
+	txErrors  atomic.Uint64
+	bufs      sockBufSizes
 
 	mu       sync.Mutex
 	closed   bool
@@ -59,6 +72,9 @@ func newMagicSock(disco DiscoPrivateKey, logger *slog.Logger) (*magicSock, error
 	}
 	m := &magicSock{conn: conn, port: uint16(la.Port), disco: disco, logger: logger,
 		stunWait: make(map[stun.TxID]chan netip.AddrPort)}
+	// Before the read loop starts: a userspace datapath lives or dies by how much
+	// the kernel will hold for it while the reader is descheduled (sockbuf.go).
+	m.bufs = tuneSocketBuffers(conn, logger)
 	go m.readLoop()
 	return m, nil
 }
@@ -75,6 +91,8 @@ func (m *magicSock) readLoop() {
 			return // socket closed
 		}
 		pkt := buf[:n]
+		m.rxPackets.Add(1)
+		m.rxBytes.Add(uint64(n))
 		from := netip.AddrPortFrom(fromUDP.Addr().Unmap(), fromUDP.Port())
 		switch {
 		case stun.IsSTUN(pkt):
@@ -167,14 +185,31 @@ func (m *magicSock) setWGHandler(h func(netip.AddrPort, []byte)) {
 	m.mu.Unlock()
 }
 
-// WriteTo sends one already-encrypted WireGuard packet straight to a peer's
-// validated direct endpoint — the payoff of hole punching: no relay hop. Errors
-// (a closed socket, an unreachable network) are the bind's signal to fall back.
+// WriteTo sends one datagram on the direct socket. WireGuard data is the payoff
+// of hole punching (no relay hop), but DISCO and STUN go through here too — the
+// counters have to match what the far side reads off its socket, and its read
+// loop cannot tell probes from data before counting them. Errors (a closed
+// socket, an unreachable network) are the bind's signal to fall back.
 func (m *magicSock) WriteTo(pkt []byte, to netip.AddrPort) error {
-	if _, err := m.conn.WriteToUDPAddrPort(pkt, to); err != nil {
+	n, err := m.conn.WriteToUDPAddrPort(pkt, to)
+	if err != nil {
+		m.txErrors.Add(1)
 		return err
 	}
+	m.txPackets.Add(1)
+	m.txBytes.Add(uint64(n))
 	return nil
+}
+
+// stats fills in this socket's half of DatapathStats.
+func (m *magicSock) stats(st *DatapathStats) {
+	st.SockRxPackets = m.rxPackets.Load()
+	st.SockRxBytes = m.rxBytes.Load()
+	st.SockTxPackets = m.txPackets.Load()
+	st.SockTxBytes = m.txBytes.Load()
+	st.SockTxErrors = m.txErrors.Load()
+	st.SockRxBufBytes = m.bufs.Read
+	st.SockTxBufBytes = m.bufs.Write
 }
 
 // sendDisco seals a DISCO message to peerDisco and writes it to `to`.
@@ -183,10 +218,7 @@ func (m *magicSock) sendDisco(to netip.AddrPort, peerDisco meshproto.DiscoKey, m
 	if err != nil {
 		return err
 	}
-	if _, err := m.conn.WriteToUDPAddrPort(pkt, to); err != nil {
-		return err
-	}
-	return nil
+	return m.WriteTo(pkt, to)
 }
 
 // SendPing sends a DISCO ping to a peer's candidate endpoint and returns the tx
@@ -246,7 +278,7 @@ func (m *magicSock) Reflexive(ctx context.Context, stunServer netip.AddrPort) (n
 	retransmit := time.NewTicker(300 * time.Millisecond)
 	defer retransmit.Stop()
 	for {
-		if _, err := m.conn.WriteToUDPAddrPort(req, stunServer); err != nil {
+		if err := m.WriteTo(req, stunServer); err != nil {
 			return netip.AddrPort{}, fmt.Errorf("mesh: send STUN to %s: %w", stunServer, err)
 		}
 		select {

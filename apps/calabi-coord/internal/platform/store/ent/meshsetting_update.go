@@ -49,6 +49,27 @@ func (_u *MeshSettingUpdate) AddMeshnetID(v int64) *MeshSettingUpdate {
 	return _u
 }
 
+// SetAliasAddrBudget sets the "alias_addr_budget" field.
+func (_u *MeshSettingUpdate) SetAliasAddrBudget(v int) *MeshSettingUpdate {
+	_u.mutation.ResetAliasAddrBudget()
+	_u.mutation.SetAliasAddrBudget(v)
+	return _u
+}
+
+// SetNillableAliasAddrBudget sets the "alias_addr_budget" field if the given value is not nil.
+func (_u *MeshSettingUpdate) SetNillableAliasAddrBudget(v *int) *MeshSettingUpdate {
+	if v != nil {
+		_u.SetAliasAddrBudget(*v)
+	}
+	return _u
+}
+
+// AddAliasAddrBudget adds value to the "alias_addr_budget" field.
+func (_u *MeshSettingUpdate) AddAliasAddrBudget(v int) *MeshSettingUpdate {
+	_u.mutation.AddAliasAddrBudget(v)
+	return _u
+}
+
 // SetRequireDeviceApproval sets the "require_device_approval" field.
 func (_u *MeshSettingUpdate) SetRequireDeviceApproval(v bool) *MeshSettingUpdate {
 	_u.mutation.SetRequireDeviceApproval(v)
@@ -125,6 +146,12 @@ func (_u *MeshSettingUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if value, ok := _u.mutation.AddedMeshnetID(); ok {
 		_spec.AddField(meshsetting.FieldMeshnetID, field.TypeInt64, value)
 	}
+	if value, ok := _u.mutation.AliasAddrBudget(); ok {
+		_spec.SetField(meshsetting.FieldAliasAddrBudget, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedAliasAddrBudget(); ok {
+		_spec.AddField(meshsetting.FieldAliasAddrBudget, field.TypeInt, value)
+	}
 	if value, ok := _u.mutation.RequireDeviceApproval(); ok {
 		_spec.SetField(meshsetting.FieldRequireDeviceApproval, field.TypeBool, value)
 	}
@@ -169,6 +196,27 @@ func (_u *MeshSettingUpdateOne) SetNillableMeshnetID(v *int64) *MeshSettingUpdat
 // AddMeshnetID adds value to the "meshnet_id" field.
 func (_u *MeshSettingUpdateOne) AddMeshnetID(v int64) *MeshSettingUpdateOne {
 	_u.mutation.AddMeshnetID(v)
+	return _u
+}
+
+// SetAliasAddrBudget sets the "alias_addr_budget" field.
+func (_u *MeshSettingUpdateOne) SetAliasAddrBudget(v int) *MeshSettingUpdateOne {
+	_u.mutation.ResetAliasAddrBudget()
+	_u.mutation.SetAliasAddrBudget(v)
+	return _u
+}
+
+// SetNillableAliasAddrBudget sets the "alias_addr_budget" field if the given value is not nil.
+func (_u *MeshSettingUpdateOne) SetNillableAliasAddrBudget(v *int) *MeshSettingUpdateOne {
+	if v != nil {
+		_u.SetAliasAddrBudget(*v)
+	}
+	return _u
+}
+
+// AddAliasAddrBudget adds value to the "alias_addr_budget" field.
+func (_u *MeshSettingUpdateOne) AddAliasAddrBudget(v int) *MeshSettingUpdateOne {
+	_u.mutation.AddAliasAddrBudget(v)
 	return _u
 }
 
@@ -277,6 +325,12 @@ func (_u *MeshSettingUpdateOne) sqlSave(ctx context.Context) (_node *MeshSetting
 	}
 	if value, ok := _u.mutation.AddedMeshnetID(); ok {
 		_spec.AddField(meshsetting.FieldMeshnetID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AliasAddrBudget(); ok {
+		_spec.SetField(meshsetting.FieldAliasAddrBudget, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedAliasAddrBudget(); ok {
+		_spec.AddField(meshsetting.FieldAliasAddrBudget, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.RequireDeviceApproval(); ok {
 		_spec.SetField(meshsetting.FieldRequireDeviceApproval, field.TypeBool, value)

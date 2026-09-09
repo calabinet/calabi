@@ -82,23 +82,51 @@ func localDirectSubnets(excludeIfname string) ([]netip.Prefix, error) {
 	return out, nil
 }
 
-// exactLocalCollision reports whether pfx is the SAME subnet as one of the local
-// networks (identical base and length) — the ONLY overlap that would hijack the
-// whole local network if routed into the mesh, and the only one that is
-// genuinely ambiguous (a routing-metric tie between two equal-length prefixes).
+// localSubnetWins reports whether pfx names address space this machine is
+// ALREADY directly attached to — equal to a local on-link subnet, or contained
+// in one. Such a route is refused: local wins.
 //
-// It deliberately does NOT flag more-specific or broader overlaps: those are
-// resolved safely by longest-prefix match. A more-specific advertised route (a
-// remote host 192.168.1.222/32 while this box is on 192.168.1.0/24) only diverts
-// that exact sub-range into the mesh and leaves the rest of the local subnet on
-// the physical link — that is a deliberate, approved host advertisement and must
-// keep working. A broader advertised route (192.168.0.0/16) never wins over the
-// local /24 for local addresses at all. pfx is masked first so an unmasked
-// advertisement (192.168.1.5/24) still matches the local 192.168.1.0/24.
-func exactLocalCollision(pfx netip.Prefix, locals []netip.Prefix) (netip.Prefix, bool) {
+// The containment half was learned the hard way. This rule used to flag only an
+// EXACT same-subnet collision, on the reasoning that a more-specific
+// advertisement (192.168.1.222/32 while this box is on 192.168.1.0/24) is
+// resolved safely by longest-prefix match — it diverts one address and leaves
+// the rest of the LAN on the wire. True about the routing table, and beside the
+// point: that argument silently assumes.222 is somewhere else. In the ordinary
+// home setup it is not. A subnet router sits on the same LAN and advertises the
+// NAS beside it, and every machine on that LAN installs a /32 that sends
+// wire-adjacent traffic into WireGuard instead. Measured 2026-09-06: the path
+// out was a NAT hairpin through the ISP, so a gigabit LAN ran at 0.3 MB/s and
+// the machine had even routed its OWN address (192.168.1.22/32) into the tun.
+//
+// What this costs, stated plainly rather than waved at. The rule cannot tell an
+// address that is LIVE on our wire (the NAS above) from one that merely falls
+// inside our subnet while nothing local answers for it — it refuses both, and
+// the second kind has real users:
+//
+//   - A remote site on the same RFC1918 /24 as ours, reached by a host route for
+//     an address we happen not to use.
+//     calls that the lightweight path that "works today" and reserves NAT aliases
+//     for whole-subnet overlap — but that plan is UNIMPLEMENTED, so this rule leaves that case with no route at all.
+//   - Links with client isolation (guest Wi-Fi, some APs), where two hosts share
+//     a subnet and genuinely cannot reach each other, so the mesh route was the
+//     only path.
+//
+// Both are rarer by a wide margin than a subnet router advertising the LAN this
+// machine is already plugged into, and both fail LOUDLY here — a Warn naming the
+// local subnet that won — rather than silently at a thousandth of the speed. The
+// honest fix for them is an explicit consumer-side include list (the mirror of
+// RoutePolicy.Excludes), not a weaker default. Until that exists, this is a
+// capability the rule removes, and saying so is part of shipping it.
+//
+// pfx is masked first, so an unmasked advertisement (192.168.1.5/24) still
+// matches the local 192.168.1.0/24. A BROADER advertisement (192.168.0.0/16
+// against a local /24) is still kept: it is not covered by the local subnet, and
+// longest-prefix match means it never wins for local addresses anyway.
+func localSubnetWins(pfx netip.Prefix, locals []netip.Prefix) (netip.Prefix, bool) {
 	m := pfx.Masked()
 	for _, l := range locals {
-		if m == l {
+		// l covers m: same family, no longer than m, and holding its base address.
+		if l.Bits() <= m.Bits() && l.Contains(m.Addr()) {
 			return l, true
 		}
 	}

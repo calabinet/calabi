@@ -16,9 +16,9 @@ func TestParseHexAddrV4(t *testing.T) {
 		ip   string
 		port int
 	}{
-		{"0100007F:1F90", "127.0.0.1", 8080},   // loopback, 8080
-		{"00000000:0016", "0.0.0.0", 22},       // wildcard, ssh
-		{"0101A8C0:0050", "192.168.1.1", 80},   // a specific LAN IP
+		{"0100007F:1F90", "127.0.0.1", 8080}, // loopback, 8080
+		{"00000000:0016", "0.0.0.0", 22},     // wildcard, ssh
+		{"0101A8C0:0050", "192.168.1.1", 80}, // a specific LAN IP
 	}
 	for _, c := range cases {
 		ip, port, ok := parseHexAddr(c.cell, false)

@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.zx2c4.com/wireguard/conn"
@@ -15,7 +16,7 @@ import (
 // meshBind is the wireguard-go conn.Bind that carries WireGuard's
 // already-encrypted packets to peers over EITHER of two transports:
 //
-//   - the calabi-derp relay, keyed by peer node key (MESH.2, always available:
+//   - the relay, keyed by peer node key (MESH.2, always available:
 //     both nodes hold an outbound connection to the relay, so it works behind any
 //     NAT); or
 //   - a direct UDP path discovered by DISCO hole punching (MESH.4 B3), when the
@@ -44,6 +45,25 @@ type meshBind struct {
 	recv   chan inbound  // persistent inbound queue (relay + direct)
 	closed chan struct{} // per Open/Close cycle: recreated by Open, closed by Close
 	open   bool
+
+	// Accounting (see dpstats.go). rxDropped counts the one place this datapath
+	// discards traffic of its own accord, and txDirect/txRelay answer "is this
+	// stream really all on one transport?" — a question a rate cannot answer and
+	// a packet capture only hints at.
+	rxDirect  atomic.Uint64
+	rxRelay   atomic.Uint64
+	rxDropped atomic.Uint64
+	// Totals from sockets that have already been retired
+	// retireSockStatsLocked). stats() adds the LIVE socket's counts on top.
+	sockRxPackets atomic.Uint64
+	sockRxBytes   atomic.Uint64
+	sockTxPackets atomic.Uint64
+	sockTxBytes   atomic.Uint64
+	sockTxErrors  atomic.Uint64
+	txDirect      atomic.Uint64
+	txRelay       atomic.Uint64
+	txDirectErr   atomic.Uint64
+	txRelayErr    atomic.Uint64
 
 	// Direct-path state (MESH.4 B3-3), guarded by dmu. All of it is optional: a
 	// bind with no direct transport attached behaves exactly like the relay-only
@@ -83,6 +103,23 @@ type meshBind struct {
 // (the peer's home relay); "" means this node's own home relay.
 type relaySender interface {
 	Send(relayAddr string, dst meshproto.NodeKey, ciphertext []byte) error
+	// TxDropped is how many frames the relay links discarded rather than send
+	// late. Part of the interface because a drop WE chose has to be reportable
+	// wherever the transport is — an invisible one is what the whole datapath
+	// accounting exists to prevent.
+	TxDropped() uint64
+	// TxBlocked is how long those links' writers spent inside conn.Write. It is
+	// the one measurement that separates "the link will not take more" from "the
+	// writer had nothing to send", which look identical from every other counter
+	// and point at opposite investigations.
+	TxBlocked() time.Duration
+	// TxSockBuf and TxRate are the adaptive send-buffer controller's state: the
+	// size currently asked of the kernel, and the rate it was derived from. On
+	// the interface because the buffer behind the relay socket is a queue this
+	// node CHOSE the depth of — 21 seconds of it, before the controller existed —
+	// and a depth we chose is exactly as reportable as a drop we chose.
+	TxSockBuf() int
+	TxRate() float64
 }
 
 // pathFinder is the DISCO prober's view the bind consumes: which direct endpoint
@@ -125,6 +162,7 @@ func (b *meshBind) attach(c relaySender) { b.client = c }
 // here (rather than at socket creation) keeps the wiring in one place.
 func (b *meshBind) attachDirect(ms *magicSock, paths pathFinder) {
 	b.dmu.Lock()
+	b.retireSockStatsLocked()
 	b.direct = ms
 	b.paths = paths
 	b.srcOf = make(map[netip.AddrPort]meshproto.DiscoKey) // a new socket ⇒ new source mappings
@@ -138,10 +176,36 @@ func (b *meshBind) attachDirect(ms *magicSock, paths pathFinder) {
 // control-plane loop is restarting). Sends fall back to the relay immediately.
 func (b *meshBind) detachDirect() {
 	b.dmu.Lock()
+	b.retireSockStatsLocked()
 	b.direct = nil
 	b.paths = nil
 	b.srcOf = nil
 	b.dmu.Unlock()
+}
+
+// retireSockStatsLocked folds the outgoing socket's totals into the bind's
+// running base before the socket is dropped. Caller holds dmu.
+//
+// The socket's counters live on the magicSock, which is REBUILT on every
+// control-plane reconnect (attachDirect gets a brand-new one). The bind's
+// counters are not, so without this the two drift apart and the socket's totals
+// silently walk backwards — a live daemon was observed reporting rx_direct
+// 369,320 against sock_rx_packets 112,427, which cannot happen and makes the
+// whole accounting chain untrustworthy at exactly the moment someone is trying
+// to read it. Deltas over a short window were still right; the absolute numbers
+// were not, which is the more dangerous of the two failures because nothing
+// about them looks wrong.
+func (b *meshBind) retireSockStatsLocked() {
+	if b.direct == nil {
+		return
+	}
+	var st DatapathStats
+	b.direct.stats(&st)
+	b.sockRxPackets.Add(st.SockRxPackets)
+	b.sockRxBytes.Add(st.SockRxBytes)
+	b.sockTxPackets.Add(st.SockTxPackets)
+	b.sockTxBytes.Add(st.SockTxBytes)
+	b.sockTxErrors.Add(st.SockTxErrors)
 }
 
 // setDirectEnabled turns direct paths on/off wholesale (see directOff).
@@ -221,6 +285,7 @@ func (b *meshBind) noteDiscoSource(peer meshproto.DiscoKey, from netip.AddrPort)
 // It copies the ciphertext (the relay client may reuse its buffer) and queues it
 // for the WireGuard receive loop; drops when the queue is full.
 func (b *meshBind) deliver(src meshproto.NodeKey, ciphertext []byte) {
+	b.rxRelay.Add(1)
 	b.enqueue(&meshEndpoint{b: b, key: src}, ciphertext)
 }
 
@@ -233,6 +298,7 @@ func (b *meshBind) deliver(src meshproto.NodeKey, ciphertext []byte) {
 // WireGuard authenticates before it roams a peer, so an unattributable packet
 // that isn't genuine is simply dropped a layer up.
 func (b *meshBind) deliverDirect(from netip.AddrPort, pkt []byte) {
+	b.rxDirect.Add(1)
 	ep := &meshEndpoint{b: b, direct: from}
 	b.dmu.Lock()
 	if dk, ok := b.srcOf[from]; ok {
@@ -246,6 +312,12 @@ func (b *meshBind) deliverDirect(from netip.AddrPort, pkt []byte) {
 
 // enqueue copies pkt (both read loops reuse their buffers) and queues it for the
 // WireGuard receive loop; drops when the queue is full.
+//
+// The drop is COUNTED. It used to be a bare `default:` justified by "WireGuard
+// retransmits" — which is not true of transport data (only of handshakes), so
+// every packet lost here is a hole the inner TCP has to find by timeout. An
+// uncounted drop in the one place we discard traffic ourselves makes the whole
+// datapath unfalsifiable: there was no way to answer "is this us or the network?"
 func (b *meshBind) enqueue(ep conn.Endpoint, pkt []byte) {
 	b.mu.Lock()
 	closed := b.closed
@@ -255,7 +327,7 @@ func (b *meshBind) enqueue(ep conn.Endpoint, pkt []byte) {
 	case b.recv <- inbound{ep: ep, pkt: cp}:
 	case <-closed:
 	default:
-		// queue full — drop; WireGuard retransmits.
+		b.rxDropped.Add(1)
 	}
 }
 
@@ -338,8 +410,10 @@ func (b *meshBind) Send(bufs [][]byte, ep conn.Endpoint) error {
 	if ms, ap, disco, ok := b.directTarget(me); ok {
 		err := sendAllDirect(ms, bufs, ap)
 		if err == nil {
+			b.txDirect.Add(uint64(len(bufs)))
 			return nil
 		}
+		b.txDirectErr.Add(1)
 		if !disco.IsZero() {
 			b.retirePath(disco, ap, err)
 		}
@@ -359,10 +433,48 @@ func (b *meshBind) Send(bufs [][]byte, ep conn.Endpoint) error {
 	relay := b.relayFor(me.key)
 	for _, buf := range bufs {
 		if err := b.client.Send(relay, me.key, buf); err != nil {
+			b.txRelayErr.Add(1)
 			return err
 		}
+		b.txRelay.Add(1)
 	}
 	return nil
+}
+
+// stats fills in the bind's half of DatapathStats, and the socket's if one is
+// attached. len(b.recv) is a live depth, not a high-water mark: a queue that is
+// merely deep says less than one that is dropping, which is why the drop counter
+// is the one that matters.
+func (b *meshBind) stats(st *DatapathStats) {
+	st.QueueDepth = len(b.recv)
+	st.QueueCap = cap(b.recv)
+	st.QueueDropped = b.rxDropped.Load()
+	st.RxDirect = b.rxDirect.Load()
+	st.RxRelay = b.rxRelay.Load()
+	st.TxDirect = b.txDirect.Load()
+	st.TxRelay = b.txRelay.Load()
+	st.TxDirectErrors = b.txDirectErr.Load()
+	st.TxRelayErrors = b.txRelayErr.Load()
+	if b.client != nil {
+		st.TxRelayDropped = b.client.TxDropped()
+		st.TxRelayBlockedMs = uint64(b.client.TxBlocked() / time.Millisecond)
+		st.TxRelaySockBuf = uint64(b.client.TxSockBuf())
+		if r := b.client.TxRate(); r > 0 {
+			st.TxRelayRateBps = uint64(r * 8)
+		}
+	}
+
+	b.dmu.Lock()
+	ms := b.direct
+	b.dmu.Unlock()
+	if ms != nil {
+		ms.stats(st) // fills the Sock* fields from the LIVE socket
+	}
+	st.SockRxPackets += b.sockRxPackets.Load()
+	st.SockRxBytes += b.sockRxBytes.Load()
+	st.SockTxPackets += b.sockTxPackets.Load()
+	st.SockTxBytes += b.sockTxBytes.Load()
+	st.SockTxErrors += b.sockTxErrors.Load()
 }
 
 // directTarget resolves the direct endpoint to use for one send, if any: the

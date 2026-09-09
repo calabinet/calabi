@@ -17,6 +17,9 @@ func (MeshSetting) Fields() []ent.Field {
 		field.Int64("meshnet_id").
 			Unique().
 			Comment("owning meshnet == org id"),
+		field.Int("alias_addr_budget").
+			Default(0).
+			Comment("how many ALIAS addresses this meshnet may hold; 0 = the built-in default (one /24). Raised by an admin for an org that publishes many subnets"),
 		field.Bool("require_device_approval").
 			Default(false).
 			Comment("new devices must be approved by an admin before they can reach anything"),

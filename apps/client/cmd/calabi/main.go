@@ -143,8 +143,7 @@ func loggingHub() interface{ Close() error } {
 }
 
 const (
-	defaultServer = "localhost:7443"
-	defaultToken  = "dev-token-please-change"
+	defaultToken = "dev-token-please-change"
 	// defaultInsecure is false: the client verifies the edge :7443 control
 	// cert against its embedded edge-CA root (+ optional CALABI_EDGE_CA_FILE)
 	// by default. Set CALABI_INSECURE=1 to skip verification (dev with a
@@ -153,6 +152,23 @@ const (
 	defaultInsecure   = false
 	defaultStatusAddr = "127.0.0.1:7400"
 )
+
+// defaultServer is the edge address used when CALABI_SERVER is unset. The value
+// here is the DEV stack's; a release stamps it (scripts/package-release-client.sh,
+// -X main.defaultServer) — normally to EMPTY, because a platform build discovers
+// its edge through bff-console and there is no single production edge to name.
+//
+// Empty is not a hole: the daemon's picker refuses a loopback/blank fallback once
+// a control plane is configured (edgepicker.Result.NoUsableEdge), and the
+// one-shot tunnel commands say what to set instead of dialling nothing. Shipping
+// localhost made an unrelated DNS failure look like a dev build had been released
+// by mistake.
+//
+// A VAR, and that is the whole point: it lived in the const block above for one
+// build, where -X is SILENTLY IGNORED — the linker does not warn, so the release
+// looked correct and shipped the dev address anyway. TestLdflagsTargetsAreVars
+// now fails the build instead.
+var defaultServer = "localhost:7443"
 
 // defaultBFFConsole is the compile-time default control-plane endpoint (the
 // daemon/CLI talk to bff-console for auth + edge discovery). It's a VAR, not a
@@ -238,7 +254,7 @@ func main() {
 		// platform | standalone — the client's explicit operating mode.
 		os.Exit(runMode(rest))
 	case "mesh":
-		// Connect (WireGuard mesh) subsystem — `calabi mesh up|status|down`.
+		// The WireGuard mesh subsystem — `calabi mesh up|status|down`.
 		os.Exit(runMesh(rest))
 	case "ui":
 		// Removed: `calabi ui` used to start its own (sessionless, empty)
@@ -283,7 +299,7 @@ Usage:
   calabi tcp  <local-port> [--name NAME] [--remote-port N]
   calabi udp  <local-port> [--name NAME] [--remote-port N]
   calabi mesh up --coord HOST:PORT --relay HOST:PORT --auth-key KEY
-     (join a private WireGuard mesh — device-to-device Connect; needs a tun
+     (join a private WireGuard mesh — device to device; needs a tun
       device + privileges. See "calabi mesh help".)
   calabi version
   calabi help
@@ -392,4 +408,23 @@ func withSignalContext() (context.Context, context.CancelFunc) {
 		}
 	}()
 	return ctx, cancel
+}
+
+// requireEdgeAddr returns the edge address for a one-shot tunnel command
+// (`calabi http/tcp/udp/sni`), or "" after printing what to do about it.
+//
+// These commands do NOT discover an edge — they dial CALABI_SERVER, or the
+// compile-time default. A release stamps that default empty, so without the
+// variable there is nothing to dial, and "dial : missing port" helps nobody.
+func requireEdgeAddr(cmd string) string {
+	addr := envOr("CALABI_SERVER", defaultServer)
+	if addr != "" {
+		return addr
+	}
+	fmt.Fprintf(os.Stderr, "calabi %s: no edge address.\n"+
+		"  This build has no compile-time default (platform clients discover their edge\n"+
+		"  through the control plane). Either:\n"+
+		"    - run `calabi daemon` and create the tunnel from the console at :7400, or\n"+
+		"    - set CALABI_SERVER=<edge-host>:7443 to dial one directly.\n", cmd)
+	return ""
 }

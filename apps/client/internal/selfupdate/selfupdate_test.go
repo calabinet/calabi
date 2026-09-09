@@ -26,7 +26,7 @@ func TestIsNewer(t *testing.T) {
 		{"1.7.0", "1.6.0", false},
 		{"1.6.1", "1.6.0", false},
 		{"2.0.0", "1.9.9", false},
-		{"dev", "1.7.0", false},   // dev builds never auto-update
+		{"dev", "1.7.0", false}, // dev builds never auto-update
 		{"1.6.0", "garbage", false},
 		{"1.6.0", "1.6.0-rc1", false}, // same base version
 		{"1.6.0", "1.7.0-rc1", true},  // suffix ignored

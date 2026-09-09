@@ -35,6 +35,11 @@ type RegisterParams struct {
 	Name     string
 	// AdvertiseRoutes are subnet-router CIDRs this node offers to forward (MESH.7).
 	AdvertiseRoutes []netip.Prefix
+	// AliasRoutes are the AdvertiseRoutes this node asks to be published under a
+	// unique stand-in prefix, because it expects them to collide with consumers'
+	// own LANs. Only the publisher can know that — the coordinator cannot
+	// anyone's local subnets. A request: it takes route approval to be granted.
+	AliasRoutes []netip.Prefix
 	// DeviceFingerprint is this install's Publish-side device id. Sent so the
 	// console can link this mesh device to its client record; empty when the
 	// install never registered a device. Display only — the coordinator does
@@ -81,6 +86,9 @@ func (c *CoordClient) Register(ctx context.Context, p RegisterParams) (Registrat
 	}
 	for _, r := range p.AdvertiseRoutes {
 		req.AdvertisedRoutes = append(req.AdvertisedRoutes, r.String())
+	}
+	for _, r := range p.AliasRoutes {
+		req.AliasedRoutes = append(req.AliasedRoutes, r.String())
 	}
 	for _, s := range p.Services {
 		req.DeclaredServices = append(req.DeclaredServices, &meshpb.DeclaredService{

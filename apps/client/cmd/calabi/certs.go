@@ -43,7 +43,7 @@ func runCertsUpload(args []string) int {
 	name := fs.String("name", "", "label for the cert (empty = derive from leaf CN)")
 	fullchainPath := fs.String("fullchain", "", "path to fullchain PEM (leaf + intermediates)")
 	keyPath := fs.String("key", "", "path to private key PEM")
-	if err := fs.Parse(reorderArgs(args, []string{"name", "fullchain", "key"})); err != nil {
+	if err := fs.Parse(reorderArgs(args, valueFlagsOf(fs))); err != nil {
 		return 2
 	}
 	if *fullchainPath == "" || *keyPath == "" {

@@ -76,7 +76,7 @@
     "switchBody2": "Los túneles de la región original (sus direcciones públicas están fijadas a esa región) ya no serán accesibles a través de este cliente; tendrás que volver a crearlos en la nueva región (la dirección pública cambiará). El cambio de nodo dentro de la misma región es automático y no se ve afectado.",
     "switchedTo": "Se cambió a la región \"{{region}}\"",
     "failed": "No se pudo cambiar de región",
-    "parkedNote": "Los edge nodes de la región actual son inaccesibles; la reconexión se ha detenido. Puedes cambiar de región manualmente desde la parte superior derecha."
+    "parkedNote": "Los edge nodes de la región actual son inaccesibles. El cliente sigue reintentando en segundo plano; cambiar de región desde la parte superior derecha reconecta de inmediato."
   },
   "affinity": {
     "header": "Nodo de datos",
@@ -458,7 +458,14 @@
       "egressSection": "Salida a internet de este dispositivo",
       "exitNode": "Ofrecer este dispositivo como nodo de salida",
       "exitNodeHelp": "Otros dispositivos pueden sacar su tráfico de internet a través de este equipo.",
-      "noForward": "El reenvío solo funciona en Linux. Este equipo anunciará estos ajustes, pero no reenviará tráfico de verdad hasta que se ejecute en un dispositivo Linux.",
+      "noForward": "Este dispositivo anuncia estas funciones, pero no puede reenviar: el enrutamiento de subredes y los nodos de salida solo se configuran automáticamente en Linux, por lo que el tráfico que envían los pares se descarta. Desactívalas o ejecuta el router en un dispositivo Linux.",
+      "noForwardLocked": "No disponible en este dispositivo: el enrutamiento de subredes y los nodos de salida necesitan reenvío de paquetes, que solo se configura automáticamente en Linux. Anunciarlos sin él enviaría el tráfico de los pares a un callejón sin salida.",
+      "alias": "Direcciones sustitutas",
+      "aliasHelp": "Cada subred publicada recibe automáticamente un prefijo sustituto único, manteniendo la última parte: .222 sigue siendo .222. Los pares acceden por ahí, así que un par cuya propia red use las mismas direcciones también llega. Requiere que un administrador apruebe la ruta.",
+      "aliasAssigned": "Los pares alcanzan estas subredes en:",
+      "aliasPending": "Esperando a que el coordinador asigne las direcciones.",
+      "aliasRefused": "Algunas subredes no pudieron recibir una dirección",
+      "aliasBudget": "Tu organización usa {{used}} de {{total}} direcciones de alias. Estas rutas siguen funcionando para los pares cuya propia red no choca con ellas; los que chocan no pueden alcanzarlas. Pide a un administrador que suba el límite.",
       "offerSection": "Ofrecer a la malla",
       "routes": "Anunciar rutas de subred",
       "routesHelp": "Rangos CIDR de la red local de este equipo que quieres exponer a la malla, p. ej. 192.168.1.0/24. Los pares llegan a ellos a través de este dispositivo.",
@@ -474,10 +481,13 @@
       "excludesHelp": "Acepta las demás, salvo estas. Excluir un rango también rechaza los prefijos más específicos que contiene.",
       "add": "Añadir",
       "invalidCidr": "No es un CIDR: prueba 192.168.1.0/24",
+      "routeTooBroad": "No se pueden publicar redes más amplias que /24: publica las subredes /24 que necesites, p. ej. {{suggest}}.",
       "dupCidr": "Ya está en la lista",
       "emptyList": "Aún no hay nada",
       "remove": "Quitar",
-      "unsaved": "Cambios sin guardar en esta pestaña"
+      "unsaved": "Cambios sin guardar en esta pestaña",
+      "aliasUnsupported": "Esta máquina no puede instalar las reglas de sustitución",
+      "aliasUnsupportedHelp": "Necesitan iptables con el objetivo xt_NETMAP. Las subredes se publican con sus direcciones reales, así que los pares cuya red choca con ellas no pueden alcanzarlas."
     },
     "ago": "hace {{d}}",
     "colAllowed": "IP permitidas",

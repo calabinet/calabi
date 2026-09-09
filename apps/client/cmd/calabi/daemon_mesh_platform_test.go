@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabi/calabi/apps/client/internal/localweb"
 	"github.com/calabi/calabi/apps/client/internal/mesh"
 	"github.com/calabi/calabi/apps/client/internal/platform/statusapi"
 )
@@ -26,11 +27,17 @@ type fakeLease struct {
 	updates   [][]mesh.DeclaredService
 	updateFPs []string
 	updateErr error
+	probe     localweb.MeshRelayProbe
+	probeErr  error
 }
 
 func (f *fakeLease) status() statusapi.MeshStatus            { return f.st }
 func (f *fakeLease) observations() []mesh.ServiceObservation { return f.obs }
 func (f *fakeLease) stop()                                   { f.stopped = true }
+
+func (f *fakeLease) probeRelayLeg(context.Context, string, int, float64, int, bool) (localweb.MeshRelayProbe, error) {
+	return f.probe, f.probeErr
+}
 
 func (f *fakeLease) updateDeclarations(_ context.Context, svcs []mesh.DeclaredService, fp string) error {
 	if f.updateErr != nil {

@@ -76,7 +76,7 @@
     "switchBody2": "Tunnels in the original region (their public addresses are pinned to that region) will no longer be reachable through this client; you'll need to recreate them in the new region (the public address will change). Node switching within the same region is automatic and unaffected.",
     "switchedTo": "Switched to region \"{{region}}\"",
     "failed": "Failed to switch region",
-    "parkedNote": "The edge nodes in the current region are unreachable; reconnection has stopped. You can switch region manually from the top-right."
+    "parkedNote": "The edge nodes in the current region are unreachable. The client keeps retrying in the background; switching region from the top-right reconnects immediately."
   },
   "affinity": {
     "header": "Data node",
@@ -498,7 +498,14 @@
       "useExitHelp": "This machine's default traffic goes through the named exit peer (its name or overlay IP). Leave empty for none.",
       "save": "Save",
       "saved": "Saved — the mesh session restarts to apply it.",
-      "noForward": "Forwarding only works on Linux. This machine will advertise these, but won't actually forward traffic until it runs on a Linux device.",
+      "noForward": "This device is advertising these but cannot forward - subnet routing and exit nodes are automated on Linux only, so traffic peers send here is dropped. Turn them off, or run the router on a Linux device.",
+      "noForwardLocked": "Unavailable on this device: subnet routing and exit nodes need packet forwarding, which is automated on Linux only. Advertising without it would send peers' traffic to a dead end.",
+      "alias": "Stand-in addresses",
+      "aliasHelp": "Every published subnet is automatically given a unique stand-in prefix, with the last part unchanged: .222 stays .222. Peers reach it there, so a peer whose own LAN uses the same addresses can still get through. Takes an admin approving the route.",
+      "aliasAssigned": "Peers reach these subnets at:",
+      "aliasPending": "Waiting for the coordinator to assign addresses.",
+      "aliasRefused": "Some subnets could not be given an address",
+      "aliasBudget": "Your organisation is using {{used}} of {{total}} alias addresses. These routes still work for peers whose own network does not clash with them; the ones that clash cannot reach them. Ask an administrator to raise the limit.",
       "acceptSection": "Accept from the mesh",
       "accept": "Install subnet routes peers advertise",
       "acceptHelp": "Off by default. An accepted route enters this machine's routing table — if it covers a host that also connects to services on this machine, the replies go into the mesh and those connections stall.",
@@ -506,10 +513,13 @@
       "excludesHelp": "Accept the rest, except these. Excluding a range also refuses the more specific prefixes inside it.",
       "add": "Add",
       "invalidCidr": "Not a CIDR — try 192.168.1.0/24",
+      "routeTooBroad": "Routes wider than /24 cannot be published — publish the specific /24 subnets you need, e.g. {{suggest}}.",
       "dupCidr": "Already in the list",
       "emptyList": "Nothing here yet",
       "remove": "Remove",
-      "unsaved": "Unsaved changes in this tab"
+      "unsaved": "Unsaved changes in this tab",
+      "aliasUnsupported": "This machine cannot install stand-in rules",
+      "aliasUnsupportedHelp": "They need iptables with the xt_NETMAP target. The subnets are published under their real addresses instead, so peers whose own network collides with them cannot reach them."
     },
     "org": "Organization",
     "orgPersonal": "Personal space",

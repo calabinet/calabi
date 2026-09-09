@@ -1,6 +1,36 @@
 package main
 
-import "strings"
+import (
+	"flag"
+	"strings"
+)
+
+// valueFlagsOf is the argument reorderArgs actually wants: the names of every
+// flag on fs that CONSUMES a following token — i.e. every non-boolean one.
+//
+// It exists because the alternative is a hand-written list per command, and that
+// list is silently wrong the moment someone adds a flag and forgets it. The
+// failure is nasty in a specific way: an unlisted `--foo bar` leaves `bar` behind
+// as a positional, so flag.Parse hands `--foo` whatever token follows it — the
+// NEXT FLAG'S NAME — and the command runs with a plausible-looking wrong value
+// instead of failing. That is exactly what happened when --alias-routes was
+// added to `daemon` and the list was not.
+//
+// Must be called AFTER every flag is registered, which is where reorderArgs is
+// used anyway.
+func valueFlagsOf(fs *flag.FlagSet) []string {
+	var out []string
+	fs.VisitAll(func(f *flag.Flag) {
+		// flag's own test for "this one stands alone": a Value that reports
+		// IsBoolFlag. Asking the Value rather than type-switching keeps custom
+		// boolean flags (and future ones) correct for free.
+		if b, ok := f.Value.(interface{ IsBoolFlag() bool }); ok && b.IsBoolFlag() {
+			return
+		}
+		out = append(out, f.Name)
+	})
+	return out
+}
 
 // reorderArgs lifts all flag tokens to the front of the slice so that
 // stdlib `flag.Parse` (which stops at the first positional) sees the

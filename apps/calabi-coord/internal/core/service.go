@@ -457,7 +457,24 @@ func (s *MemServiceStore) DeleteService(_ context.Context, id int64) error {
 // is what every meshnet runs on until an admin changes something.
 type MeshnetSettings struct {
 	RequireDeviceApproval bool `json:"require_device_approval"`
+	// AliasAddrBudget caps how many ALIAS addresses this meshnet may hold —
+	// pool space, not routes: a /24 subnet costs 256 and a /16 costs 65536, so a
+	// big LAN is priced like one. 0 means DefaultAliasAddrBudget.
+	//
+	// It exists because the alias pool is a single platform-wide range and
+	// nothing else bounds it: a node self-asserts its advertised routes, an
+	// unreviewed node's claims are auto-approved (see Coordinator.Register), and
+	// aliasing follows approval. Without a cap one org can drain the pool, and
+	// the ones who then cannot alias a colliding subnet are OTHER orgs — the
+	// exhausting party is unaffected, which is the wrong way round for a shared
+	// resource. Raised per-org by an admin (PUT /admin/meshnets/{id}/settings).
+	AliasAddrBudget int `json:"alias_addr_budget"`
 }
+
+// DefaultAliasAddrBudget is one /24 — enough for a subnet router publishing its
+// LAN, or for a couple of dozen host routes out of it, and small enough that the
+// default cannot drain a shared pool. An org that publishes more asks an admin.
+const DefaultAliasAddrBudget = 256
 
 // SettingsStore persists per-meshnet settings. Optional: without one every
 // meshnet runs on defaults and the switches aren't available.

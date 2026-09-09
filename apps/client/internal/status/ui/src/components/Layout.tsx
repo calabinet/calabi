@@ -412,8 +412,9 @@ export default function Layout() {
   const pickRegion = (region: string) => {
     if (switchRegionMu.isPending) return;
     const retry = region === currentRegion;
-    // A same-region click only does something when we're parked (it retries
-    // the current region). Otherwise it's a no-op.
+    // A same-region click only does something while the prompt is up: it skips
+    // the background retry's wait and dials the current region now. Otherwise
+    // it's a no-op.
     if (retry && !unavailable) return;
     Modal.confirm({
       title: retry
@@ -680,8 +681,11 @@ export default function Layout() {
           ]}
         />
         {/* Bottom of the sidebar, pinned via marginTop:auto:
-            (1) parked-state prompt when the daemon gave up reconnecting
-                (informational only — region switch is the top-right dropdown), and
+            (1) the "no edge in this region" prompt (informational only — region
+                switch is the top-right dropdown). The daemon has NOT stopped:
+                it keeps retrying in the background, and the dropdown is only
+                the faster way out. It used to stop, which is what left an
+                unattended machine down forever after a brief outage; and
             (2) the account / logout row — moved here from the top bar so the
                 top bar stays single-line (no horizontal scroll). */}
         <div style={{ marginTop: "auto" }}>

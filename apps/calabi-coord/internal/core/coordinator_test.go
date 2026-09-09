@@ -446,7 +446,7 @@ func TestRouteApprovalGrandfathersUnreviewedNodes(t *testing.T) {
 	c := newTestCoord()
 	ctx := context.Background()
 	lan := netip.MustParsePrefix("192.168.1.0/24")
-	other := netip.MustParsePrefix("10.0.0.0/8")
+	other := netip.MustParsePrefix("10.9.1.0/24") // a /8 is refused as too broad
 
 	n, err := c.Register(ctx, RegisterInput{Meshnet: 1, Name: "router", NodeKey: key(1),
 		AdvertisedRoutes: []netip.Prefix{lan, other}})
@@ -516,7 +516,7 @@ func TestNetMapCarriesOnlyApprovedRoutes(t *testing.T) {
 	c := newTestCoord()
 	ctx := context.Background()
 	lan := netip.MustParsePrefix("192.168.1.0/24")
-	other := netip.MustParsePrefix("10.0.0.0/8")
+	other := netip.MustParsePrefix("10.9.1.0/24") // a /8 is refused as too broad
 	router, _ := c.Register(ctx, RegisterInput{Meshnet: 1, Name: "router", NodeKey: key(1),
 		AdvertisedRoutes: []netip.Prefix{lan, other}})
 	peer, _ := c.Register(ctx, RegisterInput{Meshnet: 1, Name: "peer", NodeKey: key(2)})

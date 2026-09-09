@@ -122,8 +122,8 @@ func runHTTP(args []string) int {
 	name := fs.String("name", "web", "tunnel name shown in dashboard")
 	domain := fs.String("domain", "", "request a specific subdomain (empty = auto-assign)")
 	host := fs.String("host", "127.0.0.1", "local bind host to forward to")
-	sec, secNames := registerSecurityFlags(fs, true)
-	if err := fs.Parse(reorderArgs(args, append([]string{"name", "domain", "host"}, secNames...))); err != nil {
+	sec := registerSecurityFlags(fs, true)
+	if err := fs.Parse(reorderArgs(args, valueFlagsOf(fs))); err != nil {
 		return 2
 	}
 	secJSON, secErr := sec.buildConfigJSON()
@@ -148,12 +148,18 @@ func runHTTP(args []string) int {
 	}
 
 	logger := setupLogger()
+	// These one-shot commands do not discover an edge; a release build stamps
+	// no compile-time default, so say what to set rather than dialling nothing.
+	edgeAddr := requireEdgeAddr("http")
+	if edgeAddr == "" {
+		return 2
+	}
 	logger.Info("connecting",
-		"server", envOr("CALABI_SERVER", defaultServer),
+		"server", edgeAddr,
 		"local", localAddr)
 
 	mux, err := transport.Dial(transport.DialOptions{
-		Addr:       envOr("CALABI_SERVER", defaultServer),
+		Addr:       edgeAddr,
 		Insecure:   envBool("CALABI_INSECURE", defaultInsecure),
 		CACertFile: envOr("CALABI_EDGE_CA_FILE", ""),
 	})
@@ -165,7 +171,7 @@ func runHTTP(args []string) int {
 	cli := session.New(logger, mux, resolveToken(), *name)
 	cli.SetDeviceID(resolveDeviceID())
 
-	state := status.New(version, envOr("CALABI_SERVER", defaultServer))
+	state := status.New(version, edgeAddr)
 	cli.AttachTracker(state)
 	startStatusPage(logger, state)
 

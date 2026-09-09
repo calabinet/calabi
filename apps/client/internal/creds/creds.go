@@ -127,13 +127,17 @@ type Config struct {
 	// CALABI_MODE.
 	Mode string `json:"mode,omitempty"`
 
-	// Mesh (Connect) subnet-router / exit-node role for this node, set from the
+	// Mesh subnet-router / exit-node role for this node, set from the
 	// :7400 console or the daemon flags (--advertise-routes etc.). Persisted so a
 	// UI toggle survives a daemon restart. The platform mesh controller reads these
 	// on (re)enroll; changing them from the console restarts the mesh session.
 	// Forwarding is Linux-only — on Windows/macOS
 	// these advertise but don't forward yet.
-	MeshAdvertiseRoutes   []string `json:"mesh_advertise_routes,omitempty"`    // subnet-router CIDRs
+	MeshAdvertiseRoutes []string `json:"mesh_advertise_routes,omitempty"` // subnet-router CIDRs
+	// MeshAliasRoutes is IGNORED — aliasing is applied to every advertised route
+	// where the host supports it, not to a chosen subset. Kept so an existing
+	// creds file still loads;
+	MeshAliasRoutes       []string `json:"mesh_alias_routes,omitempty"`
 	MeshAdvertiseExitNode bool     `json:"mesh_advertise_exit_node,omitempty"` // advertise AS an exit node
 	MeshExitNode          string   `json:"mesh_exit_node,omitempty"`           // route THIS node's default via this peer
 	// MeshServices are services DECLARED from the local console (:7400). They

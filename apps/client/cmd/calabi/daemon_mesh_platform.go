@@ -1,4 +1,4 @@
-// Platform daemon Connect (mesh) auto-enrollment.
+// Platform daemon mesh auto-enrollment.
 //
 // The local/standalone daemon joins its meshnet from a declarative `mesh:` YAML
 // block (daemon_local_mesh.go). The PLATFORM daemon has no such block — it is
@@ -71,6 +71,10 @@ type meshLease interface {
 	// session. mesh.ErrNotEnrolled means the caller must re-enroll instead (no
 	// session, unknown node, or a coordinator that predates the RPC).
 	updateDeclarations(ctx context.Context, services []mesh.DeclaredService, fingerprint string) error
+	// probeRelayLeg drives one segment of the relay path on the session's live
+	// relay link (see internal/mesh/derp/probe.go). On the lease rather than on
+	// the controller because only the running session has a datapath.
+	probeRelayLeg(ctx context.Context, relay string, size int, rateMbps float64, seconds int, oneWay bool) (localweb.MeshRelayProbe, error)
 	stop()
 }
 
@@ -85,11 +89,14 @@ type meshAdvertise struct {
 	Routes   []string // subnet-router CIDRs this node advertises (MESH.7a)
 	ExitNode bool     // advertise this node AS an exit node (MESH.7b)
 	ExitPeer string   // route THIS node's default traffic through this exit peer
+	// AliasRoutes is the subset of Routes to publish under a unique stand-in
+	// prefix, for LANs that collide with consumers' own.
+	AliasRoutes []string
 }
 
 // platformMeshController polls bff-console for the node's enrollment and keeps a
 // mesh session running to match. It implements statusapi.MeshStatusSource so the
-// :7400 console renders the node's live Connect state.
+// :7400 console renders the node's live mesh state.
 type platformMeshController struct {
 	logger  *slog.Logger
 	bffURL  string
@@ -374,6 +381,7 @@ func (c *platformMeshController) reconcile(ctx context.Context, enr meshEnrollme
 		Relay:             enr.RelayAddr,
 		Name:              name,
 		AdvertiseRoutes:   c.adv.Routes,
+		AliasRoutes:       c.adv.AliasRoutes,
 		AdvertiseExitNode: c.adv.ExitNode,
 		ExitNode:          c.adv.ExitPeer,
 		Services:          c.declaredServices(),
@@ -422,7 +430,7 @@ func (c *platformMeshController) shutdown() {
 	c.stopLocked("daemon shutdown")
 }
 
-// MeshStatus implements statusapi.MeshStatusSource: the node's live Connect state.
+// MeshStatus implements statusapi.MeshStatusSource: the node's live mesh state.
 // When nothing is running it reports Enabled:false, carrying Paused so the console
 // can tell a local stop (offer Start) from "never enrolled" (unavailable).
 func (c *platformMeshController) MeshStatus() statusapi.MeshStatus {
@@ -632,9 +640,10 @@ func (c *platformMeshController) Advertise() statusapi.MeshAdvertise {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return statusapi.MeshAdvertise{
-		Routes:   append([]string(nil), c.adv.Routes...),
-		ExitNode: c.adv.ExitNode,
-		ExitPeer: c.adv.ExitPeer,
+		Routes:      append([]string(nil), c.adv.Routes...),
+		AliasRoutes: append([]string(nil), c.adv.AliasRoutes...),
+		ExitNode:    c.adv.ExitNode,
+		ExitPeer:    c.adv.ExitPeer,
 	}
 }
 
@@ -644,7 +653,12 @@ func (c *platformMeshController) Advertise() statusapi.MeshAdvertise {
 // again. The caller (statusapi) has already persisted it to creds.
 func (c *platformMeshController) SetAdvertise(a statusapi.MeshAdvertise) error {
 	c.mu.Lock()
-	c.adv = meshAdvertise{Routes: append([]string(nil), a.Routes...), ExitNode: a.ExitNode, ExitPeer: a.ExitPeer}
+	c.adv = meshAdvertise{
+		Routes:      append([]string(nil), a.Routes...),
+		AliasRoutes: append([]string(nil), a.AliasRoutes...),
+		ExitNode:    a.ExitNode,
+		ExitPeer:    a.ExitPeer,
+	}
 	// Drop the running session so reconcile restarts it with the new role (a nil
 	// lease forces the change). Don't touch paused — a paused node stays paused.
 	if c.lease != nil {
@@ -683,6 +697,10 @@ func (l *runnerLease) observations() []mesh.ServiceObservation {
 	return l.r.ServiceObservations()
 }
 
+func (l *runnerLease) probeRelayLeg(ctx context.Context, relay string, size int, rateMbps float64, seconds int, oneWay bool) (localweb.MeshRelayProbe, error) {
+	return l.r.probeRelayLeg(ctx, relay, size, rateMbps, seconds, oneWay)
+}
+
 func (l *runnerLease) status() statusapi.MeshStatus {
 	return toStatusapiMesh(l.r.MeshStatus())
 }
@@ -701,16 +719,26 @@ func toStatusapiMesh(m localweb.MeshStatus) statusapi.MeshStatus {
 			TxBytes:          p.TxBytes,
 			Path:             p.Path,
 			Endpoint:         p.Endpoint,
+			RTTMicros:        p.RTTMicros,
 		})
 	}
+	aliases := make([]statusapi.MeshSubnetAlias, 0, len(m.SubnetAliases))
+	for _, a := range m.SubnetAliases {
+		aliases = append(aliases, statusapi.MeshSubnetAlias{Alias: a.Alias, Real: a.Real})
+	}
 	return statusapi.MeshStatus{
-		Enabled:  m.Enabled,
-		Up:       m.Up,
-		Coord:    m.Coord,
-		Relay:    m.Relay,
-		DerpHome: m.DerpHome,
-		Name:     m.Name,
-		Overlay:  m.Overlay,
-		Peers:    peers,
+		SubnetAliases:    aliases,
+		UnaliasedRoutes:  append([]string(nil), m.UnaliasedRoutes...),
+		AliasBudgetAddrs: m.AliasBudgetAddrs,
+		AliasUsedAddrs:   m.AliasUsedAddrs,
+		Datapath:         statusapi.MeshDatapath(m.Datapath),
+		Enabled:          m.Enabled,
+		Up:               m.Up,
+		Coord:            m.Coord,
+		Relay:            m.Relay,
+		DerpHome:         m.DerpHome,
+		Name:             m.Name,
+		Overlay:          m.Overlay,
+		Peers:            peers,
 	}
 }

@@ -82,7 +82,7 @@ type localConfig struct {
 	// Tunnels has no omitempty: an empty list persists as `tunnels: []`, which is
 	// a valid "connect, create tunnels in the console" config worth keeping explicit.
 	Tunnels []localTunnelConfig `yaml:"tunnels"`
-	// Mesh is the optional Connect (WireGuard mesh) block. Absent/disabled = the
+	// Mesh is the optional mesh (WireGuard) block. Absent/disabled = the
 	// daemon supervises tunnels only. See daemon_local_mesh.go.
 	Mesh meshConfig `yaml:"mesh,omitempty"`
 }
@@ -130,7 +130,13 @@ func runLocalDaemon(args []string) int {
 	_ = fs.Bool("local", false, "run the local supervisor daemon (this flag)")
 	configPath := fs.String("config", envOr("CALABI_DAEMON_CONFIG", ""),
 		"path to the local tunnels YAML config")
-	if err := fs.Parse(reorderArgs(args, []string{"config"})); err != nil {
+	statusAddr := registerStatusAddrFlag(fs)
+	if err := fs.Parse(reorderArgs(args, valueFlagsOf(fs))); err != nil {
+		return 2
+	}
+	statusWarning, saErr := applyStatusAddr(*statusAddr)
+	if saErr != nil {
+		fmt.Fprintln(os.Stderr, "calabi daemon --local:", saErr)
 		return 2
 	}
 	if *configPath == "" {
@@ -147,6 +153,9 @@ func runLocalDaemon(args []string) int {
 	// and serves the local console, where tunnels can be created live.
 
 	logger := setupDaemonLogger()
+	if statusWarning != "" {
+		logger.Warn("console: " + statusWarning)
+	}
 	defer func() {
 		if h := loggingHub(); h != nil {
 			_ = h.Close()
@@ -195,7 +204,7 @@ func runLocalDaemon(args []string) int {
 	// per-day byte totals next to the pidfile so the console's today / month
 	// traffic survive restarts. Started below once we have a context.
 	meter := newUsageMeter(filepath.Join(filepath.Dir(lock.Path()), "usage.json"))
-	// Connect (mesh) traffic meter — the 组网流量 counterpart, per-machine daily
+	// Mesh traffic meter — the 组网流量 counterpart, per-machine daily
 	// buckets behind the overview's mesh today/month + the chart's second series.
 	meshMeter := newMeshUsageMeter(filepath.Join(filepath.Dir(lock.Path()), "mesh-usage.json"))
 
@@ -211,14 +220,14 @@ func runLocalDaemon(args []string) int {
 	// /v1/me reports plan.code="standalone"); create / delete / edit-security
 	// write through the supervisor (live reconcile + YAML persistence).
 	// internal/localweb +
-	// Connect (WireGuard mesh): build the runner now (not started) so the local
+	// Mesh (WireGuard): build the runner now (not started) so the local
 	// API can serve its status; it's launched below once we have a signal context.
 	var meshR *meshRunner
 	if cfg.Mesh.Enabled {
 		if cfg.Mesh.complete() {
 			meshR = newMeshRunner(logger, cfg.Mesh)
 		} else {
-			logger.Warn("mesh: enabled but coord/relay/auth_key incomplete — not starting Connect")
+			logger.Warn("mesh: enabled but coord/relay/auth_key incomplete — not starting it")
 		}
 	}
 	var meshSrc localweb.MeshSource
@@ -259,12 +268,12 @@ func runLocalDaemon(args []string) int {
 	}, 5*time.Second)
 	go health.Run(ctx)
 
-	// Connect (WireGuard mesh): bring the node onto its meshnet in the background
+	// Mesh (WireGuard): bring the node onto its meshnet in the background
 	// alongside the tunnels. Stopped on shutdown before the daemon returns.
 	if meshR != nil {
 		meshR.Start(ctx)
 		defer meshR.Stop()
-		logger.Info("mesh (Connect) started", "coord", cfg.Mesh.Coord, "relay", cfg.Mesh.Relay)
+		logger.Info("mesh started", "coord", cfg.Mesh.Coord, "relay", cfg.Mesh.Relay)
 	}
 
 	logger.Info("local daemon starting",

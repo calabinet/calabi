@@ -15,6 +15,8 @@ const (
 	FieldID = "id"
 	// FieldMeshnetID holds the string denoting the meshnet_id field in the database.
 	FieldMeshnetID = "meshnet_id"
+	// FieldAliasAddrBudget holds the string denoting the alias_addr_budget field in the database.
+	FieldAliasAddrBudget = "alias_addr_budget"
 	// FieldRequireDeviceApproval holds the string denoting the require_device_approval field in the database.
 	FieldRequireDeviceApproval = "require_device_approval"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -27,6 +29,7 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldMeshnetID,
+	FieldAliasAddrBudget,
 	FieldRequireDeviceApproval,
 	FieldUpdatedAt,
 }
@@ -42,6 +45,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// DefaultAliasAddrBudget holds the default value on creation for the "alias_addr_budget" field.
+	DefaultAliasAddrBudget int
 	// DefaultRequireDeviceApproval holds the default value on creation for the "require_device_approval" field.
 	DefaultRequireDeviceApproval bool
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -61,6 +66,11 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByMeshnetID orders the results by the meshnet_id field.
 func ByMeshnetID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldMeshnetID, opts...).ToFunc()
+}
+
+// ByAliasAddrBudget orders the results by the alias_addr_budget field.
+func ByAliasAddrBudget(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAliasAddrBudget, opts...).ToFunc()
 }
 
 // ByRequireDeviceApproval orders the results by the require_device_approval field.

@@ -76,7 +76,7 @@
     "switchBody2": "I tunnel della regione originale (i cui indirizzi pubblici sono ancorati a quella regione) non saranno più raggiungibili tramite questo client; dovrai ricrearli nella nuova regione (l'indirizzo pubblico cambierà). Il cambio di nodo all'interno della stessa regione è automatico e non subisce effetti.",
     "switchedTo": "Passato alla regione \"{{region}}\"",
     "failed": "Impossibile cambiare regione",
-    "parkedNote": "Gli edge node della regione attuale non sono raggiungibili; la riconnessione è stata interrotta. Puoi cambiare regione manualmente dall'angolo in alto a destra."
+    "parkedNote": "Gli edge node della regione attuale non sono raggiungibili. Il client continua a riprovare in background; cambiare regione dall'angolo in alto a destra riconnette subito."
   },
   "affinity": {
     "header": "Nodo dati",
@@ -458,7 +458,14 @@
       "egressSection": "Uscita a internet di questo dispositivo",
       "exitNode": "Offri questo dispositivo come nodo di uscita",
       "exitNodeHelp": "Gli altri dispositivi possono far uscire il proprio traffico internet attraverso questa macchina.",
-      "noForward": "L'inoltro funziona solo su Linux. Questa macchina annuncerà queste impostazioni, ma inoltrerà davvero il traffico solo quando il client sarà in esecuzione su un dispositivo Linux.",
+      "noForward": "Questo dispositivo annuncia questi ruoli ma non può inoltrare: il routing di sottoreti e i nodi di uscita vengono configurati automaticamente solo su Linux, quindi il traffico inviato dai peer viene scartato. Disattivali oppure esegui il router su un dispositivo Linux.",
+      "noForwardLocked": "Non disponibile su questo dispositivo: il routing di sottoreti e i nodi di uscita richiedono l'inoltro dei pacchetti, configurato automaticamente solo su Linux. Annunciarli senza inoltro manderebbe il traffico dei peer in un vicolo cieco.",
+      "alias": "Indirizzi sostitutivi",
+      "aliasHelp": "Ogni sottorete pubblicata riceve automaticamente un prefisso sostitutivo univoco, con l'ultima parte invariata: .222 resta .222. I peer la raggiungono lì, quindi ci arriva anche un peer la cui rete usa gli stessi indirizzi. Richiede l'approvazione della rotta da parte di un amministratore.",
+      "aliasAssigned": "I peer raggiungono queste sottoreti a:",
+      "aliasPending": "In attesa che il coordinatore assegni gli indirizzi.",
+      "aliasRefused": "Alcune sottoreti non hanno potuto ricevere un indirizzo",
+      "aliasBudget": "La tua organizzazione usa {{used}} indirizzi alias su {{total}}. Queste rotte continuano a funzionare per i peer la cui rete non va in conflitto; quelli in conflitto non riescono a raggiungerle. Chiedi a un amministratore di alzare il limite.",
       "offerSection": "Offri alla Mesh",
       "routes": "Annuncia route di sottorete",
       "routesHelp": "I CIDR della LAN di questa macchina da esporre alla Mesh, es. 192.168.1.0/24. I peer li raggiungono attraverso questo dispositivo.",
@@ -474,10 +481,13 @@
       "excludesHelp": "Accetta le altre, tranne queste. Escludere un intervallo rifiuta anche i prefissi più specifici al suo interno.",
       "add": "Aggiungi",
       "invalidCidr": "Non è un CIDR — es. 192.168.1.0/24",
+      "routeTooBroad": "Le reti più ampie di una /24 non possono essere pubblicate: pubblica le singole sottoreti /24 che ti servono, ad es. {{suggest}}.",
       "dupCidr": "Già presente nell'elenco",
       "emptyList": "Ancora nulla",
       "remove": "Rimuovi",
-      "unsaved": "Modifiche non salvate in questa scheda"
+      "unsaved": "Modifiche non salvate in questa scheda",
+      "aliasUnsupported": "Questa macchina non può installare le regole sostitutive",
+      "aliasUnsupportedHelp": "Servono iptables e il target xt_NETMAP. Le sottoreti vengono pubblicate con i loro indirizzi reali, quindi i peer la cui rete va in conflitto non riescono a raggiungerle."
     },
     "ago": "{{d}} fa",
     "colAllowed": "IP consentiti",

@@ -83,7 +83,7 @@ a web console. That part is a separate product and is not in this repository.
 |---|---|---|
 | `calabi` | the client — opens tunnels, joins the mesh, serves the local web console | your laptop, a server, a Pi |
 | `calabi-edge` | the data plane. `role: edge` accepts public traffic for tunnels; `role: relay` is a mesh relay + STUN responder; `role: both` does both | a host with a public IP |
-| `calabi-coord` | the mesh coordinator — node registry, IP allocation, ACLs, MagicDNS, the relay directory | one host, reachable by your nodes |
+| `calabi-coord` | the mesh coordinator — node registry, IP allocation, ACLs, the relay directory | one host, reachable by your nodes |
 
 Pure Go, `CGO_ENABLED=0`, no runtime dependencies. Only tunnels? You need two of
 them, and never have to think about `calabi-coord`.
@@ -117,9 +117,8 @@ them, and never have to think about `calabi-coord`.
   already-encrypted packets between node keys and **cannot decrypt them**; the
   isolation is structural, enforced by a dependency test, not by a config flag.
   Run one relay or several, in as many regions as you like.
-- **Stable addresses + MagicDNS** — every node gets a `100.64.0.0/10` address
-  that follows it across networks, plus a name (OS-level name resolution is
-  Linux-only for now; the addresses work everywhere).
+- **Stable addresses** — every node gets a `100.64.0.0/10` address that
+  follows it across networks, on every platform.
 - **ACLs** — a JSON policy file of groups and rules decides which nodes may
   reach which, on which ports. It hot-reloads, and a broken file **fails closed**
   (deny all) rather than open.

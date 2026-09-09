@@ -1,7 +1,7 @@
-// daemon_local_mesh.go — Connect (WireGuard mesh) inside the local daemon.
+// daemon_local_mesh.go — the WireGuard mesh inside the local daemon.
 //
 // The local supervisor daemon (daemon_local.go) manages the Publish data plane
-// (reverse tunnels). This wires the SECOND data plane, Connect (mesh), into the
+// (reverse tunnels). This wires the SECOND data plane, the mesh, into the
 // same long-lived process: a declarative `mesh:` block in the daemon YAML brings
 // the node onto its meshnet in the background, and — via `calabi daemon install`
 // — as a boot-start service. Same binary, one daemon, both data planes.
@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"net/netip"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -26,17 +27,28 @@ import (
 )
 
 // meshConfig is the daemon YAML `mesh:` block. Empty/disabled = the daemon runs
-// tunnels only (no Connect), exactly as before.
+// tunnels only (no mesh), exactly as before.
 type meshConfig struct {
 	Enabled bool   `yaml:"enabled,omitempty"`
 	Coord   string `yaml:"coord,omitempty"`    // coordinator host:port (prod: your bff-console entrypoint)
-	Relay   string `yaml:"relay,omitempty"`    // calabi-derp relay host:port (this node's DERP home)
+	Relay   string `yaml:"relay,omitempty"`    // relay host:port (this node's DERP home)
 	AuthKey string `yaml:"auth_key,omitempty"` // tk_ key (platform) or pre-shared key (self-hosted)
 	Name    string `yaml:"name,omitempty"`     // node name for MagicDNS; defaults to hostname
 	KeyFile string `yaml:"key_file,omitempty"` // WireGuard private key path; default per-OS config dir
 	// AdvertiseRoutes are subnet-router CIDRs this node offers to forward (MESH.7),
 	// e.g. ["192.168.1.0/24"]. Enables local forwarding + NAT on Linux.
 	AdvertiseRoutes []string `yaml:"advertise_routes,omitempty"`
+	// AliasRoutes is IGNORED. Every advertised route is now published under a
+	// stand-in prefix wherever the host can install the rewrite, so there is no
+	// subset to pick (see runMeshFromConfig). The field is kept only so a config
+	// file written when this WAS a choice still parses instead of failing the
+	// daemon on an unknown key.
+	AliasRoutes []string `yaml:"alias_routes,omitempty"`
+	// MTU overrides the tun MTU (mesh.DefaultMTU when unset or unusable). A
+	// diagnostic knob: a path whose real MTU is below the default black-holes
+	// every full-size packet while pings sail through, and lowering this is how
+	// that gets confirmed.
+	MTU int `yaml:"mtu,omitempty"`
 	// AdvertiseExitNode offers this node as an exit node (forward peers' default
 	// route to the internet) — sugar for advertising 0.0.0.0/0 (MESH.7b).
 	AdvertiseExitNode bool `yaml:"advertise_exit_node,omitempty"`
@@ -173,11 +185,12 @@ const (
 // connection bound to the overlay address dies with it. A coordinator blip would
 // take out the very remote desktop the meshnet exists to carry.
 type meshDataPlane struct {
-	dp     *mesh.WGDatapath
-	dns    mesh.DNSSink
-	key    mesh.PrivateKey
-	routes []netip.Prefix
-	stop   func()
+	dp      *mesh.WGDatapath
+	dns     mesh.DNSSink
+	key     mesh.PrivateKey
+	routes  []netip.Prefix
+	aliases []netip.Prefix
+	stop    func()
 }
 
 // meshLoopTuning is the retry loop's knobs and its two steps. The zero value is
@@ -285,15 +298,44 @@ func (r *meshRunner) startDataPlane() (*meshDataPlane, error) {
 	// Subnet router / exit node: advertise + forward the configured CIDRs (and
 	// 0.0.0.0/0 when advertise_exit_node) with best-effort NAT. Parsed before the
 	// tun comes up so a bad CIDR costs nothing.
-	routes, err := parseCIDRList(strings.Join(r.cfg.AdvertiseRoutes, ","))
-	if err != nil {
-		return nil, fmt.Errorf("advertise_routes: %w", err)
+	// A bad entry is DROPPED, not fatal. This list comes from a file, and the
+	// width limit (mesh.AdvertiseMinBitsV4) arrived after those files did — a
+	// subnet router that has published a /16 since before the rule would
+	// otherwise fail to start its mesh session entirely, losing its overlay
+	// address and every other route over one netmask. See mesh.SplitRouteList.
+	routes, badRoutes := mesh.SplitRouteList(r.cfg.AdvertiseRoutes)
+	if len(badRoutes) > 0 {
+		r.logger.Warn("mesh: ignoring unusable subnet routes from the config",
+			"advertise_routes", mesh.ProblemStrings(badRoutes))
+	}
+	// EVERY published route is aliased — this is not a setting.
+	//
+	// A route published under its real CIDR is unreachable from any peer whose
+	// own LAN happens to use the same addresses, and neither the publisher nor
+	// the coordinator can see whose does. Leaving that as a switch meant the
+	// person who had to predict the collision was the one who could not observe
+	// it, and the default (off) was the answer that breaks. Aliasing everything
+	// costs one NAT hop and makes the rule uniform: peers always reach a subnet
+	// at its stand-in prefix.
+	//
+	// The only remaining question is whether THIS machine can install the
+	// rewrite, which is a fact about the host, not a preference — so it is
+	// probed rather than configured. A host that cannot keeps publishing real
+	// CIDRs, exactly as before aliases existed.
+	var aliasRoutes []netip.Prefix
+	if len(routes) > 0 {
+		if mesh.SubnetAliasSupported() {
+			aliasRoutes = routes
+		} else {
+			r.logger.Warn("mesh: this host cannot install subnet-alias rules (needs iptables with the xt_NETMAP target); " +
+				"subnets are published under their real addresses, so peers whose own LAN collides with them cannot reach them")
+		}
 	}
 	if r.cfg.AdvertiseExitNode {
 		routes = append(routes, netip.PrefixFrom(netip.IPv4Unspecified(), 0)) // 0.0.0.0/0
 	}
 
-	dp, err := mesh.NewWGDatapath(priv, r.cfg.Relay, r.logger)
+	dp, err := mesh.NewWGDatapath(priv, r.cfg.Relay, resolveMeshMTU(r.cfg.MTU, r.logger), r.logger)
 	if err != nil {
 		return nil, fmt.Errorf("datapath: %w", err)
 	}
@@ -302,7 +344,7 @@ func (r *meshRunner) startDataPlane() (*meshDataPlane, error) {
 	// MagicDNS: best-effort name resolution for peers (mesh still works without it).
 	var dnsSink mesh.DNSSink
 	if sink, cleanup, err := mesh.StartMagicDNS(r.logger); err != nil {
-		r.logger.Warn("mesh: MagicDNS unavailable; node names won't resolve via the OS", "err", err)
+		logMagicDNSUnavailable(r.logger, err)
 	} else {
 		stops = append(stops, cleanup)
 		dnsSink = sink
@@ -323,7 +365,7 @@ func (r *meshRunner) startDataPlane() (*meshDataPlane, error) {
 		dp.SetExitBypassHosts([]string{r.cfg.Coord, r.cfg.Relay})
 	}
 
-	return &meshDataPlane{dp: dp, dns: dnsSink, key: priv, routes: routes, stop: func() {
+	return &meshDataPlane{dp: dp, dns: dnsSink, key: priv, routes: routes, aliases: aliasRoutes, stop: func() {
 		for i := len(stops) - 1; i >= 0; i-- {
 			stops[i]()
 		}
@@ -361,6 +403,7 @@ func (r *meshRunner) runControlPlane(ctx context.Context, data *meshDataPlane) e
 			NodeKey:           data.key.Public(),
 			Name:              name,
 			AdvertiseRoutes:   data.routes,
+			AliasRoutes:       data.aliases,
 			DeviceFingerprint: resolveFingerprint(r.logger),
 			Services:          declaredServices(r.cfg.Services),
 		},
@@ -473,7 +516,7 @@ func (r *meshRunner) Stop() {
 	<-done
 }
 
-// MeshStatus implements localweb.MeshSource: the node's Connect state for the
+// MeshStatus implements localweb.MeshSource: the node's mesh state for the
 // :7400 console + `calabi mesh status`.
 func (r *meshRunner) MeshStatus() localweb.MeshStatus {
 	name := r.cfg.Name
@@ -497,6 +540,16 @@ func (r *meshRunner) MeshStatus() localweb.MeshStatus {
 		if snap.Relay != "" {
 			ms.Relay = snap.Relay // the relay actually homed at, which may have moved
 		}
+		for _, a := range snap.SubnetAliases {
+			ms.SubnetAliases = append(ms.SubnetAliases, localweb.MeshSubnetAlias{
+				Alias: a.Alias.String(), Real: a.Real.String(),
+			})
+		}
+		for _, a := range snap.UnaliasedRoutes {
+			ms.UnaliasedRoutes = append(ms.UnaliasedRoutes, a.Real.String())
+		}
+		ms.AliasBudgetAddrs, ms.AliasUsedAddrs = snap.AliasBudgetAddrs, snap.AliasUsedAddrs
+		ms.Datapath = localweb.MeshDatapath(snap.Datapath)
 		for _, p := range snap.Peers {
 			ms.Peers = append(ms.Peers, localweb.MeshPeer{
 				PublicKey:        p.PublicKey,
@@ -594,4 +647,55 @@ func resolveAcceptRoutes(explicit *bool, keyFile string, logger *slog.Logger) bo
 		}
 	}
 	return seeded
+}
+
+// meshMTUEnv overrides the tun MTU for BOTH daemon kinds.
+//
+// The YAML `mesh:` block only reaches the LOCAL daemon: the platform daemon
+// builds its meshConfig in code (daemon_mesh_platform.go) and never fills MTU
+// in, so a config-file knob is unreachable on every installed machine — which
+// is the only kind that matters when someone is trying to diagnose a live
+// network. An env var reaches both, and is settable where these daemons
+// actually live: a systemd unit's Environment= and a launchd plist's
+// EnvironmentVariables.
+//
+// It is a DIAGNOSTIC knob, not a setting: the default clears every path we know
+// of, and lowering it is how a path-MTU black hole gets confirmed (WireGuard
+// does no PMTU discovery of its own, so a link that silently eats full-size
+// packets looks exactly like heavy random loss).
+const meshMTUEnv = "CALABI_MESH_MTU"
+
+// resolveMeshMTU picks the tun MTU: the env override, else the config field,
+// else 0 (meaning mesh.DefaultMTU).
+//
+// Neither source fails hard. Both are STORED settings — a unit file, a plist, a
+// YAML block — read long after they were written, by a service with no one
+// watching. One unusable value must not cost the overlay address, every peer
+// and every route; it costs itself, loudly (see the late-validation trap).
+func resolveMeshMTU(fromConfig int, logger *slog.Logger) int {
+	warn := func(src string, v int) {
+		if logger != nil {
+			logger.Warn("mesh: ignoring unusable mtu; using the default",
+				"source", src, "mtu", v, "min", mesh.MinMTU, "max", mesh.MaxMTU, "using", mesh.DefaultMTU)
+		}
+	}
+	if raw := strings.TrimSpace(os.Getenv(meshMTUEnv)); raw != "" {
+		n, err := strconv.Atoi(raw)
+		switch {
+		case err != nil:
+			warn(meshMTUEnv, 0)
+		case !mesh.ValidMTU(n):
+			warn(meshMTUEnv, n)
+		default:
+			if logger != nil {
+				logger.Info("mesh: tun MTU overridden", "source", meshMTUEnv, "mtu", n)
+			}
+			return n
+		}
+	}
+	if fromConfig != 0 && !mesh.ValidMTU(fromConfig) {
+		warn("config", fromConfig)
+		return 0
+	}
+	return fromConfig
 }

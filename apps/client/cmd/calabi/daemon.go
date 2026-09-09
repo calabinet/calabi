@@ -44,6 +44,7 @@ import (
 	"github.com/calabi/calabi/apps/client/internal/session"
 	"github.com/calabi/calabi/apps/client/internal/status"
 	"github.com/calabi/calabi/apps/client/internal/transport"
+	"github.com/calabi/calabi/apps/client/internal/wake"
 )
 
 // daemonRegistry is the per-process dynamic ProxyRegistry the daemon
@@ -232,25 +233,37 @@ func runDaemon(args []string) int {
 	// clears the edge/region anchor so the next pick re-evaluates.
 	edgeAffinity := fs.String("edge-affinity", envOr("CALABI_EDGE_AFFINITY", ""),
 		"edge affinity: own | platform (empty = keep current). BYOI orgs default to 'own'.")
-	// Connect (mesh) subnet-router / exit-node role for this node. Mirror `calabi
+	// Mesh subnet-router / exit-node role for this node. Mirror `calabi
 	// mesh up`'s flags so an auto-enrolled platform daemon can advertise routes or
 	// act as / use an exit node too. Forwarding is Linux-only.
 	meshAdvertiseRoutes := fs.String("advertise-routes", envOr("CALABI_MESH_ADVERTISE_ROUTES", ""),
-		"mesh: comma-separated CIDRs to advertise as a subnet router (e.g. 192.168.1.0/24)")
+		"mesh: comma-separated subnets to advertise as a subnet router, /24 or smaller (e.g. 192.168.1.0/24). A bare address is a single host: 192.168.1.22")
+	meshAliasRoutes := fs.String("alias-routes", envOr("CALABI_MESH_ALIAS_ROUTES", ""),
+		"mesh: DEPRECATED and ignored: every advertised route is aliased where the host supports it")
 	meshServices := fs.String("mesh-service", envOr("CALABI_MESH_SERVICES", ""),
 		"declare services this machine offers on the mesh, e.g. \"db:tcp:5432,web:443\" (proto defaults to tcp). A DECLARATION: each entry lands in the console as pending until an admin confirms it")
 	meshAdvertiseExit := fs.Bool("advertise-exit-node", envBool("CALABI_MESH_ADVERTISE_EXIT_NODE", false),
 		"mesh: advertise this node as an exit node (offer to forward peers' default route)")
 	meshExitNode := fs.String("exit-node", envOr("CALABI_MESH_EXIT_NODE", ""),
 		"mesh: route THIS node's default traffic through the named exit-node peer (name or overlay IP)")
-	if err := fs.Parse(reorderArgs(args, []string{"name", "edge-region", "persist-edge-region", "edge-affinity",
-		"advertise-routes", "advertise-exit-node", "exit-node", "mesh-service"})); err != nil {
+	statusAddr := registerStatusAddrFlag(fs)
+	if err := fs.Parse(reorderArgs(args, valueFlagsOf(fs))); err != nil {
+		return 2
+	}
+	// Validated before any work: a bad bind address should be a message about
+	// what you typed, not a console that quietly isn't there.
+	statusWarning, err := applyStatusAddr(*statusAddr)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "calabi daemon:", err)
 		return 2
 	}
 
 	// log to file + stderr so service-manager-launched runs
 	// (no terminal) still have a paper trail.
 	logger := setupDaemonLogger()
+	if statusWarning != "" {
+		logger.Warn("mesh/console: " + statusWarning)
+	}
 	defer func() {
 		if hub := loggingGetHub(); hub != nil {
 			_ = hub.Close()
@@ -366,25 +379,26 @@ func runDaemon(args []string) int {
 	// console is console.calabi.net. Named consoleWebURL because `consoleURL`
 	// below already means this daemon's LOCAL status page (:7400).
 	consoleWebURL := envOr("CALABI_CONSOLE_WEB", defaultConsoleWeb)
-	// Connect (WireGuard mesh) auto-enrollment. The controller asks bff-console
+	// Mesh (WireGuard) auto-enrollment. The controller asks bff-console
 	// whether this node is enrolled and, when so, brings it onto its org's meshnet
 	// in the background — the node's coord auth key is the daemon's own credential
 	// (resolveToken), which coord resolves to the org == meshnet. Wired into the
 	// :7400 console as the /v1/mesh status source; started once we have a signal
 	// context (below). Dark until the platform sets the coord/relay addresses, so
-	// existing daemons are unaffected until an operator turns Connect on.
+	// existing daemons are unaffected until an operator turns the mesh on.
 	// Seed the node's subnet-router / exit-node role from creds (persisted by the
 	// :7400 console toggle so it survives restarts). If the daemon was started with
 	// an explicit --advertise-* flag or CALABI_MESH_* env, that wins and is written
 	// back to creds — so ops can force it at install and it still sticks.
 	meshAdv := meshAdvertise{}
 	if c, err := creds.Load(); err == nil && c != nil {
-		meshAdv = meshAdvertise{Routes: c.MeshAdvertiseRoutes, ExitNode: c.MeshAdvertiseExitNode, ExitPeer: c.MeshExitNode}
+		meshAdv = meshAdvertise{Routes: c.MeshAdvertiseRoutes, ExitNode: c.MeshAdvertiseExitNode, ExitPeer: c.MeshExitNode, AliasRoutes: c.MeshAliasRoutes}
 	}
-	if *meshAdvertiseRoutes != "" || *meshAdvertiseExit || *meshExitNode != "" {
-		meshAdv = meshAdvertise{Routes: splitCSV(*meshAdvertiseRoutes), ExitNode: *meshAdvertiseExit, ExitPeer: *meshExitNode}
+	if *meshAdvertiseRoutes != "" || *meshAdvertiseExit || *meshExitNode != "" || *meshAliasRoutes != "" {
+		meshAdv = meshAdvertise{Routes: splitCSV(*meshAdvertiseRoutes), ExitNode: *meshAdvertiseExit, ExitPeer: *meshExitNode, AliasRoutes: splitCSV(*meshAliasRoutes)}
 		if c, err := creds.Load(); err == nil && c != nil {
 			c.MeshAdvertiseRoutes, c.MeshAdvertiseExitNode, c.MeshExitNode = meshAdv.Routes, meshAdv.ExitNode, meshAdv.ExitPeer
+			c.MeshAliasRoutes = meshAdv.AliasRoutes
 			if serr := creds.Save(c); serr != nil {
 				logger.Warn("persist mesh advertise flags failed", "err", serr)
 			}
@@ -452,7 +466,7 @@ func runDaemon(args []string) int {
 			// device row B sitting permanently offline while edge
 			// presence keeps user A's row live.
 			sessionRestartTrigger()
-			// Connect runs on its own controller, not on the edge session, so the
+			// The mesh runs on its own controller, not on the edge session, so the
 			// kick above does not reach it. Its meshnet is the org behind the
 			// credential — which just changed — so re-enroll too.
 			meshCtl.Rebind("login")
@@ -554,7 +568,7 @@ func runDaemon(args []string) int {
 			go meshCtl.Nudge()
 		},
 	})
-	// Connect (mesh) traffic meter: per-machine daily byte buckets behind the
+	// Mesh traffic meter: per-machine daily byte buckets behind the
 	// overview's 组网流量 (today / month) and the 7-day chart's second series.
 	// Local in BOTH deployments — mesh isn't metered server-side per machine — so
 	// it's registered on the status mux here rather than proxied like tunnel usage.
@@ -573,7 +587,7 @@ func runDaemon(args []string) int {
 
 	// start the health monitor loop in the background.
 	go healthMon.Run(ctx)
-	// Connect (mesh) enrollment: poll the control plane + reconcile the node's
+	// Mesh enrollment: poll the control plane + reconcile the node's
 	// meshnet session. Bound to ctx, torn down on shutdown. No-op until the
 	// platform configures a coordinator (enrollment reports enabled:false).
 	go meshCtl.Run(ctx)
@@ -638,6 +652,26 @@ func runDaemon(args []string) int {
 		}
 	}
 
+	// A resumed machine gets the same treatment as a manual restart request.
+	//
+	// The mesh controller has detected suspend/resume since MESH.4 and rebuilds
+	// its relay links within seconds; the edge session had nothing, so a laptop
+	// that woke up kept a TCP connection the far side had long forgotten. The
+	// note above says why that is not self-correcting: the control loop is
+	// blocked in a context-unaware proto.ReadFrame, so the dead socket is only
+	// noticed when the OS keep-alive finally gives up — minutes later. Killing
+	// the session on wake is what makes the tunnels come back with the network
+	// instead of some minutes after it.
+	//
+	// A false positive costs one re-dial. Missing a real wake costs a daemon that
+	// reports itself connected while carrying nothing, which is the expensive
+	// way round.
+	go wake.Loop(ctx, func(gap time.Duration) {
+		logger.Info("machine resumed from sleep; restarting the edge session",
+			"gap", gap.Round(time.Second).String())
+		sessionRestartTrigger()
+	})
+
 	// SIGHUP hot-reload. On Unix only; Windows is a no-op (use
 	// `calabi daemon restart` instead). Reload regenerates local-token
 	// and signals the session to rotate creds on next reconnect.
@@ -666,15 +700,15 @@ func runDaemon(args []string) int {
 	// file (so a SPA login mid-loop is picked up) and re-dials.
 	// LifecycleFatal during the back-off lets the SPA tell the user
 	// "auth error — please log in" rather than just spinning forever.
-	const retryDelay = 15 * time.Second
-	// maxReconnectFails: after this many CONSECUTIVE failures to even
-	// establish a session (dial / handshake / region-unavailable), the
-	// loop PARKS — it stops retrying and waits for a user action (manual
-	// region switch / login / org switch all nudge reloadCh). This is the
-	// "重连10次后提示并停止重连" behaviour. A successful handshake resets
-	// the counter, so a long-lived session that later drops doesn't count
-	// toward the cap.
-	const maxReconnectFails = 10
+	// Consecutive failures to even ESTABLISH a session (dial / handshake /
+	// region-unavailable). A successful handshake resets it, so a long-lived
+	// session that later drops starts its own back-off from scratch.
+	//
+	// It used to be a cap: at 10 the loop stopped dialling and waited for a
+	// human. See reconnectDelay in reconnect.go for why that was wrong and what
+	// replaced it — in short, the counter conflated "your region has no edge"
+	// (needs a person) with "this machine has no network" (needs nobody), and
+	// stopping was only ever right for the first.
 	reconnectFails := 0
 	for ctx.Err() == nil {
 		// Interactive daemon with no real credential yet — a service installed
@@ -709,6 +743,9 @@ func runDaemon(args []string) int {
 		if ctx.Err() != nil {
 			break
 		}
+		// How long to wait before the next dial. Each branch below owns it; the
+		// default is the plain cadence used for anything expected back shortly.
+		retryIn := baseRetryDelay
 		// Distinguish auth errors (fatal until creds change) from
 		// network blips (recoverable on retry).
 		if isAuthError(err) {
@@ -751,9 +788,9 @@ func runDaemon(args []string) int {
 			}
 			state.SetLifecycle(status.LifecycleFatal)
 			// Auth is a separate terminal category — it parks on
-			// LifecycleFatal until creds change, so it shouldn't burn the
-			// reconnect cap. Reset so a later network outage gets its full
-			// allowance.
+			// LifecycleFatal until creds change, so it shouldn't inflate the
+			// back-off. Reset so a later network outage starts from the short
+			// end of the ladder.
 			reconnectFails = 0
 			if usingAPIKey {
 				logger.Warn("auth failed: the API key was rejected (invalid or revoked) — "+
@@ -771,34 +808,31 @@ func runDaemon(args []string) int {
 			logger.Info("session ended; reconnecting", "err", err)
 		} else {
 			// Couldn't even establish a session (dial / handshake /
-			// region-unavailable). Count it; park once we hit the cap so
-			// we stop hammering a server that isn't coming back — the user
-			// can switch region manually to un-park.
+			// region-unavailable). reconnectDelay reads the error to tell the
+			// two apart: only "the region answered and has no edge for you"
+			// raises the manual-switch prompt, and even that one keeps
+			// retrying — slowly — because it heals on its own too.
 			reconnectFails++
-			if reconnectFails >= maxReconnectFails {
+			var needsOperator bool
+			retryIn, needsOperator = reconnectDelay(err, reconnectFails)
+			if needsOperator {
 				state.SetLifecycle(status.LifecycleUnavailable)
-				logger.Warn("reconnect attempts exhausted; parking until manual region switch / re-login",
-					"fails", reconnectFails, "err", err)
-				// PARK: wait ONLY on ctx or an explicit restart trigger
-				// (manual region switch / login / org switch all nudge
-				// reloadCh). No time.After — we deliberately stop retrying.
-				select {
-				case <-ctx.Done():
-				case <-reloadCh:
-					reconnectFails = 0
-					logger.Info("manual action received; resuming reconnect")
-				}
-				continue
+				logger.Warn("no healthy edge in the anchored region; showing the manual-region prompt and retrying in the background",
+					"fails", reconnectFails, "next_try_in", retryIn, "err", err)
+			} else {
+				state.SetLifecycle(status.LifecycleReconnecting)
+				logger.Info("connect failed; retrying", "fails", reconnectFails, "next_try_in", retryIn, "err", err)
 			}
-			state.SetLifecycle(status.LifecycleReconnecting)
-			logger.Info("connect failed; retrying", "fails", reconnectFails, "err", err)
 		}
 		select {
 		case <-ctx.Done():
 		case <-reloadCh:
+			// A user action (login / org switch / region switch / SIGHUP) or a
+			// detected resume from sleep. Both mean "the reason this was failing
+			// may be gone" — drop the back-off and dial now.
 			reconnectFails = 0
 			logger.Info("session restart requested; skipping back-off")
-		case <-time.After(retryDelay):
+		case <-time.After(retryIn):
 		}
 	}
 	state.SetLifecycle(status.LifecycleStopped)
@@ -938,12 +972,21 @@ func runOneSession(
 	state.SetPreferredRegion(pr)
 
 	// Region locked + no healthy edge in it: do NOT dial (cross-region
-	// auto-switch is disabled). Return connected=false so the reconnect
-	// loop counts this toward the park-after-N cap and eventually surfaces
-	// "服务器不可用，可手动切换地域". The user un-parks by picking another
-	// region from the top bar.
+	// auto-switch is disabled). Wrap errNoUsableEdge so the reconnect loop can
+	// tell this apart from "this machine has no network" — it is the one failure
+	// that surfaces "服务器不可用，可手动切换地域", because it is the one a user
+	// can actually act on (pick another region from the top bar). The loop keeps
+	// retrying underneath the prompt; the region coming back also fixes it.
 	if pick.RegionUnavailable {
-		return false, fmt.Errorf("no healthy edge in region %q; cross-region auto-switch disabled — switch region manually", pick.Region)
+		return false, errRegionHasNoEdge(pick.Region)
+	}
+	// Discovery failed and there is nothing usable to fall back to. Same handling
+	// as the region case: don't dial, let the reconnect loop count it. The old
+	// behaviour dialled the build's dev default and reported a connection refused
+	// from localhost, which describes the machine we are standing on rather than
+	// the thing that is actually broken.
+	if pick.NoUsableEdge {
+		return false, errEdgeDiscoveryFailed(pick.Reason)
 	}
 	// Surface to /v1/status so the SPA can show "connected via edgeN
 	// (region cn-hangzhou)" in the header.

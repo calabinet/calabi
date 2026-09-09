@@ -17,6 +17,25 @@ type Status struct {
 	// node was configured with: the node re-homes onto the one it measured closest.
 	Relay string
 	Peers []PeerStatus
+	// SubnetAliases are the stand-in prefixes published for THIS node's own
+	// subnet routes, when it is a subnet router for a LAN that collides with
+	// consumers' own. Reported so the console can show "192.168.1.0/24 is
+	// reachable at 100.96.5.0/24" — without that, nobody knows what to dial.
+	SubnetAliases []SubnetAlias
+	// UnaliasedRoutes are this node's own routes that asked for a stand-in prefix
+	// and did not get one. They publish under their real CIDR, so only consumers
+	// whose own LAN collides with them lose access — silently. Reported so the
+	// operator who asked for the alias can see it and act.
+	UnaliasedRoutes []SubnetAlias
+	// AliasBudgetAddrs / AliasUsedAddrs are the org's alias budget and usage in
+	// addresses, so the console can say why rather than only that.
+	AliasBudgetAddrs int
+	AliasUsedAddrs   int
+	// Datapath is this node's own packet accounting (see dpstats.go): what the
+	// direct socket carried, what our queue dropped, what the filter refused.
+	// Peers[] above reports WireGuard's view; this is the layer under it, and
+	// the only place a loss caused by US is visible at all.
+	Datapath DatapathStats
 }
 
 // Transport labels for PeerStatus.Path — how this peer's traffic is reaching it

@@ -19,6 +19,8 @@ type MeshSetting struct {
 	ID int `json:"id,omitempty"`
 	// owning meshnet == org id
 	MeshnetID int64 `json:"meshnet_id,omitempty"`
+	// how many ALIAS addresses this meshnet may hold; 0 = the built-in default (one /24). Raised by an admin for an org that publishes many subnets
+	AliasAddrBudget int `json:"alias_addr_budget,omitempty"`
 	// new devices must be approved by an admin before they can reach anything
 	RequireDeviceApproval bool `json:"require_device_approval,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -33,7 +35,7 @@ func (*MeshSetting) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case meshsetting.FieldRequireDeviceApproval:
 			values[i] = new(sql.NullBool)
-		case meshsetting.FieldID, meshsetting.FieldMeshnetID:
+		case meshsetting.FieldID, meshsetting.FieldMeshnetID, meshsetting.FieldAliasAddrBudget:
 			values[i] = new(sql.NullInt64)
 		case meshsetting.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -63,6 +65,12 @@ func (_m *MeshSetting) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field meshnet_id", values[i])
 			} else if value.Valid {
 				_m.MeshnetID = value.Int64
+			}
+		case meshsetting.FieldAliasAddrBudget:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field alias_addr_budget", values[i])
+			} else if value.Valid {
+				_m.AliasAddrBudget = int(value.Int64)
 			}
 		case meshsetting.FieldRequireDeviceApproval:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -114,6 +122,9 @@ func (_m *MeshSetting) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("meshnet_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.MeshnetID))
+	builder.WriteString(", ")
+	builder.WriteString("alias_addr_budget=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AliasAddrBudget))
 	builder.WriteString(", ")
 	builder.WriteString("require_device_approval=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RequireDeviceApproval))

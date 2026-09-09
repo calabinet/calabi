@@ -123,6 +123,17 @@ func (s *MemNodeStore) UpdateApprovedRoutes(_ context.Context, id int64, routes 
 	return nil
 }
 
+func (s *MemNodeStore) UpdateRouteAliases(_ context.Context, id int64, aliases []RouteAlias) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n, ok := s.nodes[id]
+	if !ok {
+		return ErrNodeNotFound
+	}
+	n.RouteAliases = append([]RouteAlias(nil), aliases...)
+	return nil
+}
+
 func (s *MemNodeStore) UpdateName(_ context.Context, id int64, name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

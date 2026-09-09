@@ -24,8 +24,8 @@ func runUDP(args []string) int {
 	name := fs.String("name", "udp", "tunnel name shown in dashboard")
 	remotePort := fs.Uint("remote-port", 0, "request a specific edge port (0 = auto-assign from pool)")
 	host := fs.String("host", "127.0.0.1", "local host to forward to")
-	sec, secNames := registerSecurityFlags(fs, false)
-	if err := fs.Parse(reorderArgs(args, append([]string{"name", "remote-port", "host"}, secNames...))); err != nil {
+	sec := registerSecurityFlags(fs, false)
+	if err := fs.Parse(reorderArgs(args, valueFlagsOf(fs))); err != nil {
 		return 2
 	}
 	secJSON, secErr := sec.buildConfigJSON()
@@ -54,12 +54,18 @@ func runUDP(args []string) int {
 	}
 
 	logger := setupLogger()
+	// These one-shot commands do not discover an edge; a release build stamps
+	// no compile-time default, so say what to set rather than dialling nothing.
+	edgeAddr := requireEdgeAddr("udp")
+	if edgeAddr == "" {
+		return 2
+	}
 	logger.Info("connecting",
-		"server", envOr("CALABI_SERVER", defaultServer),
+		"server", edgeAddr,
 		"local", localAddr)
 
 	mux, err := transport.Dial(transport.DialOptions{
-		Addr:       envOr("CALABI_SERVER", defaultServer),
+		Addr:       edgeAddr,
 		Insecure:   envBool("CALABI_INSECURE", defaultInsecure),
 		CACertFile: envOr("CALABI_EDGE_CA_FILE", ""),
 	})
@@ -71,7 +77,7 @@ func runUDP(args []string) int {
 	cli := session.New(logger, mux, resolveToken(), *name)
 	cli.SetDeviceID(resolveDeviceID())
 
-	state := status.New(version, envOr("CALABI_SERVER", defaultServer))
+	state := status.New(version, edgeAddr)
 	cli.AttachTracker(state)
 	startStatusPage(logger, state)
 
@@ -96,7 +102,7 @@ func runUDP(args []string) int {
 		return 1
 	}
 
-	edgeHostForState := envOr("CALABI_SERVER", defaultServer)
+	edgeHostForState := edgeAddr
 	if i := lastIndexByte(edgeHostForState, ':'); i > 0 {
 		edgeHostForState = edgeHostForState[:i]
 	}

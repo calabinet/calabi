@@ -8,16 +8,43 @@ import (
 )
 
 // carrierGradeNAT is the 100.64.0.0/10 shared address space (RFC 6598) the mesh
-// overlay draws stable per-node /32s from — the same range Tailscale uses, so it
-// won't collide with typical RFC 1918 LANs behind a node.
+// overlay lives in — the same range Tailscale uses, so it won't collide with
+// typical RFC 1918 LANs behind a node. The client routes this WHOLE prefix into
+// the tun (mesh.meshOverlayCIDR), which is what lets everything below be handed
+// to a consumer with no consumer-side change at all.
 var carrierGradeNAT = netip.MustParsePrefix("100.64.0.0/10")
+
+// The overlay is split in two, and the split is load-bearing.
+//
+// Node /32s come from the lower half. Subnet ALIASES — whole prefixes standing
+// in for a subnet router's real LAN, so two sites that both use 192.168.1.0/24
+// can reach each other — come from
+// the upper half. They MUST NOT be able to collide: an alias that lands on a
+// node's overlay address would route that node's own traffic into somebody's
+// LAN. Two allocators sharing one range and staying out of each other's way by
+// convention is exactly the arrangement that holds until it doesn't, so the
+// ranges are disjoint by construction and TestOverlayPoolsCannotOverlap says so.
+//
+// The plan proposed carving aliases out of "the meshnet's own overlay slice".
+// There is no such slice: MemIPAM hands out globally-unique addresses across the
+// whole /10 (see its comment). Reserving half is the honest version of that idea
+// against the allocator that actually exists.
+var (
+	overlayNodePool  = netip.MustParsePrefix("100.64.0.0/11") // 100.64.0.0 – 100.95.255.255
+	overlayAliasPool = netip.MustParsePrefix("100.96.0.0/11") // 100.96.0.0 – 100.127.255.255
+)
 
 // ErrPoolExhausted is returned when the overlay range has no free address.
 var ErrPoolExhausted = errors.New("core: overlay address pool exhausted")
 
-// MemIPAM is a simple sequential allocator over 100.64.0.0/10, held in memory.
+// MemIPAM is a simple sequential allocator over overlayNodePool, held in memory.
 // v0 hands out globally-unique addresses (not yet partitioned per meshnet); the
 // platform build (MESH.8) will persist allocations and may segment per meshnet.
+//
+// Bounded to the node half of the overlay rather than the whole /10: see the
+// pool comment above. Every address ever handed out lives in 100.64.0.0/11
+// already — allocation starts at 100.64.0.1 and walks up — so narrowing the
+// bound retires no existing address.
 type MemIPAM struct {
 	mu       sync.Mutex
 	next     netip.Addr
@@ -26,7 +53,7 @@ type MemIPAM struct {
 
 // NewMemIPAM starts allocation at 100.64.0.1 (skipping the network address).
 func NewMemIPAM() *MemIPAM {
-	return &MemIPAM{next: carrierGradeNAT.Addr().Next()}
+	return &MemIPAM{next: overlayNodePool.Addr().Next()}
 }
 
 func (p *MemIPAM) Allocate(_ context.Context, _ MeshnetID) (netip.Addr, error) {
@@ -37,7 +64,7 @@ func (p *MemIPAM) Allocate(_ context.Context, _ MeshnetID) (netip.Addr, error) {
 		p.returned = p.returned[:n-1]
 		return addr, nil
 	}
-	if !carrierGradeNAT.Contains(p.next) {
+	if !overlayNodePool.Contains(p.next) {
 		return netip.Addr{}, ErrPoolExhausted
 	}
 	addr := p.next
@@ -55,7 +82,7 @@ func (p *MemIPAM) Warm(used []netip.Addr) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for _, a := range used {
-		if carrierGradeNAT.Contains(a) && a.Compare(p.next) >= 0 {
+		if overlayNodePool.Contains(a) && a.Compare(p.next) >= 0 {
 			p.next = a.Next()
 		}
 	}
@@ -64,7 +91,7 @@ func (p *MemIPAM) Warm(used []netip.Addr) {
 func (p *MemIPAM) Release(_ context.Context, addr netip.Addr) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if carrierGradeNAT.Contains(addr) {
+	if overlayNodePool.Contains(addr) {
 		p.returned = append(p.returned, addr)
 	}
 	return nil

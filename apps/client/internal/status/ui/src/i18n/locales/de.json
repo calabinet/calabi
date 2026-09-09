@@ -76,7 +76,7 @@
     "switchBody2": "Tunnel in der ursprünglichen Region (ihre öffentlichen Adressen sind an diese Region gebunden) sind über diesen Client nicht mehr erreichbar; du musst sie in der neuen Region neu erstellen (die öffentliche Adresse ändert sich). Der Knotenwechsel innerhalb derselben Region erfolgt automatisch und ist nicht betroffen.",
     "switchedTo": "Zu Region \"{{region}}\" gewechselt",
     "failed": "Region konnte nicht gewechselt werden",
-    "parkedNote": "Die Edge-Knoten in der aktuellen Region sind nicht erreichbar; die Wiederverbindung wurde gestoppt. Du kannst die Region oben rechts manuell wechseln."
+    "parkedNote": "Die Edge-Knoten in der aktuellen Region sind nicht erreichbar. Der Client versucht es im Hintergrund weiter; ein Regionswechsel oben rechts stellt die Verbindung sofort wieder her."
   },
   "affinity": {
     "header": "Datenknoten",
@@ -458,7 +458,14 @@
       "egressSection": "Internetzugang dieses Geräts",
       "exitNode": "Dieses Gerät als Exit-Node anbieten",
       "exitNodeHelp": "Andere Geräte können ihren Internetverkehr über dieses Gerät leiten.",
-      "noForward": "Weiterleitung funktioniert nur unter Linux. Dieses Gerät kündigt die Einstellungen zwar an, leitet den Verkehr aber erst weiter, wenn es unter Linux läuft.",
+      "noForward": "Dieses Gerät kündigt diese Rollen an, kann aber nicht weiterleiten - Subnetz-Routing und Exit-Nodes werden nur unter Linux automatisch eingerichtet, sodass Datenverkehr von Peers verworfen wird. Schalte sie ab oder betreibe den Router auf einem Linux-Gerät.",
+      "noForwardLocked": "Auf diesem Gerät nicht verfügbar: Subnetz-Routing und Exit-Nodes erfordern Paketweiterleitung, die nur unter Linux automatisch eingerichtet wird. Eine Ankündigung ohne sie würde den Datenverkehr der Peers in eine Sackgasse leiten.",
+      "alias": "Ersatzadressen",
+      "aliasHelp": "Jedes veröffentlichte Subnetz erhält automatisch ein eindeutiges Ersatzpräfix, wobei der letzte Teil unverändert bleibt: .222 bleibt .222. Peers erreichen es dort, sodass auch ein Peer mit denselben Adressen im eigenen LAN durchkommt. Erfordert die Freigabe der Route durch eine Administratorin oder einen Administrator.",
+      "aliasAssigned": "Peers erreichen diese Subnetze unter:",
+      "aliasPending": "Warten auf die Adressvergabe durch den Koordinator.",
+      "aliasRefused": "Einigen Subnetzen konnte keine Adresse zugewiesen werden",
+      "aliasBudget": "Diese Organisation nutzt {{used}} von {{total}} Alias-Adressen. Diese Routen funktionieren weiterhin für Peers, deren eigenes Netz nicht kollidiert; kollidierende Peers erreichen sie nicht. Bitte einen Administrator um eine Erhöhung.",
       "offerSection": "Für das Mesh bereitstellen",
       "routes": "Subnetz-Routen ankündigen",
       "routesHelp": "CIDRs aus dem LAN dieses Geräts, die im Mesh verfügbar sein sollen, z. B. 192.168.1.0/24. Peers erreichen sie über dieses Gerät.",
@@ -474,10 +481,13 @@
       "excludesHelp": "Alle übrigen annehmen, außer diesen. Wird ein Bereich ausgeschlossen, gilt das auch für die spezifischeren Präfixe darin.",
       "add": "Hinzufügen",
       "invalidCidr": "Kein CIDR — z. B. 192.168.1.0/24",
+      "routeTooBroad": "Netze breiter als /24 können nicht veröffentlicht werden. Stattdessen die benötigten /24-Subnetze einzeln veröffentlichen, z. B. {{suggest}}.",
       "dupCidr": "Steht bereits in der Liste",
       "emptyList": "Noch nichts vorhanden",
       "remove": "Entfernen",
-      "unsaved": "Ungespeicherte Änderungen in diesem Tab"
+      "unsaved": "Ungespeicherte Änderungen in diesem Tab",
+      "aliasUnsupported": "Dieser Rechner kann keine Ersatzregeln einrichten",
+      "aliasUnsupportedHelp": "Dafür wird iptables mit dem Ziel xt_NETMAP benötigt. Die Subnetze werden stattdessen unter ihren echten Adressen veröffentlicht — Peers, deren eigenes Netz damit kollidiert, erreichen sie nicht."
     },
     "ago": "vor {{d}}",
     "colAllowed": "Erlaubte IPs",

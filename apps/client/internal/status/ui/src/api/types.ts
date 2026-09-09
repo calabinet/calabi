@@ -489,6 +489,18 @@ export interface MeshPeer {
 }
 
 export interface MeshStatus {
+  // subnet_aliases is the mapping for THIS node's own subnet routes when it
+  // publishes a LAN that collides with consumers' own. Shown because nobody can
+  // dial an address they cannot see.
+  subnet_aliases?: { alias: string; real: string }[];
+  // Routes that asked for a stand-in prefix and did not get one. They still work
+  // for consumers that do not collide with them; the ones that DO collide cannot
+  // reach them, silently — which is exactly why this is surfaced.
+  unaliased_routes?: string[];
+  // The org's alias budget and usage, in addresses (a /24 is 256), so the page
+  // can say WHY rather than only THAT.
+  alias_budget_addrs?: number;
+  alias_used_addrs?: number;
   enabled: boolean; // a `mesh:` block is configured on this daemon
   up: boolean; // the datapath is currently live
   paused?: boolean; // stopped locally via meshDown; Start (meshUp) re-enrolls
@@ -545,4 +557,10 @@ export interface MeshAdvertise {
   // return path of connections to services this machine publishes.
   accept_routes?: boolean;
   route_excludes?: string[]; // refused even while accepting the rest
+  // alias_supported is read-only, and a CAPABILITY rather than a setting: every
+  // advertised route is published under a stand-in prefix, so the only question
+  // is whether this host can install the rewrite (Linux + iptables NETMAP).
+  // Optional because an older daemon does not report it — undefined must not be
+  // rendered as "unsupported".
+  alias_supported?: boolean;
 }

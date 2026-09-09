@@ -207,7 +207,9 @@ export const api = {
   // session so the change takes effect.
   // accept_routes / route_excludes are OPTIONAL on the wire: omitting a field
   // means "leave it unchanged", so an older page can't silently switch route
-  // acceptance off when it saves the three fields it knows about.
+  // acceptance off when it saves the fields it knows about. alias_routes is
+  // gone — aliasing is applied to every advertised route, so there is no subset
+  // to send; the daemon drops the field if an older page still posts one.
   setMeshAdvertise: async (body: {
     routes: string[];
     advertise_exit_node: boolean;

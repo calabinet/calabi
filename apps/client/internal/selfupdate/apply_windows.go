@@ -14,8 +14,8 @@ import (
 // service (which kills this daemon). BREAKAWAY may be a no-op if the service
 // isn't in a job; harmless then.
 const (
-	detachedProcess       = 0x00000008
-	createNewProcessGroup = 0x00000200
+	detachedProcess        = 0x00000008
+	createNewProcessGroup  = 0x00000200
 	createBreakawayFromJob = 0x01000000
 )
 

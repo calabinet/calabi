@@ -35,6 +35,10 @@ const (
 	FieldAdvertisedRoutesJSON = "advertised_routes_json"
 	// FieldApprovedRoutesJSON holds the string denoting the approved_routes_json field in the database.
 	FieldApprovedRoutesJSON = "approved_routes_json"
+	// FieldAliasedRoutesJSON holds the string denoting the aliased_routes_json field in the database.
+	FieldAliasedRoutesJSON = "aliased_routes_json"
+	// FieldRouteAliasesJSON holds the string denoting the route_aliases_json field in the database.
+	FieldRouteAliasesJSON = "route_aliases_json"
 	// FieldRoutesReviewed holds the string denoting the routes_reviewed field in the database.
 	FieldRoutesReviewed = "routes_reviewed"
 	// FieldOwnerUserID holds the string denoting the owner_user_id field in the database.
@@ -71,6 +75,8 @@ var Columns = []string{
 	FieldEndpointsJSON,
 	FieldAdvertisedRoutesJSON,
 	FieldApprovedRoutesJSON,
+	FieldAliasedRoutesJSON,
+	FieldRouteAliasesJSON,
 	FieldRoutesReviewed,
 	FieldOwnerUserID,
 	FieldDeviceFingerprint,
@@ -113,6 +119,10 @@ var (
 	DefaultAdvertisedRoutesJSON string
 	// DefaultApprovedRoutesJSON holds the default value on creation for the "approved_routes_json" field.
 	DefaultApprovedRoutesJSON string
+	// DefaultAliasedRoutesJSON holds the default value on creation for the "aliased_routes_json" field.
+	DefaultAliasedRoutesJSON string
+	// DefaultRouteAliasesJSON holds the default value on creation for the "route_aliases_json" field.
+	DefaultRouteAliasesJSON string
 	// DefaultRoutesReviewed holds the default value on creation for the "routes_reviewed" field.
 	DefaultRoutesReviewed bool
 	// DefaultOwnerUserID holds the default value on creation for the "owner_user_id" field.
@@ -196,6 +206,16 @@ func ByAdvertisedRoutesJSON(opts ...sql.OrderTermOption) OrderOption {
 // ByApprovedRoutesJSON orders the results by the approved_routes_json field.
 func ByApprovedRoutesJSON(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldApprovedRoutesJSON, opts...).ToFunc()
+}
+
+// ByAliasedRoutesJSON orders the results by the aliased_routes_json field.
+func ByAliasedRoutesJSON(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAliasedRoutesJSON, opts...).ToFunc()
+}
+
+// ByRouteAliasesJSON orders the results by the route_aliases_json field.
+func ByRouteAliasesJSON(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRouteAliasesJSON, opts...).ToFunc()
 }
 
 // ByRoutesReviewed orders the results by the routes_reviewed field.

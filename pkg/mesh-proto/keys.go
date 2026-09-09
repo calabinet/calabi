@@ -48,8 +48,8 @@ func (k NodeKey) IsZero() bool { return k == NodeKey{} }
 // Equal is a constant-time comparison, so key checks don't leak timing.
 func (k NodeKey) Equal(o NodeKey) bool { return subtle.ConstantTimeCompare(k[:], o[:]) == 1 }
 
-func (k NodeKey) String() string            { return keyText(k[:]) }
-func (k NodeKey) MarshalText() ([]byte, error) { return []byte(keyText(k[:])), nil }
+func (k NodeKey) String() string                { return keyText(k[:]) }
+func (k NodeKey) MarshalText() ([]byte, error)  { return []byte(keyText(k[:])), nil }
 func (k *NodeKey) UnmarshalText(b []byte) error { return parseKey(string(b), k[:]) }
 
 // ParseNodeKey decodes a base64 (WireGuard-style) public key.

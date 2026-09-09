@@ -11,7 +11,7 @@ import (
 	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
 )
 
-// fakeRelayServer is a minimal calabi-derp stand-in: it accepts links, reads the
+// fakeRelayServer is a minimal relay stand-in: it accepts links, reads the
 // ClientInfo frame, and records every packet frame it is asked to forward — just
 // enough to see WHICH relay the pool sent a packet through.
 type fakeRelayServer struct {

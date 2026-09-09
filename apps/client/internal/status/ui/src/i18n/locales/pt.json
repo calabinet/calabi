@@ -76,7 +76,7 @@
     "switchBody2": "Os túneis da região original (cujos endereços públicos estão fixados nessa região) deixarão de estar acessíveis por este cliente; você precisará recriá-los na nova região (o endereço público mudará). A troca de nós dentro da mesma região é automática e não é afetada.",
     "switchedTo": "Trocado para a região \"{{region}}\"",
     "failed": "Falha ao trocar de região",
-    "parkedNote": "Os edge nodes da região atual estão inacessíveis; a reconexão foi interrompida. Você pode trocar de região manualmente no canto superior direito."
+    "parkedNote": "Os edge nodes da região atual estão inacessíveis. O cliente continua tentando em segundo plano; trocar de região no canto superior direito reconecta imediatamente."
   },
   "affinity": {
     "header": "Nó de dados",
@@ -458,7 +458,14 @@
       "egressSection": "Saída para a internet deste dispositivo",
       "exitNode": "Oferecer este dispositivo como nó de saída",
       "exitNodeHelp": "Outros dispositivos podem fazer o tráfego de internet deles sair por esta máquina.",
-      "noForward": "O encaminhamento só funciona no Linux. Esta máquina vai anunciar essas configurações, mas só encaminhará o tráfego de verdade quando estiver em um dispositivo Linux.",
+      "noForward": "Este dispositivo anuncia estas funções, mas não consegue encaminhar: o roteamento de sub-redes e os nós de saída só são configurados automaticamente no Linux, portanto o tráfego enviado pelos pares é descartado. Desative-as ou execute o roteador em um dispositivo Linux.",
+      "noForwardLocked": "Indisponível neste dispositivo: o roteamento de sub-redes e os nós de saída exigem encaminhamento de pacotes, configurado automaticamente apenas no Linux. Anunciá-los sem isso levaria o tráfego dos pares a um beco sem saída.",
+      "alias": "Endereços substitutos",
+      "aliasHelp": "Cada sub-rede publicada recebe automaticamente um prefixo substituto único, mantendo a última parte: .222 continua .222. Os pares acedem por aí, por isso um par cuja própria rede use os mesmos endereços também chega. Requer que um administrador aprove a rota.",
+      "aliasAssigned": "Os pares alcançam estas sub-redes em:",
+      "aliasPending": "Aguardando o coordenador atribuir os endereços.",
+      "aliasRefused": "Algumas sub-redes não puderam receber um endereço",
+      "aliasBudget": "A sua organização usa {{used}} de {{total}} endereços de alias. Estas rotas continuam a funcionar para os pares cuja rede não colide com elas; os que colidem não conseguem alcançá-las. Peça a um administrador para aumentar o limite.",
       "offerSection": "Oferecer à Malha",
       "routes": "Anunciar rotas de sub-rede",
       "routesHelp": "CIDRs da rede local desta máquina para expor à Malha, por exemplo 192.168.1.0/24. Os pares acessam essas redes através deste dispositivo.",
@@ -474,10 +481,13 @@
       "excludesHelp": "Aceita as demais, exceto estas. Excluir um intervalo também recusa os prefixos mais específicos dentro dele.",
       "add": "Adicionar",
       "invalidCidr": "Não é um CIDR — ex.: 192.168.1.0/24",
+      "routeTooBroad": "Redes maiores do que /24 não podem ser publicadas — publique as sub-redes /24 de que precisa, por ex. {{suggest}}.",
       "dupCidr": "Já está na lista",
       "emptyList": "Ainda não há nada",
       "remove": "Remover",
-      "unsaved": "Alterações não salvas nesta aba"
+      "unsaved": "Alterações não salvas nesta aba",
+      "aliasUnsupported": "Esta máquina não consegue instalar as regras de substituição",
+      "aliasUnsupportedHelp": "São precisos iptables com o alvo xt_NETMAP. As sub-redes são publicadas com os endereços reais, por isso os pares cuja rede colide com elas não conseguem alcançá-las."
     },
     "ago": "há {{d}}",
     "colAllowed": "IPs permitidos",

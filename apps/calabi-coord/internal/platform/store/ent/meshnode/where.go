@@ -109,6 +109,16 @@ func ApprovedRoutesJSON(v string) predicate.MeshNode {
 	return predicate.MeshNode(sql.FieldEQ(FieldApprovedRoutesJSON, v))
 }
 
+// AliasedRoutesJSON applies equality check predicate on the "aliased_routes_json" field. It's identical to AliasedRoutesJSONEQ.
+func AliasedRoutesJSON(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldAliasedRoutesJSON, v))
+}
+
+// RouteAliasesJSON applies equality check predicate on the "route_aliases_json" field. It's identical to RouteAliasesJSONEQ.
+func RouteAliasesJSON(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldRouteAliasesJSON, v))
+}
+
 // RoutesReviewed applies equality check predicate on the "routes_reviewed" field. It's identical to RoutesReviewedEQ.
 func RoutesReviewed(v bool) predicate.MeshNode {
 	return predicate.MeshNode(sql.FieldEQ(FieldRoutesReviewed, v))
@@ -787,6 +797,136 @@ func ApprovedRoutesJSONEqualFold(v string) predicate.MeshNode {
 // ApprovedRoutesJSONContainsFold applies the ContainsFold predicate on the "approved_routes_json" field.
 func ApprovedRoutesJSONContainsFold(v string) predicate.MeshNode {
 	return predicate.MeshNode(sql.FieldContainsFold(FieldApprovedRoutesJSON, v))
+}
+
+// AliasedRoutesJSONEQ applies the EQ predicate on the "aliased_routes_json" field.
+func AliasedRoutesJSONEQ(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldAliasedRoutesJSON, v))
+}
+
+// AliasedRoutesJSONNEQ applies the NEQ predicate on the "aliased_routes_json" field.
+func AliasedRoutesJSONNEQ(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNEQ(FieldAliasedRoutesJSON, v))
+}
+
+// AliasedRoutesJSONIn applies the In predicate on the "aliased_routes_json" field.
+func AliasedRoutesJSONIn(vs ...string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldIn(FieldAliasedRoutesJSON, vs...))
+}
+
+// AliasedRoutesJSONNotIn applies the NotIn predicate on the "aliased_routes_json" field.
+func AliasedRoutesJSONNotIn(vs ...string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNotIn(FieldAliasedRoutesJSON, vs...))
+}
+
+// AliasedRoutesJSONGT applies the GT predicate on the "aliased_routes_json" field.
+func AliasedRoutesJSONGT(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldGT(FieldAliasedRoutesJSON, v))
+}
+
+// AliasedRoutesJSONGTE applies the GTE predicate on the "aliased_routes_json" field.
+func AliasedRoutesJSONGTE(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldGTE(FieldAliasedRoutesJSON, v))
+}
+
+// AliasedRoutesJSONLT applies the LT predicate on the "aliased_routes_json" field.
+func AliasedRoutesJSONLT(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldLT(FieldAliasedRoutesJSON, v))
+}
+
+// AliasedRoutesJSONLTE applies the LTE predicate on the "aliased_routes_json" field.
+func AliasedRoutesJSONLTE(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldLTE(FieldAliasedRoutesJSON, v))
+}
+
+// AliasedRoutesJSONContains applies the Contains predicate on the "aliased_routes_json" field.
+func AliasedRoutesJSONContains(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldContains(FieldAliasedRoutesJSON, v))
+}
+
+// AliasedRoutesJSONHasPrefix applies the HasPrefix predicate on the "aliased_routes_json" field.
+func AliasedRoutesJSONHasPrefix(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldHasPrefix(FieldAliasedRoutesJSON, v))
+}
+
+// AliasedRoutesJSONHasSuffix applies the HasSuffix predicate on the "aliased_routes_json" field.
+func AliasedRoutesJSONHasSuffix(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldHasSuffix(FieldAliasedRoutesJSON, v))
+}
+
+// AliasedRoutesJSONEqualFold applies the EqualFold predicate on the "aliased_routes_json" field.
+func AliasedRoutesJSONEqualFold(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEqualFold(FieldAliasedRoutesJSON, v))
+}
+
+// AliasedRoutesJSONContainsFold applies the ContainsFold predicate on the "aliased_routes_json" field.
+func AliasedRoutesJSONContainsFold(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldContainsFold(FieldAliasedRoutesJSON, v))
+}
+
+// RouteAliasesJSONEQ applies the EQ predicate on the "route_aliases_json" field.
+func RouteAliasesJSONEQ(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldRouteAliasesJSON, v))
+}
+
+// RouteAliasesJSONNEQ applies the NEQ predicate on the "route_aliases_json" field.
+func RouteAliasesJSONNEQ(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNEQ(FieldRouteAliasesJSON, v))
+}
+
+// RouteAliasesJSONIn applies the In predicate on the "route_aliases_json" field.
+func RouteAliasesJSONIn(vs ...string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldIn(FieldRouteAliasesJSON, vs...))
+}
+
+// RouteAliasesJSONNotIn applies the NotIn predicate on the "route_aliases_json" field.
+func RouteAliasesJSONNotIn(vs ...string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNotIn(FieldRouteAliasesJSON, vs...))
+}
+
+// RouteAliasesJSONGT applies the GT predicate on the "route_aliases_json" field.
+func RouteAliasesJSONGT(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldGT(FieldRouteAliasesJSON, v))
+}
+
+// RouteAliasesJSONGTE applies the GTE predicate on the "route_aliases_json" field.
+func RouteAliasesJSONGTE(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldGTE(FieldRouteAliasesJSON, v))
+}
+
+// RouteAliasesJSONLT applies the LT predicate on the "route_aliases_json" field.
+func RouteAliasesJSONLT(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldLT(FieldRouteAliasesJSON, v))
+}
+
+// RouteAliasesJSONLTE applies the LTE predicate on the "route_aliases_json" field.
+func RouteAliasesJSONLTE(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldLTE(FieldRouteAliasesJSON, v))
+}
+
+// RouteAliasesJSONContains applies the Contains predicate on the "route_aliases_json" field.
+func RouteAliasesJSONContains(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldContains(FieldRouteAliasesJSON, v))
+}
+
+// RouteAliasesJSONHasPrefix applies the HasPrefix predicate on the "route_aliases_json" field.
+func RouteAliasesJSONHasPrefix(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldHasPrefix(FieldRouteAliasesJSON, v))
+}
+
+// RouteAliasesJSONHasSuffix applies the HasSuffix predicate on the "route_aliases_json" field.
+func RouteAliasesJSONHasSuffix(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldHasSuffix(FieldRouteAliasesJSON, v))
+}
+
+// RouteAliasesJSONEqualFold applies the EqualFold predicate on the "route_aliases_json" field.
+func RouteAliasesJSONEqualFold(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEqualFold(FieldRouteAliasesJSON, v))
+}
+
+// RouteAliasesJSONContainsFold applies the ContainsFold predicate on the "route_aliases_json" field.
+func RouteAliasesJSONContainsFold(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldContainsFold(FieldRouteAliasesJSON, v))
 }
 
 // RoutesReviewedEQ applies the EQ predicate on the "routes_reviewed" field.

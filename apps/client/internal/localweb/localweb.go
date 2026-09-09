@@ -87,11 +87,21 @@ type HealthSource interface {
 	Snapshot() []probe.Result
 }
 
-// MeshSource powers /v1/mesh — the Connect (WireGuard mesh) status the console
+// MeshSource powers /v1/mesh — the WireGuard mesh status the console
 // and `calabi mesh status` render. The daemon's meshRunner implements it. nil =
 // mesh not configured (the endpoint reports enabled:false).
 type MeshSource interface {
 	MeshStatus() MeshStatus
+	// ProbeRelayLeg drives one segment of the relay path and reports what came
+	// back (see MeshRelayProbe). relay names which link; empty means this node's
+	// home relay. It measures the LIVE link rather than dialing its own, because
+	// a second connection would need either an identity the coordinator has not
+	// granted or this node's own key, and the relay hands a key to the newest
+	// connection claiming it -- the probe would evict the link it came to measure.
+	// oneWay drives the send direction alone (no return traffic), which is what
+	// separates a slow network from the relay stalling its own read loop.
+	ProbeRelayLeg(ctx context.Context, relay string, size int, rateMbps float64, seconds int, oneWay bool) (MeshRelayProbe, error)
+
 	// MeshDown stops the mesh subsystem (idempotent; nil if already down).
 	MeshDown() error
 }
@@ -109,6 +119,28 @@ type MeshStatus struct {
 	Name     string     `json:"name,omitempty"`
 	Overlay  string     `json:"overlay,omitempty"`
 	Peers    []MeshPeer `json:"peers"`
+	// SubnetAliases is the stand-in mapping for this node's OWN subnet routes,
+	// when it publishes a LAN that collides with consumers' own.
+	SubnetAliases []MeshSubnetAlias `json:"subnet_aliases,omitempty"`
+	// UnaliasedRoutes are routes that asked for a stand-in prefix and did not get
+	// one. They still work for consumers that do not collide with them; the ones
+	// that DO collide cannot reach them, silently — which is why this is shown.
+	UnaliasedRoutes []string `json:"unaliased_routes,omitempty"`
+	// AliasBudgetAddrs / AliasUsedAddrs explain WHY, in addresses (a /24 is 256).
+	AliasBudgetAddrs int `json:"alias_budget_addrs,omitempty"`
+	AliasUsedAddrs   int `json:"alias_used_addrs,omitempty"`
+	// Datapath is this node's own packet accounting — where traffic goes missing
+	// (see MeshDatapath). Always emitted, zeroed while the mesh is down.
+	Datapath MeshDatapath `json:"datapath"`
+}
+
+// MeshSubnetAlias is one subnet behind THIS node and the unique prefix the mesh
+// reaches it by. Shown because nobody can dial an address they cannot see: the
+// alias scheme deliberately asks a person to use a different address than the
+// one written on the machine, so the mapping has to be somewhere they look.
+type MeshSubnetAlias struct {
+	Alias string `json:"alias"`
+	Real  string `json:"real"`
 }
 
 // MeshPeer is one peer's live state in /v1/mesh.
@@ -119,7 +151,7 @@ type MeshPeer struct {
 	RxBytes          int64    `json:"rx_bytes"`
 	TxBytes          int64    `json:"tx_bytes"`
 	// Path is "direct" when hole punching found a working peer-to-peer path,
-	// "relay" when traffic goes through calabi-derp. Endpoint carries the direct
+	// "relay" when traffic goes through the relay. Endpoint carries the direct
 	// UDP address in the former case.
 	Path     string `json:"path,omitempty"`
 	Endpoint string `json:"endpoint,omitempty"`
@@ -169,7 +201,7 @@ type Config struct {
 	Inspector InspectorSource // /v1/inspect/*; nil disables
 	Usage     UsageSource     // /v1/usage/current; nil → always 0
 	Health    HealthSource    // /v1/probe/health; nil → enabled:false
-	Mesh      MeshSource      // /v1/mesh (Connect status); nil → enabled:false
+	Mesh      MeshSource      // /v1/mesh (mesh status); nil → enabled:false
 	Server    string          // edge control endpoint, shown in the synthetic /v1/edges row
 	Region    string          // labels the synthetic edge; empty → "local"
 }
@@ -206,8 +238,9 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/v1/probe/health", s.handleProbeHealth)
 	mux.HandleFunc("/v1/probe/ports", s.handleProbePorts)
 	mux.HandleFunc("/v1/probe/check", s.handleProbeCheck)
-	mux.HandleFunc("/v1/mesh", s.handleMesh)          // GET status
-	mux.HandleFunc("/v1/mesh/down", s.handleMeshDown) // POST stop (local-token)
+	mux.HandleFunc("/v1/mesh", s.handleMesh)                     // GET status
+	mux.HandleFunc("/v1/mesh/down", s.handleMeshDown)            // POST stop (local-token)
+	mux.HandleFunc("/v1/mesh/relaytest", s.handleMeshRelayProbe) // POST measure one relay leg
 	mux.HandleFunc("/v1/inspect/connections", s.handleInspectConnections)
 	mux.HandleFunc("/v1/inspect/captures", s.handleInspectCaptures)
 	mux.HandleFunc("/v1/inspect/replay", notSupported)
@@ -695,7 +728,7 @@ func (s *Server) handleProbeCheck(w http.ResponseWriter, r *http.Request) {
 	}))
 }
 
-// --- /v1/mesh — Connect (WireGuard mesh) status ----------------------------
+// --- /v1/mesh — WireGuard mesh status ----------------------------
 
 func (s *Server) handleMesh(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

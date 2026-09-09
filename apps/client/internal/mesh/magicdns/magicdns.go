@@ -1,4 +1,4 @@
-// Package magicdns is the client-side MagicDNS resolver for Connect: it answers
+// Package magicdns is the client-side MagicDNS resolver for the mesh: it answers
 // A queries for mesh node names (from the live netmap) and forwards everything
 // else to an upstream resolver, so pointing the OS at it doesn't break normal
 // DNS. Names resolve in both forms: the bare "<node>" and the FQDN

@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"net/netip"
+	"sort"
 	"strings"
 	"time"
 
@@ -44,6 +45,18 @@ type WGConfig struct {
 	// home relay, and to keep its own home link on the relay its own region
 	// resolves to. Empty for a deployment whose map carries no usable relay.
 	RelayByRegion map[string]string
+	// SubnetAliases are the stand-in prefixes the coordinator published for THIS
+	// node's own subnet routes. The datapath does not route on them — the rewrite
+	// is the kernel's — but it carries them so Snapshot can report the mapping.
+	// Nobody can use an alias they cannot see: the whole scheme asks a person to
+	// dial a different address than the one written on the machine.
+	SubnetAliases []SubnetAlias
+	// UnaliasedRoutes / AliasBudgetAddrs / AliasUsedAddrs are reported state for
+	// the console: which of this node's own routes could not get a stand-in
+	// prefix, and the org's budget picture that explains why.
+	UnaliasedRoutes  []SubnetAlias
+	AliasBudgetAddrs int
+	AliasUsedAddrs   int
 	// Filter / FilterEnabled are the node's INBOUND packet filter (MESH.5b),
 	// straight from the netmap. FilterEnabled false = the coordinator doesn't
 	// compile filters, so nothing is filtered.
@@ -67,6 +80,12 @@ func BuildWGConfig(nm NetMap) WGConfig {
 	cfg := WGConfig{NodeKey: nm.Self.NodeKey, OverlayAddr: nm.Self.Overlay}
 	cfg.Filter, cfg.FilterEnabled = nm.Filter, nm.FilterEnabled
 	cfg.RelayGrant = nm.RelayGrant
+	cfg.SubnetAliases = nm.SubnetAliases
+	for _, r := range nm.UnaliasedRoutes {
+		// Reuse the pair type with an empty Alias: "this real prefix, no alias".
+		cfg.UnaliasedRoutes = append(cfg.UnaliasedRoutes, SubnetAlias{Real: r})
+	}
+	cfg.AliasBudgetAddrs, cfg.AliasUsedAddrs = nm.AliasBudgetAddrs, nm.AliasUsedAddrs
 	cfg.RelayByRegion = relayAddrsByRegion(nm.DERP)
 	cfg.SelfRelay = cfg.RelayByRegion[nm.Self.DERPHome]
 	for _, p := range nm.Peers {
@@ -203,22 +222,18 @@ func applyRoutePolicy(cfg WGConfig, rp RoutePolicy) (WGConfig, []RefusedRoute) {
 // selectSubnetRoutes decides which of the peers' advertised allowed-ips get an OS
 // route at the tun (MESH.7a). It drops three kinds: overlay /32s (already covered
 // by the meshOverlayCIDR route), default routes (0.0.0.0/0 — handled by the exit
-// step, never a plain tun route), and — the local-wins rule — an advertised
-// subnet that is IDENTICAL to a directly-connected local network.
+// step, never a plain tun route), and — the local-wins rule — any advertisement
+// naming address space this machine is already directly attached to, whether that
+// is the whole local subnet or one host inside it.
 //
-// The last case is narrow ON PURPOSE. Only an exact same-subnet collision (this
-// box and a remote subnet-router both literally on 192.168.1.0/24) is ambiguous:
-// routing it into the tun would hijack the machine's OWN LAN, and two equal-length
-// prefixes tie under longest-prefix so a routing-metric accident would otherwise
-// decide it — drop it, local wins (reach the remote copy via address translation).
+// The last case reads simply: nothing a peer says should send traffic into
+// WireGuard for an address reachable on this machine's own wire.
+// localSubnetWins for why the host-inside-our-LAN half was added, what it costs
+// on client-isolated links, and why it leaves the alias mechanism alone.
 //
-// A MORE-SPECIFIC advertisement (a remote host 192.168.1.222/32 while this box is
-// on 192.168.1.0/24) or a BROADER one (192.168.0.0/16) is NOT dropped: RFC1918
-// address space collides constantly, and longest-prefix match already resolves
-// these safely — the /32 diverts only that one address into the mesh and leaves
-// the rest of the local /24 on the physical link; the /16 never beats the local
-// /24 for local addresses. These are exactly the approved host/subnet routes that
-// must keep working. Pure + deterministic so it can be unit-tested.
+// A BROADER advertisement (192.168.0.0/16 against a local /24) is still kept:
+// the local subnet does not cover it, and longest-prefix match means it never
+// wins for local addresses anyway. Pure + deterministic so it can be unit-tested.
 func selectSubnetRoutes(peers []WGPeer, overlay netip.Prefix, locals []netip.Prefix) (keep []netip.Prefix, dropped []droppedRoute) {
 	seen := map[netip.Prefix]bool{}
 	for _, p := range peers {
@@ -226,7 +241,7 @@ func selectSubnetRoutes(peers []WGPeer, overlay netip.Prefix, locals []netip.Pre
 			if overlay.Contains(aip.Addr()) || isDefaultRoute(aip) || seen[aip] {
 				continue
 			}
-			if l, ok := exactLocalCollision(aip, locals); ok {
+			if l, ok := localSubnetWins(aip, locals); ok {
 				dropped = append(dropped, droppedRoute{Advertised: aip, Local: l, Peer: p.PublicKey})
 				continue
 			}
@@ -251,9 +266,10 @@ func selectSubnetRoutes(peers []WGPeer, overlay netip.Prefix, locals []netip.Pre
 // Only prefixes WE installed are ever removed — that is the whole reason for
 // carrying `have`. Scanning the OS table for routes that merely LOOK like mesh
 // routes would delete the operator's own static ones. It also means a prefix
-// selectSubnetRoutes DROPPED (identical to a local network) can never be deleted
+// selectSubnetRoutes DROPPED (covered by a local network) can never be deleted
 // here: it never entered `have`, so this can't withdraw the machine's own LAN out
-// from under it. Pure + deterministic so it can be unit-tested.
+// from under it. (That parenthetical now covers a host inside a local network as
+// well as a whole identical one — same rule, wider reach.) Pure + deterministic so it can be unit-tested.
 func diffSubnetRoutes(have, want []netip.Prefix) (add, del []netip.Prefix) {
 	inWant := make(map[netip.Prefix]bool, len(want))
 	for _, p := range want {
@@ -315,6 +331,21 @@ func nextSubnetState(want, add, del []netip.Prefix, addOK, delOK bool) []netip.P
 // controller logs a policy decision when it CHANGES rather than on every netmap
 // re-push. Order is the peer iteration order, which is stable for an unchanged
 // netmap — a reorder costs one extra log line, never a missed one.
+// aliasFingerprint identifies a set of subnet aliases, so the netmap callback
+// can tell "the coordinator re-sent the same thing" from "the mapping changed"
+// without comparing slices at every push.
+func aliasFingerprint(as []SubnetAlias) string {
+	if len(as) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(as))
+	for _, a := range as {
+		parts = append(parts, a.Alias.String()+"->"+a.Real.String())
+	}
+	sort.Strings(parts) // order from the wire is not guaranteed; the SET is what matters
+	return strings.Join(parts, ";")
+}
+
 func refusedFingerprint(rs []RefusedRoute) string {
 	if len(rs) == 0 {
 		return ""
@@ -327,4 +358,22 @@ func refusedFingerprint(rs []RefusedRoute) string {
 		b.WriteByte(';')
 	}
 	return b.String()
+}
+
+// droppedFingerprint is a stable identity for a set of local-wins drops, so the
+// datapath can log the set when it CHANGES rather than on every netmap push.
+//
+// Sorted, because the order comes from the peer list and the coordinator does
+// not promise one — an unsorted join would "change" whenever two peers swapped
+// places and re-log a set that is in fact identical.
+func droppedFingerprint(dropped []droppedRoute) string {
+	if len(dropped) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(dropped))
+	for _, dr := range dropped {
+		parts = append(parts, dr.Advertised.String()+"<"+dr.Local.String()+"@"+dr.Peer.String())
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
 }

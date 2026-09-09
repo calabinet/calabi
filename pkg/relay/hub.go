@@ -26,11 +26,19 @@ type Hub struct {
 }
 
 type client struct {
-	key   meshproto.NodeKey
-	conn  net.Conn
-	wmu   sync.Mutex // serializes frame writes to conn
-	auth  authState  // R0': the challenge/grant state of this link (auth.go)
-	usage *usageCounter
+	key  meshproto.NodeKey
+	conn net.Conn
+	// wmu serializes every write to conn: the control frames written inline below
+	// and the data frames written by the queue's own goroutine. Without it the two
+	// can interleave mid-frame and desynchronise the stream permanently.
+	wmu sync.Mutex
+	// sendq carries data frames to this client. Relayed packets go through it so
+	// that writing to a slow destination cannot stall the goroutine reading from
+	// whoever sent them — see sendq.go.
+	sendq  *sendQueue
+	closed chan struct{} // closed when Serve returns; stops the writer
+	auth   authState     // R0': the challenge/grant state of this link (auth.go)
+	usage  *usageCounter
 }
 
 // NewHub returns an empty hub. A zero AuthConfig means connections are accepted
@@ -95,7 +103,8 @@ func (h *Hub) Serve(conn net.Conn) {
 	}
 	var key meshproto.NodeKey
 	copy(key[:], payload)
-	c := &client{key: key, conn: conn}
+	c := &client{key: key, conn: conn, sendq: newSendQueue(), closed: make(chan struct{})}
+	defer close(c.closed)
 
 	// Authenticate BEFORE registering. ClientInfo is only a claim, and add()
 	// evicts whatever link currently holds that key — so registering first would
@@ -110,7 +119,15 @@ func (h *Hub) Serve(conn net.Conn) {
 
 	h.add(c)
 	defer h.remove(c)
+	// The writer starts only after add(), so c.usage is set: the queue credits
+	// usage itself, on the frames it actually manages to write.
+	go c.sendq.run(conn, &c.wmu, c.usage, c.closed)
 	h.logger.Info("derp client connected", "key", key)
+	defer func() {
+		if n := c.sendq.Dropped(); n > 0 {
+			h.logger.Info("derp client disconnected", "key", key, "dropped_as_stale", n)
+		}
+	}()
 
 	for {
 		typ, payload, err := meshproto.ReadDERPFrame(conn)
@@ -123,7 +140,12 @@ func (h *Hub) Serve(conn net.Conn) {
 			if err != nil {
 				continue // ignore malformed packet, keep the link
 			}
-			h.logger.Debug("derp recv SendPacket", "src", key, "dst", dst, "bytes", len(ciphertext))
+			// No logging on this line. It ran once per relayed packet with two
+			// 32-byte node keys as arguments, which allocates on every packet even
+			// when the level is off (the variadic slice and the boxing happen at
+			// the call site, before Enabled is consulted) and turns the forwarding
+			// core into synchronous log I/O when it is on. What a per-packet log
+			// line could tell you, the usage counters and Dropped already do.
 			c.usage.in.Add(uint64(len(ciphertext)))
 			h.forward(key, dst, ciphertext)
 		case meshproto.DERPFramePing:
@@ -148,19 +170,25 @@ func (h *Hub) Serve(conn net.Conn) {
 // forward relays ciphertext from src to dst as a RecvPacket. Best-effort: if dst
 // isn't connected the packet is dropped (the sender upgrades to a direct path or
 // retries — MESH.4). The hub treats ciphertext as opaque.
+//
+// This NEVER blocks. It hands the frame to the destination's own writer and
+// returns, so the caller — the source link's read goroutine — keeps reading no
+// matter how slow the destination is. See sendq.go for what inline writing here
+// cost in the field.
+//
+// Usage is credited by the writer, not here: a frame that is dropped or fails to
+// write cost the platform nothing, and that has to stay true now that dropping
+// is something the relay does on purpose.
 func (h *Hub) forward(src, dst meshproto.NodeKey, ciphertext []byte) {
 	dc := h.lookup(dst)
 	if dc == nil {
-		h.logger.Debug("derp forward: dst not connected", "src", src, "dst", dst)
-		return
+		return // dst offline; nothing to log per packet about it
 	}
-	if err := dc.write(meshproto.DERPFrameRecvPacket, meshproto.EncodePacket(src, ciphertext)); err != nil {
-		h.logger.Warn("derp forward failed", "err", err)
-		return
+	frame, err := meshproto.EncodeDERPFrame(meshproto.DERPFrameRecvPacket, meshproto.EncodePacket(src, ciphertext))
+	if err != nil {
+		return // oversize frame: the sender built it, the relay just declines it
 	}
-	// Counted on success only: a write that failed cost the platform nothing.
-	dc.usage.out.Add(uint64(len(ciphertext)))
-	h.logger.Debug("derp forwarded", "src", src, "dst", dst, "bytes", len(ciphertext))
+	dc.sendq.enqueue(frame, uint64(len(ciphertext)))
 }
 
 // Connected reports whether key currently has a live link (exported for tests

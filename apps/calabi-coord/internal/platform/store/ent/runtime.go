@@ -86,40 +86,48 @@ func init() {
 	meshnodeDescApprovedRoutesJSON := meshnodeFields[10].Descriptor()
 	// meshnode.DefaultApprovedRoutesJSON holds the default value on creation for the approved_routes_json field.
 	meshnode.DefaultApprovedRoutesJSON = meshnodeDescApprovedRoutesJSON.Default.(string)
+	// meshnodeDescAliasedRoutesJSON is the schema descriptor for aliased_routes_json field.
+	meshnodeDescAliasedRoutesJSON := meshnodeFields[11].Descriptor()
+	// meshnode.DefaultAliasedRoutesJSON holds the default value on creation for the aliased_routes_json field.
+	meshnode.DefaultAliasedRoutesJSON = meshnodeDescAliasedRoutesJSON.Default.(string)
+	// meshnodeDescRouteAliasesJSON is the schema descriptor for route_aliases_json field.
+	meshnodeDescRouteAliasesJSON := meshnodeFields[12].Descriptor()
+	// meshnode.DefaultRouteAliasesJSON holds the default value on creation for the route_aliases_json field.
+	meshnode.DefaultRouteAliasesJSON = meshnodeDescRouteAliasesJSON.Default.(string)
 	// meshnodeDescRoutesReviewed is the schema descriptor for routes_reviewed field.
-	meshnodeDescRoutesReviewed := meshnodeFields[11].Descriptor()
+	meshnodeDescRoutesReviewed := meshnodeFields[13].Descriptor()
 	// meshnode.DefaultRoutesReviewed holds the default value on creation for the routes_reviewed field.
 	meshnode.DefaultRoutesReviewed = meshnodeDescRoutesReviewed.Default.(bool)
 	// meshnodeDescOwnerUserID is the schema descriptor for owner_user_id field.
-	meshnodeDescOwnerUserID := meshnodeFields[12].Descriptor()
+	meshnodeDescOwnerUserID := meshnodeFields[14].Descriptor()
 	// meshnode.DefaultOwnerUserID holds the default value on creation for the owner_user_id field.
 	meshnode.DefaultOwnerUserID = meshnodeDescOwnerUserID.Default.(int64)
 	// meshnodeDescDeviceFingerprint is the schema descriptor for device_fingerprint field.
-	meshnodeDescDeviceFingerprint := meshnodeFields[13].Descriptor()
+	meshnodeDescDeviceFingerprint := meshnodeFields[15].Descriptor()
 	// meshnode.DefaultDeviceFingerprint holds the default value on creation for the device_fingerprint field.
 	meshnode.DefaultDeviceFingerprint = meshnodeDescDeviceFingerprint.Default.(string)
 	// meshnodeDescTagsPinned is the schema descriptor for tags_pinned field.
-	meshnodeDescTagsPinned := meshnodeFields[14].Descriptor()
+	meshnodeDescTagsPinned := meshnodeFields[16].Descriptor()
 	// meshnode.DefaultTagsPinned holds the default value on creation for the tags_pinned field.
 	meshnode.DefaultTagsPinned = meshnodeDescTagsPinned.Default.(bool)
 	// meshnodeDescTagsJSON is the schema descriptor for tags_json field.
-	meshnodeDescTagsJSON := meshnodeFields[15].Descriptor()
+	meshnodeDescTagsJSON := meshnodeFields[17].Descriptor()
 	// meshnode.DefaultTagsJSON holds the default value on creation for the tags_json field.
 	meshnode.DefaultTagsJSON = meshnodeDescTagsJSON.Default.(string)
 	// meshnodeDescApproved is the schema descriptor for approved field.
-	meshnodeDescApproved := meshnodeFields[16].Descriptor()
+	meshnodeDescApproved := meshnodeFields[18].Descriptor()
 	// meshnode.DefaultApproved holds the default value on creation for the approved field.
 	meshnode.DefaultApproved = meshnodeDescApproved.Default.(bool)
 	// meshnodeDescDisabled is the schema descriptor for disabled field.
-	meshnodeDescDisabled := meshnodeFields[17].Descriptor()
+	meshnodeDescDisabled := meshnodeFields[19].Descriptor()
 	// meshnode.DefaultDisabled holds the default value on creation for the disabled field.
 	meshnode.DefaultDisabled = meshnodeDescDisabled.Default.(bool)
 	// meshnodeDescCreatedAt is the schema descriptor for created_at field.
-	meshnodeDescCreatedAt := meshnodeFields[18].Descriptor()
+	meshnodeDescCreatedAt := meshnodeFields[20].Descriptor()
 	// meshnode.DefaultCreatedAt holds the default value on creation for the created_at field.
 	meshnode.DefaultCreatedAt = meshnodeDescCreatedAt.Default.(func() time.Time)
 	// meshnodeDescLastSeen is the schema descriptor for last_seen field.
-	meshnodeDescLastSeen := meshnodeFields[19].Descriptor()
+	meshnodeDescLastSeen := meshnodeFields[21].Descriptor()
 	// meshnode.DefaultLastSeen holds the default value on creation for the last_seen field.
 	meshnode.DefaultLastSeen = meshnodeDescLastSeen.Default.(func() time.Time)
 	// meshnode.UpdateDefaultLastSeen holds the default value on update for the last_seen field.
@@ -170,12 +178,16 @@ func init() {
 	meshservice.DefaultCreatedAt = meshserviceDescCreatedAt.Default.(func() time.Time)
 	meshsettingFields := schema.MeshSetting{}.Fields()
 	_ = meshsettingFields
+	// meshsettingDescAliasAddrBudget is the schema descriptor for alias_addr_budget field.
+	meshsettingDescAliasAddrBudget := meshsettingFields[1].Descriptor()
+	// meshsetting.DefaultAliasAddrBudget holds the default value on creation for the alias_addr_budget field.
+	meshsetting.DefaultAliasAddrBudget = meshsettingDescAliasAddrBudget.Default.(int)
 	// meshsettingDescRequireDeviceApproval is the schema descriptor for require_device_approval field.
-	meshsettingDescRequireDeviceApproval := meshsettingFields[1].Descriptor()
+	meshsettingDescRequireDeviceApproval := meshsettingFields[2].Descriptor()
 	// meshsetting.DefaultRequireDeviceApproval holds the default value on creation for the require_device_approval field.
 	meshsetting.DefaultRequireDeviceApproval = meshsettingDescRequireDeviceApproval.Default.(bool)
 	// meshsettingDescUpdatedAt is the schema descriptor for updated_at field.
-	meshsettingDescUpdatedAt := meshsettingFields[2].Descriptor()
+	meshsettingDescUpdatedAt := meshsettingFields[3].Descriptor()
 	// meshsetting.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	meshsetting.DefaultUpdatedAt = meshsettingDescUpdatedAt.Default.(func() time.Time)
 	// meshsetting.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

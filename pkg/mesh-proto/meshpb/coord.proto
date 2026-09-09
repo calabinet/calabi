@@ -107,6 +107,18 @@ message RegisterNodeRequest {
   // shape as advertised_routes above. Declared here so agent / IaC machines
   // need no console visit to propose what they offer.
   repeated DeclaredService declared_services = 9;
+  // aliased_routes are the advertised_routes this node asks to be published to
+  // peers under a UNIQUE stand-in prefix instead of their own addresses, because
+  // it expects them to collide with consumers' own LANs — 192.168.1.0/24 is
+  // everywhere, and a consumer that is itself on it can never reach this one.
+  // Must be a subset of advertised_routes; the coordinator ignores the rest.
+  //
+  // A REQUEST, like advertised_routes: an alias is granted only once an admin
+  // has also approved the route. Only the publisher can know its LAN is one of
+  // the crowded ones — the coordinator cannot see consumers' local subnets, so
+  // it cannot guess, and aliasing a route that does not collide costs everyone a
+  // change of address for nothing.
+  repeated string aliased_routes = 10;
 }
 
 // DeclaredService is one entry of RegisterNodeRequest.declared_services.
@@ -242,7 +254,42 @@ message NetMap {
   // set the ACL sees) — a node's own unconfirmed declarations are already in its
   // config, so it checks those without being told.
   repeated DeclaredService self_services = 7;
+  // subnet_aliases is sent to a SUBNET ROUTER about ITSELF: the stand-in prefix
+  // the coordinator published for each of its aliased routes. Peers only ever
+  // see the alias (it is what lands in this node's allowed_ips); this node needs
+  // both halves so it can install the 1:1 rewrite that turns one into the other.
+  //
+  // Empty for every node that is not an aliased subnet router, which is nearly
+  // all of them.
+  repeated SubnetAlias subnet_aliases = 8;
+  // unaliased_routes are this node's own routes that asked for a stand-in
+  // prefix, were approved, and did not get one — the meshnet is at its alias
+  // budget, the subnet is too large to alias, or the pool is full.
+  //
+  // They still work: they publish under their real CIDR, so every consumer that
+  // does not collide with them reaches them exactly as before. The ones that DO
+  // collide cannot, and that is the failure this field exists to make visible —
+  // the operator who asked for the alias is the only person who can act on it,
+  // and the alternative is a line in the coordinator's log that nobody reads.
+  repeated string unaliased_routes = 9;
+  // alias_budget_addrs / alias_used_addrs are the meshnet's alias budget and
+  // its current usage, in ADDRESSES (a /24 is 256, a /16 is 65536). Sent so the
+  // node can say WHY instead of only THAT: "your organisation's budget is 256
+  // and all of it is in use" is something to act on; "no alias" is not.
+  uint32 alias_budget_addrs = 10;
+  uint32 alias_used_addrs = 11;
   // MagicDNS records land here in MESH.6.
+}
+
+// SubnetAlias is one real subnet and the unique prefix standing in for it.
+//
+// Same size, always: the host bits are positional, so alias .222 IS real .222.
+// That is what lets the router rewrite with one stateless rule rather than a
+// lookup table, and what lets a person who knows the NAS is .222 find it without
+// consulting anything. See docs/runbook/mesh-subnet-alias-nat-plan.md.
+message SubnetAlias {
+  string alias = 1;
+  string real = 2;
 }
 
 // FilterRule allows traffic from any of src_cidrs to any of dst_ports on the

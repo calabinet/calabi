@@ -124,6 +124,18 @@ func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeReque
 		}
 		in.AdvertisedRoutes = append(in.AdvertisedRoutes, pfx.Masked())
 	}
+	// Which of those the node wants published under a stand-in prefix. Not
+	// validated against advertised_routes here: core reconciles against the
+	// APPROVED set anyway, so a stray entry is inert rather than an error, and
+	// rejecting the whole registration over one would take the node off the mesh
+	// for a request it could simply not be granted.
+	for _, raw := range req.GetAliasedRoutes() {
+		pfx, err := netip.ParsePrefix(raw)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "aliased_route %q: %v", raw, err)
+		}
+		in.AliasedRoutes = append(in.AliasedRoutes, pfx.Masked())
+	}
 
 	node, err := s.coord.Register(ctx, in)
 	if err != nil {

@@ -1,9 +1,14 @@
-// TrafficChart.tsx — rolling line chart of bytes_total over time.
+// TrafficChart.tsx — rolling line chart of throughput over time.
 //
-// Data model: we keep the last 60 samples (one per /tunnels poll
-// at ~2s intervals = 2-minute rolling window). Each sample is the
-// delta since the previous sample, so the chart shows throughput,
-// not cumulative bytes.
+// Data model: we keep the last 60 samples (one per snapshot poll at ~2s
+// intervals = a 2-minute rolling window) of an ALREADY-MEASURED rate.
+//
+// This component used to take the cumulative byte total and do the differencing
+// itself. It got the denominator wrong — see lib/rate.ts for the full account —
+// and printed spikes of several GB/s on links that top out around 20 Mbit/s.
+// Those spikes were read as real bursts. Measuring is now the caller's job
+// (useCounterRate, one per polled source, each against its own clock); this file
+// only plots.
 import { useEffect, useRef, useState } from "react";
 import { Card, Typography } from "antd";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -12,7 +17,15 @@ import { useTranslation } from "react-i18next";
 const { Text } = Typography;
 
 interface Props {
-  totalBytes: number;
+  /** Bytes per second, measured by the caller. */
+  rate: number;
+  /**
+   * Timestamp of the sample that produced `rate`, and the effect key: one point
+   * is appended per distinct value. Driving the chart off the sample's identity
+   * rather than the rate's VALUE is what keeps an idle link plotting real zeros
+   * instead of holding its last reading on screen.
+   */
+  sampleAt: number;
   title?: string;
 }
 
@@ -25,25 +38,22 @@ function fmtRate(bps: number): string {
   return `${(bps / 1024 / 1024 / 1024).toFixed(2)} GB/s`;
 }
 
-export default function TrafficChart({ totalBytes, title }: Props) {
+export default function TrafficChart({ rate, sampleAt, title }: Props) {
   const { t } = useTranslation();
   const displayTitle = title || t("trafficChart.title");
   const [points, setPoints] = useState<{ t: number; bps: number }[]>([]);
-  const lastRef = useRef<{ ts: number; total: number } | null>(null);
+  const plottedRef = useRef(0);
 
   useEffect(() => {
-    const now = Date.now();
-    const last = lastRef.current;
-    lastRef.current = { ts: now, total: totalBytes };
-    if (!last) return;
-    const dt = (now - last.ts) / 1000;
-    if (dt <= 0) return;
-    const bps = Math.max(0, (totalBytes - last.total) / dt);
+    if (!sampleAt || sampleAt === plottedRef.current) return;
+    plottedRef.current = sampleAt;
+    const bps = Number.isFinite(rate) ? Math.max(0, rate) : 0;
     setPoints((prev) => {
-      const next = [...prev, { t: now, bps }];
+      const next = [...prev, { t: sampleAt, bps }];
       return next.length > MAX_POINTS ? next.slice(next.length - MAX_POINTS) : next;
     });
-  }, [totalBytes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sampleAt]);
 
   const peak = points.reduce((m, p) => Math.max(m, p.bps), 0);
   const current = points.length > 0 ? points[points.length - 1].bps : 0;

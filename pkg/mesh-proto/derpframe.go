@@ -64,18 +64,41 @@ func WriteDERPFrame(w io.Writer, t DERPFrameType, payload []byte) error {
 	if len(payload) > MaxDERPFrameLen {
 		return ErrFrameTooLarge
 	}
-	var hdr [5]byte
-	hdr[0] = byte(t)
-	binary.BigEndian.PutUint32(hdr[1:], uint32(len(payload)))
-	if _, err := w.Write(hdr[:]); err != nil {
-		return fmt.Errorf("meshproto: write frame header: %w", err)
+	// ONE write, not two.
+	//
+	// This used to write the 5-byte header and the payload separately. On a TCP
+	// relay link with TCP_NODELAY that puts a 5-byte segment on the wire ahead of
+	// every packet, and the pair interacts badly with both Nagle and delayed ACK:
+	// the second write can end up waiting on an ACK for the first, which turns a
+	// pipelined stream into one frame per round trip. A live link measured 2.7
+	// Mbit/s — 257 frames/s, ~3.9 ms each — against 20 Mbit/s for plain iperf3 on
+	// the same path, which is exactly the shape of one frame per RTT.
+	//
+	// Loopback could never show this (no RTT, and the segments coalesce), which is
+	// why it survived: every test of this function was local.
+	buf, err := EncodeDERPFrame(t, payload)
+	if err != nil {
+		return err
 	}
-	if len(payload) > 0 {
-		if _, err := w.Write(payload); err != nil {
-			return fmt.Errorf("meshproto: write frame payload: %w", err)
-		}
+	if _, err := w.Write(buf); err != nil {
+		return fmt.Errorf("meshproto: write frame: %w", err)
 	}
 	return nil
+}
+
+// EncodeDERPFrame builds the on-wire bytes of one frame. Split out from
+// WriteDERPFrame so a caller that queues frames (the relay client's send queue)
+// can do the framing once, off the hot path, and hand the writer a single slice
+// to write — the same one-write property, held across a queue.
+func EncodeDERPFrame(t DERPFrameType, payload []byte) ([]byte, error) {
+	if len(payload) > MaxDERPFrameLen {
+		return nil, ErrFrameTooLarge
+	}
+	buf := make([]byte, 5+len(payload))
+	buf[0] = byte(t)
+	binary.BigEndian.PutUint32(buf[1:], uint32(len(payload)))
+	copy(buf[5:], payload)
+	return buf, nil
 }
 
 // ReadDERPFrame reads one frame from r. The returned payload is a fresh slice

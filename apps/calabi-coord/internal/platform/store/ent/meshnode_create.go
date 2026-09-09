@@ -158,6 +158,34 @@ func (_c *MeshNodeCreate) SetNillableApprovedRoutesJSON(v *string) *MeshNodeCrea
 	return _c
 }
 
+// SetAliasedRoutesJSON sets the "aliased_routes_json" field.
+func (_c *MeshNodeCreate) SetAliasedRoutesJSON(v string) *MeshNodeCreate {
+	_c.mutation.SetAliasedRoutesJSON(v)
+	return _c
+}
+
+// SetNillableAliasedRoutesJSON sets the "aliased_routes_json" field if the given value is not nil.
+func (_c *MeshNodeCreate) SetNillableAliasedRoutesJSON(v *string) *MeshNodeCreate {
+	if v != nil {
+		_c.SetAliasedRoutesJSON(*v)
+	}
+	return _c
+}
+
+// SetRouteAliasesJSON sets the "route_aliases_json" field.
+func (_c *MeshNodeCreate) SetRouteAliasesJSON(v string) *MeshNodeCreate {
+	_c.mutation.SetRouteAliasesJSON(v)
+	return _c
+}
+
+// SetNillableRouteAliasesJSON sets the "route_aliases_json" field if the given value is not nil.
+func (_c *MeshNodeCreate) SetNillableRouteAliasesJSON(v *string) *MeshNodeCreate {
+	if v != nil {
+		_c.SetRouteAliasesJSON(*v)
+	}
+	return _c
+}
+
 // SetRoutesReviewed sets the "routes_reviewed" field.
 func (_c *MeshNodeCreate) SetRoutesReviewed(v bool) *MeshNodeCreate {
 	_c.mutation.SetRoutesReviewed(v)
@@ -355,6 +383,14 @@ func (_c *MeshNodeCreate) defaults() {
 		v := meshnode.DefaultApprovedRoutesJSON
 		_c.mutation.SetApprovedRoutesJSON(v)
 	}
+	if _, ok := _c.mutation.AliasedRoutesJSON(); !ok {
+		v := meshnode.DefaultAliasedRoutesJSON
+		_c.mutation.SetAliasedRoutesJSON(v)
+	}
+	if _, ok := _c.mutation.RouteAliasesJSON(); !ok {
+		v := meshnode.DefaultRouteAliasesJSON
+		_c.mutation.SetRouteAliasesJSON(v)
+	}
 	if _, ok := _c.mutation.RoutesReviewed(); !ok {
 		v := meshnode.DefaultRoutesReviewed
 		_c.mutation.SetRoutesReviewed(v)
@@ -432,6 +468,12 @@ func (_c *MeshNodeCreate) check() error {
 	}
 	if _, ok := _c.mutation.ApprovedRoutesJSON(); !ok {
 		return &ValidationError{Name: "approved_routes_json", err: errors.New(`ent: missing required field "MeshNode.approved_routes_json"`)}
+	}
+	if _, ok := _c.mutation.AliasedRoutesJSON(); !ok {
+		return &ValidationError{Name: "aliased_routes_json", err: errors.New(`ent: missing required field "MeshNode.aliased_routes_json"`)}
+	}
+	if _, ok := _c.mutation.RouteAliasesJSON(); !ok {
+		return &ValidationError{Name: "route_aliases_json", err: errors.New(`ent: missing required field "MeshNode.route_aliases_json"`)}
 	}
 	if _, ok := _c.mutation.RoutesReviewed(); !ok {
 		return &ValidationError{Name: "routes_reviewed", err: errors.New(`ent: missing required field "MeshNode.routes_reviewed"`)}
@@ -529,6 +571,14 @@ func (_c *MeshNodeCreate) createSpec() (*MeshNode, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ApprovedRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldApprovedRoutesJSON, field.TypeString, value)
 		_node.ApprovedRoutesJSON = value
+	}
+	if value, ok := _c.mutation.AliasedRoutesJSON(); ok {
+		_spec.SetField(meshnode.FieldAliasedRoutesJSON, field.TypeString, value)
+		_node.AliasedRoutesJSON = value
+	}
+	if value, ok := _c.mutation.RouteAliasesJSON(); ok {
+		_spec.SetField(meshnode.FieldRouteAliasesJSON, field.TypeString, value)
+		_node.RouteAliasesJSON = value
 	}
 	if value, ok := _c.mutation.RoutesReviewed(); ok {
 		_spec.SetField(meshnode.FieldRoutesReviewed, field.TypeBool, value)

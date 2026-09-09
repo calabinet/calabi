@@ -120,27 +120,6 @@ func TestControllerOnWakeResetsTheDatapath(t *testing.T) {
 	}
 }
 
-func TestWokeUp(t *testing.T) {
-	tests := []struct {
-		name       string
-		mono, wall time.Duration
-		want       bool
-	}{
-		{"an ordinary tick", wakeCheckInterval, wakeCheckInterval, false},
-		{"a busy machine, not a sleeping one", 20 * time.Second, 20 * time.Second, false},
-		{"monotonic stopped across the suspend", wakeCheckInterval, 20 * time.Minute, true},
-		{"monotonic kept running through it", 20 * time.Minute, wakeCheckInterval, true},
-		{"both saw it", time.Hour, time.Hour, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := wokeUp(tt.mono, tt.wall); got != tt.want {
-				t.Fatalf("wokeUp(%s, %s) = %v, want %v", tt.mono, tt.wall, got, tt.want)
-			}
-		})
-	}
-}
-
 // A session's loops must not outlive the session.
 //
 // The regression: they were bound to the CALLER's context, which is the daemon's

@@ -130,8 +130,8 @@ func TestDiscoProberProbesLearnedCandidate(t *testing.T) {
 	defer b.Close()
 
 	prober := newDiscoProber(a, slog.Default())
-	bReal := loopback(b.LocalPort())                    // the port that actually reaches b
-	dead := netip.MustParseAddrPort("203.0.113.7:9")    // b's only "advertised" endpoint — unreachable
+	bReal := loopback(b.LocalPort())                 // the port that actually reaches b
+	dead := netip.MustParseAddrPort("203.0.113.7:9") // b's only "advertised" endpoint — unreachable
 
 	// The peer advertises only the unreachable endpoint; the real port is learned
 	// from its incoming DISCO, exactly as meshBind.noteDiscoSource feeds it.

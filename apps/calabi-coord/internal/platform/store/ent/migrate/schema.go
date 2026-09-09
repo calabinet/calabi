@@ -57,6 +57,8 @@ var (
 		{Name: "endpoints_json", Type: field.TypeString, Default: "[]"},
 		{Name: "advertised_routes_json", Type: field.TypeString, Default: "[]"},
 		{Name: "approved_routes_json", Type: field.TypeString, Default: "[]"},
+		{Name: "aliased_routes_json", Type: field.TypeString, Default: "[]"},
+		{Name: "route_aliases_json", Type: field.TypeString, Default: "[]"},
 		{Name: "routes_reviewed", Type: field.TypeBool, Default: false},
 		{Name: "owner_user_id", Type: field.TypeInt64, Default: 0},
 		{Name: "device_fingerprint", Type: field.TypeString, Default: ""},
@@ -150,6 +152,7 @@ var (
 	MeshSettingsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "meshnet_id", Type: field.TypeInt64, Unique: true},
+		{Name: "alias_addr_budget", Type: field.TypeInt, Default: 0},
 		{Name: "require_device_approval", Type: field.TypeBool, Default: false},
 		{Name: "updated_at", Type: field.TypeTime},
 	}

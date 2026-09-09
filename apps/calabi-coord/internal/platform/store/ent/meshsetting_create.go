@@ -26,6 +26,20 @@ func (_c *MeshSettingCreate) SetMeshnetID(v int64) *MeshSettingCreate {
 	return _c
 }
 
+// SetAliasAddrBudget sets the "alias_addr_budget" field.
+func (_c *MeshSettingCreate) SetAliasAddrBudget(v int) *MeshSettingCreate {
+	_c.mutation.SetAliasAddrBudget(v)
+	return _c
+}
+
+// SetNillableAliasAddrBudget sets the "alias_addr_budget" field if the given value is not nil.
+func (_c *MeshSettingCreate) SetNillableAliasAddrBudget(v *int) *MeshSettingCreate {
+	if v != nil {
+		_c.SetAliasAddrBudget(*v)
+	}
+	return _c
+}
+
 // SetRequireDeviceApproval sets the "require_device_approval" field.
 func (_c *MeshSettingCreate) SetRequireDeviceApproval(v bool) *MeshSettingCreate {
 	_c.mutation.SetRequireDeviceApproval(v)
@@ -89,6 +103,10 @@ func (_c *MeshSettingCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *MeshSettingCreate) defaults() {
+	if _, ok := _c.mutation.AliasAddrBudget(); !ok {
+		v := meshsetting.DefaultAliasAddrBudget
+		_c.mutation.SetAliasAddrBudget(v)
+	}
 	if _, ok := _c.mutation.RequireDeviceApproval(); !ok {
 		v := meshsetting.DefaultRequireDeviceApproval
 		_c.mutation.SetRequireDeviceApproval(v)
@@ -103,6 +121,9 @@ func (_c *MeshSettingCreate) defaults() {
 func (_c *MeshSettingCreate) check() error {
 	if _, ok := _c.mutation.MeshnetID(); !ok {
 		return &ValidationError{Name: "meshnet_id", err: errors.New(`ent: missing required field "MeshSetting.meshnet_id"`)}
+	}
+	if _, ok := _c.mutation.AliasAddrBudget(); !ok {
+		return &ValidationError{Name: "alias_addr_budget", err: errors.New(`ent: missing required field "MeshSetting.alias_addr_budget"`)}
 	}
 	if _, ok := _c.mutation.RequireDeviceApproval(); !ok {
 		return &ValidationError{Name: "require_device_approval", err: errors.New(`ent: missing required field "MeshSetting.require_device_approval"`)}
@@ -139,6 +160,10 @@ func (_c *MeshSettingCreate) createSpec() (*MeshSetting, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.MeshnetID(); ok {
 		_spec.SetField(meshsetting.FieldMeshnetID, field.TypeInt64, value)
 		_node.MeshnetID = value
+	}
+	if value, ok := _c.mutation.AliasAddrBudget(); ok {
+		_spec.SetField(meshsetting.FieldAliasAddrBudget, field.TypeInt, value)
+		_node.AliasAddrBudget = value
 	}
 	if value, ok := _c.mutation.RequireDeviceApproval(); ok {
 		_spec.SetField(meshsetting.FieldRequireDeviceApproval, field.TypeBool, value)

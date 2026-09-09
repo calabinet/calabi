@@ -24,7 +24,7 @@ import (
 	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
 )
 
-// runMesh is the `calabi mesh` command group — the Connect (WireGuard mesh)
+// runMesh is the `calabi mesh` command group — the WireGuard mesh
 // subsystem. Available in BOTH deployments (mesh is the open data plane).
 //
 // ⚠ `mesh up` needs a tun device + privileges (wintun.dll on Windows) and has
@@ -42,6 +42,8 @@ func runMesh(args []string) int {
 		return runMeshStatus(args[1:])
 	case "down":
 		return runMeshDown(args[1:])
+	case "relaytest":
+		return runMeshRelayTest(args[1:])
 	case "help", "-h", "--help":
 		printMeshUsage()
 		return 0
@@ -55,11 +57,13 @@ func runMesh(args []string) int {
 func runMeshUp(args []string) int {
 	fs := flag.NewFlagSet("mesh up", flag.ContinueOnError)
 	coordAddr := fs.String("coord", "", "coordinator address host:port (in production: your bff-console entrypoint)")
-	relayAddr := fs.String("relay", "", "calabi-derp relay address host:port (this node's DERP home)")
+	relayAddr := fs.String("relay", "", "relay address host:port (this node's DERP home)")
 	authKey := fs.String("auth-key", "", "tk_ auth key (platform) or pre-shared key (self-hosted)")
-	name := fs.String("name", defaultNodeName(), "node name (used for MagicDNS)")
+	name := fs.String("name", defaultNodeName(), "node name (how this machine is labelled in the console)")
+	mtu := fs.Int("mtu", mesh.DefaultMTU, "tun MTU (576-1500); LOWER it to test a path that black-holes full-size packets")
 	keyFile := fs.String("key-file", defaultMeshKeyPath(), "path to the node's WireGuard private key (created if absent)")
-	advertise := fs.String("advertise-routes", "", "comma-separated CIDRs to advertise as a subnet router (e.g. 192.168.1.0/24)")
+	advertise := fs.String("advertise-routes", "", "comma-separated subnets to advertise as a subnet router, /24 or smaller (e.g. 192.168.1.0/24). A bare address is a single host: 192.168.1.22")
+	aliasRoutes := fs.String("alias-routes", "", "DEPRECATED and ignored: every advertised route is aliased where the host supports it")
 	advertiseExit := fs.Bool("advertise-exit-node", false, "advertise this node as an exit node (offer to forward peers' default route to the internet)")
 	exitNode := fs.String("exit-node", "", "route this node's default traffic through the named exit-node peer (name or overlay IP)")
 	if err := fs.Parse(args); err != nil {
@@ -73,6 +77,14 @@ func runMeshUp(args []string) int {
 	routes, err := parseCIDRList(*advertise)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "calabi mesh up: --advertise-routes: %v\n", err)
+		return 2
+	}
+	// Which of them to publish under a stand-in prefix. Parsed but not checked
+	// against `routes`: the coordinator grants an alias only for a route it also
+	// approved, so a stray entry is inert rather than fatal.
+	aliased, err := parseCIDRList(*aliasRoutes)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "calabi mesh up: --alias-routes: %v\n", err)
 		return 2
 	}
 	if *advertiseExit {
@@ -90,7 +102,13 @@ func runMeshUp(args []string) int {
 
 	// Bring up the WireGuard tun datapath over the relay. This is the step that
 	// needs a tun device + privileges.
-	dp, err := mesh.NewWGDatapath(priv, *relayAddr, logger)
+	// Typed on the command line, so a bad value fails here rather than being
+	// quietly ignored — the person who just typed it is present to fix it.
+	if !mesh.ValidMTU(*mtu) {
+		fmt.Fprintf(os.Stderr, "calabi mesh up: --mtu %d is outside %d..%d\n", *mtu, mesh.MinMTU, mesh.MaxMTU)
+		return 1
+	}
+	dp, err := mesh.NewWGDatapath(priv, *relayAddr, *mtu, logger)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "calabi mesh up: datapath: %v\n", err)
 		return 1
@@ -101,7 +119,7 @@ func runMeshUp(args []string) int {
 	// without it (e.g. on platforms whose OS integration isn't wired yet).
 	var dnsSink mesh.DNSSink
 	if sink, cleanup, err := mesh.StartMagicDNS(logger); err != nil {
-		logger.Warn("mesh: MagicDNS unavailable; node names won't resolve via the OS", "err", err)
+		logMagicDNSUnavailable(logger, err)
 	} else {
 		defer cleanup()
 		dnsSink = sink
@@ -141,6 +159,7 @@ func runMeshUp(args []string) int {
 			NodeKey:           priv.Public(),
 			Name:              *name,
 			AdvertiseRoutes:   routes,
+			AliasRoutes:       aliased,
 			DeviceFingerprint: resolveFingerprint(logger),
 		},
 		ExitNode: *exitNode,
@@ -163,6 +182,23 @@ func defaultNodeName() string {
 		return h
 	}
 	return randomNodeName()
+}
+
+// logMagicDNSUnavailable reports a MagicDNS start-up failure at the volume it
+// deserves. Both mesh entry points — foreground `mesh up` and the daemon
+// runner — go through here so the two can't drift apart.
+//
+// Off Linux the OS integration simply isn't wired (MESH.6).
+// That is the EXPECTED state on Windows and macOS, so warning about it on
+// every single start reads as a fault and keeps advertising a feature we no
+// longer offer. A failure on a platform that does support it is a different
+// thing — there, something actually went wrong, and it stays a warning.
+func logMagicDNSUnavailable(logger *slog.Logger, err error) {
+	if errors.Is(err, mesh.ErrMagicDNSUnsupported) {
+		logger.Debug("mesh: MagicDNS OS integration not wired on this platform; node names won't resolve via the OS", "err", err)
+		return
+	}
+	logger.Warn("mesh: MagicDNS unavailable; node names won't resolve via the OS", "err", err)
 }
 
 // meshNodeLabel turns a raw name into a MagicDNS label: lowercase, only
@@ -327,8 +363,76 @@ func defaultMeshKeyPath() string {
 }
 
 // meshConsoleURL is the local daemon console base URL (where /v1/mesh lives).
-func meshConsoleURL() string {
-	return "http://" + envOr("CALABI_STATUS_ADDR", defaultStatusAddr)
+// meshConsoleCandidates lists the daemon console URLs to try, best first.
+//
+// Assuming 127.0.0.1:7400 was wrong often enough to be a bug. The daemon binds
+// with listenWithFallback, which walks 7400→7419 when the port is taken (that
+// is how a second client on one machine gets its own console) — so the address
+// the CLI needs is decided at RUNTIME and is not the default. It already gets
+// written down: publishConsoleURL records the real bound URL in the daemon's
+// data dir. Nothing read it back, so `calabi mesh status` told people their
+// daemon was unreachable while it was running one port over.
+//
+// Two directories, because the daemon's data dir depends on how it was started:
+// a user-run daemon uses creds.DataDir(), while one installed as a system
+// service keeps its data next to the exe (creds.SetDataDir(exeDir)) — and the
+// CLI, run from a shell, resolves the FORMER. Looking in only one place would
+// have fixed this for exactly the deployment that does not need it.
+//
+// An explicit CALABI_STATUS_ADDR is the sole candidate: if someone named an
+// address, silently talking to a different daemon is worse than failing.
+func meshConsoleCandidates() []string {
+	if v := strings.TrimSpace(os.Getenv("CALABI_STATUS_ADDR")); v != "" {
+		return []string{"http://" + v}
+	}
+	var out []string
+	seen := map[string]bool{}
+	add := func(u string) {
+		u = strings.TrimSpace(u)
+		if strings.HasPrefix(u, "http://") && !seen[u] {
+			seen[u] = true
+			out = append(out, u)
+		}
+	}
+	if dir, err := creds.DataDir(); err == nil && dir != "" {
+		add(readConsoleURLFile(filepath.Join(dir, consoleURLFile)))
+	}
+	if dir := exeDir(); dir != "" {
+		add(readConsoleURLFile(filepath.Join(dir, consoleURLFile)))
+	}
+	add("http://" + defaultStatusAddr)
+	return out
+}
+
+// readConsoleURLFile reads a console.url written by a daemon boot, or "".
+func readConsoleURLFile(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+// dialMeshConsole GETs path from the first candidate that answers.
+//
+// "First that ANSWERS" rather than "first that exists": console.url is not
+// removed when a daemon stops, so the recorded address can name a daemon that
+// is gone while a live one sits on the default port. Trying each in turn costs
+// one refused loopback connection and removes a whole class of "it says my
+// daemon is down and it isn't".
+func dialMeshConsole(path string) (*http.Response, string, error) {
+	cands := meshConsoleCandidates()
+	var firstErr error
+	for _, base := range cands {
+		resp, err := http.Get(base + path)
+		if err == nil {
+			return resp, base, nil
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+	return nil, strings.Join(cands, ", "), firstErr
 }
 
 // meshStatusResp mirrors localweb.MeshStatus.
@@ -347,15 +451,49 @@ type meshStatusResp struct {
 		TxBytes          int64    `json:"tx_bytes"`
 		Path             string   `json:"path"`
 		Endpoint         string   `json:"endpoint"`
+		RTTMicros        int64    `json:"rtt_micros"`
 	} `json:"peers"`
+	// Datapath is the node's own packet accounting. Decoded structurally rather
+	// than by embedding localweb's type: this command talks to a daemon that may
+	// be a DIFFERENT build (an older service, a newer CLI), so it has to tolerate
+	// fields it doesn't know and absent fields it does.
+	Datapath struct {
+		SockRxPackets  uint64 `json:"sock_rx_packets"`
+		SockRxBytes    uint64 `json:"sock_rx_bytes"`
+		SockTxPackets  uint64 `json:"sock_tx_packets"`
+		SockTxBytes    uint64 `json:"sock_tx_bytes"`
+		SockTxErrors   uint64 `json:"sock_tx_errors"`
+		SockRxBufBytes int    `json:"sock_rx_buf_bytes"`
+		SockTxBufBytes int    `json:"sock_tx_buf_bytes"`
+		QueueDepth     int    `json:"queue_depth"`
+		QueueCap       int    `json:"queue_cap"`
+		QueueDropped   uint64 `json:"queue_dropped"`
+		RxDirect       uint64 `json:"rx_direct"`
+		RxRelay        uint64 `json:"rx_relay"`
+		TxDirect       uint64 `json:"tx_direct"`
+		TxRelay        uint64 `json:"tx_relay"`
+		TxDirectErrors uint64 `json:"tx_direct_errors"`
+		TxRelayErrors  uint64 `json:"tx_relay_errors"`
+		TxRelayDropped uint64 `json:"tx_relay_dropped"`
+		// Blocked or starved? A shed frame looks identical either way, and the two
+		// need opposite investigations — see internal/mesh/derp/sendq.go.
+		TxRelayBlockedMs uint64 `json:"tx_relay_blocked_ms"`
+		TxRelaySockBuf   uint64 `json:"tx_relay_sockbuf"`
+		TxRelayRateBps   uint64 `json:"tx_relay_rate_bps"`
+		FilterDropped    uint64 `json:"filter_dropped"`
+		Flows            int    `json:"flows"`
+	} `json:"datapath"`
 }
 
-// runMeshStatus prints the Connect status the local daemon reports on /v1/mesh.
+// runMeshStatus prints the mesh status the local daemon reports on /v1/mesh.
 func runMeshStatus(_ []string) int {
-	resp, err := http.Get(meshConsoleURL() + "/v1/mesh")
+	resp, tried, err := dialMeshConsole("/v1/mesh")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "calabi mesh status: daemon not reachable at %s (%v)\n"+
-			"  is `calabi daemon` running with a `mesh:` block in its config?\n", meshConsoleURL(), err)
+		fmt.Fprintf(os.Stderr, "calabi mesh status: no daemon answered (%v)\n"+
+			"  tried: %s\n"+
+			"  is `calabi daemon` running with a `mesh:` block in its config?\n"+
+			"  if it is listening somewhere else: CALABI_STATUS_ADDR=host:port calabi mesh status\n",
+			err, tried)
 		return 1
 	}
 	defer resp.Body.Close()
@@ -396,25 +534,161 @@ func runMeshStatus(_ []string) int {
 		if p.Endpoint != "" {
 			path += " " + p.Endpoint
 		}
+		// The RTT is what separates a path that is merely "direct" from one that
+		// is any good: two machines on one LAN and the same two hairpinning out
+		// through the ISP both read "direct", and differ by a factor of ~20.
+		if p.RTTMicros > 0 {
+			path += fmt.Sprintf(" %.1fms", float64(p.RTTMicros)/1000)
+		}
 		fmt.Printf("    - %s  allowed=%s  path=%s  handshake=%s  rx=%dB tx=%dB\n",
 			shortKey(p.PublicKey), strings.Join(p.AllowedIPs, ","), path, hs, p.RxBytes, p.TxBytes)
 	}
+	printDatapath(st)
 	return 0
+}
+
+// printDatapath prints the node's own packet accounting — the layer under
+// WireGuard's per-peer byte counters, where a loss caused by THIS machine is
+// visible.
+//
+// The lines are ordered as the packet travels, because that is how the numbers
+// are read: a drop is found by looking for the step where the count falls. The
+// two loss lines are printed unconditionally, zeros included — "dropped 0" is
+// the answer that exonerates this node, and hiding it would leave the reader
+// unable to tell "nothing dropped" from "this build doesn't count".
+func printDatapath(st meshStatusResp) {
+	d := st.Datapath
+	if d.QueueCap == 0 && d.SockRxPackets == 0 && d.RxRelay == 0 {
+		return // a daemon too old to report any of this; say nothing rather than "0"
+	}
+	fmt.Printf("  datapath:\n")
+	fmt.Printf("    socket:  rx %d pkt / %d B    tx %d pkt / %d B    tx-err %d\n",
+		d.SockRxPackets, d.SockRxBytes, d.SockTxPackets, d.SockTxBytes, d.SockTxErrors)
+	fmt.Printf("    buffers: rx %s  tx %s%s\n",
+		humanBytes(d.SockRxBufBytes), humanBytes(d.SockTxBufBytes), bufWarning(d.SockRxBufBytes))
+	fmt.Printf("    queue:   %d/%d    dropped %d\n", d.QueueDepth, d.QueueCap, d.QueueDropped)
+	fmt.Printf("    transport: rx direct %d / relay %d    tx direct %d / relay %d    tx-err direct %d / relay %d\n",
+		d.RxDirect, d.RxRelay, d.TxDirect, d.TxRelay, d.TxDirectErrors, d.TxRelayErrors)
+	// Deliberate drops get their own line rather than hiding among the errors:
+	// this is the congestion signal a TCP relay would otherwise swallow, and a
+	// climbing number here means the relay path is genuinely oversubscribed —
+	// which is information, not a fault.
+	fmt.Printf("    relay:   dropped-as-stale %d    writer blocked %s%s\n",
+		d.TxRelayDropped, humanMillis(d.TxRelayBlockedMs), blockedHint(d.TxRelayBlockedMs))
+	// The kernel send buffer behind the relay socket is a queue this node chose
+	// the depth of, so it is reported next to the drops for the same reason. It
+	// is rendered as TIME as well as bytes because bytes are not what went wrong:
+	// 8 MB was a problem only because on that link it was 21 seconds.
+	fmt.Printf("    sndbuf:  %s\n", sndbufLine(d.TxRelaySockBuf, d.TxRelayRateBps))
+	fmt.Printf("    filter:  dropped %d    flows %d\n", d.FilterDropped, d.Flows)
+}
+
+// sndbufLine renders the kernel send-buffer state behind the relay socket.
+//
+// Three states, and telling them apart is the whole job. This line first
+// shipped able to say only two, and it reported a socket PINNED to 64 KB by
+// CALABI_MESH_RELAY_SNDBUF as "kernel auto-tuned (no cap applied)" — on a link
+// someone was at that moment trying to work out the slowness of. A status line
+// that denies the setting doing the damage is worse than no line.
+//
+// The three are distinguishable from these two numbers alone, without a third
+// field, because the adaptive controller CANNOT apply a size before it has a
+// rate sample (sndbuf.go: targetLocked needs one). So a size with no rate behind
+// it is necessarily a pinned one.
+func sndbufLine(bufBytes, rateBps uint64) string {
+	switch {
+	case bufBytes == 0:
+		return "kernel auto-tuned (no cap applied)"
+	case rateBps == 0:
+		return fmt.Sprintf("%s pinned by %s (not adaptive)", humanBytes(int(bufBytes)), sndbufEnvName)
+	default:
+		q := time.Duration(float64(bufBytes) * 8 / float64(rateBps) * float64(time.Second))
+		return fmt.Sprintf("%s adaptive    %v of queue at the measured %.1f Mbit/s",
+			humanBytes(int(bufBytes)), q.Round(time.Millisecond), float64(rateBps)/1e6)
+	}
+}
+
+// sndbufEnvName is named here rather than imported: the derp package's copy is
+// unexported, and a status line naming the wrong variable would send someone
+// looking in the wrong place.
+const sndbufEnvName = "CALABI_MESH_RELAY_SNDBUF"
+
+// humanMillis renders a cumulative duration counter compactly.
+func humanMillis(ms uint64) string {
+	if ms < 1000 {
+		return fmt.Sprintf("%dms", ms)
+	}
+	return fmt.Sprintf("%.1fs", float64(ms)/1000)
+}
+
+// blockedHint says what a large blocked time MEANS, right next to the number.
+//
+// The counter separates two states every other number reports identically —
+// frames offered, frames shed, throughput low — that need opposite
+// investigations. Near zero while frames are shed means the writer sat idle and
+// the throttle is not this queue at all.
+//
+// A high value says the writer was waiting on the relay's TCP, and deliberately
+// does NOT say why. The first version of this line claimed "the link would not
+// take more; the drops beside it are the signal", and on the link that produced
+// this counter that reading was wrong: the link carried 18.9 Mbit/s for plain
+// iperf3 at the same minute, and the writer was blocked because TCP was in loss
+// recovery — while the drops beside it were this queue's own deadline expiring
+// mid-recovery. A hint that names one cause invites you to stop looking, which
+// is the opposite of what a diagnostic is for.
+func blockedHint(ms uint64) string {
+	if ms >= 1000 {
+		return "   ← waiting on the relay's TCP (a slow link, or loss recovery — check both)"
+	}
+	return ""
+}
+
+// bufWarning flags a receive buffer too small to absorb a burst on a fast path.
+// 1 MiB is ~800 full-size packets, about 10ms of a gigabit link — below that, a
+// userspace datapath loses packets to nothing but its own scheduling, and those
+// losses are invisible here because the kernel discards them before we read.
+func bufWarning(rx int) string {
+	if rx > 0 && rx < 1<<20 {
+		return "   ← small; bursts will be dropped by the kernel before we see them"
+	}
+	return ""
+}
+
+func humanBytes(n int) string {
+	switch {
+	case n <= 0:
+		return "?"
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MiB", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.0f KiB", float64(n)/(1<<10))
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
 }
 
 // runMeshDown asks the local daemon to stop the mesh subsystem (POST
 // /v1/mesh/down, local-token gated).
 func runMeshDown(_ []string) int {
-	tok, _ := creds.LoadLocalToken()
-	req, err := http.NewRequest(http.MethodPost, meshConsoleURL()+"/v1/mesh/down", nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "calabi mesh down: %v\n", err)
-		return 1
+	// Same resolution as `mesh status` — a daemon that fell back off 7400 has to
+	// be stoppable too, or the port scan turns a convenience into a trap.
+	var resp *http.Response
+	var tried string
+	var err error
+	for _, base := range meshConsoleCandidates() {
+		tried = base
+		req, rerr := http.NewRequest(http.MethodPost, base+"/v1/mesh/down", nil)
+		if rerr != nil {
+			fmt.Fprintf(os.Stderr, "calabi mesh down: %v\n", rerr)
+			return 1
+		}
+		req.Header.Set("X-Local-Token", localTokenFor(base))
+		if resp, err = http.DefaultClient.Do(req); err == nil {
+			break
+		}
 	}
-	req.Header.Set("X-Local-Token", tok)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "calabi mesh down: daemon not reachable at %s (%v)\n", meshConsoleURL(), err)
+	if err != nil || resp == nil {
+		fmt.Fprintf(os.Stderr, "calabi mesh down: no daemon answered (last tried %s: %v)\n", tried, err)
 		return 1
 	}
 	defer resp.Body.Close()
@@ -426,26 +700,12 @@ func runMeshDown(_ []string) int {
 	return 0
 }
 
-// parseCIDRList parses a comma-separated list of CIDRs (each masked to its
-// network). Empty input yields nil.
+// parseCIDRList parses a comma-separated list of subnet routes. A bare address
+// is a host route (192.168.1.22 == 192.168.1.22/32) and an IPv4 route wider than
+// a /24 is refused — see mesh.ParseRoute, which is also what the :7400 console
+// and the daemon config go through, so the rule has one definition.
 func parseCIDRList(csv string) ([]netip.Prefix, error) {
-	csv = strings.TrimSpace(csv)
-	if csv == "" {
-		return nil, nil
-	}
-	var out []netip.Prefix
-	for _, s := range strings.Split(csv, ",") {
-		s = strings.TrimSpace(s)
-		if s == "" {
-			continue
-		}
-		p, err := netip.ParsePrefix(s)
-		if err != nil {
-			return nil, fmt.Errorf("%q: %w", s, err)
-		}
-		out = append(out, p.Masked())
-	}
-	return out, nil
+	return mesh.ParseRouteList(csv)
 }
 
 func orDash(s string) string {
@@ -463,19 +723,26 @@ func shortKey(k string) string {
 }
 
 func printMeshUsage() {
-	fmt.Fprintln(os.Stderr, `calabi mesh -- Connect (WireGuard mesh) subsystem
+	fmt.Fprintln(os.Stderr, `calabi mesh -- the WireGuard mesh subsystem
 
 Usage:
   calabi mesh up --coord HOST:PORT --relay HOST:PORT --auth-key KEY [--name N] [--key-file PATH]
                  [--advertise-routes CIDR,...] [--advertise-exit-node] [--exit-node NAME|IP]
      Join the meshnet in the FOREGROUND: enroll with the coordinator, bring up a
-     WireGuard tun over the calabi-derp relay, apply the netmap. Ctrl-C to leave.
+     WireGuard tun over the relay, apply the netmap. Ctrl-C to leave.
      --advertise-routes / --advertise-exit-node make this node a subnet router /
      exit node; --exit-node routes THIS node's default traffic through a peer.
   calabi mesh status
-     Show the Connect status of the running local daemon (reads :7400 /v1/mesh).
+     Show the mesh status of the running local daemon (reads :7400 /v1/mesh).
   calabi mesh down
      Ask the running local daemon to stop the mesh subsystem.
+  calabi mesh relaytest [--relay host:3340] [--seconds N] [--size N] [--rate Mbit]
+     Drive ONE LEG of the relay path — this node to the relay and back, through
+     the relay's own read and write loops, with no second node, no WireGuard and
+     no tun involved. Run it on each end to tell "this leg's network is slow"
+     from "the relay's forwarding is slow" from "our datapath is slow"; a
+     transfer between two nodes cannot separate those, because it crosses all
+     three at once.
 
 Run mesh as a background SERVICE via the local daemon: add a mesh: block
 (enabled/coord/relay/auth_key/name) to the daemon config and run
