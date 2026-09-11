@@ -22,6 +22,8 @@ package acmechallenge
 import (
 	"encoding/json"
 	"log/slog"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -47,6 +49,7 @@ type Store struct {
 
 type entry struct {
 	keyAuth string
+	domain  string
 	addedAt time.Time
 }
 
@@ -88,7 +91,11 @@ func (s *Store) onPresent(m *eventbus.Msg) {
 		return
 	}
 	s.mu.Lock()
-	s.tokens[ev.Token] = entry{keyAuth: ev.KeyAuth, addedAt: time.Now()}
+	s.tokens[ev.Token] = entry{
+		keyAuth: ev.KeyAuth,
+		domain:  strings.ToLower(strings.TrimSpace(ev.Domain)),
+		addedAt: time.Now(),
+	}
 	s.mu.Unlock()
 	s.logger.Info("acme challenge installed", "domain", ev.Domain, "token", ev.Token)
 }
@@ -108,10 +115,18 @@ func (s *Store) onCleanup(m *eventbus.Msg) {
 	s.logger.Debug("acme challenge cleaned", "domain", ev.Domain, "token", ev.Token)
 }
 
-// Resolve returns the keyAuth for a token, or ok=false on miss/expiry.
-// This is the closure the HTTP listener calls for
-// /.well-known/acme-challenge/<token>.
-func (s *Store) Resolve(token string) (string, bool) {
+// Resolve returns the keyAuth for a token probed under `host`, or
+// ok=false on miss/expiry/host mismatch. This is the closure the HTTP
+// listener calls for /.well-known/acme-challenge/<token>.
+//
+// The host check matters (audit finding CERT-1): this table is filled
+// from a bus subject every platform edge subscribes to, so without it
+// ANY live token is answered under ANY Host. Combined with an issuance
+// path that did not check domain ownership, that let one org obtain a
+// real certificate for another org's domain. An http-01 validator always
+// probes the exact name it is validating, so binding the answer to the
+// token's own domain costs nothing legitimate.
+func (s *Store) Resolve(token, host string) (string, bool) {
 	s.mu.RLock()
 	e, ok := s.tokens[token]
 	s.mu.RUnlock()
@@ -124,7 +139,32 @@ func (s *Store) Resolve(token string) (string, bool) {
 		s.mu.Unlock()
 		return "", false
 	}
+	if e.domain == "" {
+		// An older cert-svc published no domain. Answer (so an in-flight
+		// issuance across a rollout still completes) but say so — once
+		// both sides are current this should never appear.
+		s.logger.Warn("acme challenge has no domain; answering without a host check",
+			"token", token, "host", host)
+		return e.keyAuth, true
+	}
+	if !hostMatches(host, e.domain) {
+		s.logger.Warn("refusing acme challenge: probed under a host the token was not issued for",
+			"token", token, "probed_host", host, "token_domain", e.domain)
+		return "", false
+	}
 	return e.keyAuth, true
+}
+
+// hostMatches compares a request Host (which may carry a port) against the
+// token's domain, case-insensitively.
+func hostMatches(host, domain string) bool {
+	h := strings.ToLower(strings.TrimSpace(host))
+	if i := strings.LastIndex(h, ":"); i > 0 && !strings.Contains(h[i+1:], ":") {
+		if _, err := strconv.Atoi(h[i+1:]); err == nil {
+			h = h[:i]
+		}
+	}
+	return h == domain
 }
 
 // Close drains the subscriptions. Idempotent-ish (safe to call once).

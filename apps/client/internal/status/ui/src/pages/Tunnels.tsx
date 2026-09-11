@@ -276,6 +276,12 @@ export default function Tunnels() {
   // "this edition doesn't have it" — there's no plan to upgrade — so the editor
   // hides those sections rather than showing the managed "upgrade" prompt.
   const standalone = me?.plan?.code === "standalone";
+  // 隐藏商业化入口 (运营设置, proxied through /v1/me). Distinct from
+  // standalone: standalone has no plan at all (the sections are hidden),
+  // whereas this is a managed platform that HAS plans but shows no way to
+  // buy one — the limits still apply, the copy just stops sending people
+  // to a page that is not there.
+  const hideCommerce = me?.ui?.hide_commerce === true;
   // M11.19.1: tunnelCount must reflect the Org-wide count to line up
   // with the plan cap — plan.max_tunnels is enforced against ALL
   // members' tunnels at tunnel-svc.CreateTunnel admit. items.length is
@@ -753,7 +759,10 @@ export default function Tunnels() {
               !canManage
                 ? t("serviceMode.tunnelsReadonly")
                 : capped
-                  ? t("tunnels.cappedTooltip", { count: tunnelCount, max: planMax })
+                  ? t(hideCommerce ? "tunnels.cappedTooltipNoUpgrade" : "tunnels.cappedTooltip", {
+                      count: tunnelCount,
+                      max: planMax,
+                    })
                   : ""
             }
           >
@@ -821,7 +830,9 @@ export default function Tunnels() {
           showIcon
           type="warning"
           message={t("tunnels.cappedAlertMsg", { count: tunnelCount, max: planMax })}
-          description={t("tunnels.cappedAlertDesc")}
+          description={t(
+            hideCommerce ? "tunnels.cappedAlertDescNoUpgrade" : "tunnels.cappedAlertDesc",
+          )}
         />
       )}
 
@@ -872,6 +883,7 @@ export default function Tunnels() {
       <SecurityDrawer
         tunnel={secRow}
         standalone={standalone}
+        hideCommerce={hideCommerce}
         ipPolicyEnabled={ipPolicyEnabled}
         basicAuthEnabled={basicAuthEnabled}
         rateLimitEnabled={rateLimitEnabled}
@@ -1283,6 +1295,7 @@ function buildSecurityConfig(
 function SecurityDrawer({
   tunnel,
   standalone,
+  hideCommerce,
   ipPolicyEnabled,
   basicAuthEnabled,
   rateLimitEnabled,
@@ -1292,6 +1305,7 @@ function SecurityDrawer({
 }: {
   tunnel: RemoteTunnel | null;
   standalone: boolean;
+  hideCommerce: boolean;
   ipPolicyEnabled: boolean;
   basicAuthEnabled: boolean;
   rateLimitEnabled: boolean;
@@ -1406,7 +1420,10 @@ function SecurityDrawer({
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message={t("tunnels.security.lockedNotice", { features: lockedFeatures.join("、") })}
+          message={t(
+            hideCommerce ? "tunnels.security.lockedNoticeContact" : "tunnels.security.lockedNotice",
+            { features: lockedFeatures.join("、") },
+          )}
         />
       )}
 

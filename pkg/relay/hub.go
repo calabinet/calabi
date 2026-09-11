@@ -147,7 +147,7 @@ func (h *Hub) Serve(conn net.Conn) {
 			// core into synchronous log I/O when it is on. What a per-packet log
 			// line could tell you, the usage counters and Dropped already do.
 			c.usage.in.Add(uint64(len(ciphertext)))
-			h.forward(key, dst, ciphertext)
+			h.forward(c, dst, ciphertext)
 		case meshproto.DERPFramePing:
 			_ = c.write(meshproto.DERPFramePong, payload)
 		case meshproto.DERPFrameAuthProof:
@@ -179,16 +179,36 @@ func (h *Hub) Serve(conn net.Conn) {
 // Usage is credited by the writer, not here: a frame that is dropped or fails to
 // write cost the platform nothing, and that has to stay true now that dropping
 // is something the relay does on purpose.
-func (h *Hub) forward(src, dst meshproto.NodeKey, ciphertext []byte) {
+func (h *Hub) forward(src *client, dst meshproto.NodeKey, ciphertext []byte) {
 	dc := h.lookup(dst)
 	if dc == nil {
 		return // dst offline; nothing to log per packet about it
 	}
-	frame, err := meshproto.EncodeDERPFrame(meshproto.DERPFrameRecvPacket, meshproto.EncodePacket(src, ciphertext))
+	if crossesMeshnets(src, dc) {
+		return
+	}
+	frame, err := meshproto.EncodeDERPFrame(meshproto.DERPFrameRecvPacket, meshproto.EncodePacket(src.key, ciphertext))
 	if err != nil {
 		return // oversize frame: the sender built it, the relay just declines it
 	}
 	dc.sendq.enqueue(frame, uint64(len(ciphertext)))
+}
+
+// crossesMeshnets reports whether a frame would go from one org to another.
+// Such a frame is never legitimate - a meshnet is one org and nothing is shared
+// between them - and WireGuard on the far side drops it anyway. But by then the
+// relay has delivered it, and relay usage is billed as the RECEIVER egress: a
+// node of org A could run up the bill of org B with junk addressed to a B node
+// key (security audit 1-D). Refusing it here costs two atomic loads a packet.
+//
+// Only enforceable with authentication on, where each link proved the meshnet
+// its grant names. A relay running without it knows no meshnets (both 0) and
+// forwards exactly as before; that posture is documented as open.
+func crossesMeshnets(src, dst *client) bool {
+	// The usage counter mirrors the grant meshnet atomically (add / re-auth), so
+	// the per-packet path takes no lock.
+	s, d := src.usage.meshnet.Load(), dst.usage.meshnet.Load()
+	return s != 0 && d != 0 && s != d
 }
 
 // Connected reports whether key currently has a live link (exported for tests

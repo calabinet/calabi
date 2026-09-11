@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/ed25519"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -35,12 +37,44 @@ func (u *Updater) logf(format string, args ...any) {
 // current, or (false, err) on any failure. A failed check NEVER touches the
 // running install — verification gates the apply.
 func (u *Updater) CheckAndApply(ctx context.Context) (bool, error) {
-	m, err := FetchManifest(ctx, u.ManifestURL)
+	m, raw, err := FetchManifest(ctx, u.ManifestURL)
 	if err != nil {
 		return false, err
 	}
-	if !IsNewer(u.CurrentVersion, m.Version) {
+	// NOTHING from the manifest is trusted before its own signature checks out
+	// (audit finding UPD-1). Fail closed: a root service that cannot establish
+	// where an instruction came from must not follow it.
+	sig, err := FetchManifestSignature(ctx, u.ManifestURL)
+	if err != nil {
+		return false, err
+	}
+	if err := VerifyManifestSignature(raw, sig, u.PubKey); err != nil {
+		return false, err
+	}
+	// The version reached the filesystem path verbatim before this check.
+	if err := ValidateVersion(m.Version); err != nil {
+		return false, err
+	}
+	if err := os.MkdirAll(u.DownloadDir, 0o700); err != nil {
+		return false, err
+	}
+	// Anti-rollback. A valid signature proves we published this manifest, not
+	// that we published it LAST: replaying a genuine older one is the same
+	// downgrade by another route, and the attacker needs no key for it.
+	floor := readVersionFloor(u.DownloadDir)
+	if floor != "" && IsNewer(m.Version, floor) && !m.Rollback {
+		return false, fmt.Errorf("selfupdate: manifest offers %s but %s was already seen — refusing "+
+			"(a deliberate rollback must carry \"rollback\": true inside the signed manifest)", m.Version, floor)
+	}
+	if !m.Rollback {
+		writeVersionFloor(u.DownloadDir, m.Version)
+	}
+	if !IsNewer(u.CurrentVersion, m.Version) && !m.Rollback {
 		u.logf("selfupdate: up to date (current %s, manifest %s)", u.CurrentVersion, m.Version)
+		return false, nil
+	}
+	if m.Rollback && u.CurrentVersion == m.Version {
+		u.logf("selfupdate: already on the rollback target %s", m.Version)
 		return false, nil
 	}
 	art, ok := m.ArtifactForThisPlatform()
@@ -53,10 +87,17 @@ func (u *Updater) CheckAndApply(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("selfupdate: artifact for %s is missing sha256/signature — refusing", PlatformKey())
 	}
 
-	if err := os.MkdirAll(u.DownloadDir, 0o700); err != nil {
+	// The installer must come from the same host as the manifest, over the same
+	// or a stronger scheme: a spoofed manifest should not be able to redirect a
+	// root service's download to an arbitrary origin.
+	if err := sameOriginArtifact(u.ManifestURL, art.URL); err != nil {
 		return false, err
 	}
-	dest := filepath.Join(u.DownloadDir, "calabi-update-"+m.Version+installerExt())
+
+	// A FIXED filename. The version is attacker-controlled input and has no
+	// business in a path built by a service running as root/LocalSystem; it is
+	// validated above as well, but the path simply doesn't depend on it now.
+	dest := filepath.Join(u.DownloadDir, "calabi-update"+installerExt())
 	u.logf("selfupdate: downloading %s", art.URL)
 	if err := Download(ctx, art.URL, dest); err != nil {
 		return false, err
@@ -103,6 +144,28 @@ func (u *Updater) RunPeriodic(ctx context.Context, interval time.Duration) {
 		}
 		t.Reset(interval)
 	}
+}
+
+// sameOriginArtifact requires the installer URL to share the manifest's host,
+// and to be https whenever the manifest was fetched over https (a dev/test
+// manifest served over plain http may point at an http installer on the same
+// host).
+func sameOriginArtifact(manifestURL, artifactURL string) error {
+	m, err := url.Parse(manifestURL)
+	if err != nil {
+		return fmt.Errorf("selfupdate: manifest url: %w", err)
+	}
+	a, err := url.Parse(artifactURL)
+	if err != nil {
+		return fmt.Errorf("selfupdate: artifact url: %w", err)
+	}
+	if !strings.EqualFold(a.Host, m.Host) {
+		return fmt.Errorf("selfupdate: artifact host %q does not match the manifest host — refusing", a.Host)
+	}
+	if strings.EqualFold(m.Scheme, "https") && !strings.EqualFold(a.Scheme, "https") {
+		return fmt.Errorf("selfupdate: artifact must be served over https — refusing")
+	}
+	return nil
 }
 
 func installerExt() string {

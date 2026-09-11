@@ -13,7 +13,7 @@
 //
 // This file holds the always-present access-control features: IP access control
 // (allow/deny CIDR) and HTTP Basic auth. The optional advanced features
-// (connection rate limiting, request-header rewriting, an OAuth login wall) sit
+// (connection rate limiting, request-header rewriting, OAuth authentication) sit
 // behind the `adv` seam — see parseAdvanced and the Has*/Allow* methods.
 package policy
 

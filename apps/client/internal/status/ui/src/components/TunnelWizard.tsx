@@ -714,7 +714,14 @@ export default function TunnelWizard({ open, onClose, prefillPort, publish }: Pr
               </Form.Item>
             ) : (
               <Form.Item label={t("wizard.subdomainFreeLabel")}>
-                <Input disabled placeholder={t("wizard.subdomainFreePlaceholder")} />
+                <Input
+                  disabled
+                  placeholder={t(
+                    me?.ui?.hide_commerce
+                      ? "wizard.subdomainFreePlaceholderNoUpgrade"
+                      : "wizard.subdomainFreePlaceholder",
+                  )}
+                />
               </Form.Item>
             );
           }}

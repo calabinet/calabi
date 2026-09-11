@@ -200,16 +200,17 @@ func meshHomePin() string {
 
 // newPlatformMeshController builds the controller (not started). authKey returns
 // the daemon's current data-plane credential ("" when there is none yet, e.g.
-// pre-login — the poll then just retries). name is the default node name; adv is
-// the optional subnet-router / exit-node role.
-func newPlatformMeshController(logger *slog.Logger, bffURL string, authKey func() string, name string, adv meshAdvertise, services []meshServiceDecl) *platformMeshController {
+// pre-login — the poll then just retries); refresh renews it when the
+// coordinator refuses it (see refreshAfterDenial). name is the default node name;
+// adv is the optional subnet-router / exit-node role.
+func newPlatformMeshController(logger *slog.Logger, bffURL string, authKey func() string, refresh func(context.Context) string, name string, adv meshAdvertise, services []meshServiceDecl) *platformMeshController {
 	return &platformMeshController{
 		logger:   logger.With("component", "mesh.enroll"),
 		bffURL:   strings.TrimRight(bffURL, "/"),
 		authKey:  authKey,
 		name:     name,
 		adv:      adv,
-		start:    realMeshLeaseStarter(logger),
+		start:    realMeshLeaseStarter(logger, refresh),
 		services: services,
 		hc:       &http.Client{Timeout: 10 * time.Second},
 		poll:     30 * time.Second,
@@ -684,11 +685,13 @@ func (c *platformMeshController) SetAdvertise(a statusapi.MeshAdvertise) error {
 }
 
 // realMeshLeaseStarter builds the production lease: a meshRunner whose auth key is
-// the daemon's live credential, started in the background.
-func realMeshLeaseStarter(logger *slog.Logger) meshLeaseStarter {
+// the daemon's live credential — renewed through refresh when the coordinator
+// refuses it — started in the background.
+func realMeshLeaseStarter(logger *slog.Logger, refresh func(context.Context) string) meshLeaseStarter {
 	return func(ctx context.Context, cfg meshConfig, authKey func() string) meshLease {
 		r := newMeshRunner(logger, cfg)
 		r.authKeyFn = authKey
+		r.refreshFn = refresh
 		r.Start(ctx)
 		return &runnerLease{r: r}
 	}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"sync"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -20,6 +21,13 @@ import (
 // entrypoint, so the client keeps exactly one public ingress.
 type CoordClient struct {
 	rpc meshpb.CoordinatorClient
+
+	// The session RegisterNode returned (mesh protocol v2), sent on every
+	// node-scoped call after it. The coordinator issues it only to a node that
+	// proved it holds its private key, so it - not the org auth key - is what
+	// says which device is calling.
+	sessMu  sync.Mutex
+	session string
 }
 
 // NewCoordClient wraps an existing gRPC connection.
@@ -29,10 +37,15 @@ func NewCoordClient(cc grpc.ClientConnInterface) *CoordClient {
 
 // RegisterParams is what a node presents to enroll.
 type RegisterParams struct {
-	AuthKey  string // tk_ auth key (platform) / pre-shared key (self-hosted)
-	NodeKey  meshproto.NodeKey
-	DiscoKey meshproto.DiscoKey // optional until MESH.4
-	Name     string
+	AuthKey string // tk_ auth key (platform) / pre-shared key (self-hosted)
+	NodeKey meshproto.NodeKey
+	// NodePrivate is the private half of NodeKey. It never leaves the node: it
+	// seals the registration proof (mesh protocol v2), which is how the
+	// coordinator knows the caller is this device and not merely a member of its
+	// org who read NodeKey out of a netmap.
+	NodePrivate PrivateKey
+	DiscoKey    meshproto.DiscoKey // optional until MESH.4
+	Name        string
 	// AdvertiseRoutes are subnet-router CIDRs this node offers to forward (MESH.7).
 	AdvertiseRoutes []netip.Prefix
 	// AliasRoutes are the AdvertiseRoutes this node asks to be published under a
@@ -74,6 +87,12 @@ type Registration struct {
 
 // Register enrolls the node and returns its mesh identity (id + overlay addr).
 func (c *CoordClient) Register(ctx context.Context, p RegisterParams) (Registration, error) {
+	// Without the private key there is nothing to prove possession with, and a
+	// mismatched one would only be refused by the coordinator a round trip later
+	// with a less useful error.
+	if p.NodePrivate == (PrivateKey{}) || p.NodePrivate.Public() != p.NodeKey {
+		return Registration{}, errors.New("mesh: register: NodePrivate is missing or does not match NodeKey")
+	}
 	req := &meshpb.RegisterNodeRequest{
 		AuthKey:           p.AuthKey,
 		NodeKey:           p.NodeKey.String(),
@@ -95,10 +114,16 @@ func (c *CoordClient) Register(ctx context.Context, p RegisterParams) (Registrat
 			Name: s.Name, Proto: s.Proto, Port: uint32(s.Port), Target: s.Target, Note: s.Note,
 		})
 	}
+	if err := c.attachProof(ctx, req, p); err != nil {
+		return Registration{}, err
+	}
 	resp, err := c.rpc.RegisterNode(ctx, req)
 	if err != nil {
 		return Registration{}, err
 	}
+	c.sessMu.Lock()
+	c.session = resp.GetSessionToken()
+	c.sessMu.Unlock()
 	reg := Registration{NodeID: resp.GetNodeId(), ProtocolVersion: resp.GetProtocolVersion()}
 	if oa := resp.GetOverlayAddr(); oa != "" {
 		addr, err := netip.ParseAddr(oa)
@@ -110,13 +135,46 @@ func (c *CoordClient) Register(ctx context.Context, p RegisterParams) (Registrat
 	return reg, nil
 }
 
+// sessionToken is the session the node registered into ("" before Register).
+func (c *CoordClient) sessionToken() string {
+	c.sessMu.Lock()
+	defer c.sessMu.Unlock()
+	return c.session
+}
+
+// attachProof answers the coordinator's registration challenge with the node's
+// private key (mesh protocol v2).
+//
+// A coordinator that predates v2 answers Unimplemented: it issues no challenge
+// and asks for no proof, so the registration goes ahead without one. That is
+// what lets this client ship before the coordinator does. It is not a downgrade
+// an attacker can force - in production the coordinator is reached over TLS
+// verified against the embedded CA, so only the real coordinator can answer, and
+// a real coordinator new enough to check refuses an unproven registration.
+func (c *CoordClient) attachProof(ctx context.Context, req *meshpb.RegisterNodeRequest, p RegisterParams) error {
+	chr, err := c.rpc.GetRegisterChallenge(ctx, &meshpb.GetRegisterChallengeRequest{AuthKey: p.AuthKey})
+	if status.Code(err) == codes.Unimplemented {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	ch, err := meshproto.ParseRegisterChallenge(chr.GetChallenge())
+	if err != nil {
+		return fmt.Errorf("mesh: registration challenge: %w", err)
+	}
+	req.ChallengeId = chr.GetChallengeId()
+	req.RegisterProof = meshproto.SealRegisterProof(ch, p.NodeKey, [meshproto.KeyLen]byte(p.NodePrivate))
+	return nil
+}
+
 // ReportEndpoints uploads the node's freshly discovered candidate endpoints so
 // peers can attempt direct paths to it (MESH.4), together with the relay region
 // it measured as closest (homeRegion; "" = not measured yet, keep the current
 // home). Endpoints are host:port; the coordinator stores both and re-pushes
 // affected netmaps.
 func (c *CoordClient) ReportEndpoints(ctx context.Context, nodeID int64, eps []netip.AddrPort, homeRegion string) error {
-	req := &meshpb.ReportEndpointsRequest{NodeId: nodeID, HomeRegion: homeRegion}
+	req := &meshpb.ReportEndpointsRequest{NodeId: nodeID, HomeRegion: homeRegion, SessionToken: c.sessionToken()}
 	for _, ep := range eps {
 		req.Endpoints = append(req.Endpoints, ep.String())
 	}
@@ -135,7 +193,7 @@ func (c *CoordClient) ReportServiceHealth(ctx context.Context, nodeID int64, in 
 	if len(in) == 0 {
 		return nil
 	}
-	req := &meshpb.ReportServiceHealthRequest{NodeId: nodeID}
+	req := &meshpb.ReportServiceHealthRequest{NodeId: nodeID, SessionToken: c.sessionToken()}
 	for _, r := range in {
 		req.Services = append(req.Services, &meshpb.ServiceHealth{
 			Name: r.Name, TargetOk: r.TargetOK, MeshOk: r.MeshOK, Checked: r.Checked,
@@ -146,7 +204,7 @@ func (c *CoordClient) ReportServiceHealth(ctx context.Context, nodeID int64, in 
 }
 
 func (c *CoordClient) Watch(ctx context.Context, nodeID int64, onNetMap func(NetMap)) error {
-	stream, err := c.rpc.PullNetMap(ctx, &meshpb.PullNetMapRequest{NodeId: nodeID})
+	stream, err := c.rpc.PullNetMap(ctx, &meshpb.PullNetMapRequest{NodeId: nodeID, SessionToken: c.sessionToken()})
 	if err != nil {
 		return err
 	}
@@ -179,11 +237,15 @@ var ErrNotEnrolled = errors.New("mesh: node is not enrolled in this meshnet")
 // An older coordinator answers Unimplemented; that is reported as ErrNotEnrolled
 // so the caller takes the same re-enroll fallback and the feature degrades to
 // exactly the old behaviour instead of failing the edit.
+//
+// Unauthenticated means the session is gone - the coordinator restarted, or a
+// newer registration replaced it - and re-enrolling is the fix for that too.
 func (c *CoordClient) UpdateDeclarations(ctx context.Context, p RegisterParams) error {
 	req := &meshpb.UpdateNodeDeclarationsRequest{
 		AuthKey:           p.AuthKey,
 		NodeKey:           p.NodeKey.String(),
 		DeviceFingerprint: p.DeviceFingerprint,
+		SessionToken:      c.sessionToken(),
 	}
 	for _, s := range p.Services {
 		req.DeclaredServices = append(req.DeclaredServices, &meshpb.DeclaredService{
@@ -192,7 +254,7 @@ func (c *CoordClient) UpdateDeclarations(ctx context.Context, p RegisterParams) 
 	}
 	if _, err := c.rpc.UpdateNodeDeclarations(ctx, req); err != nil {
 		switch status.Code(err) {
-		case codes.FailedPrecondition, codes.Unimplemented:
+		case codes.FailedPrecondition, codes.Unimplemented, codes.Unauthenticated:
 			return ErrNotEnrolled
 		}
 		return err

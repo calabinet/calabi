@@ -44,6 +44,10 @@ func (k PrivateKey) Public() meshproto.NodeKey {
 // Hex encodes the private key as the 64-char hex string the WireGuard UAPI wants.
 func (k PrivateKey) Hex() string { return hex.EncodeToString(k[:]) }
 
+// String keeps the key out of logs and %v dumps of the structs that carry it
+// (RegisterParams among them). Hex is the deliberate way to get the bytes.
+func (k PrivateKey) String() string { return "mesh.PrivateKey(redacted)" }
+
 // LoadOrCreateKey reads a private key from path, or generates + persists one if
 // path doesn't exist. The file is written 0600 (owner-only). This gives the node
 // a STABLE identity across restarts — its NodeKey stays registered with the

@@ -20,6 +20,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
+	"net/url"
 	"os"
 	"runtime/debug"
 	"strconv"
@@ -696,6 +698,11 @@ type Server struct {
 	// relaxing it for self-hosters is safe. See AllowBrowser + browserGuard.
 	allowBrowser bool
 
+	// lock gates the /v1 API for visitors from other machines behind an unlock
+	// secret (console_unlock.go). nil = no secret configured: such visitors are
+	// refused outright. Set by SetConsoleSecret.
+	lock *consoleLock
+
 	// ready receives the ACTUAL bound console URL once Run() binds — which may
 	// differ from the requested addr after the port fallback. Buffered(1) so the
 	// send never blocks even if nobody's listening; the daemon boot reads it to
@@ -735,6 +742,151 @@ func (s *Server) AttachAPI(register func(mux *http.ServeMux)) {
 // is no Tauri shell to stamp the CalabiDesktop UA).
 func (s *Server) AllowBrowser() {
 	s.allowBrowser = true
+}
+
+// SetConsoleSecret lets visitors from other machines use the console once they
+// have entered secret (see consoleGuard and console_unlock.go). Call before
+// Run(). Empty leaves them refused outright.
+func (s *Server) SetConsoleSecret(secret string) {
+	secret = strings.TrimSpace(secret)
+	if secret == "" {
+		s.lock = nil
+		return
+	}
+	s.lock = newConsoleLock(s.logger, secret)
+}
+
+// consoleGuard decides who may use the :7400 console's /v1 API. It began as the
+// fix for two browser-driven holes (audit findings MESH-8 / MESH-9):
+//
+//   - CSRF. POST /v1/auth/login is deliberately un-tokened — the SPA cannot
+//     fetch the local token before the user has identified themselves — and
+//     nothing checked where the request came from. Any page the user visited
+//     could POST the ATTACKER's credentials as a CORS-"simple" request (no
+//     preflight, response never read) and rebind this daemon, and with it the
+//     machine's tunnels and mesh membership, to the attacker's org.
+//   - DNS rebinding. GET /v1/local-token hands the write token to any loopback
+//     caller and no handler checked Host, so a page that rebinds its own name
+//     to 127.0.0.1 becomes same-origin, reads the token, and can then drive
+//     every guarded write (set an exit node, tear the mesh down, create
+//     tunnels).
+//
+// So /v1/* must not arrive from a cross-site browser context, and is served
+// freely only to THIS machine: a loopback peer addressing a local name. It takes
+// both. The peer address is what a network client cannot fake — Host is the
+// client's to write, and a Host check alone let anyone reach a console bound
+// beyond loopback by sending `Host: localhost`. Host is what a PAGE cannot
+// fake — a rebinding page connects from this very machine, but under its own
+// name.
+//
+// Anyone else — another machine, or this one reached through a reverse proxy
+// under a public name — must first unlock the console with its secret
+// (console_unlock.go); with no secret configured they are refused outright.
+// Static assets, /healthz and /metrics are untouched: they carry no authority,
+// and a deployment scraping them over the LAN keeps working.
+func (s *Server) consoleGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/v1/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// Sec-Fetch-Site is stamped by the browser and cannot be forged by the
+		// page; Origin is the fallback for everything that doesn't send it.
+		if r.Header.Get("Sec-Fetch-Site") == "cross-site" || !originAllowed(r.Header.Get("Origin"), r.Host) {
+			http.Error(w, "cross-site request refused", http.StatusForbidden)
+			return
+		}
+		local := localRequest(r)
+		// Answered here, ahead of the API: a locked visitor has to be able to
+		// ask whether it is locked, and to unlock.
+		switch r.URL.Path {
+		case consoleStatePath:
+			s.lock.serveState(w, r, local)
+			return
+		case consoleUnlockPath:
+			s.lock.serveUnlock(w, r, local)
+			return
+		}
+		if local {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if s.lock == nil {
+			http.Error(w, "this console only answers on localhost", http.StatusMisdirectedRequest)
+			return
+		}
+		if !s.lock.unlocked(r) {
+			writeConsoleJSON(w, http.StatusUnauthorized, map[string]any{"error": "console_locked"})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// localRequest reports whether r came from this machine AND addresses it by a
+// local name. See consoleGuard for why it needs both.
+func localRequest(r *http.Request) bool {
+	ip, ok := peerAddr(r)
+	return ok && ip.IsLoopback() && loopbackHost(r.Host)
+}
+
+// peerAddr is the connection's remote address — the TCP peer, never a header.
+func peerAddr(r *http.Request) (netip.Addr, bool) {
+	h, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		h = r.RemoteAddr
+	}
+	ip, err := netip.ParseAddr(strings.TrimSuffix(strings.TrimPrefix(h, "["), "]"))
+	if err != nil {
+		return netip.Addr{}, false
+	}
+	return ip.Unmap(), true
+}
+
+// loopbackHost reports whether a Host names this machine. Anything else means
+// the browser resolved some other name to us — the rebinding case.
+//
+// The unspecified address counts: it is what a local caller dials when the
+// console is bound to 0.0.0.0 (`calabi mesh status` in the container image does
+// exactly that). A page cannot exploit it — a request carrying another site's
+// Origin is refused before this is consulted, and localRequest also requires a
+// loopback peer.
+func loopbackHost(host string) bool {
+	h, _, err := net.SplitHostPort(host)
+	if err != nil {
+		h = host
+	}
+	h = strings.TrimSuffix(strings.TrimPrefix(h, "["), "]")
+	if h == "localhost" || strings.HasSuffix(h, ".localhost") {
+		return true
+	}
+	if ip, err := netip.ParseAddr(h); err == nil {
+		ip = ip.Unmap()
+		return ip.IsLoopback() || ip.IsUnspecified()
+	}
+	return false
+}
+
+// originAllowed reports whether an Origin may drive the console.
+//
+// Empty is allowed on purpose: non-browser callers (curl, the CLI) send none,
+// and a browser omits it on same-origin navigations. The Tauri shell loads the
+// packaged UI from its own scheme, so that is allowed too. So is a page on this
+// machine, and the console's own page as a visitor from another machine sees it:
+// an Origin naming the very host the request addresses. Anything else is some
+// other site.
+func originAllowed(origin, host string) bool {
+	if origin == "" || origin == "null" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	if u.Scheme == "tauri" {
+		return true
+	}
+	return loopbackHost(u.Host) || (host != "" && strings.EqualFold(u.Host, host))
 }
 
 // Run binds and serves until ctx is cancelled. Returns nil on graceful
@@ -790,6 +942,8 @@ func (s *Server) Run(ctx context.Context) error {
 	if !s.allowBrowser {
 		handler = browserGuard(mux)
 	}
+	// Outermost, so it applies whichever UA posture the console runs in.
+	handler = s.consoleGuard(handler)
 	s.srv = &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second}
 	// Compare PORTS, not the two address strings. net.Listen("tcp",
 	// "0.0.0.0:7500") on a dual-stack host hands back an IPv6 socket whose

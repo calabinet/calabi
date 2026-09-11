@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"math"
 	"net/netip"
+	"sync"
 
 	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
 )
@@ -77,10 +78,32 @@ type Coordinator struct {
 	// Nil = this coordinator issues none, which is correct while its relays still
 	// run with relay.require_auth off. See relaygrant.go.
 	RelayGrants RelayGrantIssuer
-	// RelayUsageSink receives relayed-byte totals once they have been attributed
-	// to a meshnet (F2, relayusage.go). Nil = this coordinator collects nothing.
-	RelayUsageSink RelayUsageSink
-	Logger         *slog.Logger
+	Logger      *slog.Logger
+
+	// enrollLocks serializes enrollment PER MESHNET.
+	//
+	// Register decides on a snapshot and then writes: it counts the meshnet's
+	// active nodes, asks the quota backend whether one more fits, allocates an
+	// address and inserts. Run concurrently, every caller read the same count and
+	// every caller passed, so one burst bought far more seats than the plan
+	// allows (audit finding MESH-12) — quota-svc cannot catch it either, because
+	// the count it judges is the one the caller supplied.
+	//
+	// The same snapshot feeds the name-uniqueness and route-overlap rules, so
+	// serializing here closes those races too rather than only the seat one.
+	//
+	// One process, like the v2 session table: a multi-replica coordinator would
+	// need a shared lock (or a unique seat row) instead. The zero value works, so
+	// callers that build a Coordinator literal need not initialize it.
+	enrollLocks sync.Map // MeshnetID -> *sync.Mutex
+}
+
+// lockMeshnet serializes one meshnet's enrollments and returns the unlock func.
+func (c *Coordinator) lockMeshnet(t MeshnetID) func() {
+	v, _ := c.enrollLocks.LoadOrStore(t, &sync.Mutex{})
+	mu := v.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
 }
 
 // RegisterInput carries the fields a node presents at enrollment.
@@ -130,9 +153,25 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 	in.AdvertisedRoutes = keptRoutes
 	in.AliasedRoutes, _ = splitAdvertised(in.AliasedRoutes)
 	if len(refusedRoutes) > 0 && c.Logger != nil {
-		c.Logger.Warn("refusing subnet routes: wider than the publishable maximum",
-			"meshnet", in.Meshnet, "refused", refusedRoutes, "max_prefix_bits", advertiseMinBitsV4)
+		c.Logger.Warn("refusing subnet routes: not publishable (wider than the maximum, or inside the mesh's own address space)",
+			"meshnet", in.Meshnet, "refused", refusedRoutes,
+			"max_prefix_bits", advertiseMinBitsV4, "reserved", carrierGradeNAT)
 	}
+	// Everything from here to the insert is decide-then-write on a snapshot, so
+	// it runs one-at-a-time per meshnet (MESH-12). Held across the store calls
+	// deliberately: the seat count, the name check and the route-overlap check
+	// all read the same snapshot, and a lock that ended before the write would
+	// leave every one of them racy.
+	defer c.lockMeshnet(in.Meshnet)()
+
+	// The meshnet's nodes, fetched once. Three rules below read them: a name may
+	// not collide with a peer's (MESH-5), a CIDR a peer already publishes is not
+	// auto-approved (MESH-1), and the seat gate counts them.
+	peers, err := c.Nodes.ListMeshnet(ctx, in.Meshnet)
+	if err != nil {
+		return nil, fmt.Errorf("core: list meshnet: %w", err)
+	}
+
 	// Re-enrollment: reuse the existing node (same id + overlay), just refresh the
 	// mutable fields. No new IPAM allocation.
 	if existing, err := c.Nodes.FindByKey(ctx, in.Meshnet, in.NodeKey); err == nil && existing != nil {
@@ -148,7 +187,10 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 		if !existing.NamePinned {
 			// An admin rename wins over the node's hostname: without this guard the
 			// next daemon restart (which re-registers) would silently undo it.
-			existing.Name = in.Name
+			// Deduped for the same reason a fresh node's name is: re-registering
+			// under a colleague's name would inherit whatever an ACL granted that
+			// name (MESH-5).
+			existing.Name = dedupeNodeName(in.Name, namesInMeshnet(peers, existing.ID))
 		}
 		existing.DiscoKey = in.DiscoKey
 		if !existing.TagsPinned {
@@ -173,9 +215,10 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 			// advertising a CIDR must stop receiving its traffic.
 			existing.ApprovedRoutes = intersectPrefixes(existing.ApprovedRoutes, in.AdvertisedRoutes)
 		} else {
-			// Never reviewed: behave exactly as before approval existed, so the
-			// feature doesn't silently cut subnet routers that work today.
-			existing.ApprovedRoutes = in.AdvertisedRoutes
+			// Never reviewed: behave as before approval existed, so the feature
+			// doesn't silently cut subnet routers that work today — except for a
+			// CIDR a peer already publishes, which now waits for an admin (MESH-1).
+			existing.ApprovedRoutes = autoApprovable(in.AdvertisedRoutes, peers, existing.ID, c.Logger, in.Meshnet)
 		}
 		// A daemon restart with an edited config is how an alias request changes,
 		// so reconcile on the re-enrollment path too — and AFTER the approval
@@ -207,11 +250,7 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 	// seat for someone else — we count active nodes, then ask the quota backend
 	// whether one more is allowed, BEFORE allocating an address.
 	if c.Quota != nil {
-		existing, err := c.Nodes.ListMeshnet(ctx, in.Meshnet)
-		if err != nil {
-			return nil, fmt.Errorf("core: count meshnet nodes: %w", err)
-		}
-		active, _ := seatCounts(existing)
+		active, _ := seatCounts(peers)
 		allowed, limit, reason, err := c.Quota.Admit(ctx, in.Meshnet, active)
 		switch {
 		case err != nil:
@@ -250,15 +289,17 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 		return nil, fmt.Errorf("core: allocate overlay: %w", err)
 	}
 	n := &Node{
-		Meshnet:           in.Meshnet,
-		Name:              in.Name,
-		HostName:          in.Name,
-		NodeKey:           in.NodeKey,
-		DiscoKey:          in.DiscoKey,
-		Tags:              in.Tags,
-		OwnerUserID:       in.OwnerUserID,
-		AdvertisedRoutes:  in.AdvertisedRoutes,
-		ApprovedRoutes:    in.AdvertisedRoutes, // not yet reviewed; see RoutesReviewed
+		Meshnet:          in.Meshnet,
+		Name:             dedupeNodeName(in.Name, namesInMeshnet(peers, 0)), // MESH-5
+		HostName:         in.Name,
+		NodeKey:          in.NodeKey,
+		DiscoKey:         in.DiscoKey,
+		Tags:             in.Tags,
+		OwnerUserID:      in.OwnerUserID,
+		AdvertisedRoutes: in.AdvertisedRoutes,
+		// Not yet reviewed (see RoutesReviewed), minus anything a peer already
+		// publishes — that one waits for an admin (MESH-1).
+		ApprovedRoutes:    autoApprovable(in.AdvertisedRoutes, peers, 0, c.Logger, in.Meshnet),
 		AliasedRoutes:     in.AliasedRoutes,
 		Overlay:           addr,
 		DeviceFingerprint: in.DeviceFingerprint,
@@ -529,6 +570,19 @@ func (c *Coordinator) UpdateSettings(ctx context.Context, t MeshnetID, in Meshne
 	prev, err := c.Settings.GetSettings(ctx, t)
 	if err != nil {
 		return fmt.Errorf("core: read settings: %w", err)
+	}
+	// The alias budget is one org's claim on a pool every org shares, so it gets
+	// a ceiling here as well as an RBAC gate in the BFFs (audit finding MESH-4):
+	// whoever reaches this call, through whichever surface, cannot take the pool.
+	if in.AliasAddrBudget > MaxAliasAddrBudget {
+		if c.Logger != nil {
+			c.Logger.Warn("clamping alias budget to the platform maximum",
+				"meshnet", t, "asked", in.AliasAddrBudget, "max", MaxAliasAddrBudget)
+		}
+		in.AliasAddrBudget = MaxAliasAddrBudget
+	}
+	if in.AliasAddrBudget < 0 {
+		in.AliasAddrBudget = 0 // 0 = DefaultAliasAddrBudget
 	}
 	if err := c.Settings.SetSettings(ctx, t, in); err != nil {
 		return fmt.Errorf("core: save settings: %w", err)

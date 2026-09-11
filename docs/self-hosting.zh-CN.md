@@ -195,7 +195,7 @@ calabi udp  53    --remote-port 5353
 ### 按隧道的安全策略
 
 所有按隧道的访问控制都在这个二进制里：**IP 黑白名单**（所有隧道类型）、
-**HTTP Basic 认证**、**连接限速**、**请求头改写**，以及 **OAuth 登录墙**
+**HTTP Basic 认证**、**连接限速**、**请求头改写**，以及 **OAuth 登录认证**
 （Google / GitHub）——后三项只对 HTTP 生效。密码在**本地**就用 bcrypt 哈希过，
 明文不会离开你的机器：
 
@@ -279,6 +279,11 @@ calabi daemon install --config tunnels.yaml   # 然后：calabi daemon start|sto
 
 控制台只和本地守护进程通信（loopback），不需要账号，也不会往控制面发任何请求。
 改某条隧道的策略只会重新注册那一条——其他隧道的连接不受影响。
+
+如果你把控制台绑定到 loopback 之外（`CALABI_STATUS_ADDR`），来自其他机器的访问者必须先输入它的
+解锁口令：守护进程在启动时会打印该口令，并保存在其数据目录下的 `console-secret` 中；也可以从
+`CALABI_STATUS_SECRET` 读取你自己指定的口令。控制台是明文 HTTP——在你不信任的网络上，请用 SSH
+隧道或 HTTPS 代理。
 
 > 控制台的编辑会重写 `tunnels.yaml`（你的 `server` / `token` / TLS 配置原样保留
 > ——`token: ${CALABI_TOKEN}` 这种写法能让密钥不落到文件里；但**注释不会保留**，

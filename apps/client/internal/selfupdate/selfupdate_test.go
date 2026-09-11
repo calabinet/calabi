@@ -121,12 +121,18 @@ func TestFetchManifestAndArtifact(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	m, err := FetchManifest(context.Background(), srv.URL)
+	m, raw, err := FetchManifest(context.Background(), srv.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if m.Version != "1.7.0" {
 		t.Errorf("version=%q", m.Version)
+	}
+	// The raw bytes must be exactly what the server sent: the signature is
+	// checked against these, so any re-serialisation here would verify a
+	// different byte string than the one that was downloaded.
+	if string(raw) != body {
+		t.Errorf("raw manifest bytes differ from the served body:\ngot  %q\nwant %q", raw, body)
 	}
 	a, ok := m.ArtifactForThisPlatform()
 	if !ok {
@@ -142,7 +148,59 @@ func TestFetchManifestHTTPError(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer srv.Close()
-	if _, err := FetchManifest(context.Background(), srv.URL); err == nil {
+	if _, _, err := FetchManifest(context.Background(), srv.URL); err == nil {
 		t.Error("FetchManifest should error on HTTP 404")
+	}
+}
+
+// VerifyManifestSignature is the gate that makes the manifest's own claims
+// (which version, which platform, which sha256) trustworthy — see UPD-1.
+func TestVerifyManifestSignature(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := []byte(`{"version":"1.7.0","platforms":{}}`)
+	sig := base64.StdEncoding.EncodeToString(ed25519.Sign(priv, raw))
+
+	if err := VerifyManifestSignature(raw, sig, pub); err != nil {
+		t.Errorf("valid manifest signature rejected: %v", err)
+	}
+	// One byte changed anywhere in the manifest breaks it.
+	if err := VerifyManifestSignature(append(raw, ' '), sig, pub); err == nil {
+		t.Error("a modified manifest passed verification")
+	}
+	otherPub, _, _ := ed25519.GenerateKey(nil)
+	if err := VerifyManifestSignature(raw, sig, otherPub); err == nil {
+		t.Error("a manifest signed by another key passed verification")
+	}
+	if err := VerifyManifestSignature(raw, "!!not-base64!!", pub); err == nil {
+		t.Error("a non-base64 signature passed verification")
+	}
+	if err := VerifyManifestSignature(raw, sig, ed25519.PublicKey{1, 2, 3}); err == nil {
+		t.Error("a malformed public key passed verification")
+	}
+}
+
+// The version floor is what makes REPLAYING a genuine older manifest useless.
+func TestVersionFloor(t *testing.T) {
+	dir := t.TempDir()
+
+	// A fresh install has no floor and must not be wedged by that.
+	if got := readVersionFloor(dir); got != "" {
+		t.Errorf("fresh floor = %q, want empty", got)
+	}
+	writeVersionFloor(dir, "2.0.0")
+	if got := readVersionFloor(dir); got != "2.0.0" {
+		t.Errorf("floor = %q, want 2.0.0", got)
+	}
+	// A corrupt floor is ignored rather than blocking updates forever — the
+	// file is local state, not an authority, and a machine that cannot read it
+	// should still be able to update.
+	if err := os.WriteFile(filepath.Join(dir, versionFloorFile), []byte("not-a-version"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := readVersionFloor(dir); got != "" {
+		t.Errorf("corrupt floor = %q, want it ignored", got)
 	}
 }

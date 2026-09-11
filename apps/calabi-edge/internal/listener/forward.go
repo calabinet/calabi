@@ -163,18 +163,53 @@ func (f *Forward) handle(peer net.Conn) {
 		return
 	}
 
-	// Security policy (server-authoritative IP allowlist). A mesh-relayed
-	// connection reaches the OWNING edge here — enforce with the ORIGINAL
-	// visitor IP the relay carries (hdr.VisitorIP), NOT the peer edge's
-	// address. Without this, hitting any same-region peer would bypass the
-	// owner's IP policy. HTTP/HTTPS → 403; SNI passthrough → silent close.
+	// Security policy. A mesh-relayed connection reaches the OWNING edge here,
+	// so this is the ONLY place the owner's policy can be applied to it — and it
+	// must apply the SAME gates as the public listeners (http.go / https.go), or
+	// a visitor who lands on any same-region peer walks straight past them.
+	// Enforced with the ORIGINAL visitor IP the relay carries (hdr.VisitorIP),
+	// never the peer edge's address.
+	//
+	// Only the IP rule used to run here (audit finding EDGE-1): Basic-Auth, the
+	// per-tunnel rate cap and OAuth 登录认证 were all skipped on the relay path,
+	// so the headline login gate protecting a customer's private backend was
+	// bypassable by retrying until the DNS/LB routed you to a non-owner edge.
+	//
+	// The head the relay carries is a plain HTTP head for KindHTTP and KindHTTPS
+	// alike (the origin edge terminates TLS before relaying, see https.go), so
+	// the credentials are readable exactly as on the public path. KindSNI is a
+	// raw TLS ClientHello with no HTTP semantics — the public SNI listener has
+	// no HTTP gates either, so it keeps just the IP rule and closes silently.
 	if p := sess.Proxy(target.ProxyID); p != nil {
-		if pol := p.LoadPolicy(); pol.HasIPRules() && !pol.AllowIPString(hdr.VisitorIP) {
-			if hdr.Kind != mesh.KindSNI {
-				writeStatus(peer, 403, "forbidden: source IP not allowed")
+		if pol := p.LoadPolicy(); pol != nil {
+			if pol.HasIPRules() && !pol.AllowIPString(hdr.VisitorIP) {
+				if hdr.Kind != mesh.KindSNI {
+					writeStatus(peer, 403, "forbidden: source IP not allowed")
+				}
+				f.observeRequest(hdr.Kind, "ip_denied")
+				return
 			}
-			f.observeRequest(hdr.Kind, "ip_denied")
-			return
+			if hdr.Kind != mesh.KindSNI {
+				if pol.HasBasicAuth() && !pol.CheckBasicAuth(headerValue(head, "Authorization")) {
+					write401(peer, basicAuthRealm)
+					f.observeRequest(hdr.Kind, "auth_required")
+					return
+				}
+				if pol.HasRateLimit() && !pol.AllowRate() {
+					writeStatus(peer, 429, "rate limit exceeded")
+					f.observeRequest(hdr.Kind, "rate_limited")
+					return
+				}
+				if pol.HasOAuth() {
+					// https=true for a relayed HTTPS visitor so the redirect_uri
+					// it is sent to matches the scheme it arrived on.
+					if pol.GateOAuth(peer, hdr.Path, hdr.Host, hdr.Kind == mesh.KindHTTPS,
+						headerValue(head, "Cookie"), time.Now()) {
+						f.observeRequest(hdr.Kind, "oauth_redirect")
+						return
+					}
+				}
+			}
 		}
 	}
 

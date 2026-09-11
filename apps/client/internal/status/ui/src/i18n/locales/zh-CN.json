@@ -96,6 +96,7 @@
     "readOnlyDesc": "账单逾期或配额超限时会进入只读模式,无法创建新隧道。请前往控制台查看详情。",
     "quotaExceededMsg": "本月流量已超出限额 ({{pct}}%)",
     "quotaExceededDesc": "超出后所有现有隧道继续工作,但无法新增。升级套餐或等下个月重置。",
+    "quotaExceededDescNoUpgrade": "超出后所有现有隧道继续工作,但无法新增。下个自然月自动重置。",
     "activeTunnels": "组织隧道",
     "uptime": "在线时长",
     "todayTraffic": "今日流量",
@@ -123,6 +124,7 @@
     "notifFatalBody": "请查看「日志」页面定位原因。",
     "notifQuota100Title": "本月流量已用尽",
     "notifQuota100Body": "升级套餐,或等下个自然月重置。",
+    "notifQuota100BodyNoUpgrade": "等下个自然月重置,或联系平台管理员。",
     "notifQuota80Title": "流量已使用 80%",
     "notifQuota80Body": "已用 {{pct}}%,接近月度上限。",
     "sessionCaller": "会话 / 调用方",
@@ -197,7 +199,7 @@
       "remove": "移除（每行一个头名）"
     },
     "oauth": {
-      "title": "OAuth 登录墙",
+      "title": "OAuth 登录认证",
       "hint": "访客访问你的服务前需用身份提供方登录（HTTP/HTTPS）。",
       "providerPlaceholder": "提供方（关闭）",
       "callbackHint": "在你的 OAuth 应用里注册这个回调地址：",
@@ -211,7 +213,8 @@
       "save": "保存",
       "saved": "安全策略已保存",
       "failed": "保存安全策略失败",
-      "lockedNotice": "部分功能需升级套餐后可用：{{features}}。"
+      "lockedNotice": "部分功能需升级套餐后可用：{{features}}。",
+      "lockedNoticeContact": "当前套餐不包含：{{features}}。如需开通请联系平台管理员。"
     },
     "edit": {
       "title": "编辑隧道",
@@ -227,8 +230,10 @@
     "deleteConfirmTitle": "确认删除?",
     "deleteConfirmDesc": "删除后会立即从边缘节点移除,如果客户端在跑,关联连接会被切断。",
     "cappedTooltip": "已达套餐上限 {{count}}/{{max}},升级或删除现有隧道后再试",
+    "cappedTooltipNoUpgrade": "已达套餐上限 {{count}}/{{max}},删除现有隧道后再试",
     "cappedAlertMsg": "已达套餐隧道数上限 {{count}} / {{max}}",
     "cappedAlertDesc": "升级套餐或删除现有隧道后,「新建隧道」按钮才会重新可用。",
+    "cappedAlertDescNoUpgrade": "删除现有隧道后,「新建隧道」按钮才会重新可用。",
     "edgeSwitchMsg": "已跨地域切换到新边缘节点 #{{current}}(原节点 #{{previous}} 所在地域不可用)",
     "edgeSwitchDesc1": "本机已连接到",
     "edgeSwitchAnotherRegion": "另一个地域",
@@ -276,6 +281,7 @@
     "subdomainPattern": "只能小写字母/数字/连字符，且不以连字符开头或结尾",
     "subdomainFreeLabel": "子域名",
     "subdomainFreePlaceholder": "体验版自动分配随机子域名（升级后可自选）",
+    "subdomainFreePlaceholderNoUpgrade": "自动分配随机子域名",
     "countHint": "当前组织已有 {{team}} 条隧道,新建后会追加到列表",
     "countHintShared": "当前组织已有 {{team}} 条隧道（其中本客户端 {{mine}} 条）,新建后会追加到列表",
     "customDomainSelectPlaceholder": "选择一个已验证的域名",
@@ -423,6 +429,18 @@
     "registerPre": "还没有账号? 请通过",
     "consoleLink": "控制台",
     "registerPost": "注册。"
+  },
+  "consoleLock": {
+    "title": "解锁此控制台",
+    "subtitle": "你正在从另一台机器打开这个客户端的控制台。",
+    "secret": "解锁口令",
+    "secretRequired": "请输入解锁口令",
+    "submit": "解锁",
+    "wrongSecret": "口令不正确。",
+    "throttled": "尝试次数过多，请 {{seconds}} 秒后再试。",
+    "failed": "无法解锁控制台，请重试。",
+    "where": "控制台监听本机以外的地址时，daemon 会在启动日志里打印这个口令（容器请用 docker logs 查看）。它也保存在 daemon 数据目录下的 console-secret 文件中；也可以用 CALABI_STATUS_SECRET 自行指定。",
+    "unavailable": "这个控制台只接受本机访问。请在那台机器上打开，或为 daemon 设置解锁口令（CALABI_STATUS_SECRET）以允许远程访问。"
   },
   "logs": {
     "paused": "已暂停",

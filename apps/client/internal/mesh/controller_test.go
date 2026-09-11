@@ -34,7 +34,7 @@ func TestControllerRegistersWithDiscoKeyAndReportsEndpoints(t *testing.T) {
 	ctrl := &Controller{
 		Coord:    c,
 		Datapath: dp,
-		Params:   RegisterParams{AuthKey: "k", NodeKey: mustKey(1), Name: "laptop"},
+		Params:   RegisterParams{AuthKey: "k", NodeKey: testKey(1).Public(), NodePrivate: testKey(1), Name: "laptop"},
 		Logger:   slog.Default(),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -82,7 +82,7 @@ func TestControllerAppliesNetMapToDatapath(t *testing.T) {
 	ctrl := &Controller{
 		Coord:    c,
 		Datapath: dp,
-		Params:   RegisterParams{AuthKey: "k", NodeKey: mustKey(1), Name: "laptop"},
+		Params:   RegisterParams{AuthKey: "k", NodeKey: testKey(1).Public(), NodePrivate: testKey(1), Name: "laptop"},
 		Logger:   slog.Default(),
 	}
 

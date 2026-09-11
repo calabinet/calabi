@@ -20,19 +20,7 @@
     "  volumes:",
     "    - ./mesh/derp-map.json:/etc/calabi/derp-map.json:ro",
     "  environment:",
-    "    CALABI_COORD_DERP_MAP_FILE: /etc/calabi/derp-map.json",
-    "",
-    "usage_collection (F2) maps a region code to the base URL calabi-coord drains",
-    "that relay's byte counters from. It is a SEPARATE section on purpose:",
-    "'regions' above is broadcast to every mesh node, while this address is",
-    "internal and is reached with a credential. Never merge the two.",
-    "",
-    "The relay must be started with a relay usage token, and calabi-coord with the",
-    "same value in CALABI_COORD_RELAY_USAGE_TOKEN. Omit a region here and that relay",
-    "is simply not collected — which is exactly what a user's self-hosted relay",
-    "does: its traffic never reaches the platform's accounting at all.",
-    "",
-    "Prefer https. The token and the traffic graph both cross this link."
+    "    CALABI_COORD_DERP_MAP_FILE: /etc/calabi/derp-map.json"
   ],
   "home_region": "lax",
   "regions": [
@@ -66,8 +54,5 @@
         }
       ]
     }
-  ],
-  "usage_collection": {
-    "lax": "https://derp-lax.internal.example.net:9200"
-  }
+  ]
 }

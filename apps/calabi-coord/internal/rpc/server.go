@@ -25,36 +25,108 @@ type Server struct {
 	auth   core.Authenticator
 	notif  *core.Notifier
 	logger *slog.Logger
+	// sessions holds registration challenges and node sessions (mesh protocol
+	// v2, nodeauth.go).
+	sessions *nodeSessions
 }
 
 // New builds the RPC server.
 func New(coord *core.Coordinator, auth core.Authenticator, notif *core.Notifier, logger *slog.Logger) *Server {
-	return &Server{coord: coord, auth: auth, notif: notif, logger: logger}
+	return &Server{coord: coord, auth: auth, notif: notif, logger: logger, sessions: newNodeSessions()}
+}
+
+// minNodeProtocolVersion is the oldest mesh protocol a node may enroll with.
+// v2 (2026-09-10) is where registration started proving possession of the node
+// private key and the node-scoped calls started carrying the session that proof
+// earns (nodeauth.go). A node below it can do neither.
+const minNodeProtocolVersion uint32 = 2
+
+// authorizeNode returns the node a session token speaks for, refusing the call
+// when the token belongs to a different node than the request names. nodeID 0
+// means the request names none (UpdateNodeDeclarations): the session decides.
+//
+// PullNetMap, ReportEndpoints and ReportServiceHealth used to trust node_id
+// alone - sequential ids on an internet-facing listener, so anyone could read
+// any org's netmap or rewrite any node (security audit 1-C). An org key plus a
+// node key was not enough either: node keys are public within an org, so any
+// member could speak for a colleague's device. A session exists only for a node
+// that proved it holds its private key at registration.
+func (s *Server) authorizeNode(ctx context.Context, token string, nodeID int64) (*core.Node, error) {
+	if token == "" {
+		return nil, status.Error(codes.Unauthenticated, "session_token is required")
+	}
+	sess, ok := s.sessions.lookup(token)
+	if !ok {
+		// Unknown to THIS process: never issued, superseded by a newer
+		// registration, or issued before a restart. Registering again fixes all
+		// three, and is what a node does when its stream ends.
+		return nil, status.Error(codes.Unauthenticated, "unknown session; register again")
+	}
+	if nodeID != 0 && sess.nodeID != nodeID {
+		return nil, status.Error(codes.PermissionDenied, "session belongs to a different node")
+	}
+	node, err := s.coord.Nodes.Get(ctx, sess.nodeID)
+	if err != nil {
+		if errors.Is(err, core.ErrNodeNotFound) {
+			s.sessions.forget(token)
+			return nil, status.Error(codes.NotFound, "node not found")
+		}
+		return nil, status.Errorf(codes.Internal, "load node: %v", err)
+	}
+	// The session was minted for this exact row; if the row no longer matches,
+	// the session is stale.
+	if node.Meshnet != sess.meshnet || node.NodeKey != sess.nodeKey {
+		s.sessions.forget(token)
+		return nil, status.Error(codes.Unauthenticated, "session no longer matches the node; register again")
+	}
+	return node, nil
+}
+
+// GetRegisterChallenge issues the one-time challenge RegisterNode requires an
+// answer to (mesh protocol v2, nodeauth.go). The auth key is resolved here too:
+// an anonymous caller must not be able to make the coordinator hold state.
+func (s *Server) GetRegisterChallenge(ctx context.Context, req *meshpb.GetRegisterChallengeRequest) (*meshpb.GetRegisterChallengeResponse, error) {
+	ident, err := s.auth.Resolve(ctx, req.GetAuthKey())
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, "auth key denied")
+	}
+	id, ch, err := s.sessions.issueChallenge(ident.Meshnet)
+	if err != nil {
+		if errors.Is(err, errTooManyChallenges) {
+			return nil, status.Error(codes.ResourceExhausted, err.Error())
+		}
+		return nil, status.Errorf(codes.Internal, "registration challenge: %v", err)
+	}
+	return &meshpb.GetRegisterChallengeResponse{ChallengeId: id, Challenge: ch.Encode()}, nil
 }
 
 // UpdateNodeDeclarations records new declarations for a node that is ALREADY
 // enrolled, without touching its session.
 //
-// Authenticated exactly like RegisterNode — the auth key resolves to a meshnet
-// and node_key selects within it — so it grants nothing RegisterNode didn't
-// already grant. What it avoids is the cost: re-enrolling to change a service
-// list tore down the datapath and re-punched every path for an edit that moves
-// no addresses.
+// Authorized by the session RegisterNode issued (mesh protocol v2), like every
+// other node-scoped call. It used to resolve "auth key + node key", which is
+// exactly what let an org member edit a colleague's device (security audit 1-C,
+// same-org residual). A node_key, when sent, must still name the session's node.
 //
 // Peers still get bumped: declarations are ACL "svc:" selectors, so the
 // coordinator recompiles each receiver's port filter from them.
 func (s *Server) UpdateNodeDeclarations(ctx context.Context, req *meshpb.UpdateNodeDeclarationsRequest) (*meshpb.UpdateNodeDeclarationsResponse, error) {
-	ident, err := s.auth.Resolve(ctx, req.GetAuthKey())
+	self, err := s.authorizeNode(ctx, req.GetSessionToken(), 0)
 	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, "auth key denied")
+		if status.Code(err) == codes.NotFound {
+			// "You aren't enrolled here": the caller's answer is to enroll.
+			return nil, status.Error(codes.FailedPrecondition, "node is not enrolled in this meshnet")
+		}
+		return nil, err
 	}
-	nodeKey, err := meshproto.ParseNodeKey(req.GetNodeKey())
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "node_key: %v", err)
+	if raw := req.GetNodeKey(); raw != "" {
+		if k, perr := meshproto.ParseNodeKey(raw); perr != nil || k != self.NodeKey {
+			return nil, status.Error(codes.PermissionDenied, "node_key does not match the session")
+		}
 	}
 	in := core.UpdateDeclarationsInput{
-		Meshnet:           ident.Meshnet,
-		NodeKey:           nodeKey,
+		Meshnet:           self.Meshnet,
+		NodeKey:           self.NodeKey,
 		DeviceFingerprint: req.GetDeviceFingerprint(),
 	}
 	for _, d := range req.GetDeclaredServices() {
@@ -67,8 +139,6 @@ func (s *Server) UpdateNodeDeclarations(ctx context.Context, req *meshpb.UpdateN
 	if err != nil {
 		switch {
 		case errors.Is(err, core.ErrNodeNotFound):
-			// Not an error the caller should retry: it means "you aren't
-			// enrolled here", and the answer is to enroll.
 			return nil, status.Error(codes.FailedPrecondition, "node is not enrolled in this meshnet")
 		case errors.Is(err, core.ErrNodeDisabled):
 			return nil, status.Error(codes.PermissionDenied, err.Error())
@@ -76,13 +146,22 @@ func (s *Server) UpdateNodeDeclarations(ctx context.Context, req *meshpb.UpdateN
 			return nil, status.Errorf(codes.Internal, "update declarations: %v", err)
 		}
 	}
-	s.notif.Bump(ident.Meshnet)
+	s.notif.Bump(self.Meshnet)
 	return &meshpb.UpdateNodeDeclarationsResponse{NodeId: node.ID}, nil
 }
 
 // RegisterNode authenticates the node's auth key to a meshnet, allocates its
 // overlay address, persists it, and notifies existing peers so they pick it up.
 func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeRequest) (*meshpb.RegisterNodeResponse, error) {
+	// Mesh protocol v2 proves the device at registration and authorizes every
+	// later call by the session that earns (nodeauth.go). An older client can do
+	// neither; letting it half-enroll would only make it retry forever, every
+	// retry bumping each peer in its meshnet. Refusing it here is the same outcome
+	// without that churn, and with an error that says why.
+	if v := req.GetProtocolVersion(); v < minNodeProtocolVersion {
+		return nil, status.Errorf(codes.FailedPrecondition,
+			"mesh protocol v%d is no longer accepted; this coordinator requires v%d or newer - upgrade calabi", v, minNodeProtocolVersion)
+	}
 	ident, err := s.auth.Resolve(ctx, req.GetAuthKey())
 	if err != nil {
 		return nil, status.Error(codes.Unauthenticated, "auth key denied")
@@ -91,6 +170,17 @@ func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeReque
 	nodeKey, err := meshproto.ParseNodeKey(req.GetNodeKey())
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "node_key: %v", err)
+	}
+	// Proof of possession (mesh protocol v2). The auth key above says which org
+	// the caller belongs to; only this says which DEVICE it is. Without it a
+	// member could re-enroll a colleague's node - node keys are public within an
+	// org - and be handed that device's record (security audit 1-C).
+	pending, ok := s.sessions.takeChallenge(req.GetChallengeId(), meshnet)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "registration challenge missing, expired or already used; call GetRegisterChallenge first")
+	}
+	if err := meshproto.OpenRegisterProof(pending.ch, pending.ephPriv, nodeKey, req.GetRegisterProof()); err != nil {
+		return nil, status.Error(codes.Unauthenticated, "registration proof rejected: the caller does not hold this node key")
 	}
 	in := core.RegisterInput{
 		Meshnet:           meshnet,
@@ -149,6 +239,11 @@ func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeReque
 		}
 	}
 
+	// The session every node-scoped call will be authorized by (nodeauth.go).
+	token, err := s.sessions.start(node)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "start session: %v", err)
+	}
 	// Peers in this meshnet should learn about the newcomer.
 	s.notif.Bump(meshnet)
 
@@ -158,23 +253,22 @@ func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeReque
 		OverlayAddr:     node.Overlay.String(),
 		ProtocolVersion: ver,
 		Capabilities:    caps,
+		SessionToken:    token,
 	}, nil
 }
 
 // PullNetMap streams the node's netmap: an initial snapshot, then a fresh one
 // every time its meshnet changes, until the client disconnects.
 //
-// MESH.1 SIMPLIFICATION: the stream is keyed by node_id alone (no per-stream
-// auth token yet). A real deployment must bind the stream to the node's
-// authenticated identity — added alongside the ACL work (MESH.5).
+// The stream is bound to the caller: authorizeNode checks that the session token
+// names this node before a byte of netmap is sent. It used to be keyed by
+// node_id alone (a MESH.1 simplification that outlived its note), which let
+// anyone read any org netmap - security audit 1-C.
 func (s *Server) PullNetMap(req *meshpb.PullNetMapRequest, stream meshpb.Coordinator_PullNetMapServer) error {
 	ctx := stream.Context()
-	self, err := s.coord.Nodes.Get(ctx, req.GetNodeId())
+	self, err := s.authorizeNode(ctx, req.GetSessionToken(), req.GetNodeId())
 	if err != nil {
-		if errors.Is(err, core.ErrNodeNotFound) {
-			return status.Error(codes.NotFound, "node not found")
-		}
-		return status.Errorf(codes.Internal, "load node: %v", err)
+		return err
 	}
 
 	// The netmap stream is the node's live control connection: hold it open =
@@ -232,12 +326,9 @@ func (s *Server) sendNetMap(stream meshpb.Coordinator_PullNetMapServer, nodeID i
 // reporting nonsense costs it a wrong badge on its own row and nothing else.
 // That is why it needs no approval step, unlike everything a node DECLARES.
 func (s *Server) ReportServiceHealth(ctx context.Context, req *meshpb.ReportServiceHealthRequest) (*meshpb.ReportServiceHealthResponse, error) {
-	self, err := s.coord.Nodes.Get(ctx, req.GetNodeId())
+	self, err := s.authorizeNode(ctx, req.GetSessionToken(), req.GetNodeId())
 	if err != nil {
-		if errors.Is(err, core.ErrNodeNotFound) {
-			return nil, status.Error(codes.NotFound, "node not found")
-		}
-		return nil, status.Errorf(codes.Internal, "load node: %v", err)
+		return nil, err
 	}
 	out := make(map[string]core.ServiceHealth, len(req.GetServices()))
 	for _, h := range req.GetServices() {
@@ -256,12 +347,9 @@ func (s *Server) ReportServiceHealth(ctx context.Context, req *meshpb.ReportServ
 // ReportEndpoints records a node's discovered candidate endpoints and notifies
 // its peers so they can attempt direct paths (used from MESH.4).
 func (s *Server) ReportEndpoints(ctx context.Context, req *meshpb.ReportEndpointsRequest) (*meshpb.ReportEndpointsResponse, error) {
-	self, err := s.coord.Nodes.Get(ctx, req.GetNodeId())
+	self, err := s.authorizeNode(ctx, req.GetSessionToken(), req.GetNodeId())
 	if err != nil {
-		if errors.Is(err, core.ErrNodeNotFound) {
-			return nil, status.Error(codes.NotFound, "node not found")
-		}
-		return nil, status.Errorf(codes.Internal, "load node: %v", err)
+		return nil, err
 	}
 	eps := make([]netip.AddrPort, 0, len(req.GetEndpoints()))
 	for _, raw := range req.GetEndpoints() {

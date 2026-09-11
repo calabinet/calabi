@@ -208,7 +208,7 @@ Environment:
 
 Every per-tunnel access control ships in this binary: **IP allow/deny** (all
 tunnel types), **HTTP Basic auth**, **connection rate limiting**,
-**request-header rewrite**, and the **OAuth login wall** (Google / GitHub) —
+**request-header rewrite**, and **OAuth authentication** (Google / GitHub) —
 the last three are HTTP-only. Passwords are bcrypt-hashed **locally** before
 they leave your machine:
 
@@ -298,6 +298,12 @@ your browser for a dashboard:
 The console talks only to the local daemon (loopback); no account, no
 control-plane round-trips. Editing a tunnel's policy re-registers just that
 tunnel — your other tunnels keep their connections.
+
+If you bind the console beyond loopback (`CALABI_STATUS_ADDR`), visitors from
+other machines must first enter its unlock secret: the daemon prints it at
+startup and keeps it in `console-secret` in its data directory, or takes your own
+from `CALABI_STATUS_SECRET`. It is plain HTTP — over a network you don't trust,
+use an SSH tunnel or an HTTPS proxy.
 
 > Console edits rewrite `tunnels.yaml` (your `server` / `token` / TLS settings
 > are preserved verbatim — a `token: ${CALABI_TOKEN}` keeps the secret out of the

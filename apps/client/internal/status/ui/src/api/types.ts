@@ -229,6 +229,14 @@ export interface AccountMe {
     max_online_clients?: number;
     read_only: boolean;
   };
+  // Platform-wide display switches, proxied straight through from
+  // bff-console /v1/account/me (statusapi forwards the body verbatim).
+  // hide_commerce is the 运营设置 toggle that takes the commerce entry points
+  // out of the web console; this UI uses it to stop telling people to
+  // 升级套餐 when there is no place to do that.
+  ui?: {
+    hide_commerce?: boolean;
+  };
 }
 
 // M11.7 Org switcher types — mirror bff-console/internal/handlers/orgs.go's

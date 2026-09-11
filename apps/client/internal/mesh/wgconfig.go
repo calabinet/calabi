@@ -92,7 +92,7 @@ func BuildWGConfig(nm NetMap) WGConfig {
 		wp := WGPeer{
 			PublicKey:           p.NodeKey,
 			DiscoKey:            p.DiscoKey,
-			AllowedIPs:          p.AllowedIPs,
+			AllowedIPs:          ownOverlayOnly(p),
 			DERPHome:            p.DERPHome,
 			PersistentKeepalive: meshKeepalive,
 		}
@@ -102,6 +102,44 @@ func BuildWGConfig(nm NetMap) WGConfig {
 		cfg.Peers = append(cfg.Peers, wp)
 	}
 	return cfg
+}
+
+// meshNodePoolCIDR is the half of the overlay range the coordinator allocates
+// NODE addresses from (calabi-coord/internal/core/ipam.go overlayNodePool). The
+// other half, 100.96.0.0/11, is the subnet-alias pool and is legitimately
+// carried by a subnet router's peer entry — so this is deliberately narrower
+// than meshOverlayCIDR.
+const meshNodePoolCIDR = "100.64.0.0/11"
+
+// ownOverlayOnly strips any allowed-ip inside the node pool that is not this
+// peer's OWN address.
+//
+// Defence in depth for audit finding MESH-1. The coordinator now refuses to
+// publish a route inside its own address space, but the consequence of getting
+// it wrong lands here and is severe: WireGuard allowed-ips are exclusive, so a
+// peer that carries another node's overlay /32 takes over that address on this
+// machine — traffic meant for a colleague's device arrives at, and can be
+// answered by, whoever claimed it. A node's own /32 is the only reason a peer
+// entry should ever mention the node pool, and that is cheap to check here,
+// against a netmap from ANY coordinator (older, self-hosted, or compromised).
+func ownOverlayOnly(p Peer) []netip.Prefix {
+	if !p.Overlay.IsValid() {
+		// No overlay address on the peer entry (an older coordinator, or a
+		// netmap shape that predates it): we cannot tell a legitimate self
+		// address from a claimed one, and stripping both would take the peer
+		// off the mesh. Leave it alone — the coordinator-side refusal is the
+		// primary control; this is defence in depth.
+		return p.AllowedIPs
+	}
+	pool := netip.MustParsePrefix(meshNodePoolCIDR)
+	kept := make([]netip.Prefix, 0, len(p.AllowedIPs))
+	for _, aip := range p.AllowedIPs {
+		if pool.Overlaps(aip) && !(aip.Addr() == p.Overlay && aip.Bits() == aip.Addr().BitLen()) {
+			continue
+		}
+		kept = append(kept, aip)
+	}
+	return kept
 }
 
 // ResolveExitNode maps a local exit-node selection (a peer name or an overlay

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/netip"
 	"sort"
 	"strconv"
 	"strings"
@@ -146,6 +148,44 @@ func ValidateServiceTarget(target string) error {
 			strings.TrimPrefix(err.Error(), "invalid label: "))
 	}
 	return nil
+}
+
+// ValidateConsoleServiceTarget is the stricter rule for a target an ADMIN typed
+// in the console: it may only name the machine itself.
+//
+// A console entry is delivered to the member's device in its netmap, and the
+// device then dials that target every minute and reports whether it answered.
+// With an arbitrary host:port that turns every member's machine into an
+// admin-driven open/closed oracle for whatever it can reach — their home LAN, a
+// cloud metadata address (audit finding MESH-14).
+//
+// The feature's own design note draws the line in the right place already: a
+// console entry says no more than "this machine offers this port". Restricting
+// the target to loopback is that sentence, enforced. A device declaring its own
+// target (from its own config, on its own machine) is unaffected — that is the
+// device's choice to make about itself.
+func ValidateConsoleServiceTarget(target string) error {
+	if err := ValidateServiceTarget(target); err != nil {
+		return err
+	}
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return nil // no explicit target: the service's own port on this machine
+	}
+	host, _, err := net.SplitHostPort(target)
+	if err != nil {
+		return fmt.Errorf("%w: target %q: want host:port", ErrInvalidService, target)
+	}
+	h := strings.ToLower(strings.TrimSpace(host))
+	if h == "localhost" {
+		return nil
+	}
+	if ip, err := netip.ParseAddr(h); err == nil && ip.IsLoopback() {
+		return nil
+	}
+	return fmt.Errorf("%w: target %q must be on this machine (localhost or 127.0.0.1); "+
+		"a console entry records what THIS device offers, it does not send the device probing other hosts",
+		ErrInvalidService, target)
 }
 
 // SetServiceApproved confirms (or un-confirms) a service a NODE declared. This
@@ -320,7 +360,8 @@ func (c *Coordinator) CreateConsoleService(ctx context.Context, t MeshnetID, nod
 		return nil, err
 	}
 	target = strings.TrimSpace(target)
-	if err := ValidateServiceTarget(target); err != nil {
+	// Stricter than the device-declared path on purpose — see MESH-14 there.
+	if err := ValidateConsoleServiceTarget(target); err != nil {
 		return nil, err
 	}
 	// The node must be in the CALLER's meshnet. Without this the id in a request
@@ -475,6 +516,14 @@ type MeshnetSettings struct {
 // LAN, or for a couple of dozen host routes out of it, and small enough that the
 // default cannot drain a shared pool. An org that publishes more asks an admin.
 const DefaultAliasAddrBudget = 256
+
+// MaxAliasAddrBudget is the most any ONE meshnet may be granted, whoever asks.
+// The alias pool (100.96.0.0/11) holds 2,097,152 addresses and is shared by
+// every tenant, so a per-org ceiling of a /16's worth leaves room for ~32 orgs
+// at the maximum and thousands at the default. An operator who genuinely needs
+// more for one customer changes this constant deliberately — friction that
+// belongs on a shared resource (audit finding MESH-4).
+const MaxAliasAddrBudget = 65536
 
 // SettingsStore persists per-meshnet settings. Optional: without one every
 // meshnet runs on defaults and the switches aren't available.

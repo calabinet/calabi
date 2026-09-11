@@ -134,6 +134,14 @@ type meshRunner struct {
 	// local/standalone daemon leaves it nil and uses cfg.AuthKey from its YAML.
 	authKeyFn func() string
 
+	// refreshFn, when set, is asked for a fresh credential after the coordinator
+	// refuses the one authKeyFn returned; it returns the new credential, or ""
+	// when there is nothing to do. The platform daemon sets it for a login
+	// session — see refreshAfterDenial for why the mesh cannot wait for anyone
+	// else to. lastRefresh is its cooldown; loop goroutine only.
+	refreshFn   func(context.Context) string
+	lastRefresh time.Time
+
 	// tune is the retry loop's knobs and steps; the zero value is production.
 	// Only tests set it (see loop).
 	tune meshLoopTuning
@@ -273,6 +281,9 @@ func (r *meshRunner) loop(ctx context.Context) {
 		}
 		if time.Since(started) >= t.healthySession {
 			backoff = t.minBackoff // that session worked; don't punish the next one
+		}
+		if r.refreshAfterDenial(ctx, err) {
+			backoff = t.minBackoff // a fresh credential is worth trying straight away
 		}
 		// Deliberately NOT an error about the mesh being down: the tun device,
 		// the peers and the relay links are all still up and carrying traffic.
@@ -424,6 +435,7 @@ func (r *meshRunner) runControlPlane(ctx context.Context, data *meshDataPlane) e
 		Params: mesh.RegisterParams{
 			AuthKey:           r.authKey(),
 			NodeKey:           data.key.Public(),
+			NodePrivate:       data.key,
 			Name:              name,
 			AdvertiseRoutes:   data.routes,
 			AliasRoutes:       data.aliases,

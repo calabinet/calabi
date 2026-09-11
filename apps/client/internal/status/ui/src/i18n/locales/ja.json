@@ -96,6 +96,7 @@
     "readOnlyDesc": "請求の延滞やクォータ超過によりアカウントが読み取り専用モードになり、新しいトンネルを作成できません。詳細はコンソールで確認してください。",
     "quotaExceededMsg": "今月のトラフィックが上限を超過 ({{pct}}%)",
     "quotaExceededDesc": "超過後も既存のトンネルは動作し続けますが、新規追加はできません。プランをアップグレードするか、来月のリセットをお待ちください。",
+    "quotaExceededDescNoUpgrade": "超過後も既存のトンネルは動作し続けますが、新規追加はできません。翌月に自動的にリセットされます。",
     "activeTunnels": "組織のトンネル",
     "uptime": "稼働時間",
     "todayTraffic": "本日のトラフィック",
@@ -111,6 +112,7 @@
     "notifFatalBody": "ログページで原因を確認してください。",
     "notifQuota100Title": "今月のトラフィックを使い切りました",
     "notifQuota100Body": "プランをアップグレードするか、翌月のリセットをお待ちください。",
+    "notifQuota100BodyNoUpgrade": "翌月のリセットをお待ちいただくか、プラットフォーム管理者にご連絡ください。",
     "notifQuota80Title": "トラフィックの 80% を使用",
     "notifQuota80Body": "{{pct}}% 使用済み、月間上限に近づいています。",
     "trafficBreakdown": "トンネル {{tunnel}} · 中継 {{relay}}",
@@ -197,7 +199,7 @@
       "remove": "削除（1 行に 1 つのヘッダー名）"
     },
     "oauth": {
-      "title": "OAuth ログインウォール",
+      "title": "OAuth ログイン認証",
       "hint": "訪問者がサービスに到達する前に、ID プロバイダーでのサインインを要求します（HTTP/HTTPS）。",
       "providerPlaceholder": "プロバイダー（オフ）",
       "callbackHint": "このリダイレクト/コールバック URL を OAuth アプリに登録してください:",
@@ -211,7 +213,8 @@
       "save": "保存",
       "saved": "セキュリティポリシーを保存しました",
       "failed": "セキュリティポリシーの保存に失敗しました",
-      "lockedNotice": "一部の機能はプランのアップグレードが必要です：{{features}}。"
+      "lockedNotice": "一部の機能はプランのアップグレードが必要です：{{features}}。",
+      "lockedNoticeContact": "現在のプランに含まれていません：{{features}}。利用が必要な場合はプラットフォーム管理者にご連絡ください。"
     },
     "edit": {
       "title": "トンネルを編集",
@@ -227,8 +230,10 @@
     "deleteConfirmTitle": "削除を確認しますか?",
     "deleteConfirmDesc": "エッジノードから直ちに削除されます。クライアントが実行中の場合、関連する接続は切断されます。",
     "cappedTooltip": "プラン上限に達しました {{count}}/{{max}}。アップグレードするか、既存のトンネルを削除して再試行してください。",
+    "cappedTooltipNoUpgrade": "プラン上限に達しました {{count}}/{{max}}。既存のトンネルを削除して再試行してください。",
     "cappedAlertMsg": "プランのトンネル数上限に達しました {{count}} / {{max}}",
     "cappedAlertDesc": "プランをアップグレードするか、既存のトンネルを削除すると「トンネルを新規作成」ボタンが再び利用可能になります。",
+    "cappedAlertDescNoUpgrade": "既存のトンネルを削除すると「トンネルを新規作成」ボタンが再び利用可能になります。",
     "edgeSwitchMsg": "リージョン間で新しいエッジノード #{{current}} に切り替えました（ノード #{{previous}} のリージョンが利用不可）",
     "edgeSwitchDesc1": "このクライアントは現在 ",
     "edgeSwitchAnotherRegion": "別のリージョン",
@@ -274,6 +279,7 @@
     "subdomainPattern": "小文字 / 数字 / ハイフンのみ。ハイフンで始まる・終わることはできません",
     "subdomainFreeLabel": "サブドメイン",
     "subdomainFreePlaceholder": "Free プランではランダムなサブドメインが割り当てられます（アップグレード後に自分で選択可能）",
+    "subdomainFreePlaceholderNoUpgrade": "ランダムなサブドメインが自動的に割り当てられます",
     "countHint": "この組織にはすでに {{team}} 件のトンネルがあります。新規作成するとリストに追加されます",
     "countHintShared": "この組織にはすでに {{team}} 件のトンネルがあります（うち {{mine}} 件がこのクライアント）。新規作成するとリストに追加されます",
     "customDomainSelectPlaceholder": "検証済みドメインを選択",
@@ -423,6 +429,18 @@
     "registerPre": "アカウントをお持ちでない場合は ",
     "consoleLink": "コンソール",
     "registerPost": " から登録してください。"
+  },
+  "consoleLock": {
+    "title": "このコンソールのロックを解除",
+    "subtitle": "このクライアントのコンソールを別のマシンから開いています。",
+    "secret": "ロック解除シークレット",
+    "secretRequired": "ロック解除シークレットを入力してください",
+    "submit": "ロック解除",
+    "wrongSecret": "シークレットが一致しません。",
+    "throttled": "試行回数が多すぎます。{{seconds}} 秒後にもう一度お試しください。",
+    "failed": "コンソールのロックを解除できませんでした。もう一度お試しください。",
+    "where": "コンソールが自身のマシン以外で待ち受けている場合、daemon は起動時にこのシークレットをログに出力します（コンテナの場合は docker logs）。daemon のデータディレクトリにある console-secret ファイルにも保存されており、CALABI_STATUS_SECRET で任意の値を指定することもできます。",
+    "unavailable": "このコンソールは同じマシンからのアクセスのみ受け付けます。そのマシン上で開くか、リモートアクセスを許可するには daemon にロック解除シークレット（CALABI_STATUS_SECRET）を設定してください。"
   },
   "logs": {
     "paused": "一時停止中",

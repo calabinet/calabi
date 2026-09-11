@@ -179,7 +179,7 @@ func (h *HTTPS) handle(visitor net.Conn) {
 			h.observeRequest("rate_limited")
 			return
 		}
-		// OAuth login wall — see http.go. HTTPS=true so the redirect_uri is https.
+		// OAuth authentication — see http.go. HTTPS=true so the redirect_uri is https.
 		if pol.HasOAuth() {
 			if pol.GateOAuth(visitor, path, host, true, headerValue(head, "Cookie"), time.Now()) {
 				h.observeRequest("oauth_redirect")

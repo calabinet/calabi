@@ -143,7 +143,7 @@ func TestControllerRunStopsItsLoopsWhenItReturns(t *testing.T) {
 	ctrl := &Controller{
 		Coord:       dialFake(t, f),
 		Datapath:    &recordingDatapath{ch: make(chan WGConfig, 4)},
-		Params:      RegisterParams{AuthKey: "k", NodeKey: mustKey(1), Name: "laptop"},
+		Params:      RegisterParams{AuthKey: "k", NodeKey: testKey(1).Public(), NodePrivate: testKey(1), Name: "laptop"},
 		Logger:      slog.Default(),
 		reportEvery: reportEvery,
 	}

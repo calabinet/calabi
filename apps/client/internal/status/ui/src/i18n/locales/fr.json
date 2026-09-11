@@ -96,6 +96,7 @@
     "readOnlyDesc": "Une facturation en retard ou un quota dépassé met le compte en mode lecture seule, où aucun nouveau tunnel ne peut être créé. Ouvrez la console pour plus de détails.",
     "quotaExceededMsg": "Trafic mensuel au-delà de la limite ({{pct}} %)",
     "quotaExceededDesc": "Une fois dépassé, tous les tunnels existants continuent de fonctionner mais aucun nouveau ne peut être ajouté. Améliorez votre forfait ou attendez la réinitialisation du mois prochain.",
+    "quotaExceededDescNoUpgrade": "Une fois dépassé, tous les tunnels existants continuent de fonctionner mais aucun nouveau ne peut être ajouté. Réinitialisation le mois prochain.",
     "activeTunnels": "Tunnels de l'org",
     "uptime": "Temps de fonctionnement",
     "todayTraffic": "Trafic du jour",
@@ -111,6 +112,7 @@
     "notifFatalBody": "Consultez la page Journaux pour en trouver la cause.",
     "notifQuota100Title": "Trafic mensuel épuisé",
     "notifQuota100Body": "Améliorez votre forfait, ou attendez la réinitialisation du mois calendaire suivant.",
+    "notifQuota100BodyNoUpgrade": "Attendez la réinitialisation du mois calendaire suivant ou contactez l'administrateur de la plateforme.",
     "notifQuota80Title": "80 % du trafic utilisé",
     "notifQuota80Body": "{{pct}} % utilisé, proche de la limite mensuelle.",
     "trafficBreakdown": "Tunnel {{tunnel}} · Relais {{relay}}",
@@ -197,7 +199,7 @@
       "remove": "Supprimer (un nom d'en-tête par ligne)"
     },
     "oauth": {
-      "title": "Mur de connexion OAuth",
+      "title": "Authentification OAuth",
       "hint": "Exigez des visiteurs qu'ils se connectent via un fournisseur d'identité avant d'atteindre votre service (HTTP/HTTPS).",
       "providerPlaceholder": "Fournisseur (désactivé)",
       "callbackHint": "Enregistrez cette URL de redirection / callback dans votre application OAuth :",
@@ -211,7 +213,8 @@
       "save": "Enregistrer",
       "saved": "Politique de sécurité enregistrée",
       "failed": "Échec de l'enregistrement de la politique de sécurité",
-      "lockedNotice": "Certaines fonctionnalités nécessitent une mise à niveau de la formule : {{features}}."
+      "lockedNotice": "Certaines fonctionnalités nécessitent une mise à niveau de la formule : {{features}}.",
+      "lockedNoticeContact": "Votre formule n'inclut pas : {{features}}. Demandez à l'administrateur de la plateforme de les activer."
     },
     "edit": {
       "title": "Modifier le tunnel",
@@ -227,8 +230,10 @@
     "deleteConfirmTitle": "Confirmer la suppression ?",
     "deleteConfirmDesc": "Il est retiré immédiatement du nœud edge ; si un client est en cours d'exécution, les connexions associées sont coupées.",
     "cappedTooltip": "Limite du forfait atteinte {{count}}/{{max}} ; améliorez votre forfait ou supprimez des tunnels existants, puis réessayez.",
+    "cappedTooltipNoUpgrade": "Limite du forfait atteinte {{count}}/{{max}} ; supprimez des tunnels existants, puis réessayez.",
     "cappedAlertMsg": "Limite de tunnels du forfait atteinte {{count}} / {{max}}",
     "cappedAlertDesc": "Améliorez votre forfait ou supprimez des tunnels existants pour que le bouton « Nouveau tunnel » redevienne disponible.",
+    "cappedAlertDescNoUpgrade": "Supprimez des tunnels existants pour que le bouton « Nouveau tunnel » redevienne disponible.",
     "edgeSwitchMsg": "Bascule inter-région vers le nouveau nœud edge n°{{current}} (la région du nœud n°{{previous}} est indisponible)",
     "edgeSwitchDesc1": "Ce client est désormais connecté à un nœud edge dans ",
     "edgeSwitchAnotherRegion": "une autre région",
@@ -274,6 +279,7 @@
     "subdomainPattern": "Lettres minuscules / chiffres / traits d'union uniquement, et ne peut pas commencer ni finir par un trait d'union",
     "subdomainFreeLabel": "Sous-domaine",
     "subdomainFreePlaceholder": "Le forfait Gratuit attribue un sous-domaine aléatoire (choisissez le vôtre après une amélioration)",
+    "subdomainFreePlaceholderNoUpgrade": "Un sous-domaine aléatoire est attribué automatiquement",
     "countHint": "Cette organisation a déjà {{team}} tunnels ; un nouveau est ajouté à la liste",
     "countHintShared": "Cette organisation a déjà {{team}} tunnels ({{mine}} sur ce client) ; un nouveau est ajouté à la liste",
     "customDomainSelectPlaceholder": "Choisir un domaine vérifié",
@@ -423,6 +429,18 @@
     "registerPre": "Pas de compte ? Inscrivez-vous via la ",
     "consoleLink": "console",
     "registerPost": "."
+  },
+  "consoleLock": {
+    "title": "Déverrouiller cette console",
+    "subtitle": "Vous ouvrez la console de ce client depuis une autre machine.",
+    "secret": "Secret de déverrouillage",
+    "secretRequired": "Veuillez saisir le secret de déverrouillage",
+    "submit": "Déverrouiller",
+    "wrongSecret": "Ce secret ne correspond pas.",
+    "throttled": "Trop de tentatives. Réessayez dans {{seconds}} secondes.",
+    "failed": "Impossible de déverrouiller la console. Réessayez.",
+    "where": "Le daemon affiche ce secret dans son journal au démarrage lorsque la console écoute au-delà de sa propre machine (pour un conteneur : docker logs). Il est aussi enregistré dans le fichier console-secret du répertoire de données du daemon, et vous pouvez choisir le vôtre avec CALABI_STATUS_SECRET.",
+    "unavailable": "Cette console n'accepte que les accès depuis sa propre machine. Ouvrez-la sur celle-ci, ou donnez au daemon un secret de déverrouillage (CALABI_STATUS_SECRET) pour autoriser l'accès à distance."
   },
   "logs": {
     "paused": "En pause",

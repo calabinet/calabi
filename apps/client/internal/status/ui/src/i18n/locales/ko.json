@@ -96,6 +96,7 @@
     "readOnlyDesc": "청구 연체나 할당량 초과 시 계정이 읽기 전용 모드가 되어 새 터널을 만들 수 없습니다. 자세한 내용은 콘솔을 확인하세요.",
     "quotaExceededMsg": "이번 달 트래픽이 한도를 초과했습니다 ({{pct}}%)",
     "quotaExceededDesc": "초과 후에도 기존 터널은 모두 계속 작동하지만 새로 추가할 수 없습니다. 요금제를 업그레이드하거나 다음 달 초기화를 기다리세요.",
+    "quotaExceededDescNoUpgrade": "초과 후에도 기존 터널은 모두 계속 작동하지만 새로 추가할 수 없습니다. 다음 달에 자동으로 초기화됩니다.",
     "activeTunnels": "조직 터널",
     "uptime": "가동 시간",
     "todayTraffic": "오늘 트래픽",
@@ -111,6 +112,7 @@
     "notifFatalBody": "원인을 찾으려면 로그 페이지를 확인하세요.",
     "notifQuota100Title": "이번 달 트래픽 소진됨",
     "notifQuota100Body": "요금제를 업그레이드하거나 다음 달 초기화를 기다리세요.",
+    "notifQuota100BodyNoUpgrade": "다음 달 초기화를 기다리거나 플랫폼 관리자에게 문의하세요.",
     "notifQuota80Title": "트래픽 80% 사용됨",
     "notifQuota80Body": "{{pct}}% 사용, 월 한도에 근접했습니다.",
     "trafficBreakdown": "터널 {{tunnel}} · 릴레이 {{relay}}",
@@ -197,7 +199,7 @@
       "remove": "제거(한 줄에 헤더 이름 하나)"
     },
     "oauth": {
-      "title": "OAuth 로그인 월",
+      "title": "OAuth 로그인 인증",
       "hint": "방문자가 서비스에 접근하기 전에 ID 제공자로 로그인하도록 요구합니다(HTTP/HTTPS).",
       "providerPlaceholder": "제공자(끔)",
       "callbackHint": "OAuth 앱에 이 리디렉션/콜백 URL을 등록하세요:",
@@ -211,7 +213,8 @@
       "save": "저장",
       "saved": "보안 정책이 저장됨",
       "failed": "보안 정책 저장 실패",
-      "lockedNotice": "일부 기능은 요금제 업그레이드가 필요합니다: {{features}}."
+      "lockedNotice": "일부 기능은 요금제 업그레이드가 필요합니다: {{features}}.",
+      "lockedNoticeContact": "현재 요금제에 포함되지 않습니다: {{features}}. 사용하려면 플랫폼 관리자에게 문의하세요."
     },
     "edit": {
       "title": "터널 편집",
@@ -227,8 +230,10 @@
     "deleteConfirmTitle": "삭제를 확인할까요?",
     "deleteConfirmDesc": "엣지 노드에서 즉시 제거됩니다. 클라이언트가 실행 중이면 관련 연결이 끊깁니다.",
     "cappedTooltip": "요금제 한도 도달 {{count}}/{{max}}. 업그레이드하거나 기존 터널을 삭제한 후 다시 시도하세요.",
+    "cappedTooltipNoUpgrade": "요금제 한도 도달 {{count}}/{{max}}. 기존 터널을 삭제한 후 다시 시도하세요.",
     "cappedAlertMsg": "요금제 터널 한도 도달 {{count}} / {{max}}",
     "cappedAlertDesc": "\"새 터널\" 버튼을 다시 사용하려면 요금제를 업그레이드하거나 기존 터널을 삭제하세요.",
+    "cappedAlertDescNoUpgrade": "\"새 터널\" 버튼을 다시 사용하려면 기존 터널을 삭제하세요.",
     "edgeSwitchMsg": "새 엣지 노드 #{{current}}(으)로 리전 간 전환됨(노드 #{{previous}}의 리전이 사용 불가)",
     "edgeSwitchDesc1": "이 클라이언트는 이제 ",
     "edgeSwitchAnotherRegion": "다른 리전",
@@ -274,6 +279,7 @@
     "subdomainPattern": "소문자 / 숫자 / 하이픈만 가능하며 하이픈으로 시작하거나 끝날 수 없습니다",
     "subdomainFreeLabel": "하위 도메인",
     "subdomainFreePlaceholder": "Free 요금제는 무작위 하위 도메인을 할당합니다(업그레이드 후 직접 선택 가능)",
+    "subdomainFreePlaceholderNoUpgrade": "무작위 하위 도메인이 자동으로 할당됩니다",
     "countHint": "이 조직에는 이미 {{team}}개의 터널이 있습니다. 새 터널은 목록에 추가됩니다",
     "countHintShared": "이 조직에는 이미 {{team}}개의 터널이 있습니다(이 클라이언트에 {{mine}}개). 새 터널은 목록에 추가됩니다",
     "customDomainSelectPlaceholder": "검증된 도메인 선택",
@@ -423,6 +429,18 @@
     "registerPre": "계정이 없으신가요? ",
     "consoleLink": "콘솔",
     "registerPost": "에서 등록하세요."
+  },
+  "consoleLock": {
+    "title": "이 콘솔 잠금 해제",
+    "subtitle": "다른 기기에서 이 클라이언트의 콘솔을 열고 있습니다.",
+    "secret": "잠금 해제 비밀 키",
+    "secretRequired": "잠금 해제 비밀 키를 입력하세요",
+    "submit": "잠금 해제",
+    "wrongSecret": "비밀 키가 일치하지 않습니다.",
+    "throttled": "시도 횟수가 너무 많습니다. {{seconds}}초 후에 다시 시도하세요.",
+    "failed": "콘솔 잠금을 해제하지 못했습니다. 다시 시도하세요.",
+    "where": "콘솔이 자기 기기 밖에서 수신 대기하면 daemon이 시작할 때 이 비밀 키를 로그에 출력합니다(컨테이너는 docker logs). daemon 데이터 디렉터리의 console-secret 파일에도 저장되며, CALABI_STATUS_SECRET으로 직접 지정할 수도 있습니다.",
+    "unavailable": "이 콘솔은 같은 기기에서의 접속만 허용합니다. 해당 기기에서 열거나, 원격 접속을 허용하려면 daemon에 잠금 해제 비밀 키(CALABI_STATUS_SECRET)를 설정하세요."
   },
   "logs": {
     "paused": "일시 중지됨",

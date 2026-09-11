@@ -6,6 +6,11 @@
 // loading state rather than punting to login — bouncing back and forth
 // on an infra blip would be a worse UX than waiting.
 //
+// One 401 is not about the account: console_locked means this page is being
+// viewed from another machine and its unlock has lapsed (12 h, or the daemon
+// restarted). main.tsx sends that back to ConsoleLockGate's unlock form; the
+// ACCOUNT login here would be the wrong door, so we only hold still.
+//
 // We use React Query so this probe is shared with the topbar / Overview
 // page (they all useQuery on ["me"]), avoiding a second roundtrip.
 import { LoadingOutlined } from "@ant-design/icons";
@@ -13,8 +18,23 @@ import { Spin } from "antd";
 import { useQuery } from "@tanstack/react-query";
 import { Navigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { api, ApiError } from "../api/client";
+import { api, ApiError, isConsoleLocked } from "../api/client";
 import type { AccountMe } from "../api/types";
+
+function FullPageSpin() {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Spin indicator={<LoadingOutlined style={{ fontSize: 28 }} spin />} />
+    </div>
+  );
+}
 
 export default function AuthGate({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
@@ -28,21 +48,13 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   });
 
   if (isLoading) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Spin indicator={<LoadingOutlined style={{ fontSize: 28 }} spin />} />
-      </div>
-    );
+    return <FullPageSpin />;
   }
 
   if (error) {
+    if (isConsoleLocked(error)) {
+      return <FullPageSpin />;
+    }
     const status = (error as ApiError)?.status;
     // 401 = no/bad token → login screen. We don't bounce other errors to
     // login (an infra blip shouldn't log the user out) — instead we show a

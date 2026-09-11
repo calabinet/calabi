@@ -96,6 +96,7 @@
     "readOnlyDesc": "Overdue billing or an exceeded quota puts the account in read-only mode, where new tunnels can't be created. Open the console for details.",
     "quotaExceededMsg": "Monthly traffic over limit ({{pct}}%)",
     "quotaExceededDesc": "Once exceeded, all existing tunnels keep working but no new ones can be added. Upgrade your plan or wait for next month's reset.",
+    "quotaExceededDescNoUpgrade": "Once exceeded, all existing tunnels keep working but no new ones can be added. Resets at the start of next month.",
     "activeTunnels": "Org tunnels",
     "uptime": "Uptime",
     "todayTraffic": "Today's traffic",
@@ -123,6 +124,7 @@
     "notifFatalBody": "Check the Logs page to find the cause.",
     "notifQuota100Title": "Monthly traffic used up",
     "notifQuota100Body": "Upgrade your plan, or wait for the next calendar month to reset.",
+    "notifQuota100BodyNoUpgrade": "Wait for the next calendar month to reset, or ask your platform administrator.",
     "notifQuota80Title": "80% of traffic used",
     "notifQuota80Body": "{{pct}}% used, approaching the monthly limit.",
     "sessionCaller": "Session / Caller",
@@ -197,7 +199,7 @@
       "remove": "Remove (one header name per line)"
     },
     "oauth": {
-      "title": "OAuth login wall",
+      "title": "OAuth authentication",
       "hint": "Require visitors to sign in with an identity provider before reaching your service (HTTP/HTTPS).",
       "providerPlaceholder": "Provider (off)",
       "callbackHint": "Register this redirect/callback URL in your OAuth app:",
@@ -211,7 +213,8 @@
       "save": "Save",
       "saved": "Security policy saved",
       "failed": "Failed to save security policy",
-      "lockedNotice": "Some features require a plan upgrade to use: {{features}}."
+      "lockedNotice": "Some features require a plan upgrade to use: {{features}}.",
+      "lockedNoticeContact": "Your plan doesn't include: {{features}}. Ask your platform administrator to enable them."
     },
     "edit": {
       "title": "Edit tunnel",
@@ -227,8 +230,10 @@
     "deleteConfirmTitle": "Confirm delete?",
     "deleteConfirmDesc": "It's removed from the edge node immediately; if a client is running, related connections are cut.",
     "cappedTooltip": "Plan limit reached {{count}}/{{max}}; upgrade or delete existing tunnels and try again.",
+    "cappedTooltipNoUpgrade": "Plan limit reached {{count}}/{{max}}; delete existing tunnels and try again.",
     "cappedAlertMsg": "Plan tunnel limit reached {{count}} / {{max}}",
     "cappedAlertDesc": "Upgrade your plan or delete existing tunnels for the \"New tunnel\" button to become available again.",
+    "cappedAlertDescNoUpgrade": "Delete existing tunnels for the \"New tunnel\" button to become available again.",
     "edgeSwitchMsg": "Switched cross-region to new edge node #{{current}} (the region of node #{{previous}} is unavailable)",
     "edgeSwitchDesc1": "This client is now connected to an edge node in ",
     "edgeSwitchAnotherRegion": "another region",
@@ -276,6 +281,7 @@
     "subdomainPattern": "Lowercase letters / digits / hyphens only, and may not start or end with a hyphen",
     "subdomainFreeLabel": "Subdomain",
     "subdomainFreePlaceholder": "Free plan assigns a random subdomain (choose your own after upgrading)",
+    "subdomainFreePlaceholderNoUpgrade": "A random subdomain is assigned automatically",
     "countHint": "This organization already has {{team}} tunnels; a new one is appended to the list",
     "countHintShared": "This organization already has {{team}} tunnels ({{mine}} on this client); a new one is appended to the list",
     "customDomainSelectPlaceholder": "Select a verified domain",
@@ -423,6 +429,18 @@
     "registerPre": "Don't have an account? Register via the ",
     "consoleLink": "console",
     "registerPost": "."
+  },
+  "consoleLock": {
+    "title": "Unlock this console",
+    "subtitle": "You're opening this client's console from another machine.",
+    "secret": "Unlock secret",
+    "secretRequired": "Enter the unlock secret",
+    "submit": "Unlock",
+    "wrongSecret": "That secret didn't match.",
+    "throttled": "Too many attempts. Try again in {{seconds}} seconds.",
+    "failed": "Couldn't unlock the console. Try again.",
+    "where": "The daemon prints this secret in its log at startup when the console listens beyond its own machine (for a container: docker logs). It's also saved in the file console-secret in the daemon's data directory, and you can choose your own with CALABI_STATUS_SECRET.",
+    "unavailable": "This console only accepts visitors from its own machine. Open it there, or give the daemon an unlock secret (CALABI_STATUS_SECRET) to allow remote access."
   },
   "logs": {
     "paused": "Paused",

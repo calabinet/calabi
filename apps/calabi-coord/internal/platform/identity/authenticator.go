@@ -103,7 +103,51 @@ func (a *Authenticator) Resolve(ctx context.Context, authKey string) (core.Ident
 	if owner == 0 {
 		owner = resp.GetUserId()
 	}
+	// Scope gate (audit finding MESH-3). Joining a mesh is a WRITE: the node
+	// gets an address, the full netmap (every device's name, overlay, public
+	// endpoints, subnet routes) and, under a permissive policy, reach to every
+	// peer. Before this, coord looked only at which org a credential named, so a
+	// key handed to a monitoring script for reading — or one minted with no
+	// scopes at all — was a network credential.
+	//
+	// user_id == 0 is identity-svc's api-key discriminator (the same one the
+	// BFFs gate on). A human session carries a real user id and scopes like
+	// "org.role.developer", which are not ".write" — so the rule applies ONLY to
+	// machine credentials, and logging a daemon in interactively still works.
+	//
+	// The write-capable test mirrors bff-console's writeCapableScope, the rule
+	// that decides who may MINT such a key (audit 1-B): one place decides what
+	// "write credential" means.
+	if resp.GetUserId() == 0 && !hasWriteScope(resp.GetRoles()) {
+		a.logger.Warn("mesh enrollment denied: api key carries no write scope",
+			"org", org, "actor", owner, "scopes", scopesFromRoles(resp.GetRoles()))
+		return core.Identity{}, core.ErrAuthDenied
+	}
 	return core.Identity{Meshnet: core.MeshnetID(org), UserID: owner}, nil
+}
+
+// scopesFromRoles pulls the "scopes:a,b" element out of identity-svc's role
+// strings ("org:42 ws:7 scopes:tunnel.read,tunnel.write"). nil when absent.
+func scopesFromRoles(roles []string) []string {
+	for _, r := range roles {
+		for _, kv := range strings.Fields(r) {
+			if v, ok := strings.CutPrefix(kv, "scopes:"); ok {
+				return strings.Split(v, ",")
+			}
+		}
+	}
+	return nil
+}
+
+// hasWriteScope reports whether the credential carries any write-capable scope.
+func hasWriteScope(roles []string) bool {
+	for _, s := range scopesFromRoles(roles) {
+		s = strings.TrimSpace(s)
+		if s == "tunnel.write" || strings.HasSuffix(s, ".write") {
+			return true
+		}
+	}
+	return false
 }
 
 // orgFromRoles parses identity-svc's role strings ("org:42 ws:7 scopes:...") and

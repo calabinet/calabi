@@ -34,6 +34,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	Coordinator_RegisterNode_FullMethodName           = "/calabi.mesh.v1.Coordinator/RegisterNode"
+	Coordinator_GetRegisterChallenge_FullMethodName   = "/calabi.mesh.v1.Coordinator/GetRegisterChallenge"
 	Coordinator_PullNetMap_FullMethodName             = "/calabi.mesh.v1.Coordinator/PullNetMap"
 	Coordinator_ReportEndpoints_FullMethodName        = "/calabi.mesh.v1.Coordinator/ReportEndpoints"
 	Coordinator_UpdateNodeDeclarations_FullMethodName = "/calabi.mesh.v1.Coordinator/UpdateNodeDeclarations"
@@ -53,6 +54,12 @@ type CoordinatorClient interface {
 	// records its public keys, allocates an overlay IP (IPAM), and returns the
 	// node's identity within the mesh.
 	RegisterNode(ctx context.Context, in *RegisterNodeRequest, opts ...grpc.CallOption) (*RegisterNodeResponse, error)
+	// GetRegisterChallenge hands a node a one-time challenge that RegisterNode
+	// requires it to answer with its node private key (mesh protocol v2). An org
+	// credential says which meshnet the caller belongs to; only this proof says
+	// which DEVICE it is, so knowing a node key - public within an org - is no
+	// longer enough to enroll it or take its record over.
+	GetRegisterChallenge(ctx context.Context, in *GetRegisterChallengeRequest, opts ...grpc.CallOption) (*GetRegisterChallengeResponse, error)
 	// PullNetMap is a long-lived server stream. The coordinator pushes a fresh
 	// NetMap whenever topology or ACL changes, so the node reprograms its
 	// WireGuard peers live without reconnecting.
@@ -111,6 +118,16 @@ func (c *coordinatorClient) RegisterNode(ctx context.Context, in *RegisterNodeRe
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RegisterNodeResponse)
 	err := c.cc.Invoke(ctx, Coordinator_RegisterNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coordinatorClient) GetRegisterChallenge(ctx context.Context, in *GetRegisterChallengeRequest, opts ...grpc.CallOption) (*GetRegisterChallengeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRegisterChallengeResponse)
+	err := c.cc.Invoke(ctx, Coordinator_GetRegisterChallenge_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -179,6 +196,12 @@ type CoordinatorServer interface {
 	// records its public keys, allocates an overlay IP (IPAM), and returns the
 	// node's identity within the mesh.
 	RegisterNode(context.Context, *RegisterNodeRequest) (*RegisterNodeResponse, error)
+	// GetRegisterChallenge hands a node a one-time challenge that RegisterNode
+	// requires it to answer with its node private key (mesh protocol v2). An org
+	// credential says which meshnet the caller belongs to; only this proof says
+	// which DEVICE it is, so knowing a node key - public within an org - is no
+	// longer enough to enroll it or take its record over.
+	GetRegisterChallenge(context.Context, *GetRegisterChallengeRequest) (*GetRegisterChallengeResponse, error)
 	// PullNetMap is a long-lived server stream. The coordinator pushes a fresh
 	// NetMap whenever topology or ACL changes, so the node reprograms its
 	// WireGuard peers live without reconnecting.
@@ -236,6 +259,9 @@ type UnimplementedCoordinatorServer struct{}
 func (UnimplementedCoordinatorServer) RegisterNode(context.Context, *RegisterNodeRequest) (*RegisterNodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RegisterNode not implemented")
 }
+func (UnimplementedCoordinatorServer) GetRegisterChallenge(context.Context, *GetRegisterChallengeRequest) (*GetRegisterChallengeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRegisterChallenge not implemented")
+}
 func (UnimplementedCoordinatorServer) PullNetMap(*PullNetMapRequest, grpc.ServerStreamingServer[NetMap]) error {
 	return status.Error(codes.Unimplemented, "method PullNetMap not implemented")
 }
@@ -283,6 +309,24 @@ func _Coordinator_RegisterNode_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CoordinatorServer).RegisterNode(ctx, req.(*RegisterNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Coordinator_GetRegisterChallenge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRegisterChallengeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoordinatorServer).GetRegisterChallenge(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Coordinator_GetRegisterChallenge_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoordinatorServer).GetRegisterChallenge(ctx, req.(*GetRegisterChallengeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -362,6 +406,10 @@ var Coordinator_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RegisterNode",
 			Handler:    _Coordinator_RegisterNode_Handler,
+		},
+		{
+			MethodName: "GetRegisterChallenge",
+			Handler:    _Coordinator_GetRegisterChallenge_Handler,
 		},
 		{
 			MethodName: "ReportEndpoints",

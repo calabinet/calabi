@@ -13,8 +13,18 @@ import "sync"
 // another; MESH.8. Single-instance — including every self-hosted coordinator —
 // needs only this in-process notifier.)
 type Notifier struct {
-	mu   sync.Mutex
-	subs map[MeshnetID]map[int64]chan struct{}
+	mu sync.Mutex
+	// nextSub hands each subscription its own key. Keying by NODE id instead
+	// looked natural — one stream per node — but a node legitimately holds two
+	// for a moment: the reconnect that Presence is explicitly built to tolerate
+	// opens the new stream before the old one's teardown runs. The old stream's
+	// unsubscribe then deleted the map entry the NEW stream had just installed,
+	// leaving a live stream that Bump could no longer reach (audit finding
+	// MESH-11). It kept serving the node its stale netmap — including an ACL an
+	// admin had just tightened — until the 15-minute grant refresh happened to
+	// re-push, and a node could provoke that state deliberately.
+	nextSub int64
+	subs    map[MeshnetID]map[int64]chan struct{} // meshnet -> subscription id -> signal
 }
 
 // NewNotifier returns an empty notifier.
@@ -22,24 +32,30 @@ func NewNotifier() *Notifier {
 	return &Notifier{subs: make(map[MeshnetID]map[int64]chan struct{})}
 }
 
-// Subscribe registers a stream for meshnet t under nodeID. It returns a signal
-// channel (buffered depth 1, so signals coalesce) and an unsubscribe func the
-// caller MUST invoke when the stream ends.
+// Subscribe registers a stream for meshnet t. It returns a signal channel
+// (buffered depth 1, so signals coalesce) and an unsubscribe func the caller
+// MUST invoke when the stream ends.
+//
+// nodeID identifies the caller for readability at the call site only; the
+// subscription is keyed independently so that two streams of the same node
+// cannot delete each other's registration.
 func (n *Notifier) Subscribe(t MeshnetID, nodeID int64) (<-chan struct{}, func()) {
 	ch := make(chan struct{}, 1)
 	n.mu.Lock()
+	n.nextSub++
+	id := n.nextSub
 	m := n.subs[t]
 	if m == nil {
 		m = make(map[int64]chan struct{})
 		n.subs[t] = m
 	}
-	m[nodeID] = ch
+	m[id] = ch
 	n.mu.Unlock()
 
 	return ch, func() {
 		n.mu.Lock()
 		if m := n.subs[t]; m != nil {
-			delete(m, nodeID)
+			delete(m, id) // only ever its OWN entry
 			if len(m) == 0 {
 				delete(n.subs, t)
 			}

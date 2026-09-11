@@ -1,8 +1,8 @@
 package policy
 
 // policy_advanced.go — the advanced (platform-only) access-control features:
-// per-tunnel connection rate limiting, request-header rewriting, and the OAuth
-// login wall.
+// per-tunnel connection rate limiting, request-header rewriting, and OAuth
+// authentication.
 //
 // These used to be platform-only, stubbed out to "off"/passthrough by a
 // self-hosted-build twin. Since F3 there is no such split: one edge binary
@@ -33,7 +33,7 @@ type advanced struct {
 	// before forwarding upstream (set/replace + remove). nil = no rewrite.
 	reqHeaders *headerRewrite
 	// oauthCfg, when non-nil, gates HTTP/HTTPS visitors behind an identity
-	// provider login (Google / GitHub). nil = no login wall.
+	// provider login (Google / GitHub). nil = no OAuth authentication.
 	oauthCfg *oauth.Config
 }
 
@@ -248,9 +248,9 @@ func (p *Policy) RewriteRequestHead(head []byte) []byte {
 	return []byte(b.String())
 }
 
-// ---- OAuth login wall ----------------------------------------------------
+// ---- OAuth authentication ----------------------------------------------------
 
-// parseOAuth builds the OAuth login-wall config, or nil when not configured.
+// parseOAuth builds the OAuth authentication config, or nil when not configured.
 // An invalid config (bad provider / missing creds) fails OPEN to nil so a
 // glitch never bricks the tunnel — bff-console validates at the write path.
 func parseOAuth(provider, clientID, clientSecret string, allowEmails, allowDomains []string) *oauth.Config {
@@ -269,7 +269,7 @@ func (p *Policy) HasOAuth() bool {
 	return p != nil && p.adv.oauthCfg != nil
 }
 
-// GateOAuth runs the OAuth login wall for an HTTP/HTTPS visitor. It returns
+// GateOAuth runs the OAuth authentication check for an HTTP/HTTPS visitor. It returns
 // true when the edge already handled the request (wrote an IdP redirect /
 // callback / error) — the caller must then NOT open the upstream. No OAuth
 // configured (or nil policy) → false (pass through). Encapsulates the oauth

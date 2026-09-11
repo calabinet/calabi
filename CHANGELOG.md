@@ -10,6 +10,116 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## 1.9.0 — 2026-09-11
+
+A security release. Most of it closes holes found in a review of the mesh after
+it shipped; the rest concerns the edge, the self-update, and who may use the
+local console.
+
+**Upgrade clients before the coordinator.** A 1.9.0 coordinator refuses to enroll
+nodes that speak an older mesh protocol — every client before 1.9.0 — while a
+1.9.0 client still enrolls with an older coordinator. If you run your own
+coordinator, update your clients first. Tunnels are not affected either way.
+
+### Mesh
+
+- **Changed** — Mesh protocol 2. Enrolling now proves possession of the node's
+  private key — the coordinator issues a one-time challenge and the node answers
+  it with the key — and returns a session token that every later call from that
+  node carries. Before, those calls (fetching the network map, reporting
+  endpoints and service health) identified the node only by its number, so
+  anyone who could reach the coordinator could read an organization's map or
+  overwrite a node's endpoints, and a member of an organization could enroll as a
+  colleague's device. A coordinator on this version refuses nodes older than
+  protocol 2 and tells them to upgrade.
+- **Fixed** — A member could advertise a colleague's mesh address as a subnet
+  route and draw that colleague's traffic. Routes inside the mesh's own address
+  range are now refused, a route overlapping one that another node already
+  publishes waits for an admin instead of being approved automatically, and
+  clients ignore a peer's claim to route another node's address.
+- **Changed** — Two devices enrolling under the same name no longer share it: the
+  second gets a `-2` suffix. Before, a newcomer could inherit whatever ACL rules
+  granted by device name. If your ACLs name devices, check they still point where
+  you meant.
+- **Changed** — Only a credential that can write may enroll a node. A read-only
+  API key is refused.
+- **Fixed** — One organization could fill the coordinator's table of pending
+  enrollment challenges and stall enrollment for everyone. The table is now
+  bounded per network.
+- **Fixed** — One organization could exhaust the shared pool of subnet-alias
+  addresses. The per-network budget is now capped.
+- **Fixed** — Enrollments racing each other could exceed the seat limit.
+  Enrollment within one network is now serialized.
+- **Fixed** — A node that reconnected quickly could be left on a stream that no
+  longer received map updates — including an ACL an admin had just tightened —
+  until a periodic refresh up to 15 minutes later.
+- **Changed** — A service added from the console can only point at the device
+  itself (loopback). An arbitrary target made every member's machine probe
+  whatever it could reach. A device declaring its own services is unaffected.
+- **Fixed** — With relay authentication on, a relay no longer forwards packets
+  between two different networks, which let one organization run up another's
+  relay usage.
+- **Fixed** — A coordinator whose auth-keys file is set but unreadable now refuses
+  to start, instead of falling back to a built-in development key.
+- **Fixed** — A signed-in client whose tunnel session stayed up for a long time
+  let its access token expire, after which the mesh's next re-enrollment was
+  refused every 30 seconds, indefinitely. The client now refreshes the sign-in
+  once when the coordinator refuses it, and retries.
+- **Removed** — The coordinator's relay-usage pull (`usage_collection` in the
+  relay map, `RELAY_USAGE_TOKEN`) never worked and is gone. A map file that still
+  mentions it loads as before.
+
+### Edge
+
+- **Fixed** — Requests forwarded between edges in the same region skipped OAuth
+  authentication, Basic Auth and rate limiting; only IP rules applied. The full
+  set now applies on that path too.
+- **Fixed** — After OAuth authentication, the redirect back only goes to a path on
+  the same site.
+- **Fixed** — An ACME http-01 challenge is answered only under the domain it was
+  issued for. On calabi.net, a certificate for your own domain now also requires
+  the domain to be verified in your organization.
+
+### Local console
+
+- **Changed** — Visitors from another machine must enter the console's **unlock
+  secret**. The console hands its write token to whoever can load it, and once it
+  was bound beyond loopback nothing checked who that was; it also answered pages
+  that pointed their own name at this machine (DNS rebinding). On the machine
+  itself nothing changes. The secret is generated on first start, saved as
+  `console-secret` in the data directory, and printed in the log when the console
+  listens beyond loopback (`docker logs` for the container image); set
+  `CALABI_STATUS_SECRET` to choose your own. Five wrong attempts pause that
+  address for a few minutes, and an unlock lasts 12 hours. The console is still
+  plain HTTP: across a network you don't trust, use an SSH tunnel or an HTTPS
+  proxy.
+- **Fixed** — Another website could make the console sign the daemon into that
+  site's account: the login endpoint needs no token, and nothing checked where
+  the request came from. Cross-site requests are now refused.
+- **Changed** — On Windows, a system service's data directory (credentials, mesh
+  key) is restricted to SYSTEM, Administrators and the account running it; it was
+  readable by every local user. Existing installs tighten on their next write.
+- **Changed** — When the platform hides its commerce pages, the console no longer
+  tells you to upgrade your plan. The feature the console called a "login wall" is
+  now called OAuth authentication.
+
+### Updates and connectivity
+
+- **Changed** — The self-update manifest must carry a valid signature
+  (`latest.json.sig` beside `latest.json`); the client will not move below the
+  newest version it has seen unless the signed manifest says `"rollback": true`;
+  and it only downloads installers from the manifest's own origin. If you
+  distribute your own updates, `updatekit merge` now writes the signature.
+- **Fixed** — Edge discovery gave the control plane 3 seconds to answer, DNS and
+  TLS included. On a path that had just changed — a new egress IP, a re-dialled
+  uplink — that failed every time. It now allows 10 seconds.
+- **Fixed** — Two parts of the client refreshing the sign-in at once could spend
+  the same refresh token and leave one with nothing; a refresh could also undo a
+  region switch saved while it was in flight, or overwrite a sign-in made
+  meanwhile.
+- **Security** — Updated dependencies with known vulnerabilities: gRPC 1.82.1 and
+  golang.org/x/text 0.39.0.
+
 ## 1.8.1 — 2026-09-09
 
 A follow-up to 1.8.0, and almost entirely about things that reported the wrong

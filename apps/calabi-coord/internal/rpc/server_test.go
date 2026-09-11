@@ -2,6 +2,8 @@ package rpc
 
 import (
 	"context"
+	"crypto/ecdh"
+	"crypto/rand"
 	"log/slog"
 	"net"
 	"testing"
@@ -55,15 +57,80 @@ func startTestServer(t *testing.T) meshpb.CoordinatorClient {
 	return meshpb.NewCoordinatorClient(conn)
 }
 
-func register(t *testing.T, c meshpb.CoordinatorClient, keyByte byte, name string) *meshpb.RegisterNodeResponse {
+// testNode is a node enrolled the way a real client does it: a real X25519 key
+// pair, a challenge, a proof, and the session token that comes back.
+type testNode struct {
+	id      int64
+	overlay string
+	key     meshproto.NodeKey
+	priv    [meshproto.KeyLen]byte
+	token   string
+}
+
+func newKeyPair(t *testing.T) (meshproto.NodeKey, [meshproto.KeyLen]byte) {
 	t.Helper()
-	resp, err := c.RegisterNode(context.Background(), &meshpb.RegisterNodeRequest{
-		AuthKey: devKey, NodeKey: nodeKeyB64(keyByte), Name: name,
-	})
+	k, err := ecdh.X25519().GenerateKey(rand.Reader)
 	if err != nil {
-		t.Fatalf("register %s: %v", name, err)
+		t.Fatalf("generate node key: %v", err)
 	}
-	return resp
+	var pub meshproto.NodeKey
+	copy(pub[:], k.PublicKey().Bytes())
+	var priv [meshproto.KeyLen]byte
+	copy(priv[:], k.Bytes())
+	return pub, priv
+}
+
+// enrollAs runs GetRegisterChallenge + RegisterNode claiming one key and sealing
+// the proof with another, and returns the error: the impersonation tests claim a
+// key they do not hold. mutate may edit the request before it is sent.
+func enrollAs(ctx context.Context, c meshpb.CoordinatorClient, authKey, name string,
+	claim meshproto.NodeKey, sealWith [meshproto.KeyLen]byte, mutate func(*meshpb.RegisterNodeRequest),
+) (*meshpb.RegisterNodeResponse, error) {
+	chr, err := c.GetRegisterChallenge(ctx, &meshpb.GetRegisterChallengeRequest{AuthKey: authKey})
+	if err != nil {
+		return nil, err
+	}
+	ch, err := meshproto.ParseRegisterChallenge(chr.GetChallenge())
+	if err != nil {
+		return nil, err
+	}
+	req := &meshpb.RegisterNodeRequest{
+		AuthKey: authKey, NodeKey: claim.String(), Name: name, ProtocolVersion: meshproto.ProtocolVersion,
+		ChallengeId: chr.GetChallengeId(), RegisterProof: meshproto.SealRegisterProof(ch, claim, sealWith),
+	}
+	if mutate != nil {
+		mutate(req)
+	}
+	return c.RegisterNode(ctx, req)
+}
+
+// enroll registers a fresh node under authKey and fails the test on refusal.
+func enroll(t *testing.T, c meshpb.CoordinatorClient, authKey, name string) testNode {
+	t.Helper()
+	key, priv := newKeyPair(t)
+	resp, err := enrollAs(context.Background(), c, authKey, name, key, priv, nil)
+	if err != nil {
+		t.Fatalf("enroll %s: %v", name, err)
+	}
+	if resp.GetSessionToken() == "" {
+		t.Fatalf("enroll %s: no session token", name)
+	}
+	return testNode{id: resp.GetNodeId(), overlay: resp.GetOverlayAddr(), key: key, priv: priv, token: resp.GetSessionToken()}
+}
+
+func register(t *testing.T, c meshpb.CoordinatorClient, name string) testNode {
+	t.Helper()
+	return enroll(t, c, devKey, name)
+}
+
+// pullFirst opens a netmap stream and returns its first message. A server stream
+// reports a refusal on Recv, not on the call that opened it.
+func pullFirst(ctx context.Context, c meshpb.CoordinatorClient, req *meshpb.PullNetMapRequest) (*meshpb.NetMap, error) {
+	stream, err := c.PullNetMap(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return stream.Recv()
 }
 
 func peerKeys(nm *meshpb.NetMap) map[string]string {
@@ -78,15 +145,15 @@ func TestRegisterAndNetMapPush(t *testing.T) {
 	c := startTestServer(t)
 	ctx := context.Background()
 
-	a := register(t, c, 1, "a")
-	b := register(t, c, 2, "b")
-	if a.GetOverlayAddr() != "100.64.0.1" {
-		t.Fatalf("a overlay = %s, want 100.64.0.1", a.GetOverlayAddr())
+	a := register(t, c, "a")
+	b := register(t, c, "b")
+	if a.overlay != "100.64.0.1" {
+		t.Fatalf("a overlay = %s, want 100.64.0.1", a.overlay)
 	}
 
 	// A opens its netmap stream; initial snapshot must show peer B with B's
 	// node_key + overlay.
-	stream, err := c.PullNetMap(ctx, &meshpb.PullNetMapRequest{NodeId: a.GetNodeId()})
+	stream, err := c.PullNetMap(ctx, &meshpb.PullNetMapRequest{NodeId: a.id, SessionToken: a.token})
 	if err != nil {
 		t.Fatalf("pull: %v", err)
 	}
@@ -94,29 +161,26 @@ func TestRegisterAndNetMapPush(t *testing.T) {
 	if err != nil {
 		t.Fatalf("recv initial: %v", err)
 	}
-	if nm1.GetSelf().GetNodeId() != a.GetNodeId() {
-		t.Fatalf("self = %d, want %d", nm1.GetSelf().GetNodeId(), a.GetNodeId())
+	if nm1.GetSelf().GetNodeId() != a.id {
+		t.Fatalf("self = %d, want %d", nm1.GetSelf().GetNodeId(), a.id)
 	}
 	pk := peerKeys(nm1)
-	if got := pk[nodeKeyB64(2)]; got != b.GetOverlayAddr() {
-		t.Fatalf("initial netmap: peer B overlay = %q, want %q (peers=%v)", got, b.GetOverlayAddr(), pk)
+	if got := pk[b.key.String()]; got != b.overlay {
+		t.Fatalf("initial netmap: peer B overlay = %q, want %q (peers=%v)", got, b.overlay, pk)
 	}
 	if len(pk) != 1 {
 		t.Fatalf("initial peers = %d, want 1", len(pk))
 	}
 
 	// Registering C must PUSH a fresh netmap to A's already-open stream.
-	cc := register(t, c, 3, "c")
+	cc := register(t, c, "c")
 	nm2, err := stream.Recv()
 	if err != nil {
 		t.Fatalf("recv push: %v", err)
 	}
 	pk2 := peerKeys(nm2)
-	if _, ok := pk2[nodeKeyB64(3)]; !ok {
-		t.Fatalf("pushed netmap missing C (peers=%v)", pk2)
-	}
-	if pk2[nodeKeyB64(3)] != cc.GetOverlayAddr() {
-		t.Fatalf("C overlay = %q, want %q", pk2[nodeKeyB64(3)], cc.GetOverlayAddr())
+	if pk2[cc.key.String()] != cc.overlay {
+		t.Fatalf("C overlay = %q, want %q (peers=%v)", pk2[cc.key.String()], cc.overlay, pk2)
 	}
 	if len(pk2) != 2 {
 		t.Fatalf("pushed peers = %d, want 2 (b,c)", len(pk2))
@@ -125,22 +189,172 @@ func TestRegisterAndNetMapPush(t *testing.T) {
 
 func TestRegisterAuthDenied(t *testing.T) {
 	c := startTestServer(t)
-	_, err := c.RegisterNode(context.Background(), &meshpb.RegisterNodeRequest{
-		AuthKey: "wrong", NodeKey: nodeKeyB64(9), Name: "x",
+	ctx := context.Background()
+	if _, err := c.GetRegisterChallenge(ctx, &meshpb.GetRegisterChallengeRequest{AuthKey: "wrong"}); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("challenge with a bad key: code = %v, want Unauthenticated", status.Code(err))
+	}
+	key, _ := newKeyPair(t)
+	_, err := c.RegisterNode(ctx, &meshpb.RegisterNodeRequest{
+		AuthKey: "wrong", NodeKey: key.String(), Name: "x", ProtocolVersion: meshproto.ProtocolVersion,
 	})
 	if status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("code = %v, want Unauthenticated", status.Code(err))
 	}
 }
 
-func TestPullNetMapUnknownNode(t *testing.T) {
+// Mesh protocol v2: registering proves possession of the node private key. Each
+// refusal below is one way of trying to enroll a key without holding it.
+func TestRegisterRequiresProofOfPossession(t *testing.T) {
 	c := startTestServer(t)
-	stream, err := c.PullNetMap(context.Background(), &meshpb.PullNetMapRequest{NodeId: 999})
+	ctx := context.Background()
+	victim := register(t, c, "victim")
+	_, mallory := newKeyPair(t)
+
+	// 1. No challenge at all.
+	if _, err := c.RegisterNode(ctx, &meshpb.RegisterNodeRequest{
+		AuthKey: devKey, NodeKey: victim.key.String(), Name: "pwned", ProtocolVersion: meshproto.ProtocolVersion,
+	}); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("no challenge: code = %v, want Unauthenticated", status.Code(err))
+	}
+	// 2. Claim the victim's key, seal with another.
+	if _, err := enrollAs(ctx, c, devKey, "pwned", victim.key, mallory, nil); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("wrong private key: code = %v, want Unauthenticated", status.Code(err))
+	}
+	// 3. Replay a registration that already succeeded.
+	var sent *meshpb.RegisterNodeRequest
+	if _, err := enrollAs(ctx, c, devKey, "victim", victim.key, victim.priv, func(r *meshpb.RegisterNodeRequest) { sent = r }); err != nil {
+		t.Fatalf("the genuine re-registration was refused: %v", err)
+	}
+	sent.Name = "pwned"
+	if _, err := c.RegisterNode(ctx, sent); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("replayed challenge: code = %v, want Unauthenticated", status.Code(err))
+	}
+	// 4. A genuine proof, filed under a different challenge.
+	one, _ := c.GetRegisterChallenge(ctx, &meshpb.GetRegisterChallengeRequest{AuthKey: devKey})
+	two, _ := c.GetRegisterChallenge(ctx, &meshpb.GetRegisterChallengeRequest{AuthKey: devKey})
+	ch1, _ := meshproto.ParseRegisterChallenge(one.GetChallenge())
+	if _, err := c.RegisterNode(ctx, &meshpb.RegisterNodeRequest{
+		AuthKey: devKey, NodeKey: victim.key.String(), Name: "victim", ProtocolVersion: meshproto.ProtocolVersion,
+		ChallengeId: two.GetChallengeId(), RegisterProof: meshproto.SealRegisterProof(ch1, victim.key, victim.priv),
+	}); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("proof for another challenge: code = %v, want Unauthenticated", status.Code(err))
+	}
+
+	// None of it touched the device.
+	observer := register(t, c, "observer")
+	nm, err := pullFirst(ctx, c, &meshpb.PullNetMapRequest{NodeId: observer.id, SessionToken: observer.token})
 	if err != nil {
 		t.Fatalf("pull: %v", err)
 	}
-	if _, err := stream.Recv(); status.Code(err) != codes.NotFound {
-		t.Fatalf("code = %v, want NotFound", status.Code(err))
+	for _, p := range nm.GetPeers() {
+		if p.GetNodeKey() == victim.key.String() && p.GetName() != "victim" {
+			t.Fatalf("the victim's device was renamed to %q", p.GetName())
+		}
+	}
+}
+
+// A challenge answers for the org that asked for it: one obtained with org A's
+// key cannot be spent enrolling into org B.
+func TestRegisterChallengeIsBoundToTheOrgThatAskedForIt(t *testing.T) {
+	c := startTwoOrgServer(t)
+	ctx := context.Background()
+	key, priv := newKeyPair(t)
+	chr, err := c.GetRegisterChallenge(ctx, &meshpb.GetRegisterChallengeRequest{AuthKey: "org-a-key"})
+	if err != nil {
+		t.Fatalf("challenge: %v", err)
+	}
+	ch, _ := meshproto.ParseRegisterChallenge(chr.GetChallenge())
+	if _, err := c.RegisterNode(ctx, &meshpb.RegisterNodeRequest{
+		AuthKey: "org-b-key", NodeKey: key.String(), Name: "x", ProtocolVersion: meshproto.ProtocolVersion,
+		ChallengeId: chr.GetChallengeId(), RegisterProof: meshproto.SealRegisterProof(ch, key, priv),
+	}); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("code = %v, want Unauthenticated", status.Code(err))
+	}
+}
+
+func TestNodeScopedCallsNeedTheSessionOfThatNode(t *testing.T) {
+	c := startTestServer(t)
+	ctx := context.Background()
+	a := register(t, c, "a")
+	b := register(t, c, "b")
+
+	pulls := []struct {
+		name string
+		req  *meshpb.PullNetMapRequest
+		want codes.Code
+	}{
+		{"no session", &meshpb.PullNetMapRequest{NodeId: a.id}, codes.Unauthenticated},
+		{"a made-up session", &meshpb.PullNetMapRequest{NodeId: a.id, SessionToken: "made-up"}, codes.Unauthenticated},
+		{"the session of another node", &meshpb.PullNetMapRequest{NodeId: a.id, SessionToken: b.token}, codes.PermissionDenied},
+		{"its own session", &meshpb.PullNetMapRequest{NodeId: a.id, SessionToken: a.token}, codes.OK},
+	}
+	for _, tc := range pulls {
+		if _, err := pullFirst(ctx, c, tc.req); status.Code(err) != tc.want {
+			t.Errorf("PullNetMap with %s: code = %v, want %v", tc.name, status.Code(err), tc.want)
+		}
+	}
+	if _, err := c.ReportEndpoints(ctx, &meshpb.ReportEndpointsRequest{
+		NodeId: a.id, SessionToken: b.token, Endpoints: []string{"203.0.113.7:41641"},
+	}); status.Code(err) != codes.PermissionDenied {
+		t.Errorf("ReportEndpoints with another node's session: code = %v, want PermissionDenied", status.Code(err))
+	}
+	if _, err := c.ReportServiceHealth(ctx, &meshpb.ReportServiceHealthRequest{
+		NodeId: a.id, Services: []*meshpb.ServiceHealth{{Name: "web", Checked: true}},
+	}); status.Code(err) != codes.Unauthenticated {
+		t.Errorf("ReportServiceHealth with no session: code = %v, want Unauthenticated", status.Code(err))
+	}
+}
+
+// Re-registering starts a new session and ends the old one: one live session
+// per node, so a token cannot outlive the registration that minted it.
+func TestReRegistrationSupersedesTheOldSession(t *testing.T) {
+	c := startTestServer(t)
+	ctx := context.Background()
+	key, priv := newKeyPair(t)
+	first, err := enrollAs(ctx, c, devKey, "a", key, priv, nil)
+	if err != nil {
+		t.Fatalf("first: %v", err)
+	}
+	second, err := enrollAs(ctx, c, devKey, "a", key, priv, nil)
+	if err != nil {
+		t.Fatalf("second: %v", err)
+	}
+	if second.GetNodeId() != first.GetNodeId() {
+		t.Fatalf("re-registration created node %d, want the same node %d", second.GetNodeId(), first.GetNodeId())
+	}
+	if _, err := pullFirst(ctx, c, &meshpb.PullNetMapRequest{NodeId: first.GetNodeId(), SessionToken: first.GetSessionToken()}); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("superseded session: code = %v, want Unauthenticated", status.Code(err))
+	}
+	if _, err := pullFirst(ctx, c, &meshpb.PullNetMapRequest{NodeId: second.GetNodeId(), SessionToken: second.GetSessionToken()}); err != nil {
+		t.Fatalf("current session refused: %v", err)
+	}
+}
+
+func TestUpdateNodeDeclarationsUsesTheSession(t *testing.T) {
+	c := startTestServer(t)
+	ctx := context.Background()
+	a := register(t, c, "a")
+	b := register(t, c, "b")
+
+	// What an org key plus a public node key used to be enough for.
+	if _, err := c.UpdateNodeDeclarations(ctx, &meshpb.UpdateNodeDeclarationsRequest{
+		AuthKey: devKey, NodeKey: a.key.String(), DeviceFingerprint: "fp-pwned",
+	}); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("no session: code = %v, want Unauthenticated", status.Code(err))
+	}
+	if _, err := c.UpdateNodeDeclarations(ctx, &meshpb.UpdateNodeDeclarationsRequest{
+		SessionToken: b.token, NodeKey: a.key.String(), DeviceFingerprint: "fp-pwned",
+	}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("another node's session naming a's key: code = %v, want PermissionDenied", status.Code(err))
+	}
+	resp, err := c.UpdateNodeDeclarations(ctx, &meshpb.UpdateNodeDeclarationsRequest{
+		SessionToken: a.token, DeviceFingerprint: "fp-a",
+	})
+	if err != nil {
+		t.Fatalf("its own session: %v", err)
+	}
+	if resp.GetNodeId() != a.id {
+		t.Fatalf("updated node %d, want %d", resp.GetNodeId(), a.id)
 	}
 }
 
@@ -150,28 +364,25 @@ func TestPullNetMapUnknownNode(t *testing.T) {
 func TestReportEndpointsSetsMeasuredHome(t *testing.T) {
 	c := startTestServer(t)
 	ctx := context.Background()
-	a := register(t, c, 1, "a")
-	b := register(t, c, 2, "b")
+	a := register(t, c, "a")
+	b := register(t, c, "b")
 
 	if _, err := c.ReportEndpoints(ctx, &meshpb.ReportEndpointsRequest{
-		NodeId:     a.GetNodeId(),
-		Endpoints:  []string{"203.0.113.7:41641"},
-		HomeRegion: "lax",
+		NodeId:       a.id,
+		SessionToken: a.token,
+		Endpoints:    []string{"203.0.113.7:41641"},
+		HomeRegion:   "lax",
 	}); err != nil {
 		t.Fatalf("report: %v", err)
 	}
 
-	stream, err := c.PullNetMap(ctx, &meshpb.PullNetMapRequest{NodeId: b.GetNodeId()})
+	nm, err := pullFirst(ctx, c, &meshpb.PullNetMapRequest{NodeId: b.id, SessionToken: b.token})
 	if err != nil {
 		t.Fatalf("pull netmap: %v", err)
 	}
-	nm, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("recv netmap: %v", err)
-	}
 	var seen string
 	for _, p := range nm.GetPeers() {
-		if p.GetNodeKey() == nodeKeyB64(1) {
+		if p.GetNodeKey() == a.key.String() {
 			seen = p.GetDerpHome()
 		}
 	}
@@ -184,14 +395,31 @@ func TestReportEndpointsSetsMeasuredHome(t *testing.T) {
 // is: a region it never published is refused rather than handed to peers.
 func TestReportEndpointsRejectsUnknownHomeRegion(t *testing.T) {
 	c := startTestServer(t)
-	a := register(t, c, 1, "a")
+	a := register(t, c, "a")
 
 	_, err := c.ReportEndpoints(context.Background(), &meshpb.ReportEndpointsRequest{
-		NodeId:     a.GetNodeId(),
-		Endpoints:  []string{"203.0.113.7:41641"},
-		HomeRegion: "atlantis",
+		NodeId:       a.id,
+		SessionToken: a.token,
+		Endpoints:    []string{"203.0.113.7:41641"},
+		HomeRegion:   "atlantis",
 	})
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("err = %v (code %s), want InvalidArgument", err, status.Code(err))
+	}
+}
+
+// A node below mesh protocol v2 cannot answer the registration challenge or
+// carry a session, so it is refused AT registration with an error that says why -
+// not half-enrolled and then refused on every call after.
+func TestRegisterRefusesPreV2Protocol(t *testing.T) {
+	c := startTestServer(t)
+	key, _ := newKeyPair(t)
+	for _, v := range []uint32{0, 1} {
+		_, err := c.RegisterNode(context.Background(), &meshpb.RegisterNodeRequest{
+			AuthKey: devKey, NodeKey: key.String(), Name: "old", ProtocolVersion: v,
+		})
+		if status.Code(err) != codes.FailedPrecondition {
+			t.Fatalf("protocol v%d: code = %v, want FailedPrecondition", v, status.Code(err))
+		}
 	}
 }

@@ -94,6 +94,10 @@ export default function Overview() {
     queryFn: api.me,
     retry: false,
   });
+  // 隐藏商业化入口 (运营设置, proxied through /v1/me): the quota copy stops
+  // saying 升级套餐 on a platform whose console has no plans page — the rest
+  // of the advice (wait for the monthly reset) is still true and stays.
+  const hideCommerce = me?.ui?.hide_commerce === true;
 
   const { data: usage } = useQuery<CurrentUsage>({
     queryKey: ["usage"],
@@ -240,7 +244,7 @@ export default function Overview() {
       notify(
         "quota-100",
         t("overview.notifQuota100Title"),
-        t("overview.notifQuota100Body"),
+        t(hideCommerce ? "overview.notifQuota100BodyNoUpgrade" : "overview.notifQuota100Body"),
       );
     } else if (pct >= 80) {
       notify(
@@ -328,7 +332,9 @@ export default function Overview() {
           showIcon
           type="error"
           message={t("overview.quotaExceededMsg", { pct: quotaPct.toFixed(1) })}
-          description={t("overview.quotaExceededDesc")}
+          description={t(
+            hideCommerce ? "overview.quotaExceededDescNoUpgrade" : "overview.quotaExceededDesc",
+          )}
         />
       )}
 

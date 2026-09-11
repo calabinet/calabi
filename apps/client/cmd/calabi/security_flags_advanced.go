@@ -24,7 +24,7 @@ func (sf *securityFlags) registerAdvancedFlags(fs *flag.FlagSet) {
 	if sf.l7 {
 		fs.Var(&sf.setHeader, "set-header", `set/replace an upstream request header "Name: Value" (repeatable)`)
 		fs.Var(&sf.delHeader, "del-header", "strip an upstream request header by name (repeatable)")
-		fs.StringVar(&sf.oauthProvider, "oauth-provider", "", "OAuth login-wall provider: google | github")
+		fs.StringVar(&sf.oauthProvider, "oauth-provider", "", "OAuth authentication provider: google | github")
 		fs.StringVar(&sf.oauthClientID, "oauth-client-id", "", "OAuth client id")
 		fs.StringVar(&sf.oauthClientSecret, "oauth-client-secret", "", "OAuth client secret")
 		fs.Var(&sf.oauthEmail, "oauth-allow-email", "OAuth: allowed email address (repeatable; empty = any)")

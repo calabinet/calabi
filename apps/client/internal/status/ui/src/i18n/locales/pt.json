@@ -96,6 +96,7 @@
     "readOnlyDesc": "Cobrança em atraso ou cota excedida deixa a conta em modo somente leitura, no qual não é possível criar novos túneis. Abra o console para detalhes.",
     "quotaExceededMsg": "Tráfego mensal acima do limite ({{pct}}%)",
     "quotaExceededDesc": "Uma vez excedido, todos os túneis existentes continuam funcionando, mas nenhum novo pode ser adicionado. Faça upgrade do plano ou aguarde a redefinição do próximo mês.",
+    "quotaExceededDescNoUpgrade": "Uma vez excedido, todos os túneis existentes continuam funcionando, mas nenhum novo pode ser adicionado. É redefinido no próximo mês.",
     "activeTunnels": "Túneis da org",
     "uptime": "Tempo online",
     "todayTraffic": "Tráfego de hoje",
@@ -111,6 +112,7 @@
     "notifFatalBody": "Verifique a página de Logs para encontrar a causa.",
     "notifQuota100Title": "Tráfego mensal esgotado",
     "notifQuota100Body": "Faça upgrade do plano ou aguarde a redefinição do próximo mês civil.",
+    "notifQuota100BodyNoUpgrade": "Aguarde a redefinição do próximo mês civil ou fale com o administrador da plataforma.",
     "notifQuota80Title": "80% do tráfego usado",
     "notifQuota80Body": "{{pct}}% usado, aproximando-se do limite mensal.",
     "trafficBreakdown": "Túnel {{tunnel}} · Relay {{relay}}",
@@ -197,7 +199,7 @@
       "remove": "Remover (um nome de cabeçalho por linha)"
     },
     "oauth": {
-      "title": "Muro de login OAuth",
+      "title": "Autenticação OAuth",
       "hint": "Exija que os visitantes façam login com um provedor de identidade antes de alcançar seu serviço (HTTP/HTTPS).",
       "providerPlaceholder": "Provedor (desativado)",
       "callbackHint": "Registre esta URL de redirecionamento/callback no seu app OAuth:",
@@ -211,7 +213,8 @@
       "save": "Salvar",
       "saved": "Política de segurança salva",
       "failed": "Falha ao salvar a política de segurança",
-      "lockedNotice": "Alguns recursos exigem upgrade do plano: {{features}}."
+      "lockedNotice": "Alguns recursos exigem upgrade do plano: {{features}}.",
+      "lockedNoticeContact": "Seu plano não inclui: {{features}}. Peça ao administrador da plataforma para habilitar."
     },
     "edit": {
       "title": "Editar túnel",
@@ -227,8 +230,10 @@
     "deleteConfirmTitle": "Confirmar exclusão?",
     "deleteConfirmDesc": "Ele é removido do edge node imediatamente; se houver um cliente em execução, as conexões relacionadas são cortadas.",
     "cappedTooltip": "Limite do plano atingido {{count}}/{{max}}; faça upgrade ou exclua túneis existentes e tente novamente.",
+    "cappedTooltipNoUpgrade": "Limite do plano atingido {{count}}/{{max}}; exclua túneis existentes e tente novamente.",
     "cappedAlertMsg": "Limite de túneis do plano atingido {{count}} / {{max}}",
     "cappedAlertDesc": "Faça upgrade do plano ou exclua túneis existentes para que o botão \"Novo túnel\" fique disponível novamente.",
+    "cappedAlertDescNoUpgrade": "Exclua túneis existentes para que o botão \"Novo túnel\" fique disponível novamente.",
     "edgeSwitchMsg": "Troca entre regiões para o novo edge node #{{current}} (a região do nó #{{previous}} está indisponível)",
     "edgeSwitchDesc1": "Este cliente agora está conectado a um edge node em ",
     "edgeSwitchAnotherRegion": "outra região",
@@ -274,6 +279,7 @@
     "subdomainPattern": "Apenas letras minúsculas / dígitos / hífens, e não pode começar ou terminar com hífen",
     "subdomainFreeLabel": "Subdomínio",
     "subdomainFreePlaceholder": "O plano Free atribui um subdomínio aleatório (escolha o seu após o upgrade)",
+    "subdomainFreePlaceholderNoUpgrade": "Um subdomínio aleatório é atribuído automaticamente",
     "countHint": "Esta organização já tem {{team}} túneis; um novo é adicionado à lista",
     "countHintShared": "Esta organização já tem {{team}} túneis ({{mine}} neste cliente); um novo é adicionado à lista",
     "customDomainSelectPlaceholder": "Selecione um domínio verificado",
@@ -423,6 +429,18 @@
     "registerPre": "Não tem uma conta? Registre-se pelo ",
     "consoleLink": "console",
     "registerPost": "."
+  },
+  "consoleLock": {
+    "title": "Desbloquear este console",
+    "subtitle": "Você está abrindo o console deste cliente a partir de outra máquina.",
+    "secret": "Segredo de desbloqueio",
+    "secretRequired": "Insira o segredo de desbloqueio",
+    "submit": "Desbloquear",
+    "wrongSecret": "Esse segredo não confere.",
+    "throttled": "Muitas tentativas. Tente novamente em {{seconds}} segundos.",
+    "failed": "Não foi possível desbloquear o console. Tente novamente.",
+    "where": "O daemon mostra este segredo no log ao iniciar quando o console escuta além da própria máquina (em um contêiner: docker logs). Ele também fica salvo no arquivo console-secret no diretório de dados do daemon, e você pode escolher o seu com CALABI_STATUS_SECRET.",
+    "unavailable": "Este console só aceita acessos da própria máquina. Abra-o lá ou defina um segredo de desbloqueio para o daemon (CALABI_STATUS_SECRET) para permitir acesso remoto."
   },
   "logs": {
     "paused": "Pausado",

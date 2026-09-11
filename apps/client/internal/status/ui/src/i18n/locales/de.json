@@ -96,6 +96,7 @@
     "readOnlyDesc": "Überfällige Abrechnung oder ein überschrittenes Kontingent versetzt das Konto in den Nur-Lese-Modus, in dem keine neuen Tunnel erstellt werden können. Öffne die Konsole für Details.",
     "quotaExceededMsg": "Monatlicher Traffic über dem Limit ({{pct}}%)",
     "quotaExceededDesc": "Nach Überschreitung funktionieren alle bestehenden Tunnel weiter, es können jedoch keine neuen hinzugefügt werden. Aktualisiere deinen Tarif oder warte auf die Zurücksetzung im nächsten Monat.",
+    "quotaExceededDescNoUpgrade": "Nach Überschreitung funktionieren alle bestehenden Tunnel weiter, es können jedoch keine neuen hinzugefügt werden. Wird im nächsten Monat zurückgesetzt.",
     "activeTunnels": "Org-Tunnel",
     "uptime": "Laufzeit",
     "todayTraffic": "Heutiger Traffic",
@@ -111,6 +112,7 @@
     "notifFatalBody": "Prüfe die Protokollseite, um die Ursache zu finden.",
     "notifQuota100Title": "Monatlicher Traffic aufgebraucht",
     "notifQuota100Body": "Aktualisiere deinen Tarif oder warte auf die Zurücksetzung im nächsten Kalendermonat.",
+    "notifQuota100BodyNoUpgrade": "Warte auf die Zurücksetzung im nächsten Kalendermonat oder wende dich an deinen Plattform-Administrator.",
     "notifQuota80Title": "80 % des Traffics verbraucht",
     "notifQuota80Body": "{{pct}}% verbraucht, nähert sich dem monatlichen Limit.",
     "trafficBreakdown": "Tunnel {{tunnel}} · Relay {{relay}}",
@@ -197,7 +199,7 @@
       "remove": "Entfernen (ein Header-Name pro Zeile)"
     },
     "oauth": {
-      "title": "OAuth-Anmeldeschranke",
+      "title": "OAuth-Authentifizierung",
       "hint": "Verlange, dass Besucher sich bei einem Identitätsanbieter anmelden, bevor sie deinen Dienst erreichen (HTTP/HTTPS).",
       "providerPlaceholder": "Anbieter (aus)",
       "callbackHint": "Registriere diese Weiterleitungs-/Callback-URL in deiner OAuth-App:",
@@ -211,7 +213,8 @@
       "save": "Speichern",
       "saved": "Sicherheitsrichtlinie gespeichert",
       "failed": "Sicherheitsrichtlinie konnte nicht gespeichert werden",
-      "lockedNotice": "Einige Funktionen erfordern ein Tarif-Upgrade: {{features}}."
+      "lockedNotice": "Einige Funktionen erfordern ein Tarif-Upgrade: {{features}}.",
+      "lockedNoticeContact": "Dein Tarif enthält nicht: {{features}}. Wende dich an deinen Plattform-Administrator, um sie freizuschalten."
     },
     "edit": {
       "title": "Tunnel bearbeiten",
@@ -227,8 +230,10 @@
     "deleteConfirmTitle": "Löschen bestätigen?",
     "deleteConfirmDesc": "Er wird sofort vom Edge-Knoten entfernt; wenn ein Client läuft, werden zugehörige Verbindungen getrennt.",
     "cappedTooltip": "Tariflimit erreicht {{count}}/{{max}}; aktualisiere den Tarif oder lösche bestehende Tunnel und versuche es erneut.",
+    "cappedTooltipNoUpgrade": "Tariflimit erreicht {{count}}/{{max}}; lösche bestehende Tunnel und versuche es erneut.",
     "cappedAlertMsg": "Tunnel-Limit des Tarifs erreicht {{count}} / {{max}}",
     "cappedAlertDesc": "Aktualisiere deinen Tarif oder lösche bestehende Tunnel, damit die Schaltfläche \"Neuer Tunnel\" wieder verfügbar wird.",
+    "cappedAlertDescNoUpgrade": "Lösche bestehende Tunnel, damit die Schaltfläche \"Neuer Tunnel\" wieder verfügbar wird.",
     "edgeSwitchMsg": "Regionsübergreifend zum neuen Edge-Knoten #{{current}} gewechselt (die Region von Knoten #{{previous}} ist nicht verfügbar)",
     "edgeSwitchDesc1": "Dieser Client ist jetzt mit einem Edge-Knoten in ",
     "edgeSwitchAnotherRegion": "einer anderen Region",
@@ -274,6 +279,7 @@
     "subdomainPattern": "Nur Kleinbuchstaben / Ziffern / Bindestriche, darf nicht mit einem Bindestrich beginnen oder enden",
     "subdomainFreeLabel": "Subdomain",
     "subdomainFreePlaceholder": "Der Free-Tarif weist eine zufällige Subdomain zu (nach dem Upgrade selbst wählbar)",
+    "subdomainFreePlaceholderNoUpgrade": "Eine zufällige Subdomain wird automatisch zugewiesen",
     "countHint": "Diese Organisation hat bereits {{team}} Tunnel; ein neuer wird der Liste angehängt",
     "countHintShared": "Diese Organisation hat bereits {{team}} Tunnel ({{mine}} auf diesem Client); ein neuer wird der Liste angehängt",
     "customDomainSelectPlaceholder": "Verifizierte Domain wählen",
@@ -423,6 +429,18 @@
     "registerPre": "Noch kein Konto? Registriere dich über die ",
     "consoleLink": "Konsole",
     "registerPost": "."
+  },
+  "consoleLock": {
+    "title": "Diese Konsole entsperren",
+    "subtitle": "Du öffnest die Konsole dieses Clients von einem anderen Rechner aus.",
+    "secret": "Entsperr-Geheimnis",
+    "secretRequired": "Bitte gib das Entsperr-Geheimnis ein",
+    "submit": "Entsperren",
+    "wrongSecret": "Das Geheimnis stimmt nicht.",
+    "throttled": "Zu viele Versuche. Versuche es in {{seconds}} Sekunden erneut.",
+    "failed": "Die Konsole ließ sich nicht entsperren. Versuche es erneut.",
+    "where": "Der Daemon schreibt das Geheimnis beim Start in sein Log, wenn die Konsole über den eigenen Rechner hinaus lauscht (bei einem Container: docker logs). Es liegt außerdem in der Datei console-secret im Datenverzeichnis des Daemons; ein eigenes legst du mit CALABI_STATUS_SECRET fest.",
+    "unavailable": "Diese Konsole nimmt nur Zugriffe vom eigenen Rechner an. Öffne sie dort oder gib dem Daemon ein Entsperr-Geheimnis (CALABI_STATUS_SECRET), um Fernzugriff zu erlauben."
   },
   "logs": {
     "paused": "Pausiert",

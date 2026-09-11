@@ -96,6 +96,7 @@
     "readOnlyDesc": "帳單逾期或配額超限時會進入唯讀模式,無法建立新隧道。請前往主控台查看詳情。",
     "quotaExceededMsg": "本月流量已超出限額 ({{pct}}%)",
     "quotaExceededDesc": "超出後所有現有隧道繼續運作,但無法新增。升級套餐或等下個月重置。",
+    "quotaExceededDescNoUpgrade": "超出後所有現有隧道繼續運作,但無法新增。下個自然月自動重置。",
     "activeTunnels": "組織通道",
     "uptime": "線上時間",
     "todayTraffic": "今日流量",
@@ -111,6 +112,7 @@
     "notifFatalBody": "請查看「日誌」頁面定位原因。",
     "notifQuota100Title": "本月流量已用盡",
     "notifQuota100Body": "升級套餐,或等下個自然月重置。",
+    "notifQuota100BodyNoUpgrade": "等下個自然月重置,或聯絡平台管理員。",
     "notifQuota80Title": "流量已使用 80%",
     "notifQuota80Body": "已用 {{pct}}%,接近月度上限。",
     "trafficBreakdown": "隧道 {{tunnel}} · 中繼 {{relay}}",
@@ -197,7 +199,7 @@
       "remove": "移除（每行一個標頭名）"
     },
     "oauth": {
-      "title": "OAuth 登入牆",
+      "title": "OAuth 登入認證",
       "hint": "訪客存取你的服務前需用身分提供方登入（HTTP/HTTPS）。",
       "providerPlaceholder": "提供方（關閉）",
       "callbackHint": "在你的 OAuth 應用程式裡註冊這個回呼位址：",
@@ -211,7 +213,8 @@
       "save": "儲存",
       "saved": "安全策略已儲存",
       "failed": "儲存安全策略失敗",
-      "lockedNotice": "部分功能需升級方案後可用：{{features}}。"
+      "lockedNotice": "部分功能需升級方案後可用：{{features}}。",
+      "lockedNoticeContact": "目前方案不包含：{{features}}。如需開通請聯絡平台管理員。"
     },
     "edit": {
       "title": "編輯隧道",
@@ -227,8 +230,10 @@
     "deleteConfirmTitle": "確認刪除?",
     "deleteConfirmDesc": "刪除後會立即從邊緣節點移除,如果客戶端在執行,關聯連線會被切斷。",
     "cappedTooltip": "已達套餐上限 {{count}}/{{max}},升級或刪除現有隧道後再試",
+    "cappedTooltipNoUpgrade": "已達方案上限 {{count}}/{{max}},刪除現有隧道後再試",
     "cappedAlertMsg": "已達套餐隧道數上限 {{count}} / {{max}}",
     "cappedAlertDesc": "升級套餐或刪除現有隧道後,「新建隧道」按鈕才會重新可用。",
+    "cappedAlertDescNoUpgrade": "刪除現有隧道後,「新建隧道」按鈕才會重新可用。",
     "edgeSwitchMsg": "已跨地區切換到新邊緣節點 #{{current}}(原節點 #{{previous}} 所在地區不可用)",
     "edgeSwitchDesc1": "本機已連線到",
     "edgeSwitchAnotherRegion": "另一個地區",
@@ -274,6 +279,7 @@
     "subdomainPattern": "只能小寫字母/數字/連字號,且不以連字號開頭或結尾",
     "subdomainFreeLabel": "子網域",
     "subdomainFreePlaceholder": "體驗版自動分配隨機子網域（升級後可自選）",
+    "subdomainFreePlaceholderNoUpgrade": "自動分配隨機子網域",
     "countHint": "目前組織已有 {{team}} 條隧道,新建後會追加到清單",
     "countHintShared": "目前組織已有 {{team}} 條隧道（其中本客戶端 {{mine}} 條）,新建後會追加到清單",
     "customDomainSelectPlaceholder": "選擇一個已驗證的域名",
@@ -423,6 +429,18 @@
     "registerPre": "還沒有帳號? 請透過",
     "consoleLink": "主控台",
     "registerPost": "註冊。"
+  },
+  "consoleLock": {
+    "title": "解鎖此控制台",
+    "subtitle": "你正在從另一台機器開啟這個用戶端的控制台。",
+    "secret": "解鎖密碼",
+    "secretRequired": "請輸入解鎖密碼",
+    "submit": "解鎖",
+    "wrongSecret": "密碼不正確。",
+    "throttled": "嘗試次數過多，請於 {{seconds}} 秒後再試。",
+    "failed": "無法解鎖控制台，請再試一次。",
+    "where": "控制台監聽本機以外的位址時，daemon 會在啟動日誌中印出這組密碼（容器請用 docker logs 查看）。它也儲存在 daemon 資料目錄下的 console-secret 檔案中；也可以用 CALABI_STATUS_SECRET 自行指定。",
+    "unavailable": "這個控制台只接受本機存取。請在該機器上開啟，或為 daemon 設定解鎖密碼（CALABI_STATUS_SECRET）以允許遠端存取。"
   },
   "logs": {
     "paused": "已暫停",

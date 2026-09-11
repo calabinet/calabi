@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
@@ -17,20 +18,29 @@ import (
 //
 // Shared by both deployments in MESH.1. The platform build replaces this with an
 // identity-svc Authenticator (tk_ keys -> org) — see wire_platform.go.
-func devStaticAuth() core.Authenticator {
+func devStaticAuth() (core.Authenticator, error) {
 	if path := env("AUTHKEYS_FILE"); path != "" {
-		if a, err := loadStaticAuth(path); err == nil {
-			return a
+		a, err := loadStaticAuth(path)
+		if err != nil {
+			// Setting AUTHKEYS_FILE states the intent "these keys, and only
+			// these". Falling back to the built-in key on an unreadable or
+			// half-written file answered that with "anyone, into meshnet 1" —
+			// using a key that is printed in the public source (audit finding
+			// MESH-10). prodguard only checks that the variable is SET, so an
+			// unmounted volume or a typo sailed straight past it.
+			//
+			// Fail hard regardless of environment: a broken key file is never a
+			// reason to admit the world.
+			return nil, fmt.Errorf("CALABI_COORD_AUTHKEYS_FILE=%s could not be loaded (%w) — "+
+				"refusing to start rather than fall back to the built-in dev key", path, err)
 		}
-		// Fall through to the single-key default on a bad/unreadable file — this
-		// is the DEV stub. The real self-hosted coordinator config surfaces load
-		// errors at startup (MESH.9).
+		return a, nil
 	}
 	key := env("DEV_AUTH_KEY")
 	if key == "" {
 		key = "dev-meshnet-1-key"
 	}
-	return core.StaticAuth{Keys: map[string]core.Identity{key: {Meshnet: 1}}}
+	return core.StaticAuth{Keys: map[string]core.Identity{key: {Meshnet: 1}}}, nil
 }
 
 // loadStaticAuth reads a JSON auth-keys file (key -> {meshnet, tags}) into a

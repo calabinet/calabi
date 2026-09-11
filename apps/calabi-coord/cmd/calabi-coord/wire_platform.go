@@ -119,7 +119,6 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 		Presence:        core.NewPresence(),
 		ServiceHealth:   core.NewServiceHealthTracker(),
 		RelayGrants:     relayGrantIssuer(logger, newRelayScopeSource(logger)),
-		RelayUsageSink:  newHookRelayUsageSink(logger),
 		Logger:          logger,
 	}
 
@@ -133,7 +132,11 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 	}
 
 	logger.Warn("CALABI_COORD_IDENTITY_ADDR unset; using dev StaticAuth (NOT for production) — set it to verify tk_ keys via identity-svc")
-	return coord, devStaticAuth(), nil
+	auth, err := devStaticAuth()
+	if err != nil {
+		return nil, nil, err
+	}
+	return coord, auth, nil
 }
 
 // platformStores picks the platform mesh stores: the durable ent/DB store (a

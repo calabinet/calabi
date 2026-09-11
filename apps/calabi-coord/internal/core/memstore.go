@@ -51,29 +51,6 @@ func (s *MemNodeStore) Get(_ context.Context, id int64) (*Node, error) {
 	return &out, nil
 }
 
-// ResolveNodeKey implements NodeKeyResolver: find a node by key across every
-// meshnet. Used only to attribute relay usage — see the interface's comment on
-// why this one lookup is allowed to cross the tenant boundary.
-func (s *MemNodeStore) ResolveNodeKey(_ context.Context, key meshproto.NodeKey) (*Node, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var found *Node
-	for _, n := range s.nodes {
-		if !n.NodeKey.Equal(key) {
-			continue
-		}
-		if found != nil {
-			return nil, ErrAmbiguousNodeKey
-		}
-		cp := *n
-		found = &cp
-	}
-	if found == nil {
-		return nil, ErrNodeNotFound
-	}
-	return found, nil
-}
-
 func (s *MemNodeStore) FindByKey(_ context.Context, t MeshnetID, key meshproto.NodeKey) (*Node, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -198,6 +198,36 @@ var dataDirOverride string
 // to clear (tests). Must be called before any DataDir/Path consumer.
 func SetDataDir(dir string) { dataDirOverride = dir }
 
+// secureServiceDir protects dir at the OS level when it is the SERVICE data
+// directory — which is exactly when a data dir has been set explicitly, since
+// that is what the daemon does when it runs as an OS service (see SetDataDir).
+//
+// The per-user default is deliberately left alone: locking it to
+// SYSTEM+Administrators would lock the interactive user out of their own
+// credentials. See secure_windows.go for what this does and why (audit finding
+// ACL-1); it is a no-op off Windows, where the 0o600/0o700 modes already hold.
+//
+// Callers on the write path treat failure as best-effort — a machine that
+// refuses the ACL must not become a machine that cannot log in. SecureDataDir
+// is the variant for the install/start path, which has somewhere to report it.
+func secureServiceDir(dir string) error {
+	if dataDirOverride == "" {
+		return nil
+	}
+	return secureDataDir(dir)
+}
+
+// SecureDataDir re-applies the service data directory's protection and reports
+// failure. Call it from the service install/start path, where the result can be
+// logged; existing installs are otherwise only re-secured on the next write.
+func SecureDataDir() error {
+	dir, err := DataDir()
+	if err != nil {
+		return err
+	}
+	return secureServiceDir(dir)
+}
+
 // DataDir returns the directory holding calabi's per-machine data files
 // (config.json, local-token, calabi.pid). Defaults to <config-dir>/calabi
 // (e.g. %LOCALAPPDATA%\calabi); an override set via SetDataDir wins.
@@ -279,6 +309,9 @@ func Save(c *Config) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		return fmt.Errorf("mkdir creds: %w", err)
 	}
+	// Best-effort: Windows ignores the mode above, so the service's directory
+	// needs an explicit DACL or every local user can read the tokens below.
+	_ = secureServiceDir(filepath.Dir(p))
 	b, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return err

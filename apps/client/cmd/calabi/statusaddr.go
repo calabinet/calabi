@@ -66,12 +66,12 @@ func applyStatusAddr(v string) (warning string, err error) {
 		return "", err
 	}
 	if !isLoopbackHost(host) {
-		// Deliberately blunt. The console has no authentication of its own: it
-		// hands its write token to anything that can load the page, and the
-		// loopback bind IS the boundary that makes that safe.
+		// Visitors from other machines must enter the console's unlock secret
+		// (configureConsoleUnlock prints it). But the console is plain HTTP, so the
+		// secret and the session it buys cross the network in the clear.
 		warning = fmt.Sprintf("the local console will listen on %s, not just loopback — "+
-			"it has no login of its own and hands its write token to anyone who can reach it, "+
-			"so put it behind something that does (SSH forward, or publish the port to 127.0.0.1 only)", v)
+			"visitors from other machines must enter its unlock secret, and it is plain HTTP, "+
+			"so on a network you do not trust put it behind SSH or HTTPS", v)
 	}
 	return warning, nil
 }

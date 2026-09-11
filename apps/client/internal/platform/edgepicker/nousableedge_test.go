@@ -3,6 +3,8 @@ package edgepicker
 import (
 	"context"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -13,6 +15,17 @@ import (
 // Observed 2026-09-06, where the real fault (DNS) was three layers up.
 func TestPickRefusesALoopbackFallbackWhenAControlPlaneWasConfigured(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
+	// A control plane that is configured but gets discovery nowhere. Local and
+	// immediate on purpose: this used to be the production URL, so the test
+	// reached the production host, and on a machine with no route to it every
+	// case waited out the whole query budget. The branch under test is the same
+	// whether the control plane is down or failing.
+	failing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer failing.Close()
+	down := failing.URL
+
 	cases := []struct {
 		name         string
 		bff          string
@@ -20,22 +33,22 @@ func TestPickRefusesALoopbackFallbackWhenAControlPlaneWasConfigured(t *testing.T
 		wantNoUsable bool
 	}{
 		// The case that broke: a real control plane, unreachable, dev default.
-		{"production build, discovery down", "https://api.calabi.net", "localhost:7443", true},
-		{"127.0.0.1 spelled out", "https://api.calabi.net", "127.0.0.1:7443", true},
-		{"all interfaces is not an edge either", "https://api.calabi.net", "0.0.0.0:7443", true},
-		{"nothing to fall back to", "https://api.calabi.net", "", true},
+		{"production build, discovery down", down, "localhost:7443", true},
+		{"127.0.0.1 spelled out", down, "127.0.0.1:7443", true},
+		{"all interfaces is not an edge either", down, "0.0.0.0:7443", true},
+		{"nothing to fall back to", down, "", true},
 
 		// A dev / self-hosted build has no control plane URL: localhost is
 		// exactly what it should dial, and refusing would break it.
 		{"dev build with no bff-console", "", "localhost:7443", false},
 		// A real address stays usable even when discovery fails — that is what
 		// the tier-4 fallback is for.
-		{"a real default edge", "https://api.calabi.net", "edge01-lax.calabi.net:7443", false},
+		{"a real default edge", down, "edge01-lax.calabi.net:7443", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			// No AccessToken and an unroutable URL, so discovery cannot succeed
-			// and Pick lands on tier 4 — the branch under test.
+			// No AccessToken and a control plane that only fails, so discovery
+			// cannot succeed and Pick lands on tier 4 — the branch under test.
 			got := Pick(context.Background(), logger, Input{
 				BFFConsoleURL: c.bff,
 				DefaultAddr:   c.def,

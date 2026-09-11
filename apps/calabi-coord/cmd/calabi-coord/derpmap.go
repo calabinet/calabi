@@ -19,12 +19,7 @@ import (
 // defaults to until it reports its own; empty falls back to the first region.
 type derpMapFile struct {
 	HomeRegion string `json:"home_region"`
-	// UsageCollection maps a region code to the base URL coord drains that
-	// relay's byte counters from (F2). Deliberately a SEPARATE section from
-	// regions: those are broadcast to every node, this one carries an internal
-	// address reached with a credential. Absent = that relay isn't collected.
-	UsageCollection map[string]string `json:"usage_collection"`
-	Regions         []struct {
+	Regions    []struct {
 		Code  string `json:"code"`
 		Nodes []struct {
 			HostName string `json:"host_name"`

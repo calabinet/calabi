@@ -96,6 +96,7 @@
     "readOnlyDesc": "Una facturación vencida o una cuota superada ponen la cuenta en modo de solo lectura, donde no se pueden crear nuevos túneles. Abre la consola para ver los detalles.",
     "quotaExceededMsg": "Tráfico mensual por encima del límite ({{pct}}%)",
     "quotaExceededDesc": "Una vez superado, todos los túneles existentes siguen funcionando, pero no se pueden añadir nuevos. Mejora tu plan o espera al reinicio del próximo mes.",
+    "quotaExceededDescNoUpgrade": "Una vez superado, todos los túneles existentes siguen funcionando, pero no se pueden añadir nuevos. Se reinicia el próximo mes.",
     "activeTunnels": "Túneles de la org",
     "uptime": "Tiempo activo",
     "todayTraffic": "Tráfico de hoy",
@@ -111,6 +112,7 @@
     "notifFatalBody": "Consulta la página de Registros para encontrar la causa.",
     "notifQuota100Title": "Tráfico mensual agotado",
     "notifQuota100Body": "Mejora tu plan o espera al reinicio del próximo mes natural.",
+    "notifQuota100BodyNoUpgrade": "Espera al reinicio del próximo mes natural o consulta al administrador de la plataforma.",
     "notifQuota80Title": "80% del tráfico usado",
     "notifQuota80Body": "{{pct}}% usado, acercándose al límite mensual.",
     "trafficBreakdown": "Túnel {{tunnel}} · Relay {{relay}}",
@@ -197,7 +199,7 @@
       "remove": "Eliminar (un nombre de encabezado por línea)"
     },
     "oauth": {
-      "title": "Muro de inicio de sesión OAuth",
+      "title": "Autenticación OAuth",
       "hint": "Exige que los visitantes inicien sesión con un proveedor de identidad antes de acceder a tu servicio (HTTP/HTTPS).",
       "providerPlaceholder": "Proveedor (desactivado)",
       "callbackHint": "Registra esta URL de redirección/devolución de llamada en tu aplicación OAuth:",
@@ -211,7 +213,8 @@
       "save": "Guardar",
       "saved": "Política de seguridad guardada",
       "failed": "No se pudo guardar la política de seguridad",
-      "lockedNotice": "Algunas funciones requieren mejorar el plan para usarse: {{features}}."
+      "lockedNotice": "Algunas funciones requieren mejorar el plan para usarse: {{features}}.",
+      "lockedNoticeContact": "Tu plan no incluye: {{features}}. Pide al administrador de la plataforma que las habilite."
     },
     "edit": {
       "title": "Editar túnel",
@@ -227,8 +230,10 @@
     "deleteConfirmTitle": "¿Confirmar eliminación?",
     "deleteConfirmDesc": "Se elimina del edge node de inmediato; si hay un cliente en ejecución, las conexiones relacionadas se cortan.",
     "cappedTooltip": "Límite del plan alcanzado {{count}}/{{max}}; mejora tu plan o elimina túneles existentes y vuelve a intentarlo.",
+    "cappedTooltipNoUpgrade": "Límite del plan alcanzado {{count}}/{{max}}; elimina túneles existentes y vuelve a intentarlo.",
     "cappedAlertMsg": "Límite de túneles del plan alcanzado {{count}} / {{max}}",
     "cappedAlertDesc": "Mejora tu plan o elimina túneles existentes para que el botón \"Nuevo túnel\" vuelva a estar disponible.",
+    "cappedAlertDescNoUpgrade": "Elimina túneles existentes para que el botón \"Nuevo túnel\" vuelva a estar disponible.",
     "edgeSwitchMsg": "Cambio entre regiones al nuevo edge node #{{current}} (la región del nodo #{{previous}} no está disponible)",
     "edgeSwitchDesc1": "Este cliente está ahora conectado a un edge node en ",
     "edgeSwitchAnotherRegion": "otra región",
@@ -274,6 +279,7 @@
     "subdomainPattern": "Solo letras minúsculas / dígitos / guiones, y no puede empezar ni terminar con un guion",
     "subdomainFreeLabel": "Subdominio",
     "subdomainFreePlaceholder": "El plan Gratis asigna un subdominio aleatorio (elige el tuyo tras mejorar el plan)",
+    "subdomainFreePlaceholderNoUpgrade": "Se asigna un subdominio aleatorio automáticamente",
     "countHint": "Esta organización ya tiene {{team}} túneles; uno nuevo se añade a la lista",
     "countHintShared": "Esta organización ya tiene {{team}} túneles ({{mine}} en este cliente); uno nuevo se añade a la lista",
     "customDomainSelectPlaceholder": "Selecciona un dominio verificado",
@@ -423,6 +429,18 @@
     "registerPre": "¿No tienes una cuenta? Regístrate desde la ",
     "consoleLink": "consola",
     "registerPost": "."
+  },
+  "consoleLock": {
+    "title": "Desbloquear esta consola",
+    "subtitle": "Estás abriendo la consola de este cliente desde otra máquina.",
+    "secret": "Secreto de desbloqueo",
+    "secretRequired": "Introduce el secreto de desbloqueo",
+    "submit": "Desbloquear",
+    "wrongSecret": "Ese secreto no coincide.",
+    "throttled": "Demasiados intentos. Vuelve a intentarlo dentro de {{seconds}} segundos.",
+    "failed": "No se pudo desbloquear la consola. Inténtalo de nuevo.",
+    "where": "El daemon muestra este secreto en su registro al arrancar cuando la consola escucha más allá de su propia máquina (en un contenedor: docker logs). También se guarda en el archivo console-secret del directorio de datos del daemon, y puedes elegir el tuyo con CALABI_STATUS_SECRET.",
+    "unavailable": "Esta consola solo acepta accesos desde su propia máquina. Ábrela allí o asigna al daemon un secreto de desbloqueo (CALABI_STATUS_SECRET) para permitir el acceso remoto."
   },
   "logs": {
     "paused": "En pausa",

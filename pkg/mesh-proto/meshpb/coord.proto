@@ -27,6 +27,13 @@ service Coordinator {
   // node's identity within the mesh.
   rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
 
+  // GetRegisterChallenge hands a node a one-time challenge that RegisterNode
+  // requires it to answer with its node private key (mesh protocol v2). An org
+  // credential says which meshnet the caller belongs to; only this proof says
+  // which DEVICE it is, so knowing a node key - public within an org - is no
+  // longer enough to enroll it or take its record over.
+  rpc GetRegisterChallenge(GetRegisterChallengeRequest) returns (GetRegisterChallengeResponse);
+
   // PullNetMap is a long-lived server stream. The coordinator pushes a fresh
   // NetMap whenever topology or ACL changes, so the node reprograms its
   // WireGuard peers live without reconnecting.
@@ -119,6 +126,11 @@ message RegisterNodeRequest {
   // it cannot guess, and aliasing a route that does not collide costs everyone a
   // change of address for nothing.
   repeated string aliased_routes = 10;
+  // Proof of possession (mesh protocol v2): the challenge this registration
+  // answers, and the box sealed over it with the node private key
+  // (meshproto.SealRegisterProof). Refused without both.
+  string challenge_id = 11;
+  bytes register_proof = 12;
 }
 
 // DeclaredService is one entry of RegisterNodeRequest.declared_services.
@@ -147,6 +159,25 @@ message RegisterNodeResponse {
   // Negotiated working subset (intersection of node + coordinator caps).
   uint32 protocol_version = 3;
   repeated string capabilities = 4;
+  // Names this session on every later node-scoped call (PullNetMap,
+  // ReportEndpoints, ReportServiceHealth, UpdateNodeDeclarations). Valid until
+  // the node registers again or the coordinator restarts; a node whose calls
+  // start failing Unauthenticated registers again.
+  string session_token = 5;
+}
+
+message GetRegisterChallengeRequest {
+  // The auth key RegisterNode will present. Required, so an anonymous caller
+  // cannot make the coordinator hold challenge state.
+  string auth_key = 1;
+}
+
+message GetRegisterChallengeResponse {
+  // Names the challenge on the RegisterNode that answers it. Single use,
+  // short-lived, and bound to the meshnet auth_key resolved to.
+  string challenge_id = 1;
+  // Ephemeral public key || nonce (meshproto.RegisterChallenge).
+  bytes challenge = 2;
 }
 
 // ServiceHealth is one service as the node itself sees it.
@@ -175,6 +206,10 @@ message UpdateNodeDeclarationsRequest {
   // no Publish-side registration yet and when its config momentarily won't
   // read, and the second must not erase a good value.
   string device_fingerprint = 4;
+  // Mesh protocol v2: the session from RegisterNode is what authorizes this
+  // call. auth_key and node_key above no longer do - an org key plus a node
+  // key (public within an org) let any member edit a colleague's device.
+  string session_token = 5;
 }
 message UpdateNodeDeclarationsResponse {
   int64 node_id = 1;
@@ -183,12 +218,23 @@ message UpdateNodeDeclarationsResponse {
 message ReportServiceHealthRequest {
   int64 node_id = 1;
   repeated ServiceHealth services = 2;
+  // v1 put auth_key + node_key here; v1 was never released.
+  reserved 3, 4;
+  reserved "auth_key", "node_key";
+  // From RegisterNodeResponse (mesh protocol v2), as on PullNetMapRequest.
+  string session_token = 5;
 }
 
 message ReportServiceHealthResponse {}
 
 message PullNetMapRequest {
   int64 node_id = 1;
+  // v1 put auth_key + node_key here; v1 was never released.
+  reserved 2, 3;
+  reserved "auth_key", "node_key";
+  // From RegisterNodeResponse (mesh protocol v2). The coordinator refuses the
+  // stream without it, or when it belongs to a different node than node_id.
+  string session_token = 4;
 }
 
 // NetMap is the ACL-filtered view of the meshnet a single node is allowed to
@@ -347,6 +393,11 @@ message ReportEndpointsRequest {
   // map it published, and distributes it to peers as this node's derp_home so
   // they relay via the closest hop. Empty = no change (keep the current home).
   string home_region = 3;
+  // v1 put auth_key + node_key here; v1 was never released.
+  reserved 4, 5;
+  reserved "auth_key", "node_key";
+  // From RegisterNodeResponse (mesh protocol v2), as on PullNetMapRequest.
+  string session_token = 6;
 }
 
 message ReportEndpointsResponse {}

@@ -86,6 +86,7 @@ func startStatusPageWithAPI(logger *slog.Logger, state *status.State, attachAPI 
 	}
 	srv := status.NewServer(logger, state, addr)
 	srv.AllowBrowser()
+	configureConsoleUnlock(logger, srv, addr)
 	if attachAPI != nil {
 		srv.AttachAPI(attachAPI)
 	}
@@ -121,6 +122,7 @@ func startLocalConsole(logger *slog.Logger, state *status.State, attachAPI func(
 	}
 	srv := status.NewServer(logger, state, addr)
 	srv.AllowBrowser()
+	configureConsoleUnlock(logger, srv, addr)
 	if attachAPI != nil {
 		srv.AttachAPI(attachAPI)
 	}

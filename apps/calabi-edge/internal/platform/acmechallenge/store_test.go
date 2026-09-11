@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/pkg/certevents"
 	eventbus "github.com/calabi/calabi/apps/calabi-edge/internal/bus"
+	"github.com/calabi/calabi/pkg/certevents"
 )
 
 func mustJSON(t *testing.T, v any) []byte {
@@ -26,14 +26,35 @@ func TestStore_PresentResolveCleanup(t *testing.T) {
 		Token: "tok1", KeyAuth: "tok1.thumb", Domain: "app.example.com",
 	})})
 
-	got, ok := s.Resolve("tok1")
+	got, ok := s.Resolve("tok1", "app.example.com")
 	if !ok || got != "tok1.thumb" {
 		t.Fatalf("Resolve after present = (%q,%v); want (tok1.thumb,true)", got, ok)
 	}
+	// A validator carrying the standard :80 port is the same probe.
+	if _, ok := s.Resolve("tok1", "app.example.com:80"); !ok {
+		t.Fatal("Resolve with a port in Host: expected a hit")
+	}
 
 	s.onCleanup(&eventbus.Msg{Data: mustJSON(t, certevents.ChallengeEvent{Token: "tok1"})})
-	if _, ok := s.Resolve("tok1"); ok {
+	if _, ok := s.Resolve("tok1", "app.example.com"); ok {
 		t.Fatal("Resolve after cleanup: expected miss")
+	}
+}
+
+// A token is answered only under the domain it was issued for. Every platform
+// edge subscribes to the same broadcast subject, so without this one org's live
+// token would validate another org's domain (audit finding CERT-1).
+func TestStore_ResolveRefusesForeignHost(t *testing.T) {
+	s := &Store{tokens: map[string]entry{}, ttl: time.Hour, logger: slog.Default()}
+	s.onPresent(&eventbus.Msg{Data: mustJSON(t, certevents.ChallengeEvent{
+		Token: "tok1", KeyAuth: "tok1.thumb", Domain: "attacker-own.example",
+	})})
+
+	if _, ok := s.Resolve("tok1", "app.victim-company.com"); ok {
+		t.Fatal("token was served under a Host it was not issued for")
+	}
+	if _, ok := s.Resolve("tok1", "attacker-own.example"); !ok {
+		t.Fatal("token must still be served under its own domain")
 	}
 }
 
@@ -41,7 +62,7 @@ func TestStore_Expiry(t *testing.T) {
 	s := &Store{tokens: map[string]entry{}, ttl: 5 * time.Millisecond, logger: slog.Default()}
 	s.onPresent(&eventbus.Msg{Data: mustJSON(t, certevents.ChallengeEvent{Token: "t", KeyAuth: "k"})})
 	time.Sleep(10 * time.Millisecond)
-	if _, ok := s.Resolve("t"); ok {
+	if _, ok := s.Resolve("t", "anything.example"); ok {
 		t.Fatal("expected miss after TTL elapsed")
 	}
 }
@@ -49,7 +70,7 @@ func TestStore_Expiry(t *testing.T) {
 func TestStore_BadPayloadIgnored(t *testing.T) {
 	s := &Store{tokens: map[string]entry{}, ttl: time.Hour, logger: slog.Default()}
 	s.onPresent(&eventbus.Msg{Data: []byte("not json")}) // must not panic
-	if _, ok := s.Resolve("anything"); ok {
+	if _, ok := s.Resolve("anything", "app.example.com"); ok {
 		t.Fatal("bad payload should install nothing")
 	}
 }

@@ -77,6 +77,52 @@ func NormalizeNodeName(name string) string {
 	return strings.ToLower(strings.TrimSpace(name))
 }
 
+// namesInMeshnet collects the names already answered to by nodes OTHER than
+// exceptID, normalized for comparison. exceptID 0 means "no exception".
+func namesInMeshnet(peers []*Node, exceptID int64) map[string]bool {
+	taken := make(map[string]bool, len(peers))
+	for _, p := range peers {
+		if p == nil || (exceptID != 0 && p.ID == exceptID) {
+			continue
+		}
+		if n := NormalizeNodeName(p.Name); n != "" {
+			taken[n] = true
+		}
+	}
+	return taken
+}
+
+// dedupeNodeName returns name when no other node in the meshnet answers to it,
+// and "name-2" / "name-3" … when one does.
+//
+// A node's self-reported hostname is not otherwise policed (see the file
+// comment), but it must not be allowed to COLLIDE: ACL rules and group
+// membership can select a device by name, so a member who names their laptop
+// after a privileged machine inherits whatever that name was granted (audit
+// finding MESH-5). The admin rename path has always refused duplicates
+// (ErrNodeNameTaken); registration silently accepted them.
+//
+// Suffixing rather than refusing is deliberate, and matches how Tailscale
+// handles it: two machines really can be called "laptop", and dropping the
+// second one off the mesh over a display name would be a data-plane break for
+// a cosmetic clash. The name is only an ACL selector by accident of being
+// unique — so the fix is to make it actually unique.
+func dedupeNodeName(name string, taken map[string]bool) string {
+	norm := NormalizeNodeName(name)
+	if norm == "" || !taken[norm] {
+		return name
+	}
+	for i := 2; i <= 999; i++ {
+		cand := fmt.Sprintf("%s-%d", name, i)
+		if !taken[NormalizeNodeName(cand)] {
+			return cand
+		}
+	}
+	// 998 machines share this name. Keep the collision rather than refuse the
+	// registration; an admin rename is the way out.
+	return name
+}
+
 // ValidateNodeName checks that name is a usable MagicDNS label: 1.63 chars of
 // [a-z0-9-], not starting or ending with "-". Expects an already-normalized
 // name. Pure.

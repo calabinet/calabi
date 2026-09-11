@@ -116,22 +116,9 @@ func main() {
 		// Node-admin HTTP surface (MESH.8b): list / disable / enable nodes. Served
 		// only when CALABI_COORD_MESH_ADMIN_ADDR is set, on a PRIVATE address (the
 		// bff-admin gateway is its authenticated front door).
-		Extra: withEdgeDERPWatcher(notif, withRelayUsageCollection(coord, logger, meshAdminServer(meshAdmin, coord, notif, logger))),
+		Extra: withEdgeDERPWatcher(notif, meshAdminServer(meshAdmin, coord, notif, logger)),
 	}); err != nil {
 		os.Exit(1)
-	}
-}
-
-// withRelayUsageCollection starts the relay usage poller (F2) alongside whatever
-// else the Extra hook runs, bound to the same shutdown context. A coordinator
-// with no collection configured starts nothing — which is every deployment until
-// its relays are given a usage token.
-func withRelayUsageCollection(coord *core.Coordinator, logger *slog.Logger, next func(context.Context) error) func(context.Context) error {
-	return func(ctx context.Context) error {
-		if p := newRelayUsagePoller(coord, loadRelayUsageAddrs(logger), logger); p != nil {
-			go p.Run(ctx)
-		}
-		return next(ctx)
 	}
 }
 

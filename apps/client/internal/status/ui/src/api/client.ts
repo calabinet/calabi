@@ -53,7 +53,15 @@ let cachedLocalToken: string | null = null;
 async function fetchLocalToken(): Promise<string> {
   const r = await fetch("/v1/local-token");
   if (!r.ok) {
-    throw new ApiError("could not fetch local-token", r.status, null);
+    // Keep the body: a locked console answers {"error":"console_locked"}, and
+    // main.tsx has to see that to send the page back to the unlock form.
+    let body: any = null;
+    try {
+      body = await r.json();
+    } catch {
+      body = null;
+    }
+    throw new ApiError("could not fetch local-token", r.status, body);
   }
   const j = await r.json();
   cachedLocalToken = j.token as string;
@@ -407,4 +415,40 @@ export const api = {
     jsonOrThrow<EdgeAffinity>(
       await writeRequest("POST", "/v1/edge-affinity", { affinity }),
     ),
+
+  // ---- remote access: the console's unlock secret --------------------------
+
+  // consoleState: is this page being viewed from another machine, and has it
+  // been unlocked? The daemon's guard answers it ahead of every other /v1 route,
+  // so it works while locked. A daemon older than 1.9.0 has no such route (404);
+  // callers treat any error as "not locked".
+  consoleState: async (): Promise<ConsoleState> =>
+    jsonOrThrow<ConsoleState>(await fetch("/v1/console/state")),
+
+  // consoleUnlock trades the unlock secret for a session cookie the page never
+  // sees (HttpOnly). No local token: a locked visitor cannot have one yet.
+  consoleUnlock: async (secret: string): Promise<{ ok: boolean }> =>
+    jsonOrThrow<{ ok: boolean }>(
+      await fetch("/v1/console/unlock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret }),
+      }),
+    ),
 };
+
+// /v1/console/state — see the daemon's internal/status/console_unlock.go.
+export interface ConsoleState {
+  // true = show the unlock form instead of the console.
+  locked: boolean;
+  // Viewed from another machine (or through a reverse proxy).
+  remote: boolean;
+  // false = the daemon has no secret configured, so there is nothing to enter.
+  unlock_available: boolean;
+}
+
+// isConsoleLocked: the daemon's answer to a visitor from another machine whose
+// unlock is missing or has lapsed. Not an account problem — see AuthGate.
+export function isConsoleLocked(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 401 && e.body?.error === "console_locked";
+}

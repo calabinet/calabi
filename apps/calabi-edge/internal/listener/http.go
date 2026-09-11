@@ -48,7 +48,9 @@ type HTTPOptions struct {
 	// its keyAuth. nil (self-hosted / no cert-svc) disables interception, so
 	// such a path falls through to normal host routing. Checked BEFORE host
 	// routing and BEFORE any auth / rate-limit gate — the probe is anonymous.
-	ACMEChallengeResolver func(token string) (keyAuth string, ok bool)
+	// The host is passed so the resolver can refuse a token probed under a
+	// domain it was not issued for (audit finding CERT-1).
+	ACMEChallengeResolver func(token, host string) (keyAuth string, ok bool)
 }
 
 // HTTP accepts incoming HTTP/1.x connections, sniffs the Host header, and
@@ -134,7 +136,7 @@ func (h *HTTP) handle(visitor net.Conn) {
 	// because the probe is anonymous and must never be challenged or shed.
 	if h.opts.ACMEChallengeResolver != nil {
 		if token, ok := acmeChallengeToken(path); ok {
-			if keyAuth, found := h.opts.ACMEChallengeResolver(token); found {
+			if keyAuth, found := h.opts.ACMEChallengeResolver(token, host); found {
 				writeACMEChallenge(visitor, keyAuth)
 				h.observeRequest("acme_challenge")
 				h.logger.Info("served acme http-01 challenge", "host", host, "token", token)
@@ -194,7 +196,7 @@ func (h *HTTP) handle(visitor net.Conn) {
 			h.observeRequest("rate_limited")
 			return
 		}
-		// OAuth login wall: bounce unauthenticated visitors to the IdP, handle
+		// OAuth authentication: bounce unauthenticated visitors to the IdP, handle
 		// the callback, gate by allowed email/domain. Request-1 / cookie model
 		// (like Basic auth). Handled = the edge already wrote a redirect/error,
 		// so don't open the upstream.

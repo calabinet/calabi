@@ -324,6 +324,21 @@ func isLoopbackAddr(addr string) bool {
 	return false
 }
 
+// listEdgesTimeout bounds one /v1/edges query end to end — DNS, TCP, TLS and the
+// response. It used to be 3s, and a single retransmitted handshake packet can use
+// most of that; a path that has just changed (a re-dialled uplink, a new egress
+// IP) is exactly when one gets lost. Observed 2026-09-10 on a host whose egress
+// IP had just changed: every query ended in `context deadline exceeded`.
+//
+// A longer budget costs nothing while the network is healthy. While it is down,
+// each reconnect attempt waits a few more seconds and then backs off for 15-60s
+// anyway. 10s matches the daemon's other bff-console poll (mesh enrollment).
+//
+// Deliberately NOT applied to resolveExplicitEdgeID: with CALABI_SERVER the
+// daemon dials the pinned edge whatever the lookup says — the lookup only labels
+// it — so a slow control plane must not hold that dial up.
+const listEdgesTimeout = 10 * time.Second
+
 // pickByListEdges issues GET /v1/edges?region=<r> and, on miss, retries
 // without the region filter. When Region is empty we go straight to the
 // no-filter query. Returns ok=false when all queries fail or yield no
@@ -334,7 +349,7 @@ func isLoopbackAddr(addr string) bool {
 // active_clients ranking. A miss falls through to load-balanced
 // selection AND raises Result.Switched so daemon can warn the user.
 func pickByListEdges(ctx context.Context, logger *slog.Logger, in Input) (Result, bool) {
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{Timeout: listEdgesTimeout}
 
 	res, ok, authFailed, regionUnavail := attemptListEdges(ctx, logger, client, in)
 	if ok {
@@ -460,7 +475,7 @@ func buildResult(in Input, chosen edgeJSON, reasonPrefix string) Result {
 //     healthy set → pick it (regardless of active_clients).
 //  2. Otherwise → lowest active_clients, ties broken by edge_node_id.
 func queryListEdges(parent context.Context, logger *slog.Logger, client *http.Client, in Input, region string) (edgeJSON, bool, bool, bool) {
-	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
+	ctx, cancel := context.WithTimeout(parent, listEdgesTimeout)
 	defer cancel()
 
 	base := strings.TrimRight(in.BFFConsoleURL, "/")

@@ -419,7 +419,7 @@ func runDaemon(args []string) int {
 			return tok
 		}
 		return ""
-	}, meshNodeNameFor(meshName), meshAdv, parseServiceSpecs(logger, *meshServices))
+	}, meshRefreshForLogin, meshNodeNameFor(meshName), meshAdv, parseServiceSpecs(logger, *meshServices))
 	apiServer := statusapi.New(logger, statusapi.Config{
 		BFFConsoleURL: bffConsoleURL,
 		ConsoleWebURL: consoleWebURL,

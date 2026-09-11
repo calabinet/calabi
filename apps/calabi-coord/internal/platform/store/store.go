@@ -143,27 +143,6 @@ func (s *Store) Get(ctx context.Context, id int64) (*core.Node, error) {
 
 // FindByKey returns the node in meshnet t with the given key, or
 // core.ErrNodeNotFound (drives idempotent re-enrollment).
-// ResolveNodeKey implements core.NodeKeyResolver: find a node by key across
-// every meshnet. Used ONLY to attribute relay usage — a relay reports opaque
-// keys and cannot say whose they are. ent's Only() rejects a multi-row match,
-// which is what we want: two nodes sharing a key would mean guessing an owner,
-// and guessing bills the wrong org.
-func (s *Store) ResolveNodeKey(ctx context.Context, key meshproto.NodeKey) (*core.Node, error) {
-	row, err := s.client.MeshNode.Query().
-		Where(meshnode.NodeKey(key.String())).
-		Only(ctx)
-	if err != nil {
-		switch {
-		case ent.IsNotFound(err):
-			return nil, core.ErrNodeNotFound
-		case ent.IsNotSingular(err):
-			return nil, core.ErrAmbiguousNodeKey
-		}
-		return nil, err
-	}
-	return toNode(row)
-}
-
 func (s *Store) FindByKey(ctx context.Context, t core.MeshnetID, key meshproto.NodeKey) (*core.Node, error) {
 	row, err := s.client.MeshNode.Query().
 		Where(meshnode.MeshnetID(int64(t)), meshnode.NodeKey(key.String())).

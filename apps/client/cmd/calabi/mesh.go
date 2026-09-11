@@ -163,6 +163,7 @@ func runMeshUp(args []string) int {
 		Params: mesh.RegisterParams{
 			AuthKey:           *authKey,
 			NodeKey:           priv.Public(),
+			NodePrivate:       priv,
 			Name:              *name,
 			AdvertiseRoutes:   routes,
 			AliasRoutes:       aliased,

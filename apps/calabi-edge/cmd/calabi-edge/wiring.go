@@ -66,7 +66,7 @@ type platformDeps struct {
 	// acmeChallengeResolver answers ACME http-01 probes on the visitor HTTP
 	// listener (user self-service custom-domain certs). nil when self-hosted / no
 	// cert-svc, leaving such requests to normal host routing.
-	acmeChallengeResolver func(token string) (keyAuth string, ok bool)
+	acmeChallengeResolver func(token, host string) (keyAuth string, ok bool)
 
 	// relayReporter re-sends a merged edge/relay node's OWN relay usage as a
 	// self-<label> region (edge/derp merge). nil when self-hosted, or when the

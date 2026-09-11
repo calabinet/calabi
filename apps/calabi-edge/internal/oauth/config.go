@@ -1,4 +1,4 @@
-// Package oauth implements the edge-side OAuth/OIDC "login wall" (④): the edge
+// Package oauth implements the edge-side OAuth/OIDC authentication (④): the edge
 // gates an HTTP/HTTPS tunnel behind an identity provider (Google / GitHub).
 // Used to be excluded from the open-source build; since F3 one edge binary
 // ships and every edge, self-hosted included, can enforce it.
@@ -165,13 +165,42 @@ func (c *Config) validSession(cookieHeader string, now time.Time) bool {
 	return c.emailAllowed(email)
 }
 
+// safeReturnPath reduces a remembered request target to something that can only
+// point back at THIS host.
+//
+// The visitor's raw request target used to be signed into the state and then
+// emitted verbatim as the post-login Location (audit finding OAUTH-1). Signing
+// it proves we minted it — it does NOT make it ours: the value arrives from the
+// visitor, so an attacker who gets someone to open a crafted link has the edge
+// hand them a signed state that redirects to the attacker's origin after a
+// successful login at the real IdP. That is an open redirect wearing our
+// signature.
+//
+// Anything that is not a single-slash absolute path collapses to "/":
+//   - "//evil.example/x" is protocol-relative — a browser reads it as a host;
+//   - "/\evil.example" is treated the same way by browsers;
+//   - "https://evil.example" is plainly absolute;
+//   - CR/LF would split the Location header.
+func safeReturnPath(p string) string {
+	if p == "" || p == CallbackPath {
+		return "/"
+	}
+	if p[0] != '/' {
+		return "/"
+	}
+	if len(p) > 1 && (p[1] == '/' || p[1] == '\\') {
+		return "/"
+	}
+	if strings.ContainsAny(p, "\r\n") {
+		return "/"
+	}
+	return p
+}
+
 // issueState signs the original request path into the OAuth state parameter
 // (CSRF protection + post-login redirect target), valid for stateTTL.
 func (c *Config) issueState(origPath string, now time.Time) string {
-	if origPath == "" || origPath == CallbackPath {
-		origPath = "/"
-	}
-	payload := origPath + "|" + strconv.FormatInt(now.Add(stateTTL).Unix(), 10)
+	payload := safeReturnPath(origPath) + "|" + strconv.FormatInt(now.Add(stateTTL).Unix(), 10)
 	return signToken(c.cookieKey, payload)
 }
 
@@ -189,10 +218,10 @@ func (c *Config) verifyState(state string, now time.Time) (string, bool) {
 	if err != nil || now.Unix() >= exp {
 		return "", false
 	}
-	if origPath == "" {
-		origPath = "/"
-	}
-	return origPath, true
+	// Sanitized on the way out as well as in: a state minted by an older build
+	// (they stay valid for stateTTL across a restart) can still carry a hostile
+	// target, and this is the side that actually becomes a Location header.
+	return safeReturnPath(origPath), true
 }
 
 // readCookie extracts one cookie value from a raw Cookie header.
