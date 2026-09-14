@@ -21,53 +21,53 @@ type MeshACLCreate struct {
 }
 
 // SetMeshnetID sets the "meshnet_id" field.
-func (_c *MeshACLCreate) SetMeshnetID(v int64) *MeshACLCreate {
-	_c.mutation.SetMeshnetID(v)
-	return _c
+func (mac *MeshACLCreate) SetMeshnetID(i int64) *MeshACLCreate {
+	mac.mutation.SetMeshnetID(i)
+	return mac
 }
 
 // SetPolicyJSON sets the "policy_json" field.
-func (_c *MeshACLCreate) SetPolicyJSON(v string) *MeshACLCreate {
-	_c.mutation.SetPolicyJSON(v)
-	return _c
+func (mac *MeshACLCreate) SetPolicyJSON(s string) *MeshACLCreate {
+	mac.mutation.SetPolicyJSON(s)
+	return mac
 }
 
 // SetNillablePolicyJSON sets the "policy_json" field if the given value is not nil.
-func (_c *MeshACLCreate) SetNillablePolicyJSON(v *string) *MeshACLCreate {
-	if v != nil {
-		_c.SetPolicyJSON(*v)
+func (mac *MeshACLCreate) SetNillablePolicyJSON(s *string) *MeshACLCreate {
+	if s != nil {
+		mac.SetPolicyJSON(*s)
 	}
-	return _c
+	return mac
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (_c *MeshACLCreate) SetUpdatedAt(v time.Time) *MeshACLCreate {
-	_c.mutation.SetUpdatedAt(v)
-	return _c
+func (mac *MeshACLCreate) SetUpdatedAt(t time.Time) *MeshACLCreate {
+	mac.mutation.SetUpdatedAt(t)
+	return mac
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_c *MeshACLCreate) SetNillableUpdatedAt(v *time.Time) *MeshACLCreate {
-	if v != nil {
-		_c.SetUpdatedAt(*v)
+func (mac *MeshACLCreate) SetNillableUpdatedAt(t *time.Time) *MeshACLCreate {
+	if t != nil {
+		mac.SetUpdatedAt(*t)
 	}
-	return _c
+	return mac
 }
 
 // Mutation returns the MeshACLMutation object of the builder.
-func (_c *MeshACLCreate) Mutation() *MeshACLMutation {
-	return _c.mutation
+func (mac *MeshACLCreate) Mutation() *MeshACLMutation {
+	return mac.mutation
 }
 
 // Save creates the MeshACL in the database.
-func (_c *MeshACLCreate) Save(ctx context.Context) (*MeshACL, error) {
-	_c.defaults()
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+func (mac *MeshACLCreate) Save(ctx context.Context) (*MeshACL, error) {
+	mac.defaults()
+	return withHooks(ctx, mac.sqlSave, mac.mutation, mac.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (_c *MeshACLCreate) SaveX(ctx context.Context) *MeshACL {
-	v, err := _c.Save(ctx)
+func (mac *MeshACLCreate) SaveX(ctx context.Context) *MeshACL {
+	v, err := mac.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -75,50 +75,50 @@ func (_c *MeshACLCreate) SaveX(ctx context.Context) *MeshACL {
 }
 
 // Exec executes the query.
-func (_c *MeshACLCreate) Exec(ctx context.Context) error {
-	_, err := _c.Save(ctx)
+func (mac *MeshACLCreate) Exec(ctx context.Context) error {
+	_, err := mac.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_c *MeshACLCreate) ExecX(ctx context.Context) {
-	if err := _c.Exec(ctx); err != nil {
+func (mac *MeshACLCreate) ExecX(ctx context.Context) {
+	if err := mac.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (_c *MeshACLCreate) defaults() {
-	if _, ok := _c.mutation.PolicyJSON(); !ok {
+func (mac *MeshACLCreate) defaults() {
+	if _, ok := mac.mutation.PolicyJSON(); !ok {
 		v := meshacl.DefaultPolicyJSON
-		_c.mutation.SetPolicyJSON(v)
+		mac.mutation.SetPolicyJSON(v)
 	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
+	if _, ok := mac.mutation.UpdatedAt(); !ok {
 		v := meshacl.DefaultUpdatedAt()
-		_c.mutation.SetUpdatedAt(v)
+		mac.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (_c *MeshACLCreate) check() error {
-	if _, ok := _c.mutation.MeshnetID(); !ok {
+func (mac *MeshACLCreate) check() error {
+	if _, ok := mac.mutation.MeshnetID(); !ok {
 		return &ValidationError{Name: "meshnet_id", err: errors.New(`ent: missing required field "MeshACL.meshnet_id"`)}
 	}
-	if _, ok := _c.mutation.PolicyJSON(); !ok {
+	if _, ok := mac.mutation.PolicyJSON(); !ok {
 		return &ValidationError{Name: "policy_json", err: errors.New(`ent: missing required field "MeshACL.policy_json"`)}
 	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
+	if _, ok := mac.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "MeshACL.updated_at"`)}
 	}
 	return nil
 }
 
-func (_c *MeshACLCreate) sqlSave(ctx context.Context) (*MeshACL, error) {
-	if err := _c.check(); err != nil {
+func (mac *MeshACLCreate) sqlSave(ctx context.Context) (*MeshACL, error) {
+	if err := mac.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := _c.createSpec()
-	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
+	_node, _spec := mac.createSpec()
+	if err := sqlgraph.CreateNode(ctx, mac.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -126,25 +126,25 @@ func (_c *MeshACLCreate) sqlSave(ctx context.Context) (*MeshACL, error) {
 	}
 	id := _spec.ID.Value.(int64)
 	_node.ID = int(id)
-	_c.mutation.id = &_node.ID
-	_c.mutation.done = true
+	mac.mutation.id = &_node.ID
+	mac.mutation.done = true
 	return _node, nil
 }
 
-func (_c *MeshACLCreate) createSpec() (*MeshACL, *sqlgraph.CreateSpec) {
+func (mac *MeshACLCreate) createSpec() (*MeshACL, *sqlgraph.CreateSpec) {
 	var (
-		_node = &MeshACL{config: _c.config}
+		_node = &MeshACL{config: mac.config}
 		_spec = sqlgraph.NewCreateSpec(meshacl.Table, sqlgraph.NewFieldSpec(meshacl.FieldID, field.TypeInt))
 	)
-	if value, ok := _c.mutation.MeshnetID(); ok {
+	if value, ok := mac.mutation.MeshnetID(); ok {
 		_spec.SetField(meshacl.FieldMeshnetID, field.TypeInt64, value)
 		_node.MeshnetID = value
 	}
-	if value, ok := _c.mutation.PolicyJSON(); ok {
+	if value, ok := mac.mutation.PolicyJSON(); ok {
 		_spec.SetField(meshacl.FieldPolicyJSON, field.TypeString, value)
 		_node.PolicyJSON = value
 	}
-	if value, ok := _c.mutation.UpdatedAt(); ok {
+	if value, ok := mac.mutation.UpdatedAt(); ok {
 		_spec.SetField(meshacl.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
@@ -159,16 +159,16 @@ type MeshACLCreateBulk struct {
 }
 
 // Save creates the MeshACL entities in the database.
-func (_c *MeshACLCreateBulk) Save(ctx context.Context) ([]*MeshACL, error) {
-	if _c.err != nil {
-		return nil, _c.err
+func (macb *MeshACLCreateBulk) Save(ctx context.Context) ([]*MeshACL, error) {
+	if macb.err != nil {
+		return nil, macb.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
-	nodes := make([]*MeshACL, len(_c.builders))
-	mutators := make([]Mutator, len(_c.builders))
-	for i := range _c.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(macb.builders))
+	nodes := make([]*MeshACL, len(macb.builders))
+	mutators := make([]Mutator, len(macb.builders))
+	for i := range macb.builders {
 		func(i int, root context.Context) {
-			builder := _c.builders[i]
+			builder := macb.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*MeshACLMutation)
@@ -182,11 +182,11 @@ func (_c *MeshACLCreateBulk) Save(ctx context.Context) ([]*MeshACL, error) {
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, macb.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, macb.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -210,7 +210,7 @@ func (_c *MeshACLCreateBulk) Save(ctx context.Context) ([]*MeshACL, error) {
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, macb.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -218,8 +218,8 @@ func (_c *MeshACLCreateBulk) Save(ctx context.Context) ([]*MeshACL, error) {
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_c *MeshACLCreateBulk) SaveX(ctx context.Context) []*MeshACL {
-	v, err := _c.Save(ctx)
+func (macb *MeshACLCreateBulk) SaveX(ctx context.Context) []*MeshACL {
+	v, err := macb.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -227,14 +227,14 @@ func (_c *MeshACLCreateBulk) SaveX(ctx context.Context) []*MeshACL {
 }
 
 // Exec executes the query.
-func (_c *MeshACLCreateBulk) Exec(ctx context.Context) error {
-	_, err := _c.Save(ctx)
+func (macb *MeshACLCreateBulk) Exec(ctx context.Context) error {
+	_, err := macb.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_c *MeshACLCreateBulk) ExecX(ctx context.Context) {
-	if err := _c.Exec(ctx); err != nil {
+func (macb *MeshACLCreateBulk) ExecX(ctx context.Context) {
+	if err := macb.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

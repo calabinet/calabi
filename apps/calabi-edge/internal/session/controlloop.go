@@ -35,9 +35,19 @@ type DomainAllocator interface {
 }
 
 // PortAllocator hands out remote ports for TCP/UDP proxies.
+//
+// Reserve takes a port out of circulation. The pool's own bookkeeping answers
+// "which numbers did I hand out", which is NOT the question that matters —
+// that one is "which numbers does a live tunnel row hold", and the two drift
+// apart in ordinary use: a proxy closing does not delete its row, and a
+// re-claim carries its port off the row without ever asking the pool. Both
+// drifts end the same way, with the pool re-issuing a number tunnel-svc still
+// has bound and the claim refused. So the persister's answer is what the pool
+// is told to believe. See port_reuse_test.go.
 type PortAllocator interface {
 	Allocate() (uint32, bool)
 	Release(port uint32)
+	Reserve(port uint32)
 }
 
 // ProxyPersister optionally records proxy lifecycle to an external
@@ -185,6 +195,9 @@ func (s *Session) handleNewProxy(f proto.Frame, registrar ProxyRegistrar, domain
 		LocalAddr:     req.LocalAddr,
 		Name:          req.Name,
 		ClaimTunnelID: req.ClaimTunnelID,
+	}
+	if req.Options != nil {
+		p.ProposedSecurityJSON = strings.TrimSpace(req.Options.SecurityConfigJSON)
 	}
 
 	switch req.Type {
@@ -367,14 +380,29 @@ func (s *Session) handleNewProxy(f proto.Frame, registrar ProxyRegistrar, domain
 				"remote_port", p.RemotePort,
 				"err", perr,
 			)
+			// The code used to be CodeProxyDuplicate unconditionally, because
+			// when this branch was written a port collision was the only
+			// definitive failure. An org security baseline is another, and it
+			// is nothing to do with duplication — a client switching on the
+			// numeric code branched wrong, and the message arrived wrapped in
+			// the transport's own envelope.
 			respErr := &proto.NewProxyResponse{
-				Error: proto.NewError(proto.CodeProxyDuplicate,
-					"calabi.err.proxy.persist_failed", perr.Error()),
+				Error: proto.NewError(persistErrorCode(perr),
+					"calabi.err.proxy.persist_failed", persistErrorMessage(perr)),
 			}
 			_ = s.SendControl(proto.FrameNewProxyResp, respErr)
 			return
 		}
 		p.TunnelID = tid
+		// A row now holds this port, and it will go on holding it after this
+		// proxy closes — OnProxyClosed reports the tunnel offline, it does not
+		// delete it. Take the number out of circulation: the teardown below
+		// must not hand it to the next tunnel (Release is a no-op once
+		// reserved), and a port that arrived ON THE CLAIM rather than from
+		// Allocate has to become known to the pool at all.
+		if tid != 0 && p.RemotePort != 0 && ports != nil {
+			ports.Reserve(p.RemotePort)
+		}
 	}
 
 	// Standalone (self-hosted / open-source) edge: apply the per-proxy security
@@ -384,19 +412,44 @@ func (s *Session) handleNewProxy(f proto.Frame, registrar ProxyRegistrar, domain
 	// config_json), so a tampered client can't self-grant. Fail-open: a
 	// malformed blob logs and leaves the proxy unpolicied (never blackholes a
 	// tunnel).
-	if s.TrustClientPolicy && req.Options != nil && strings.TrimSpace(req.Options.SecurityConfigJSON) != "" {
-		if pol, err := policy.Parse(req.Options.SecurityConfigJSON); err != nil {
-			s.logger.Warn("standalone: ignoring malformed client security policy",
-				"proxy_id", p.ID, "err", err)
-		} else if pol != nil {
-			p.SetPolicy(pol)
-			s.logger.Info("standalone: applied client-supplied security policy",
-				"proxy_id", p.ID,
-				"has_ip_rules", pol.HasIPRules(),
-				"has_basic_auth", pol.HasBasicAuth(),
-				"has_rate_limit", pol.HasRateLimit(),
-				"has_request_headers", pol.HasRequestHeaders(),
-				"has_oauth", pol.HasOAuth())
+	//
+	// Either way the ANSWER goes back on the wire. This decision is the edge's
+	// alone — the client knows only what it declared locally — and until it was
+	// reported, a client that guessed wrong (`--standalone` against a BYOI edge,
+	// which is control-plane-wired and therefore does NOT trust it) silenced its
+	// own warning and dropped --basic-auth without a word anywhere.
+	if req.Options != nil && strings.TrimSpace(req.Options.SecurityConfigJSON) != "" {
+		if s.TrustClientPolicy {
+			resp.ClientPolicy = proto.ClientPolicyApplied
+			if pol, err := policy.Parse(req.Options.SecurityConfigJSON); err != nil {
+				s.logger.Warn("standalone: ignoring malformed client security policy",
+					"proxy_id", p.ID, "err", err)
+			} else if pol != nil {
+				p.SetPolicy(pol)
+				s.logger.Info("standalone: applied client-supplied security policy",
+					"proxy_id", p.ID,
+					"has_ip_rules", pol.HasIPRules(),
+					"has_basic_auth", pol.HasBasicAuth(),
+					"has_rate_limit", pol.HasRateLimit(),
+					"has_request_headers", pol.HasRequestHeaders(),
+					"has_oauth", pol.HasOAuth())
+			}
+		} else {
+			resp.ClientPolicy = proto.ClientPolicyRelayed
+			// Operator-side half of the same fact. The client is told on the
+			// wire; this is for whoever reads the edge log afterwards asking
+			// why a tunnel everyone believed was password-protected is not.
+			if pol, err := policy.Parse(req.Options.SecurityConfigJSON); err == nil && pol != nil &&
+				(pol.HasBasicAuth() || pol.HasRateLimit() || pol.HasRequestHeaders() || pol.HasOAuth()) {
+				s.logger.Warn("client proposed an L7 security policy; this edge does not apply "+
+					"client policy (not standalone, or a control plane is wired). The control "+
+					"plane keeps the IP rules and drops these",
+					"proxy_id", p.ID, "domain", p.Domain,
+					"has_basic_auth", pol.HasBasicAuth(),
+					"has_rate_limit", pol.HasRateLimit(),
+					"has_request_headers", pol.HasRequestHeaders(),
+					"has_oauth", pol.HasOAuth())
+			}
 		}
 	}
 

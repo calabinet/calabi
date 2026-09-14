@@ -658,6 +658,197 @@ func (x *ReportUsageResponse) GetPublished() int32 {
 	return 0
 }
 
+type AccessRecordRow struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	OrgId    int64                  `protobuf:"varint,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	TunnelId int64                  `protobuf:"varint,2,opt,name=tunnel_id,json=tunnelId,proto3" json:"tunnel_id,omitempty"`
+	// Empty = the edge's overflow bucket (more distinct addresses that hour than
+	// it names individually). Not a missing value.
+	VisitorIp string `protobuf:"bytes,3,opt,name=visitor_ip,json=visitorIp,proto3" json:"visitor_ip,omitempty"`
+	// allowed | denied_ip | denied_auth | denied_rate. bff-edge does not
+	// validate the vocabulary — metering-svc drops anything it does not know,
+	// because `outcome` is a key column there.
+	Outcome string `protobuf:"bytes,4,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	// Start of the UTC hour, unix seconds.
+	Hour int64 `protobuf:"varint,5,opt,name=hour,proto3" json:"hour,omitempty"`
+	// Connections in this bucket SINCE THE EDGE'S LAST FLUSH — a delta, which is
+	// why metering-svc adds rather than replaces.
+	Conns         int64 `protobuf:"varint,6,opt,name=conns,proto3" json:"conns,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccessRecordRow) Reset() {
+	*x = AccessRecordRow{}
+	mi := &file_edgepb_bff_edge_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccessRecordRow) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccessRecordRow) ProtoMessage() {}
+
+func (x *AccessRecordRow) ProtoReflect() protoreflect.Message {
+	mi := &file_edgepb_bff_edge_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccessRecordRow.ProtoReflect.Descriptor instead.
+func (*AccessRecordRow) Descriptor() ([]byte, []int) {
+	return file_edgepb_bff_edge_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *AccessRecordRow) GetOrgId() int64 {
+	if x != nil {
+		return x.OrgId
+	}
+	return 0
+}
+
+func (x *AccessRecordRow) GetTunnelId() int64 {
+	if x != nil {
+		return x.TunnelId
+	}
+	return 0
+}
+
+func (x *AccessRecordRow) GetVisitorIp() string {
+	if x != nil {
+		return x.VisitorIp
+	}
+	return ""
+}
+
+func (x *AccessRecordRow) GetOutcome() string {
+	if x != nil {
+		return x.Outcome
+	}
+	return ""
+}
+
+func (x *AccessRecordRow) GetHour() int64 {
+	if x != nil {
+		return x.Hour
+	}
+	return 0
+}
+
+func (x *AccessRecordRow) GetConns() int64 {
+	if x != nil {
+		return x.Conns
+	}
+	return 0
+}
+
+type ReportAccessRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// OVERWRITTEN by bff-edge from the mTLS cert before re-publishing — body
+	// value is ignored, exactly like ReportUsage.
+	EdgeNodeId    int64              `protobuf:"varint,1,opt,name=edge_node_id,json=edgeNodeId,proto3" json:"edge_node_id,omitempty"`
+	Rows          []*AccessRecordRow `protobuf:"bytes,2,rep,name=rows,proto3" json:"rows,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportAccessRequest) Reset() {
+	*x = ReportAccessRequest{}
+	mi := &file_edgepb_bff_edge_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportAccessRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportAccessRequest) ProtoMessage() {}
+
+func (x *ReportAccessRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_edgepb_bff_edge_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportAccessRequest.ProtoReflect.Descriptor instead.
+func (*ReportAccessRequest) Descriptor() ([]byte, []int) {
+	return file_edgepb_bff_edge_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ReportAccessRequest) GetEdgeNodeId() int64 {
+	if x != nil {
+		return x.EdgeNodeId
+	}
+	return 0
+}
+
+func (x *ReportAccessRequest) GetRows() []*AccessRecordRow {
+	if x != nil {
+		return x.Rows
+	}
+	return nil
+}
+
+type ReportAccessResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// count of rows re-published. Diagnostic only.
+	Published     int32 `protobuf:"varint,1,opt,name=published,proto3" json:"published,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportAccessResponse) Reset() {
+	*x = ReportAccessResponse{}
+	mi := &file_edgepb_bff_edge_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportAccessResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportAccessResponse) ProtoMessage() {}
+
+func (x *ReportAccessResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_edgepb_bff_edge_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportAccessResponse.ProtoReflect.Descriptor instead.
+func (*ReportAccessResponse) Descriptor() ([]byte, []int) {
+	return file_edgepb_bff_edge_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ReportAccessResponse) GetPublished() int32 {
+	if x != nil {
+		return x.Published
+	}
+	return 0
+}
+
 type RelayUsageReport struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	OrgId int64                  `protobuf:"varint,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
@@ -676,7 +867,7 @@ type RelayUsageReport struct {
 
 func (x *RelayUsageReport) Reset() {
 	*x = RelayUsageReport{}
-	mi := &file_edgepb_bff_edge_proto_msgTypes[12]
+	mi := &file_edgepb_bff_edge_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -688,7 +879,7 @@ func (x *RelayUsageReport) String() string {
 func (*RelayUsageReport) ProtoMessage() {}
 
 func (x *RelayUsageReport) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_bff_edge_proto_msgTypes[12]
+	mi := &file_edgepb_bff_edge_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -701,7 +892,7 @@ func (x *RelayUsageReport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RelayUsageReport.ProtoReflect.Descriptor instead.
 func (*RelayUsageReport) Descriptor() ([]byte, []int) {
-	return file_edgepb_bff_edge_proto_rawDescGZIP(), []int{12}
+	return file_edgepb_bff_edge_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *RelayUsageReport) GetOrgId() int64 {
@@ -748,7 +939,7 @@ type ReportRelayUsageRequest struct {
 
 func (x *ReportRelayUsageRequest) Reset() {
 	*x = ReportRelayUsageRequest{}
-	mi := &file_edgepb_bff_edge_proto_msgTypes[13]
+	mi := &file_edgepb_bff_edge_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -760,7 +951,7 @@ func (x *ReportRelayUsageRequest) String() string {
 func (*ReportRelayUsageRequest) ProtoMessage() {}
 
 func (x *ReportRelayUsageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_bff_edge_proto_msgTypes[13]
+	mi := &file_edgepb_bff_edge_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -773,7 +964,7 @@ func (x *ReportRelayUsageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportRelayUsageRequest.ProtoReflect.Descriptor instead.
 func (*ReportRelayUsageRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_bff_edge_proto_rawDescGZIP(), []int{13}
+	return file_edgepb_bff_edge_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ReportRelayUsageRequest) GetReports() []*RelayUsageReport {
@@ -793,7 +984,7 @@ type ReportRelayUsageResponse struct {
 
 func (x *ReportRelayUsageResponse) Reset() {
 	*x = ReportRelayUsageResponse{}
-	mi := &file_edgepb_bff_edge_proto_msgTypes[14]
+	mi := &file_edgepb_bff_edge_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -805,7 +996,7 @@ func (x *ReportRelayUsageResponse) String() string {
 func (*ReportRelayUsageResponse) ProtoMessage() {}
 
 func (x *ReportRelayUsageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_bff_edge_proto_msgTypes[14]
+	mi := &file_edgepb_bff_edge_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -818,7 +1009,7 @@ func (x *ReportRelayUsageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportRelayUsageResponse.ProtoReflect.Descriptor instead.
 func (*ReportRelayUsageResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_bff_edge_proto_rawDescGZIP(), []int{14}
+	return file_edgepb_bff_edge_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ReportRelayUsageResponse) GetPublished() int32 {
@@ -842,7 +1033,7 @@ type RegisterRelayRequest struct {
 
 func (x *RegisterRelayRequest) Reset() {
 	*x = RegisterRelayRequest{}
-	mi := &file_edgepb_bff_edge_proto_msgTypes[15]
+	mi := &file_edgepb_bff_edge_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -854,7 +1045,7 @@ func (x *RegisterRelayRequest) String() string {
 func (*RegisterRelayRequest) ProtoMessage() {}
 
 func (x *RegisterRelayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_bff_edge_proto_msgTypes[15]
+	mi := &file_edgepb_bff_edge_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -867,7 +1058,7 @@ func (x *RegisterRelayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterRelayRequest.ProtoReflect.Descriptor instead.
 func (*RegisterRelayRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_bff_edge_proto_rawDescGZIP(), []int{15}
+	return file_edgepb_bff_edge_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *RegisterRelayRequest) GetLabel() string {
@@ -908,7 +1099,7 @@ type RegisterRelayResponse struct {
 
 func (x *RegisterRelayResponse) Reset() {
 	*x = RegisterRelayResponse{}
-	mi := &file_edgepb_bff_edge_proto_msgTypes[16]
+	mi := &file_edgepb_bff_edge_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -920,7 +1111,7 @@ func (x *RegisterRelayResponse) String() string {
 func (*RegisterRelayResponse) ProtoMessage() {}
 
 func (x *RegisterRelayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_bff_edge_proto_msgTypes[16]
+	mi := &file_edgepb_bff_edge_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -933,7 +1124,7 @@ func (x *RegisterRelayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterRelayResponse.ProtoReflect.Descriptor instead.
 func (*RegisterRelayResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_bff_edge_proto_rawDescGZIP(), []int{16}
+	return file_edgepb_bff_edge_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *RegisterRelayResponse) GetRegion() string {
@@ -981,6 +1172,20 @@ const file_edgepb_bff_edge_proto_rawDesc = "" +
 	"edgeNodeId\x129\n" +
 	"\areports\x18\x02 \x03(\v2\x1f.calabi.v1.bff_edge.UsageReportR\areports\"3\n" +
 	"\x13ReportUsageResponse\x12\x1c\n" +
+	"\tpublished\x18\x01 \x01(\x05R\tpublished\"\xa8\x01\n" +
+	"\x0fAccessRecordRow\x12\x15\n" +
+	"\x06org_id\x18\x01 \x01(\x03R\x05orgId\x12\x1b\n" +
+	"\ttunnel_id\x18\x02 \x01(\x03R\btunnelId\x12\x1d\n" +
+	"\n" +
+	"visitor_ip\x18\x03 \x01(\tR\tvisitorIp\x12\x18\n" +
+	"\aoutcome\x18\x04 \x01(\tR\aoutcome\x12\x12\n" +
+	"\x04hour\x18\x05 \x01(\x03R\x04hour\x12\x14\n" +
+	"\x05conns\x18\x06 \x01(\x03R\x05conns\"p\n" +
+	"\x13ReportAccessRequest\x12 \n" +
+	"\fedge_node_id\x18\x01 \x01(\x03R\n" +
+	"edgeNodeId\x127\n" +
+	"\x04rows\x18\x02 \x03(\v2#.calabi.v1.bff_edge.AccessRecordRowR\x04rows\"4\n" +
+	"\x14ReportAccessResponse\x12\x1c\n" +
 	"\tpublished\x18\x01 \x01(\x05R\tpublished\"\xbd\x01\n" +
 	"\x10RelayUsageReport\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\x03R\x05orgId\x12\x16\n" +
@@ -998,7 +1203,7 @@ const file_edgepb_bff_edge_proto_rawDesc = "" +
 	"\tderp_port\x18\x03 \x01(\x05R\bderpPort\x12\x1b\n" +
 	"\tstun_port\x18\x04 \x01(\x05R\bstunPort\"/\n" +
 	"\x15RegisterRelayResponse\x12\x16\n" +
-	"\x06region\x18\x01 \x01(\tR\x06region2\xaf\x15\n" +
+	"\x06region\x18\x01 \x01(\tR\x06region2\x8d\x17\n" +
 	"\aBFFEdge\x12d\n" +
 	"\rValidateToken\x12(.calabi.v1.bff_edge.ValidateTokenRequest\x1a).calabi.v1.bff_edge.ValidateTokenResponse\x12m\n" +
 	"\x10RegisterEdgeNode\x12+.calabi.v1.bff_edge.RegisterEdgeNodeRequest\x1a,.calabi.v1.bff_edge.RegisterEdgeNodeResponse\x12y\n" +
@@ -1007,7 +1212,8 @@ const file_edgepb_bff_edge_proto_rawDesc = "" +
 	"\tListEdges\x12$.calabi.v1.bff_edge.ListEdgesRequest\x1a%.calabi.v1.bff_edge.ListEdgesResponse\x12S\n" +
 	"\fCreateTunnel\x12'.calabi.v1.bff_edge.CreateTunnelRequest\x1a\x1a.calabi.v1.bff_edge.Tunnel\x12Q\n" +
 	"\vClaimTunnel\x12&.calabi.v1.bff_edge.ClaimTunnelRequest\x1a\x1a.calabi.v1.bff_edge.Tunnel\x12a\n" +
-	"\fReportStatus\x12'.calabi.v1.bff_edge.ReportStatusRequest\x1a(.calabi.v1.bff_edge.ReportStatusResponse\x12^\n" +
+	"\fReportStatus\x12'.calabi.v1.bff_edge.ReportStatusRequest\x1a(.calabi.v1.bff_edge.ReportStatusResponse\x12y\n" +
+	"\x14GetTunnelOAuthSecret\x12/.calabi.v1.bff_edge.GetTunnelOAuthSecretRequest\x1a0.calabi.v1.bff_edge.GetTunnelOAuthSecretResponse\x12^\n" +
 	"\vListTunnels\x12&.calabi.v1.bff_edge.ListTunnelsRequest\x1a'.calabi.v1.bff_edge.ListTunnelsResponse\x12y\n" +
 	"\x14ListEdgeClaimedPorts\x12/.calabi.v1.bff_edge.ListEdgeClaimedPortsRequest\x1a0.calabi.v1.bff_edge.ListEdgeClaimedPortsResponse\x12a\n" +
 	"\fDeleteTunnel\x12'.calabi.v1.bff_edge.DeleteTunnelRequest\x1a(.calabi.v1.bff_edge.DeleteTunnelResponse\x12R\n" +
@@ -1025,7 +1231,8 @@ const file_edgepb_bff_edge_proto_rawDesc = "" +
 	"\x1bSubscribeSessionEvictEvents\x126.calabi.v1.bff_edge.SubscribeSessionEvictEventsRequest\x1a%.calabi.v1.bff_edge.SessionEvictEvent0\x01\x12i\n" +
 	"\x14SubscribeUsageEvents\x12/.calabi.v1.bff_edge.SubscribeUsageEventsRequest\x1a\x1e.calabi.v1.bff_edge.UsageEvent0\x01\x12^\n" +
 	"\vReportUsage\x12&.calabi.v1.bff_edge.ReportUsageRequest\x1a'.calabi.v1.bff_edge.ReportUsageResponse\x12m\n" +
-	"\x10ReportRelayUsage\x12+.calabi.v1.bff_edge.ReportRelayUsageRequest\x1a,.calabi.v1.bff_edge.ReportRelayUsageResponse\x12d\n" +
+	"\x10ReportRelayUsage\x12+.calabi.v1.bff_edge.ReportRelayUsageRequest\x1a,.calabi.v1.bff_edge.ReportRelayUsageResponse\x12a\n" +
+	"\fReportAccess\x12'.calabi.v1.bff_edge.ReportAccessRequest\x1a(.calabi.v1.bff_edge.ReportAccessResponse\x12d\n" +
 	"\rRegisterRelay\x12(.calabi.v1.bff_edge.RegisterRelayRequest\x1a).calabi.v1.bff_edge.RegisterRelayResponseB7Z5github.com/calabi/calabi/pkg/edge-proto/edgepb;edgepbb\x06proto3"
 
 var (
@@ -1040,7 +1247,7 @@ func file_edgepb_bff_edge_proto_rawDescGZIP() []byte {
 	return file_edgepb_bff_edge_proto_rawDescData
 }
 
-var file_edgepb_bff_edge_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_edgepb_bff_edge_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_edgepb_bff_edge_proto_goTypes = []any{
 	(*RenewEdgeCertRequest)(nil),               // 0: calabi.v1.bff_edge.RenewEdgeCertRequest
 	(*SubscribeCertEventsRequest)(nil),         // 1: calabi.v1.bff_edge.SubscribeCertEventsRequest
@@ -1054,115 +1261,125 @@ var file_edgepb_bff_edge_proto_goTypes = []any{
 	(*UsageReport)(nil),                        // 9: calabi.v1.bff_edge.UsageReport
 	(*ReportUsageRequest)(nil),                 // 10: calabi.v1.bff_edge.ReportUsageRequest
 	(*ReportUsageResponse)(nil),                // 11: calabi.v1.bff_edge.ReportUsageResponse
-	(*RelayUsageReport)(nil),                   // 12: calabi.v1.bff_edge.RelayUsageReport
-	(*ReportRelayUsageRequest)(nil),            // 13: calabi.v1.bff_edge.ReportRelayUsageRequest
-	(*ReportRelayUsageResponse)(nil),           // 14: calabi.v1.bff_edge.ReportRelayUsageResponse
-	(*RegisterRelayRequest)(nil),               // 15: calabi.v1.bff_edge.RegisterRelayRequest
-	(*RegisterRelayResponse)(nil),              // 16: calabi.v1.bff_edge.RegisterRelayResponse
-	(*timestamppb.Timestamp)(nil),              // 17: google.protobuf.Timestamp
-	(*ValidateTokenRequest)(nil),               // 18: calabi.v1.bff_edge.ValidateTokenRequest
-	(*RegisterEdgeNodeRequest)(nil),            // 19: calabi.v1.bff_edge.RegisterEdgeNodeRequest
-	(*ReportClientPresenceRequest)(nil),        // 20: calabi.v1.bff_edge.ReportClientPresenceRequest
-	(*GetOrgOnlineCountRequest)(nil),           // 21: calabi.v1.bff_edge.GetOrgOnlineCountRequest
-	(*ListEdgesRequest)(nil),                   // 22: calabi.v1.bff_edge.ListEdgesRequest
-	(*CreateTunnelRequest)(nil),                // 23: calabi.v1.bff_edge.CreateTunnelRequest
-	(*ClaimTunnelRequest)(nil),                 // 24: calabi.v1.bff_edge.ClaimTunnelRequest
-	(*ReportStatusRequest)(nil),                // 25: calabi.v1.bff_edge.ReportStatusRequest
-	(*ListTunnelsRequest)(nil),                 // 26: calabi.v1.bff_edge.ListTunnelsRequest
-	(*ListEdgeClaimedPortsRequest)(nil),        // 27: calabi.v1.bff_edge.ListEdgeClaimedPortsRequest
-	(*DeleteTunnelRequest)(nil),                // 28: calabi.v1.bff_edge.DeleteTunnelRequest
-	(*ResolveRequest)(nil),                     // 29: calabi.v1.bff_edge.ResolveRequest
-	(*ResolveOwnersRequest)(nil),               // 30: calabi.v1.bff_edge.ResolveOwnersRequest
-	(*ReclaimTunnelRequest)(nil),               // 31: calabi.v1.bff_edge.ReclaimTunnelRequest
-	(*DrainEdgeRequest)(nil),                   // 32: calabi.v1.bff_edge.DrainEdgeRequest
-	(*GetCertRequest)(nil),                     // 33: calabi.v1.bff_edge.GetCertRequest
-	(*ListCertsRequest)(nil),                   // 34: calabi.v1.bff_edge.ListCertsRequest
-	(*GetEffectiveRequest)(nil),                // 35: calabi.v1.bff_edge.GetEffectiveRequest
-	(*EdgeMessage)(nil),                        // 36: calabi.v1.bff_edge.EdgeMessage
-	(*ValidateTokenResponse)(nil),              // 37: calabi.v1.bff_edge.ValidateTokenResponse
-	(*RegisterEdgeNodeResponse)(nil),           // 38: calabi.v1.bff_edge.RegisterEdgeNodeResponse
-	(*ReportClientPresenceResponse)(nil),       // 39: calabi.v1.bff_edge.ReportClientPresenceResponse
-	(*GetOrgOnlineCountResponse)(nil),          // 40: calabi.v1.bff_edge.GetOrgOnlineCountResponse
-	(*ListEdgesResponse)(nil),                  // 41: calabi.v1.bff_edge.ListEdgesResponse
-	(*Tunnel)(nil),                             // 42: calabi.v1.bff_edge.Tunnel
-	(*ReportStatusResponse)(nil),               // 43: calabi.v1.bff_edge.ReportStatusResponse
-	(*ListTunnelsResponse)(nil),                // 44: calabi.v1.bff_edge.ListTunnelsResponse
-	(*ListEdgeClaimedPortsResponse)(nil),       // 45: calabi.v1.bff_edge.ListEdgeClaimedPortsResponse
-	(*DeleteTunnelResponse)(nil),               // 46: calabi.v1.bff_edge.DeleteTunnelResponse
-	(*ResolveResponse)(nil),                    // 47: calabi.v1.bff_edge.ResolveResponse
-	(*ResolveOwnersResponse)(nil),              // 48: calabi.v1.bff_edge.ResolveOwnersResponse
-	(*ReclaimTunnelResponse)(nil),              // 49: calabi.v1.bff_edge.ReclaimTunnelResponse
-	(*DrainEdgeResponse)(nil),                  // 50: calabi.v1.bff_edge.DrainEdgeResponse
-	(*GetCertResponse)(nil),                    // 51: calabi.v1.bff_edge.GetCertResponse
-	(*ListCertsResponse)(nil),                  // 52: calabi.v1.bff_edge.ListCertsResponse
-	(*IssueEdgeCertResponse)(nil),              // 53: calabi.v1.bff_edge.IssueEdgeCertResponse
-	(*EffectiveQuota)(nil),                     // 54: calabi.v1.bff_edge.EffectiveQuota
-	(*ConfigMessage)(nil),                      // 55: calabi.v1.bff_edge.ConfigMessage
+	(*AccessRecordRow)(nil),                    // 12: calabi.v1.bff_edge.AccessRecordRow
+	(*ReportAccessRequest)(nil),                // 13: calabi.v1.bff_edge.ReportAccessRequest
+	(*ReportAccessResponse)(nil),               // 14: calabi.v1.bff_edge.ReportAccessResponse
+	(*RelayUsageReport)(nil),                   // 15: calabi.v1.bff_edge.RelayUsageReport
+	(*ReportRelayUsageRequest)(nil),            // 16: calabi.v1.bff_edge.ReportRelayUsageRequest
+	(*ReportRelayUsageResponse)(nil),           // 17: calabi.v1.bff_edge.ReportRelayUsageResponse
+	(*RegisterRelayRequest)(nil),               // 18: calabi.v1.bff_edge.RegisterRelayRequest
+	(*RegisterRelayResponse)(nil),              // 19: calabi.v1.bff_edge.RegisterRelayResponse
+	(*timestamppb.Timestamp)(nil),              // 20: google.protobuf.Timestamp
+	(*ValidateTokenRequest)(nil),               // 21: calabi.v1.bff_edge.ValidateTokenRequest
+	(*RegisterEdgeNodeRequest)(nil),            // 22: calabi.v1.bff_edge.RegisterEdgeNodeRequest
+	(*ReportClientPresenceRequest)(nil),        // 23: calabi.v1.bff_edge.ReportClientPresenceRequest
+	(*GetOrgOnlineCountRequest)(nil),           // 24: calabi.v1.bff_edge.GetOrgOnlineCountRequest
+	(*ListEdgesRequest)(nil),                   // 25: calabi.v1.bff_edge.ListEdgesRequest
+	(*CreateTunnelRequest)(nil),                // 26: calabi.v1.bff_edge.CreateTunnelRequest
+	(*ClaimTunnelRequest)(nil),                 // 27: calabi.v1.bff_edge.ClaimTunnelRequest
+	(*ReportStatusRequest)(nil),                // 28: calabi.v1.bff_edge.ReportStatusRequest
+	(*GetTunnelOAuthSecretRequest)(nil),        // 29: calabi.v1.bff_edge.GetTunnelOAuthSecretRequest
+	(*ListTunnelsRequest)(nil),                 // 30: calabi.v1.bff_edge.ListTunnelsRequest
+	(*ListEdgeClaimedPortsRequest)(nil),        // 31: calabi.v1.bff_edge.ListEdgeClaimedPortsRequest
+	(*DeleteTunnelRequest)(nil),                // 32: calabi.v1.bff_edge.DeleteTunnelRequest
+	(*ResolveRequest)(nil),                     // 33: calabi.v1.bff_edge.ResolveRequest
+	(*ResolveOwnersRequest)(nil),               // 34: calabi.v1.bff_edge.ResolveOwnersRequest
+	(*ReclaimTunnelRequest)(nil),               // 35: calabi.v1.bff_edge.ReclaimTunnelRequest
+	(*DrainEdgeRequest)(nil),                   // 36: calabi.v1.bff_edge.DrainEdgeRequest
+	(*GetCertRequest)(nil),                     // 37: calabi.v1.bff_edge.GetCertRequest
+	(*ListCertsRequest)(nil),                   // 38: calabi.v1.bff_edge.ListCertsRequest
+	(*GetEffectiveRequest)(nil),                // 39: calabi.v1.bff_edge.GetEffectiveRequest
+	(*EdgeMessage)(nil),                        // 40: calabi.v1.bff_edge.EdgeMessage
+	(*ValidateTokenResponse)(nil),              // 41: calabi.v1.bff_edge.ValidateTokenResponse
+	(*RegisterEdgeNodeResponse)(nil),           // 42: calabi.v1.bff_edge.RegisterEdgeNodeResponse
+	(*ReportClientPresenceResponse)(nil),       // 43: calabi.v1.bff_edge.ReportClientPresenceResponse
+	(*GetOrgOnlineCountResponse)(nil),          // 44: calabi.v1.bff_edge.GetOrgOnlineCountResponse
+	(*ListEdgesResponse)(nil),                  // 45: calabi.v1.bff_edge.ListEdgesResponse
+	(*Tunnel)(nil),                             // 46: calabi.v1.bff_edge.Tunnel
+	(*ReportStatusResponse)(nil),               // 47: calabi.v1.bff_edge.ReportStatusResponse
+	(*GetTunnelOAuthSecretResponse)(nil),       // 48: calabi.v1.bff_edge.GetTunnelOAuthSecretResponse
+	(*ListTunnelsResponse)(nil),                // 49: calabi.v1.bff_edge.ListTunnelsResponse
+	(*ListEdgeClaimedPortsResponse)(nil),       // 50: calabi.v1.bff_edge.ListEdgeClaimedPortsResponse
+	(*DeleteTunnelResponse)(nil),               // 51: calabi.v1.bff_edge.DeleteTunnelResponse
+	(*ResolveResponse)(nil),                    // 52: calabi.v1.bff_edge.ResolveResponse
+	(*ResolveOwnersResponse)(nil),              // 53: calabi.v1.bff_edge.ResolveOwnersResponse
+	(*ReclaimTunnelResponse)(nil),              // 54: calabi.v1.bff_edge.ReclaimTunnelResponse
+	(*DrainEdgeResponse)(nil),                  // 55: calabi.v1.bff_edge.DrainEdgeResponse
+	(*GetCertResponse)(nil),                    // 56: calabi.v1.bff_edge.GetCertResponse
+	(*ListCertsResponse)(nil),                  // 57: calabi.v1.bff_edge.ListCertsResponse
+	(*IssueEdgeCertResponse)(nil),              // 58: calabi.v1.bff_edge.IssueEdgeCertResponse
+	(*EffectiveQuota)(nil),                     // 59: calabi.v1.bff_edge.EffectiveQuota
+	(*ConfigMessage)(nil),                      // 60: calabi.v1.bff_edge.ConfigMessage
 }
 var file_edgepb_bff_edge_proto_depIdxs = []int32{
-	17, // 0: calabi.v1.bff_edge.UsageReport.window_close_at:type_name -> google.protobuf.Timestamp
+	20, // 0: calabi.v1.bff_edge.UsageReport.window_close_at:type_name -> google.protobuf.Timestamp
 	9,  // 1: calabi.v1.bff_edge.ReportUsageRequest.reports:type_name -> calabi.v1.bff_edge.UsageReport
-	17, // 2: calabi.v1.bff_edge.RelayUsageReport.window_close_at:type_name -> google.protobuf.Timestamp
-	12, // 3: calabi.v1.bff_edge.ReportRelayUsageRequest.reports:type_name -> calabi.v1.bff_edge.RelayUsageReport
-	18, // 4: calabi.v1.bff_edge.BFFEdge.ValidateToken:input_type -> calabi.v1.bff_edge.ValidateTokenRequest
-	19, // 5: calabi.v1.bff_edge.BFFEdge.RegisterEdgeNode:input_type -> calabi.v1.bff_edge.RegisterEdgeNodeRequest
-	20, // 6: calabi.v1.bff_edge.BFFEdge.ReportClientPresence:input_type -> calabi.v1.bff_edge.ReportClientPresenceRequest
-	21, // 7: calabi.v1.bff_edge.BFFEdge.GetOrgOnlineCount:input_type -> calabi.v1.bff_edge.GetOrgOnlineCountRequest
-	22, // 8: calabi.v1.bff_edge.BFFEdge.ListEdges:input_type -> calabi.v1.bff_edge.ListEdgesRequest
-	23, // 9: calabi.v1.bff_edge.BFFEdge.CreateTunnel:input_type -> calabi.v1.bff_edge.CreateTunnelRequest
-	24, // 10: calabi.v1.bff_edge.BFFEdge.ClaimTunnel:input_type -> calabi.v1.bff_edge.ClaimTunnelRequest
-	25, // 11: calabi.v1.bff_edge.BFFEdge.ReportStatus:input_type -> calabi.v1.bff_edge.ReportStatusRequest
-	26, // 12: calabi.v1.bff_edge.BFFEdge.ListTunnels:input_type -> calabi.v1.bff_edge.ListTunnelsRequest
-	27, // 13: calabi.v1.bff_edge.BFFEdge.ListEdgeClaimedPorts:input_type -> calabi.v1.bff_edge.ListEdgeClaimedPortsRequest
-	28, // 14: calabi.v1.bff_edge.BFFEdge.DeleteTunnel:input_type -> calabi.v1.bff_edge.DeleteTunnelRequest
-	29, // 15: calabi.v1.bff_edge.BFFEdge.Resolve:input_type -> calabi.v1.bff_edge.ResolveRequest
-	30, // 16: calabi.v1.bff_edge.BFFEdge.ResolveOwners:input_type -> calabi.v1.bff_edge.ResolveOwnersRequest
-	31, // 17: calabi.v1.bff_edge.BFFEdge.ReclaimTunnel:input_type -> calabi.v1.bff_edge.ReclaimTunnelRequest
-	32, // 18: calabi.v1.bff_edge.BFFEdge.DrainEdge:input_type -> calabi.v1.bff_edge.DrainEdgeRequest
-	33, // 19: calabi.v1.bff_edge.BFFEdge.GetCert:input_type -> calabi.v1.bff_edge.GetCertRequest
-	34, // 20: calabi.v1.bff_edge.BFFEdge.ListCerts:input_type -> calabi.v1.bff_edge.ListCertsRequest
-	0,  // 21: calabi.v1.bff_edge.BFFEdge.RenewEdgeCert:input_type -> calabi.v1.bff_edge.RenewEdgeCertRequest
-	35, // 22: calabi.v1.bff_edge.BFFEdge.GetEffectiveQuota:input_type -> calabi.v1.bff_edge.GetEffectiveRequest
-	36, // 23: calabi.v1.bff_edge.BFFEdge.SubscribeConfig:input_type -> calabi.v1.bff_edge.EdgeMessage
-	1,  // 24: calabi.v1.bff_edge.BFFEdge.SubscribeCertEvents:input_type -> calabi.v1.bff_edge.SubscribeCertEventsRequest
-	3,  // 25: calabi.v1.bff_edge.BFFEdge.SubscribeTunnelEvents:input_type -> calabi.v1.bff_edge.SubscribeTunnelEventsRequest
-	5,  // 26: calabi.v1.bff_edge.BFFEdge.SubscribeSessionEvictEvents:input_type -> calabi.v1.bff_edge.SubscribeSessionEvictEventsRequest
-	7,  // 27: calabi.v1.bff_edge.BFFEdge.SubscribeUsageEvents:input_type -> calabi.v1.bff_edge.SubscribeUsageEventsRequest
-	10, // 28: calabi.v1.bff_edge.BFFEdge.ReportUsage:input_type -> calabi.v1.bff_edge.ReportUsageRequest
-	13, // 29: calabi.v1.bff_edge.BFFEdge.ReportRelayUsage:input_type -> calabi.v1.bff_edge.ReportRelayUsageRequest
-	15, // 30: calabi.v1.bff_edge.BFFEdge.RegisterRelay:input_type -> calabi.v1.bff_edge.RegisterRelayRequest
-	37, // 31: calabi.v1.bff_edge.BFFEdge.ValidateToken:output_type -> calabi.v1.bff_edge.ValidateTokenResponse
-	38, // 32: calabi.v1.bff_edge.BFFEdge.RegisterEdgeNode:output_type -> calabi.v1.bff_edge.RegisterEdgeNodeResponse
-	39, // 33: calabi.v1.bff_edge.BFFEdge.ReportClientPresence:output_type -> calabi.v1.bff_edge.ReportClientPresenceResponse
-	40, // 34: calabi.v1.bff_edge.BFFEdge.GetOrgOnlineCount:output_type -> calabi.v1.bff_edge.GetOrgOnlineCountResponse
-	41, // 35: calabi.v1.bff_edge.BFFEdge.ListEdges:output_type -> calabi.v1.bff_edge.ListEdgesResponse
-	42, // 36: calabi.v1.bff_edge.BFFEdge.CreateTunnel:output_type -> calabi.v1.bff_edge.Tunnel
-	42, // 37: calabi.v1.bff_edge.BFFEdge.ClaimTunnel:output_type -> calabi.v1.bff_edge.Tunnel
-	43, // 38: calabi.v1.bff_edge.BFFEdge.ReportStatus:output_type -> calabi.v1.bff_edge.ReportStatusResponse
-	44, // 39: calabi.v1.bff_edge.BFFEdge.ListTunnels:output_type -> calabi.v1.bff_edge.ListTunnelsResponse
-	45, // 40: calabi.v1.bff_edge.BFFEdge.ListEdgeClaimedPorts:output_type -> calabi.v1.bff_edge.ListEdgeClaimedPortsResponse
-	46, // 41: calabi.v1.bff_edge.BFFEdge.DeleteTunnel:output_type -> calabi.v1.bff_edge.DeleteTunnelResponse
-	47, // 42: calabi.v1.bff_edge.BFFEdge.Resolve:output_type -> calabi.v1.bff_edge.ResolveResponse
-	48, // 43: calabi.v1.bff_edge.BFFEdge.ResolveOwners:output_type -> calabi.v1.bff_edge.ResolveOwnersResponse
-	49, // 44: calabi.v1.bff_edge.BFFEdge.ReclaimTunnel:output_type -> calabi.v1.bff_edge.ReclaimTunnelResponse
-	50, // 45: calabi.v1.bff_edge.BFFEdge.DrainEdge:output_type -> calabi.v1.bff_edge.DrainEdgeResponse
-	51, // 46: calabi.v1.bff_edge.BFFEdge.GetCert:output_type -> calabi.v1.bff_edge.GetCertResponse
-	52, // 47: calabi.v1.bff_edge.BFFEdge.ListCerts:output_type -> calabi.v1.bff_edge.ListCertsResponse
-	53, // 48: calabi.v1.bff_edge.BFFEdge.RenewEdgeCert:output_type -> calabi.v1.bff_edge.IssueEdgeCertResponse
-	54, // 49: calabi.v1.bff_edge.BFFEdge.GetEffectiveQuota:output_type -> calabi.v1.bff_edge.EffectiveQuota
-	55, // 50: calabi.v1.bff_edge.BFFEdge.SubscribeConfig:output_type -> calabi.v1.bff_edge.ConfigMessage
-	2,  // 51: calabi.v1.bff_edge.BFFEdge.SubscribeCertEvents:output_type -> calabi.v1.bff_edge.CertEvent
-	4,  // 52: calabi.v1.bff_edge.BFFEdge.SubscribeTunnelEvents:output_type -> calabi.v1.bff_edge.TunnelEvent
-	6,  // 53: calabi.v1.bff_edge.BFFEdge.SubscribeSessionEvictEvents:output_type -> calabi.v1.bff_edge.SessionEvictEvent
-	8,  // 54: calabi.v1.bff_edge.BFFEdge.SubscribeUsageEvents:output_type -> calabi.v1.bff_edge.UsageEvent
-	11, // 55: calabi.v1.bff_edge.BFFEdge.ReportUsage:output_type -> calabi.v1.bff_edge.ReportUsageResponse
-	14, // 56: calabi.v1.bff_edge.BFFEdge.ReportRelayUsage:output_type -> calabi.v1.bff_edge.ReportRelayUsageResponse
-	16, // 57: calabi.v1.bff_edge.BFFEdge.RegisterRelay:output_type -> calabi.v1.bff_edge.RegisterRelayResponse
-	31, // [31:58] is the sub-list for method output_type
-	4,  // [4:31] is the sub-list for method input_type
-	4,  // [4:4] is the sub-list for extension type_name
-	4,  // [4:4] is the sub-list for extension extendee
-	0,  // [0:4] is the sub-list for field type_name
+	12, // 2: calabi.v1.bff_edge.ReportAccessRequest.rows:type_name -> calabi.v1.bff_edge.AccessRecordRow
+	20, // 3: calabi.v1.bff_edge.RelayUsageReport.window_close_at:type_name -> google.protobuf.Timestamp
+	15, // 4: calabi.v1.bff_edge.ReportRelayUsageRequest.reports:type_name -> calabi.v1.bff_edge.RelayUsageReport
+	21, // 5: calabi.v1.bff_edge.BFFEdge.ValidateToken:input_type -> calabi.v1.bff_edge.ValidateTokenRequest
+	22, // 6: calabi.v1.bff_edge.BFFEdge.RegisterEdgeNode:input_type -> calabi.v1.bff_edge.RegisterEdgeNodeRequest
+	23, // 7: calabi.v1.bff_edge.BFFEdge.ReportClientPresence:input_type -> calabi.v1.bff_edge.ReportClientPresenceRequest
+	24, // 8: calabi.v1.bff_edge.BFFEdge.GetOrgOnlineCount:input_type -> calabi.v1.bff_edge.GetOrgOnlineCountRequest
+	25, // 9: calabi.v1.bff_edge.BFFEdge.ListEdges:input_type -> calabi.v1.bff_edge.ListEdgesRequest
+	26, // 10: calabi.v1.bff_edge.BFFEdge.CreateTunnel:input_type -> calabi.v1.bff_edge.CreateTunnelRequest
+	27, // 11: calabi.v1.bff_edge.BFFEdge.ClaimTunnel:input_type -> calabi.v1.bff_edge.ClaimTunnelRequest
+	28, // 12: calabi.v1.bff_edge.BFFEdge.ReportStatus:input_type -> calabi.v1.bff_edge.ReportStatusRequest
+	29, // 13: calabi.v1.bff_edge.BFFEdge.GetTunnelOAuthSecret:input_type -> calabi.v1.bff_edge.GetTunnelOAuthSecretRequest
+	30, // 14: calabi.v1.bff_edge.BFFEdge.ListTunnels:input_type -> calabi.v1.bff_edge.ListTunnelsRequest
+	31, // 15: calabi.v1.bff_edge.BFFEdge.ListEdgeClaimedPorts:input_type -> calabi.v1.bff_edge.ListEdgeClaimedPortsRequest
+	32, // 16: calabi.v1.bff_edge.BFFEdge.DeleteTunnel:input_type -> calabi.v1.bff_edge.DeleteTunnelRequest
+	33, // 17: calabi.v1.bff_edge.BFFEdge.Resolve:input_type -> calabi.v1.bff_edge.ResolveRequest
+	34, // 18: calabi.v1.bff_edge.BFFEdge.ResolveOwners:input_type -> calabi.v1.bff_edge.ResolveOwnersRequest
+	35, // 19: calabi.v1.bff_edge.BFFEdge.ReclaimTunnel:input_type -> calabi.v1.bff_edge.ReclaimTunnelRequest
+	36, // 20: calabi.v1.bff_edge.BFFEdge.DrainEdge:input_type -> calabi.v1.bff_edge.DrainEdgeRequest
+	37, // 21: calabi.v1.bff_edge.BFFEdge.GetCert:input_type -> calabi.v1.bff_edge.GetCertRequest
+	38, // 22: calabi.v1.bff_edge.BFFEdge.ListCerts:input_type -> calabi.v1.bff_edge.ListCertsRequest
+	0,  // 23: calabi.v1.bff_edge.BFFEdge.RenewEdgeCert:input_type -> calabi.v1.bff_edge.RenewEdgeCertRequest
+	39, // 24: calabi.v1.bff_edge.BFFEdge.GetEffectiveQuota:input_type -> calabi.v1.bff_edge.GetEffectiveRequest
+	40, // 25: calabi.v1.bff_edge.BFFEdge.SubscribeConfig:input_type -> calabi.v1.bff_edge.EdgeMessage
+	1,  // 26: calabi.v1.bff_edge.BFFEdge.SubscribeCertEvents:input_type -> calabi.v1.bff_edge.SubscribeCertEventsRequest
+	3,  // 27: calabi.v1.bff_edge.BFFEdge.SubscribeTunnelEvents:input_type -> calabi.v1.bff_edge.SubscribeTunnelEventsRequest
+	5,  // 28: calabi.v1.bff_edge.BFFEdge.SubscribeSessionEvictEvents:input_type -> calabi.v1.bff_edge.SubscribeSessionEvictEventsRequest
+	7,  // 29: calabi.v1.bff_edge.BFFEdge.SubscribeUsageEvents:input_type -> calabi.v1.bff_edge.SubscribeUsageEventsRequest
+	10, // 30: calabi.v1.bff_edge.BFFEdge.ReportUsage:input_type -> calabi.v1.bff_edge.ReportUsageRequest
+	16, // 31: calabi.v1.bff_edge.BFFEdge.ReportRelayUsage:input_type -> calabi.v1.bff_edge.ReportRelayUsageRequest
+	13, // 32: calabi.v1.bff_edge.BFFEdge.ReportAccess:input_type -> calabi.v1.bff_edge.ReportAccessRequest
+	18, // 33: calabi.v1.bff_edge.BFFEdge.RegisterRelay:input_type -> calabi.v1.bff_edge.RegisterRelayRequest
+	41, // 34: calabi.v1.bff_edge.BFFEdge.ValidateToken:output_type -> calabi.v1.bff_edge.ValidateTokenResponse
+	42, // 35: calabi.v1.bff_edge.BFFEdge.RegisterEdgeNode:output_type -> calabi.v1.bff_edge.RegisterEdgeNodeResponse
+	43, // 36: calabi.v1.bff_edge.BFFEdge.ReportClientPresence:output_type -> calabi.v1.bff_edge.ReportClientPresenceResponse
+	44, // 37: calabi.v1.bff_edge.BFFEdge.GetOrgOnlineCount:output_type -> calabi.v1.bff_edge.GetOrgOnlineCountResponse
+	45, // 38: calabi.v1.bff_edge.BFFEdge.ListEdges:output_type -> calabi.v1.bff_edge.ListEdgesResponse
+	46, // 39: calabi.v1.bff_edge.BFFEdge.CreateTunnel:output_type -> calabi.v1.bff_edge.Tunnel
+	46, // 40: calabi.v1.bff_edge.BFFEdge.ClaimTunnel:output_type -> calabi.v1.bff_edge.Tunnel
+	47, // 41: calabi.v1.bff_edge.BFFEdge.ReportStatus:output_type -> calabi.v1.bff_edge.ReportStatusResponse
+	48, // 42: calabi.v1.bff_edge.BFFEdge.GetTunnelOAuthSecret:output_type -> calabi.v1.bff_edge.GetTunnelOAuthSecretResponse
+	49, // 43: calabi.v1.bff_edge.BFFEdge.ListTunnels:output_type -> calabi.v1.bff_edge.ListTunnelsResponse
+	50, // 44: calabi.v1.bff_edge.BFFEdge.ListEdgeClaimedPorts:output_type -> calabi.v1.bff_edge.ListEdgeClaimedPortsResponse
+	51, // 45: calabi.v1.bff_edge.BFFEdge.DeleteTunnel:output_type -> calabi.v1.bff_edge.DeleteTunnelResponse
+	52, // 46: calabi.v1.bff_edge.BFFEdge.Resolve:output_type -> calabi.v1.bff_edge.ResolveResponse
+	53, // 47: calabi.v1.bff_edge.BFFEdge.ResolveOwners:output_type -> calabi.v1.bff_edge.ResolveOwnersResponse
+	54, // 48: calabi.v1.bff_edge.BFFEdge.ReclaimTunnel:output_type -> calabi.v1.bff_edge.ReclaimTunnelResponse
+	55, // 49: calabi.v1.bff_edge.BFFEdge.DrainEdge:output_type -> calabi.v1.bff_edge.DrainEdgeResponse
+	56, // 50: calabi.v1.bff_edge.BFFEdge.GetCert:output_type -> calabi.v1.bff_edge.GetCertResponse
+	57, // 51: calabi.v1.bff_edge.BFFEdge.ListCerts:output_type -> calabi.v1.bff_edge.ListCertsResponse
+	58, // 52: calabi.v1.bff_edge.BFFEdge.RenewEdgeCert:output_type -> calabi.v1.bff_edge.IssueEdgeCertResponse
+	59, // 53: calabi.v1.bff_edge.BFFEdge.GetEffectiveQuota:output_type -> calabi.v1.bff_edge.EffectiveQuota
+	60, // 54: calabi.v1.bff_edge.BFFEdge.SubscribeConfig:output_type -> calabi.v1.bff_edge.ConfigMessage
+	2,  // 55: calabi.v1.bff_edge.BFFEdge.SubscribeCertEvents:output_type -> calabi.v1.bff_edge.CertEvent
+	4,  // 56: calabi.v1.bff_edge.BFFEdge.SubscribeTunnelEvents:output_type -> calabi.v1.bff_edge.TunnelEvent
+	6,  // 57: calabi.v1.bff_edge.BFFEdge.SubscribeSessionEvictEvents:output_type -> calabi.v1.bff_edge.SessionEvictEvent
+	8,  // 58: calabi.v1.bff_edge.BFFEdge.SubscribeUsageEvents:output_type -> calabi.v1.bff_edge.UsageEvent
+	11, // 59: calabi.v1.bff_edge.BFFEdge.ReportUsage:output_type -> calabi.v1.bff_edge.ReportUsageResponse
+	17, // 60: calabi.v1.bff_edge.BFFEdge.ReportRelayUsage:output_type -> calabi.v1.bff_edge.ReportRelayUsageResponse
+	14, // 61: calabi.v1.bff_edge.BFFEdge.ReportAccess:output_type -> calabi.v1.bff_edge.ReportAccessResponse
+	19, // 62: calabi.v1.bff_edge.BFFEdge.RegisterRelay:output_type -> calabi.v1.bff_edge.RegisterRelayResponse
+	34, // [34:63] is the sub-list for method output_type
+	5,  // [5:34] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_edgepb_bff_edge_proto_init() }
@@ -1177,7 +1394,7 @@ func file_edgepb_bff_edge_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_edgepb_bff_edge_proto_rawDesc), len(file_edgepb_bff_edge_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

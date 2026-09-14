@@ -23,87 +23,87 @@ type MeshSettingUpdate struct {
 }
 
 // Where appends a list predicates to the MeshSettingUpdate builder.
-func (_u *MeshSettingUpdate) Where(ps ...predicate.MeshSetting) *MeshSettingUpdate {
-	_u.mutation.Where(ps...)
-	return _u
+func (msu *MeshSettingUpdate) Where(ps ...predicate.MeshSetting) *MeshSettingUpdate {
+	msu.mutation.Where(ps...)
+	return msu
 }
 
 // SetMeshnetID sets the "meshnet_id" field.
-func (_u *MeshSettingUpdate) SetMeshnetID(v int64) *MeshSettingUpdate {
-	_u.mutation.ResetMeshnetID()
-	_u.mutation.SetMeshnetID(v)
-	return _u
+func (msu *MeshSettingUpdate) SetMeshnetID(i int64) *MeshSettingUpdate {
+	msu.mutation.ResetMeshnetID()
+	msu.mutation.SetMeshnetID(i)
+	return msu
 }
 
 // SetNillableMeshnetID sets the "meshnet_id" field if the given value is not nil.
-func (_u *MeshSettingUpdate) SetNillableMeshnetID(v *int64) *MeshSettingUpdate {
-	if v != nil {
-		_u.SetMeshnetID(*v)
+func (msu *MeshSettingUpdate) SetNillableMeshnetID(i *int64) *MeshSettingUpdate {
+	if i != nil {
+		msu.SetMeshnetID(*i)
 	}
-	return _u
+	return msu
 }
 
-// AddMeshnetID adds value to the "meshnet_id" field.
-func (_u *MeshSettingUpdate) AddMeshnetID(v int64) *MeshSettingUpdate {
-	_u.mutation.AddMeshnetID(v)
-	return _u
+// AddMeshnetID adds i to the "meshnet_id" field.
+func (msu *MeshSettingUpdate) AddMeshnetID(i int64) *MeshSettingUpdate {
+	msu.mutation.AddMeshnetID(i)
+	return msu
 }
 
 // SetAliasAddrBudget sets the "alias_addr_budget" field.
-func (_u *MeshSettingUpdate) SetAliasAddrBudget(v int) *MeshSettingUpdate {
-	_u.mutation.ResetAliasAddrBudget()
-	_u.mutation.SetAliasAddrBudget(v)
-	return _u
+func (msu *MeshSettingUpdate) SetAliasAddrBudget(i int) *MeshSettingUpdate {
+	msu.mutation.ResetAliasAddrBudget()
+	msu.mutation.SetAliasAddrBudget(i)
+	return msu
 }
 
 // SetNillableAliasAddrBudget sets the "alias_addr_budget" field if the given value is not nil.
-func (_u *MeshSettingUpdate) SetNillableAliasAddrBudget(v *int) *MeshSettingUpdate {
-	if v != nil {
-		_u.SetAliasAddrBudget(*v)
+func (msu *MeshSettingUpdate) SetNillableAliasAddrBudget(i *int) *MeshSettingUpdate {
+	if i != nil {
+		msu.SetAliasAddrBudget(*i)
 	}
-	return _u
+	return msu
 }
 
-// AddAliasAddrBudget adds value to the "alias_addr_budget" field.
-func (_u *MeshSettingUpdate) AddAliasAddrBudget(v int) *MeshSettingUpdate {
-	_u.mutation.AddAliasAddrBudget(v)
-	return _u
+// AddAliasAddrBudget adds i to the "alias_addr_budget" field.
+func (msu *MeshSettingUpdate) AddAliasAddrBudget(i int) *MeshSettingUpdate {
+	msu.mutation.AddAliasAddrBudget(i)
+	return msu
 }
 
 // SetRequireDeviceApproval sets the "require_device_approval" field.
-func (_u *MeshSettingUpdate) SetRequireDeviceApproval(v bool) *MeshSettingUpdate {
-	_u.mutation.SetRequireDeviceApproval(v)
-	return _u
+func (msu *MeshSettingUpdate) SetRequireDeviceApproval(b bool) *MeshSettingUpdate {
+	msu.mutation.SetRequireDeviceApproval(b)
+	return msu
 }
 
 // SetNillableRequireDeviceApproval sets the "require_device_approval" field if the given value is not nil.
-func (_u *MeshSettingUpdate) SetNillableRequireDeviceApproval(v *bool) *MeshSettingUpdate {
-	if v != nil {
-		_u.SetRequireDeviceApproval(*v)
+func (msu *MeshSettingUpdate) SetNillableRequireDeviceApproval(b *bool) *MeshSettingUpdate {
+	if b != nil {
+		msu.SetRequireDeviceApproval(*b)
 	}
-	return _u
+	return msu
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (_u *MeshSettingUpdate) SetUpdatedAt(v time.Time) *MeshSettingUpdate {
-	_u.mutation.SetUpdatedAt(v)
-	return _u
+func (msu *MeshSettingUpdate) SetUpdatedAt(t time.Time) *MeshSettingUpdate {
+	msu.mutation.SetUpdatedAt(t)
+	return msu
 }
 
 // Mutation returns the MeshSettingMutation object of the builder.
-func (_u *MeshSettingUpdate) Mutation() *MeshSettingMutation {
-	return _u.mutation
+func (msu *MeshSettingUpdate) Mutation() *MeshSettingMutation {
+	return msu.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (_u *MeshSettingUpdate) Save(ctx context.Context) (int, error) {
-	_u.defaults()
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+func (msu *MeshSettingUpdate) Save(ctx context.Context) (int, error) {
+	msu.defaults()
+	return withHooks(ctx, msu.sqlSave, msu.mutation, msu.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_u *MeshSettingUpdate) SaveX(ctx context.Context) int {
-	affected, err := _u.Save(ctx)
+func (msu *MeshSettingUpdate) SaveX(ctx context.Context) int {
+	affected, err := msu.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -111,54 +111,54 @@ func (_u *MeshSettingUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (_u *MeshSettingUpdate) Exec(ctx context.Context) error {
-	_, err := _u.Save(ctx)
+func (msu *MeshSettingUpdate) Exec(ctx context.Context) error {
+	_, err := msu.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_u *MeshSettingUpdate) ExecX(ctx context.Context) {
-	if err := _u.Exec(ctx); err != nil {
+func (msu *MeshSettingUpdate) ExecX(ctx context.Context) {
+	if err := msu.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (_u *MeshSettingUpdate) defaults() {
-	if _, ok := _u.mutation.UpdatedAt(); !ok {
+func (msu *MeshSettingUpdate) defaults() {
+	if _, ok := msu.mutation.UpdatedAt(); !ok {
 		v := meshsetting.UpdateDefaultUpdatedAt()
-		_u.mutation.SetUpdatedAt(v)
+		msu.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (_u *MeshSettingUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+func (msu *MeshSettingUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(meshsetting.Table, meshsetting.Columns, sqlgraph.NewFieldSpec(meshsetting.FieldID, field.TypeInt))
-	if ps := _u.mutation.predicates; len(ps) > 0 {
+	if ps := msu.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := _u.mutation.MeshnetID(); ok {
+	if value, ok := msu.mutation.MeshnetID(); ok {
 		_spec.SetField(meshsetting.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.AddedMeshnetID(); ok {
+	if value, ok := msu.mutation.AddedMeshnetID(); ok {
 		_spec.AddField(meshsetting.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.AliasAddrBudget(); ok {
+	if value, ok := msu.mutation.AliasAddrBudget(); ok {
 		_spec.SetField(meshsetting.FieldAliasAddrBudget, field.TypeInt, value)
 	}
-	if value, ok := _u.mutation.AddedAliasAddrBudget(); ok {
+	if value, ok := msu.mutation.AddedAliasAddrBudget(); ok {
 		_spec.AddField(meshsetting.FieldAliasAddrBudget, field.TypeInt, value)
 	}
-	if value, ok := _u.mutation.RequireDeviceApproval(); ok {
+	if value, ok := msu.mutation.RequireDeviceApproval(); ok {
 		_spec.SetField(meshsetting.FieldRequireDeviceApproval, field.TypeBool, value)
 	}
-	if value, ok := _u.mutation.UpdatedAt(); ok {
+	if value, ok := msu.mutation.UpdatedAt(); ok {
 		_spec.SetField(meshsetting.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
+	if n, err = sqlgraph.UpdateNodes(ctx, msu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{meshsetting.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -166,8 +166,8 @@ func (_u *MeshSettingUpdate) sqlSave(ctx context.Context) (_node int, err error)
 		}
 		return 0, err
 	}
-	_u.mutation.done = true
-	return _node, nil
+	msu.mutation.done = true
+	return n, nil
 }
 
 // MeshSettingUpdateOne is the builder for updating a single MeshSetting entity.
@@ -179,94 +179,94 @@ type MeshSettingUpdateOne struct {
 }
 
 // SetMeshnetID sets the "meshnet_id" field.
-func (_u *MeshSettingUpdateOne) SetMeshnetID(v int64) *MeshSettingUpdateOne {
-	_u.mutation.ResetMeshnetID()
-	_u.mutation.SetMeshnetID(v)
-	return _u
+func (msuo *MeshSettingUpdateOne) SetMeshnetID(i int64) *MeshSettingUpdateOne {
+	msuo.mutation.ResetMeshnetID()
+	msuo.mutation.SetMeshnetID(i)
+	return msuo
 }
 
 // SetNillableMeshnetID sets the "meshnet_id" field if the given value is not nil.
-func (_u *MeshSettingUpdateOne) SetNillableMeshnetID(v *int64) *MeshSettingUpdateOne {
-	if v != nil {
-		_u.SetMeshnetID(*v)
+func (msuo *MeshSettingUpdateOne) SetNillableMeshnetID(i *int64) *MeshSettingUpdateOne {
+	if i != nil {
+		msuo.SetMeshnetID(*i)
 	}
-	return _u
+	return msuo
 }
 
-// AddMeshnetID adds value to the "meshnet_id" field.
-func (_u *MeshSettingUpdateOne) AddMeshnetID(v int64) *MeshSettingUpdateOne {
-	_u.mutation.AddMeshnetID(v)
-	return _u
+// AddMeshnetID adds i to the "meshnet_id" field.
+func (msuo *MeshSettingUpdateOne) AddMeshnetID(i int64) *MeshSettingUpdateOne {
+	msuo.mutation.AddMeshnetID(i)
+	return msuo
 }
 
 // SetAliasAddrBudget sets the "alias_addr_budget" field.
-func (_u *MeshSettingUpdateOne) SetAliasAddrBudget(v int) *MeshSettingUpdateOne {
-	_u.mutation.ResetAliasAddrBudget()
-	_u.mutation.SetAliasAddrBudget(v)
-	return _u
+func (msuo *MeshSettingUpdateOne) SetAliasAddrBudget(i int) *MeshSettingUpdateOne {
+	msuo.mutation.ResetAliasAddrBudget()
+	msuo.mutation.SetAliasAddrBudget(i)
+	return msuo
 }
 
 // SetNillableAliasAddrBudget sets the "alias_addr_budget" field if the given value is not nil.
-func (_u *MeshSettingUpdateOne) SetNillableAliasAddrBudget(v *int) *MeshSettingUpdateOne {
-	if v != nil {
-		_u.SetAliasAddrBudget(*v)
+func (msuo *MeshSettingUpdateOne) SetNillableAliasAddrBudget(i *int) *MeshSettingUpdateOne {
+	if i != nil {
+		msuo.SetAliasAddrBudget(*i)
 	}
-	return _u
+	return msuo
 }
 
-// AddAliasAddrBudget adds value to the "alias_addr_budget" field.
-func (_u *MeshSettingUpdateOne) AddAliasAddrBudget(v int) *MeshSettingUpdateOne {
-	_u.mutation.AddAliasAddrBudget(v)
-	return _u
+// AddAliasAddrBudget adds i to the "alias_addr_budget" field.
+func (msuo *MeshSettingUpdateOne) AddAliasAddrBudget(i int) *MeshSettingUpdateOne {
+	msuo.mutation.AddAliasAddrBudget(i)
+	return msuo
 }
 
 // SetRequireDeviceApproval sets the "require_device_approval" field.
-func (_u *MeshSettingUpdateOne) SetRequireDeviceApproval(v bool) *MeshSettingUpdateOne {
-	_u.mutation.SetRequireDeviceApproval(v)
-	return _u
+func (msuo *MeshSettingUpdateOne) SetRequireDeviceApproval(b bool) *MeshSettingUpdateOne {
+	msuo.mutation.SetRequireDeviceApproval(b)
+	return msuo
 }
 
 // SetNillableRequireDeviceApproval sets the "require_device_approval" field if the given value is not nil.
-func (_u *MeshSettingUpdateOne) SetNillableRequireDeviceApproval(v *bool) *MeshSettingUpdateOne {
-	if v != nil {
-		_u.SetRequireDeviceApproval(*v)
+func (msuo *MeshSettingUpdateOne) SetNillableRequireDeviceApproval(b *bool) *MeshSettingUpdateOne {
+	if b != nil {
+		msuo.SetRequireDeviceApproval(*b)
 	}
-	return _u
+	return msuo
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (_u *MeshSettingUpdateOne) SetUpdatedAt(v time.Time) *MeshSettingUpdateOne {
-	_u.mutation.SetUpdatedAt(v)
-	return _u
+func (msuo *MeshSettingUpdateOne) SetUpdatedAt(t time.Time) *MeshSettingUpdateOne {
+	msuo.mutation.SetUpdatedAt(t)
+	return msuo
 }
 
 // Mutation returns the MeshSettingMutation object of the builder.
-func (_u *MeshSettingUpdateOne) Mutation() *MeshSettingMutation {
-	return _u.mutation
+func (msuo *MeshSettingUpdateOne) Mutation() *MeshSettingMutation {
+	return msuo.mutation
 }
 
 // Where appends a list predicates to the MeshSettingUpdate builder.
-func (_u *MeshSettingUpdateOne) Where(ps ...predicate.MeshSetting) *MeshSettingUpdateOne {
-	_u.mutation.Where(ps...)
-	return _u
+func (msuo *MeshSettingUpdateOne) Where(ps ...predicate.MeshSetting) *MeshSettingUpdateOne {
+	msuo.mutation.Where(ps...)
+	return msuo
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (_u *MeshSettingUpdateOne) Select(field string, fields ...string) *MeshSettingUpdateOne {
-	_u.fields = append([]string{field}, fields...)
-	return _u
+func (msuo *MeshSettingUpdateOne) Select(field string, fields ...string) *MeshSettingUpdateOne {
+	msuo.fields = append([]string{field}, fields...)
+	return msuo
 }
 
 // Save executes the query and returns the updated MeshSetting entity.
-func (_u *MeshSettingUpdateOne) Save(ctx context.Context) (*MeshSetting, error) {
-	_u.defaults()
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+func (msuo *MeshSettingUpdateOne) Save(ctx context.Context) (*MeshSetting, error) {
+	msuo.defaults()
+	return withHooks(ctx, msuo.sqlSave, msuo.mutation, msuo.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_u *MeshSettingUpdateOne) SaveX(ctx context.Context) *MeshSetting {
-	node, err := _u.Save(ctx)
+func (msuo *MeshSettingUpdateOne) SaveX(ctx context.Context) *MeshSetting {
+	node, err := msuo.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -274,34 +274,34 @@ func (_u *MeshSettingUpdateOne) SaveX(ctx context.Context) *MeshSetting {
 }
 
 // Exec executes the query on the entity.
-func (_u *MeshSettingUpdateOne) Exec(ctx context.Context) error {
-	_, err := _u.Save(ctx)
+func (msuo *MeshSettingUpdateOne) Exec(ctx context.Context) error {
+	_, err := msuo.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_u *MeshSettingUpdateOne) ExecX(ctx context.Context) {
-	if err := _u.Exec(ctx); err != nil {
+func (msuo *MeshSettingUpdateOne) ExecX(ctx context.Context) {
+	if err := msuo.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (_u *MeshSettingUpdateOne) defaults() {
-	if _, ok := _u.mutation.UpdatedAt(); !ok {
+func (msuo *MeshSettingUpdateOne) defaults() {
+	if _, ok := msuo.mutation.UpdatedAt(); !ok {
 		v := meshsetting.UpdateDefaultUpdatedAt()
-		_u.mutation.SetUpdatedAt(v)
+		msuo.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (_u *MeshSettingUpdateOne) sqlSave(ctx context.Context) (_node *MeshSetting, err error) {
+func (msuo *MeshSettingUpdateOne) sqlSave(ctx context.Context) (_node *MeshSetting, err error) {
 	_spec := sqlgraph.NewUpdateSpec(meshsetting.Table, meshsetting.Columns, sqlgraph.NewFieldSpec(meshsetting.FieldID, field.TypeInt))
-	id, ok := _u.mutation.ID()
+	id, ok := msuo.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "MeshSetting.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := _u.fields; len(fields) > 0 {
+	if fields := msuo.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, meshsetting.FieldID)
 		for _, f := range fields {
@@ -313,35 +313,35 @@ func (_u *MeshSettingUpdateOne) sqlSave(ctx context.Context) (_node *MeshSetting
 			}
 		}
 	}
-	if ps := _u.mutation.predicates; len(ps) > 0 {
+	if ps := msuo.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := _u.mutation.MeshnetID(); ok {
+	if value, ok := msuo.mutation.MeshnetID(); ok {
 		_spec.SetField(meshsetting.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.AddedMeshnetID(); ok {
+	if value, ok := msuo.mutation.AddedMeshnetID(); ok {
 		_spec.AddField(meshsetting.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.AliasAddrBudget(); ok {
+	if value, ok := msuo.mutation.AliasAddrBudget(); ok {
 		_spec.SetField(meshsetting.FieldAliasAddrBudget, field.TypeInt, value)
 	}
-	if value, ok := _u.mutation.AddedAliasAddrBudget(); ok {
+	if value, ok := msuo.mutation.AddedAliasAddrBudget(); ok {
 		_spec.AddField(meshsetting.FieldAliasAddrBudget, field.TypeInt, value)
 	}
-	if value, ok := _u.mutation.RequireDeviceApproval(); ok {
+	if value, ok := msuo.mutation.RequireDeviceApproval(); ok {
 		_spec.SetField(meshsetting.FieldRequireDeviceApproval, field.TypeBool, value)
 	}
-	if value, ok := _u.mutation.UpdatedAt(); ok {
+	if value, ok := msuo.mutation.UpdatedAt(); ok {
 		_spec.SetField(meshsetting.FieldUpdatedAt, field.TypeTime, value)
 	}
-	_node = &MeshSetting{config: _u.config}
+	_node = &MeshSetting{config: msuo.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, msuo.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{meshsetting.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -349,6 +349,6 @@ func (_u *MeshSettingUpdateOne) sqlSave(ctx context.Context) (_node *MeshSetting
 		}
 		return nil, err
 	}
-	_u.mutation.done = true
+	msuo.mutation.done = true
 	return _node, nil
 }

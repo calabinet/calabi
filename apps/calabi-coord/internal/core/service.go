@@ -498,6 +498,22 @@ func (s *MemServiceStore) DeleteService(_ context.Context, id int64) error {
 // is what every meshnet runs on until an admin changes something.
 type MeshnetSettings struct {
 	RequireDeviceApproval bool `json:"require_device_approval"`
+	// ConnRecordsDisabled turns the data-plane audit trail OFF for this org.
+	//
+	// Phrased as "disabled" so the zero value keeps the platform behaviour: a
+	// meshnet that has never touched this setting records, like everything else
+	// that has never been configured.
+	//
+	// It exists because some customers are contractually required NOT to retain a
+	// record of who reached what. That is the customer's obligation to know, not
+	// something a platform can infer from their plan or their region — guessing
+	// either way is wrong in a way they pay for. So it is theirs to switch.
+	//
+	// Turning it on STOPS collecting and DELETES what is already stored for this
+	// meshnet. Anything else would leave "we keep no such records" false for up to
+	// the retention window, which is exactly the state the switch exists to
+	// prevent. The console says so before it saves.
+	ConnRecordsDisabled bool `json:"conn_records_disabled"`
 	// AliasAddrBudget caps how many ALIAS addresses this meshnet may hold —
 	// pool space, not routes: a /24 subnet costs 256 and a /16 costs 65536, so a
 	// big LAN is priced like one. 0 means DefaultAliasAddrBudget.

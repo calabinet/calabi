@@ -28,6 +28,22 @@ type PacketFilter struct {
 	mu      sync.RWMutex
 	enabled bool
 	rules   []FilterRule
+	// shields is this MACHINE'S OWN refusal, independent of the org's rules:
+	// "nobody may open a connection to me". It is the one access-control
+	// decision that belongs to the person at the keyboard rather than to an
+	// admin, and it is enforced here rather than at the coordinator on purpose:
+	//
+	//   - it must hold when the coordinator is unreachable or its netmap stale,
+	//   - it must hold in an org that has never written an ACL, where the
+	//     compiled filter is "allow everything",
+	//
+	// and neither is true of a rule the coordinator would have to send us.
+	//
+	// It does NOT block replies to conversations this machine STARTED — that
+	// check lives one level up, in filteredTUN.allowInbound, and runs before
+	// this. Outbound still works; only inbound CONNECTIONS are refused. Same
+	// meaning as Tailscale's "Block incoming connections".
+	shields bool
 }
 
 // SetRules replaces the rule set. enabled=false disables filtering entirely
@@ -43,11 +59,35 @@ func (f *PacketFilter) SetRules(enabled bool, rules []FilterRule) bool {
 	return changed
 }
 
-// Enabled reports whether filtering is active (for status/logging).
+// SetShields turns this machine's own "refuse all inbound connections" switch on
+// or off. Returns true when it changed, so the caller can log the transition.
+func (f *PacketFilter) SetShields(on bool) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	changed := f.shields != on
+	f.shields = on
+	return changed
+}
+
+// Shields reports the machine's own switch (for status/logging).
+func (f *PacketFilter) Shields() bool {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.shields
+}
+
+// Enabled reports whether ANY inbound filtering is active (for status/logging,
+// and for filteredTUN's fast path).
+//
+// Shields count. Missing that is the whole bug this method exists to avoid: the
+// common case is an org with no ACL, where the coordinator sends no filter and
+// enabled is false — and filteredTUN.Write skips the entire inspection path when
+// this returns false. A shields switch that only worked in orgs that happen to
+// have written access rules would be worse than none, because it would look on.
 func (f *PacketFilter) Enabled() bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	return f.enabled
+	return f.enabled || f.shields
 }
 
 // Allow decides one inbound IP packet. A packet it cannot parse is DROPPED when
@@ -68,8 +108,14 @@ func (f *PacketFilter) Allow(pkt []byte) bool {
 // established flows (filteredTUN) parse once and go through here.
 func (f *PacketFilter) allow(t tuple) bool {
 	f.mu.RLock()
-	enabled, rules := f.enabled, f.rules
+	enabled, shields, rules := f.enabled, f.shields, f.rules
 	f.mu.RUnlock()
+	// The machine's own refusal outranks the org's rules — an admin's "accept"
+	// is permission to try, not an obligation on the receiver to answer. Checked
+	// before `enabled` so it also holds where no filter was ever compiled.
+	if shields {
+		return false
+	}
 	if !enabled {
 		return true
 	}

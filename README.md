@@ -57,7 +57,7 @@ behind NAT, a server behind CGNAT, a box inside a corporate network. Two ways:
    your laptop                             └───────────────┘
 
               calabi-coord — the mesh's coordinator: who is in the
-              network, what address each node gets, who may talk to whom
+              network, what address each device gets, who may talk to whom
 ```
 
 Nothing here opens an inbound port on your laptop. In both modes the client
@@ -83,7 +83,7 @@ a web console. That part is a separate product and is not in this repository.
 |---|---|---|
 | `calabi` | the client — opens tunnels, joins the mesh, serves the local web console | your laptop, a server, a Pi |
 | `calabi-edge` | the data plane. `role: edge` accepts public traffic for tunnels; `role: relay` is a mesh relay + STUN responder; `role: both` does both | a host with a public IP |
-| `calabi-coord` | the mesh coordinator — node registry, IP allocation, ACLs, the relay directory | one host, reachable by your nodes |
+| `calabi-coord` | the mesh coordinator — device registry, IP allocation, ACLs, the relay directory | one host, reachable by your devices |
 
 Pure Go, `CGO_ENABLED=0`, no runtime dependencies. Only tunnels? You need two of
 them, and never have to think about `calabi-coord`.
@@ -108,22 +108,23 @@ them, and never have to think about `calabi-coord`.
 
 ## Mesh
 
-- **Real WireGuard** — the data plane is WireGuard, keys generated on each node.
+- **Real WireGuard** — the data plane is WireGuard, keys generated on each device.
   `calabi-coord` never sees a private key and never sees plaintext.
-- **Direct when possible, relayed when not** — nodes discover each other's
+- **Direct when possible, relayed when not** — devices discover each other's
   endpoints, measure latency to each relay over STUN, and hole-punch. A relayed
   path is the fallback, not the design.
 - **Your own relay** — `calabi-edge` with `role: relay` is the relay. It moves
-  already-encrypted packets between node keys and **cannot decrypt them**; the
+  already-encrypted packets between device keys and **cannot decrypt them**; the
   isolation is structural, enforced by a dependency test, not by a config flag.
   Run one relay or several, in as many regions as you like.
-- **Stable addresses** — every node gets a `100.64.0.0/10` address that
+- **Stable addresses** — every device gets a `100.64.0.0/10` address that
   follows it across networks, on every platform.
-- **ACLs** — a JSON policy file of groups and rules decides which nodes may
+- **ACLs** — a JSON policy file of groups and rules decides which devices may
   reach which, on which ports. It hot-reloads, and a broken file **fails closed**
   (deny all) rather than open.
-- **Subnet routers and exit nodes** — advertise a LAN behind one node so the
-  whole mesh can reach it, or route a node's default traffic through a peer.
+- **Subnet routers and exit devices** — advertise a LAN behind one device so
+  the whole mesh can reach it, or route a device's default traffic through a
+  peer.
   Advertising works everywhere; the forwarding/NAT side is automated on Linux.
 - **Per-day usage split** — the local console books mesh traffic as *direct* vs
   *relayed*, so you can see how much actually needed a relay.
@@ -186,7 +187,7 @@ For several tunnels with auto-reconnect and the console:
 
 ## Quick start — a mesh
 
-One coordinator, one relay, and as many nodes as you want.
+One coordinator, one relay, and as many devices as you want.
 
 ```bash
 # 1. the relay — calabi-edge in relay role, on a host with a public IP.
@@ -196,8 +197,8 @@ CALABI_EDGE_ROLE=relay CALABI_EDGE_RELAY_LABEL=home \
 
 # 2. the coordinator. authkeys.json maps an auth key to a meshnet (+ ACL tags):
 #      { "my-secret-key": { "meshnet": 1, "tags": ["tag:laptop"] } }
-#    Without CALABI_COORD_DB_DSN the node registry lives in memory: restart
-#    the coordinator and every node re-enrols on a different 100.64.x.x.
+#    Without CALABI_COORD_DB_DSN the device registry lives in memory: restart
+#    the coordinator and every device re-enrols on a different 100.64.x.x.
 CALABI_COORD_AUTHKEYS_FILE=./authkeys.json \
 CALABI_COORD_DB_DSN=sqlite:./coord.db \
 CALABI_COORD_DERP_ADDR=relay.example.com:3340 \
@@ -205,7 +206,7 @@ CALABI_COORD_DERP_STUN_PORT=3478 \
 CALABI_COORD_GRPC_ADDR=:7012 \
 ./calabi-coord
 
-# 3. every node joins (needs a tun device + privileges;
+# 3. every device joins (needs a tun device + privileges;
 #    Windows ships wintun.dll inside the binary)
 sudo ./calabi mesh up \
   --coord coord.example.com:7012 \
@@ -215,12 +216,12 @@ sudo ./calabi mesh up \
 ./calabi mesh status
 ```
 
-Then `ping 100.64.0.x` between nodes — no port forwarding anywhere.
+Then `ping 100.64.0.x` between devices — no port forwarding anywhere.
 
-> **TLS between node and coordinator.** The client dials the coordinator over
+> **TLS between device and coordinator.** The client dials the coordinator over
 > TLS by default and verifies it against the CA baked into the binary. For your
 > own deployment either give `calabi-coord` a cert from your own CA and point
-> nodes at it with `CALABI_EDGE_CA_FILE=/path/to/your-ca.pem`, or — on a trusted
+> devices at it with `CALABI_EDGE_CA_FILE=/path/to/your-ca.pem`, or — on a trusted
 > network only — set `CALABI_INSECURE=1` for plaintext. **The auth key crosses
 > that connection**, so do not run it plaintext over the public internet.
 
@@ -281,7 +282,7 @@ this repository does not derive them from their own sources.
 - SSH or a database port to a remote machine, over a TCP tunnel or over the mesh.
 - Join machines across several clouds into one flat private network without
   peering VPCs.
-- Route a laptop's traffic out through a machine at home via an exit node.
+- Route a laptop's traffic out through a machine at home via an exit device.
 
 ## Contributing
 

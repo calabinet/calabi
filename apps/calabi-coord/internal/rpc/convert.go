@@ -64,6 +64,7 @@ func toProtoPeer(n *core.Node) *meshpb.Peer {
 		OverlayAddr: n.Overlay.String(),
 		DerpHome:    n.DERPHome,
 		Name:        n.Name,
+		Os:          n.OS,
 	}
 	// A peer's traffic is routed to it by its overlay /32 plus any approved subnet
 	// routes it advertises (MESH.7) — the mesh routes those CIDRs to this node.
@@ -83,6 +84,20 @@ func toProtoPeer(n *core.Node) *meshpb.Peer {
 	}
 	for _, ep := range n.Endpoints {
 		p.Endpoints = append(p.Endpoints, ep.String())
+	}
+	// What this machine is FOR. n.Services is already confirmed-only by the time
+	// a netmap is assembled (nodesWithServices drops unapproved rows so an
+	// "svc:" rule cannot match a claim), so there is no second filter here — and
+	// deliberately no second SOURCE either: the day approval semantics change,
+	// the ACL and this list must change together.
+	//
+	// Name, proto and port only. Target is what the node itself dials to reach
+	// the app — internal topology a peer cannot use — and the note is the
+	// admin's. See PeerService in coord.proto.
+	for _, sv := range n.Services {
+		p.Services = append(p.Services, &meshpb.PeerService{
+			Name: sv.Name, Proto: sv.Proto, Port: uint32(sv.Port),
+		})
 	}
 	return p
 }

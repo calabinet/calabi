@@ -24,6 +24,8 @@ import (
 	"net/http"
 	"net/netip"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
 )
@@ -38,6 +40,12 @@ func New(coord *core.Coordinator, notif Notifier, logger *slog.Logger) http.Hand
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/meshnets/{id}/nodes", h.listNodes)
 	mux.HandleFunc("GET /admin/meshnets/{id}/usage", h.seatUsage)
+	// Data-plane audit trail (who exchanged traffic with whom, by the hour).
+	// NotImplemented when this deployment keeps none.
+	mux.HandleFunc("GET /admin/meshnets/{id}/connections", h.listConnections)
+	// Platform-wide retention for that trail, set by an operator.
+	mux.HandleFunc("GET /admin/settings/conn-records", h.getConnRecordSettings)
+	mux.HandleFunc("PUT /admin/settings/conn-records", h.putConnRecordSettings)
 	mux.HandleFunc("GET /admin/meshnets/{id}/settings", h.getSettings)
 	mux.HandleFunc("PUT /admin/meshnets/{id}/settings", h.putSettings)
 	mux.HandleFunc("POST /admin/meshnets/{id}/nodes/{nodeID}/approve", h.setApproved(true))
@@ -126,6 +134,14 @@ type nodeView struct {
 	TagsPinned bool `json:"tags_pinned"`
 	// OwnerUserID is the human whose key enrolled the node (0 = unattributed).
 	OwnerUserID int64 `json:"owner_user_id"`
+	// OS is the platform the daemon reported ("windows"/"linux"/"darwin").
+	// Self-reported and display-only; empty for nodes enrolled before it was
+	// collected.
+	OS string `json:"os,omitempty"`
+	// BlockIncoming is the machine's own "refuse all inbound connections" switch
+	// as it last reported. Absent = the daemon never said (too old), which the
+	// console must render as nothing rather than as "accepts connections".
+	BlockIncoming *bool `json:"block_incoming,omitempty"`
 	// DeviceFingerprint is the daemon's self-reported per-install id; the BFF
 	// resolves it against the org's devices to offer a link. Display only.
 	DeviceFingerprint string `json:"device_fingerprint"`
@@ -159,6 +175,11 @@ type nodeView struct {
 	// every console that wants to total it up.
 	AliasAddrs int    `json:"alias_addrs,omitempty"`
 	LastSeen   string `json:"last_seen"`
+	// CreatedAt is when this node joined the mesh. Exposed so a console can
+	// order and age a device list by something meaningful — the row id was
+	// standing in for it, which reads as an internal number and sorts right
+	// only by accident.
+	CreatedAt string `json:"created_at,omitempty"`
 }
 
 // routeAliasView is one real→alias mapping.
@@ -235,6 +256,121 @@ func (h *handler) seatUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, u)
+}
+
+// connRecordView is one stored hour between a pair of devices. Node IDS, not
+// names: names change and the caller (bff-console) already has the device list
+// to join against, so duplicating them here would be a second copy that can
+// disagree with the first.
+//
+// There is no endpoint field and there must never be one —
+// core/connrecord.go for why that line is what lets this exist as history.
+type connRecordView struct {
+	SrcNodeID int64  `json:"src_node_id"`
+	DstNodeID int64  `json:"dst_node_id"`
+	Hour      string `json:"hour"` // RFC3339 UTC, truncated to the hour
+	BytesTx   int64  `json:"bytes_tx"`
+	BytesRx   int64  `json:"bytes_rx"`
+	Path      string `json:"path,omitempty"`
+}
+
+// listConnections returns a meshnet's connection records, newest hour first.
+// Query: ?from=<rfc3339>&to=<rfc3339>&limit=<n>. Both bounds optional.
+func (h *handler) listConnections(w http.ResponseWriter, r *http.Request) {
+	if h.coord.ConnRecords == nil {
+		http.Error(w, "connection records are not kept on this deployment", http.StatusNotImplemented)
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "bad meshnet id", http.StatusBadRequest)
+		return
+	}
+	q := r.URL.Query()
+	parseTime := func(k string) (time.Time, bool) {
+		raw := strings.TrimSpace(q.Get(k))
+		if raw == "" {
+			return time.Time{}, true
+		}
+		t, perr := time.Parse(time.RFC3339, raw)
+		return t, perr == nil
+	}
+	from, okFrom := parseTime("from")
+	to, okTo := parseTime("to")
+	if !okFrom || !okTo {
+		http.Error(w, "from/to must be RFC3339", http.StatusBadRequest)
+		return
+	}
+	limit := 0
+	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
+		n, perr := strconv.Atoi(raw)
+		if perr != nil || n < 1 {
+			http.Error(w, "limit must be a positive integer", http.StatusBadRequest)
+			return
+		}
+		limit = n
+	}
+	rows, err := h.coord.ConnRecords.ListConnRecords(r.Context(), core.MeshnetID(id), from, to, limit)
+	if err != nil {
+		http.Error(w, "list connections: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	out := make([]connRecordView, 0, len(rows))
+	for _, x := range rows {
+		out = append(out, connRecordView{
+			SrcNodeID: x.SrcNodeID,
+			DstNodeID: x.DstNodeID,
+			Hour:      x.Hour.UTC().Format(time.RFC3339),
+			BytesTx:   x.BytesTx,
+			BytesRx:   x.BytesRx,
+			Path:      x.Path,
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// connRecordSettingsView is the operator-facing retention setting. enabled says
+// whether this deployment keeps a trail at all — the console needs to tell "we
+// keep none" apart from "the window is short", which are different answers to
+// an auditor.
+type connRecordSettingsView struct {
+	Enabled       bool `json:"enabled"`
+	RetentionDays int  `json:"retention_days"`
+	MinDays       int  `json:"min_days"`
+	MaxDays       int  `json:"max_days"`
+}
+
+func (h *handler) getConnRecordSettings(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, connRecordSettingsView{
+		Enabled:       h.coord.ConnRecords != nil,
+		RetentionDays: h.coord.ConnRecordRetentionDays(r.Context()),
+		MinDays:       core.MinConnRecordRetentionDays,
+		MaxDays:       core.MaxConnRecordRetentionDays,
+	})
+}
+
+// putConnRecordSettings stores the retention, CLAMPED. The console limits the
+// input too, but that is a courtesy to whoever is typing; this is the rule, and
+// it is what a curl against the admin surface meets.
+func (h *handler) putConnRecordSettings(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		RetentionDays int `json:"retention_days"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&in); err != nil {
+		http.Error(w, "bad body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	stored, err := h.coord.SetConnRecordRetentionDays(r.Context(), in.RetentionDays)
+	if err != nil {
+		http.Error(w, "store retention: "+err.Error(), http.StatusNotImplemented)
+		return
+	}
+	writeJSON(w, http.StatusOK, connRecordSettingsView{
+		Enabled:       h.coord.ConnRecords != nil,
+		RetentionDays: stored,
+		MinDays:       core.MinConnRecordRetentionDays,
+		MaxDays:       core.MaxConnRecordRetentionDays,
+	})
 }
 
 // aclEnvelope is the GET/PUT shape: the document plus whether one is stored
@@ -738,6 +874,8 @@ func toView(n *core.Node, online bool) nodeView {
 		NamePinned:        n.NamePinned,
 		TagsPinned:        n.TagsPinned,
 		OwnerUserID:       n.OwnerUserID,
+		OS:                n.OS,
+		BlockIncoming:     n.BlockIncoming,
 		DeviceFingerprint: n.DeviceFingerprint,
 		Approved:          n.Approved,
 		Online:            online,
@@ -750,6 +888,9 @@ func toView(n *core.Node, online bool) nodeView {
 	}
 	if !n.LastSeen.IsZero() {
 		v.LastSeen = n.LastSeen.Format("2006-01-02T15:04:05Z07:00")
+	}
+	if !n.CreatedAt.IsZero() {
+		v.CreatedAt = n.CreatedAt.Format("2006-01-02T15:04:05Z07:00")
 	}
 	for _, rt := range n.AdvertisedRoutes {
 		v.AdvertisedRoutes = append(v.AdvertisedRoutes, rt.String())

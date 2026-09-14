@@ -56,7 +56,7 @@ func (*MeshRelay) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the MeshRelay fields.
-func (_m *MeshRelay) assignValues(columns []string, values []any) error {
+func (mr *MeshRelay) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -67,51 +67,51 @@ func (_m *MeshRelay) assignValues(columns []string, values []any) error {
 			if !ok {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
-			_m.ID = int(value.Int64)
+			mr.ID = int(value.Int64)
 		case meshrelay.FieldMeshnetID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field meshnet_id", values[i])
 			} else if value.Valid {
-				_m.MeshnetID = value.Int64
+				mr.MeshnetID = value.Int64
 			}
 		case meshrelay.FieldLabel:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field label", values[i])
 			} else if value.Valid {
-				_m.Label = value.String
+				mr.Label = value.String
 			}
 		case meshrelay.FieldHostName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field host_name", values[i])
 			} else if value.Valid {
-				_m.HostName = value.String
+				mr.HostName = value.String
 			}
 		case meshrelay.FieldDerpPort:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field derp_port", values[i])
 			} else if value.Valid {
-				_m.DerpPort = int(value.Int64)
+				mr.DerpPort = int(value.Int64)
 			}
 		case meshrelay.FieldStunPort:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field stun_port", values[i])
 			} else if value.Valid {
-				_m.StunPort = int(value.Int64)
+				mr.StunPort = int(value.Int64)
 			}
 		case meshrelay.FieldEnabled:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field enabled", values[i])
 			} else if value.Valid {
-				_m.Enabled = value.Bool
+				mr.Enabled = value.Bool
 			}
 		case meshrelay.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				_m.CreatedAt = value.Time
+				mr.CreatedAt = value.Time
 			}
 		default:
-			_m.selectValues.Set(columns[i], values[i])
+			mr.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -119,53 +119,53 @@ func (_m *MeshRelay) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the MeshRelay.
 // This includes values selected through modifiers, order, etc.
-func (_m *MeshRelay) Value(name string) (ent.Value, error) {
-	return _m.selectValues.Get(name)
+func (mr *MeshRelay) Value(name string) (ent.Value, error) {
+	return mr.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this MeshRelay.
 // Note that you need to call MeshRelay.Unwrap() before calling this method if this MeshRelay
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (_m *MeshRelay) Update() *MeshRelayUpdateOne {
-	return NewMeshRelayClient(_m.config).UpdateOne(_m)
+func (mr *MeshRelay) Update() *MeshRelayUpdateOne {
+	return NewMeshRelayClient(mr.config).UpdateOne(mr)
 }
 
 // Unwrap unwraps the MeshRelay entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (_m *MeshRelay) Unwrap() *MeshRelay {
-	_tx, ok := _m.config.driver.(*txDriver)
+func (mr *MeshRelay) Unwrap() *MeshRelay {
+	_tx, ok := mr.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: MeshRelay is not a transactional entity")
 	}
-	_m.config.driver = _tx.drv
-	return _m
+	mr.config.driver = _tx.drv
+	return mr
 }
 
 // String implements the fmt.Stringer.
-func (_m *MeshRelay) String() string {
+func (mr *MeshRelay) String() string {
 	var builder strings.Builder
 	builder.WriteString("MeshRelay(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", mr.ID))
 	builder.WriteString("meshnet_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.MeshnetID))
+	builder.WriteString(fmt.Sprintf("%v", mr.MeshnetID))
 	builder.WriteString(", ")
 	builder.WriteString("label=")
-	builder.WriteString(_m.Label)
+	builder.WriteString(mr.Label)
 	builder.WriteString(", ")
 	builder.WriteString("host_name=")
-	builder.WriteString(_m.HostName)
+	builder.WriteString(mr.HostName)
 	builder.WriteString(", ")
 	builder.WriteString("derp_port=")
-	builder.WriteString(fmt.Sprintf("%v", _m.DerpPort))
+	builder.WriteString(fmt.Sprintf("%v", mr.DerpPort))
 	builder.WriteString(", ")
 	builder.WriteString("stun_port=")
-	builder.WriteString(fmt.Sprintf("%v", _m.StunPort))
+	builder.WriteString(fmt.Sprintf("%v", mr.StunPort))
 	builder.WriteString(", ")
 	builder.WriteString("enabled=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Enabled))
+	builder.WriteString(fmt.Sprintf("%v", mr.Enabled))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(mr.CreatedAt.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }

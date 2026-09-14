@@ -49,6 +49,10 @@ type MeshNode struct {
 	OwnerUserID int64 `json:"owner_user_id,omitempty"`
 	// daemon's self-reported per-install id; lets the console link this device to its client record. Display only — never authorize on it
 	DeviceFingerprint string `json:"device_fingerprint,omitempty"`
+	// platform the daemon's runtime reported at registration (windows/linux/darwin). A claim, display only. Empty for nodes enrolled before it was collected — render nothing, not "unknown"
+	Os string `json:"os,omitempty"`
+	// the machine's OWN 'refuse all inbound connections' switch, as it last reported. NULLABLE on purpose: null = this daemon is too old to say, which must not read as a positive 'accepts connections'. Reported state only — enforcement is entirely local to the node
+	BlockIncoming *bool `json:"block_incoming,omitempty"`
 	// an admin set the tags in the console; re-registration must not overwrite them from the auth key
 	TagsPinned bool `json:"tags_pinned,omitempty"`
 	// JSON array of ACL tags resolved from the auth key
@@ -69,11 +73,11 @@ func (*MeshNode) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case meshnode.FieldNamePinned, meshnode.FieldRoutesReviewed, meshnode.FieldTagsPinned, meshnode.FieldApproved, meshnode.FieldDisabled:
+		case meshnode.FieldNamePinned, meshnode.FieldRoutesReviewed, meshnode.FieldBlockIncoming, meshnode.FieldTagsPinned, meshnode.FieldApproved, meshnode.FieldDisabled:
 			values[i] = new(sql.NullBool)
 		case meshnode.FieldID, meshnode.FieldMeshnetID, meshnode.FieldOwnerUserID:
 			values[i] = new(sql.NullInt64)
-		case meshnode.FieldNodeKey, meshnode.FieldName, meshnode.FieldHostName, meshnode.FieldDiscoKey, meshnode.FieldOverlay, meshnode.FieldDerpHome, meshnode.FieldEndpointsJSON, meshnode.FieldAdvertisedRoutesJSON, meshnode.FieldApprovedRoutesJSON, meshnode.FieldAliasedRoutesJSON, meshnode.FieldRouteAliasesJSON, meshnode.FieldDeviceFingerprint, meshnode.FieldTagsJSON:
+		case meshnode.FieldNodeKey, meshnode.FieldName, meshnode.FieldHostName, meshnode.FieldDiscoKey, meshnode.FieldOverlay, meshnode.FieldDerpHome, meshnode.FieldEndpointsJSON, meshnode.FieldAdvertisedRoutesJSON, meshnode.FieldApprovedRoutesJSON, meshnode.FieldAliasedRoutesJSON, meshnode.FieldRouteAliasesJSON, meshnode.FieldDeviceFingerprint, meshnode.FieldOs, meshnode.FieldTagsJSON:
 			values[i] = new(sql.NullString)
 		case meshnode.FieldCreatedAt, meshnode.FieldLastSeen:
 			values[i] = new(sql.NullTime)
@@ -86,7 +90,7 @@ func (*MeshNode) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the MeshNode fields.
-func (_m *MeshNode) assignValues(columns []string, values []any) error {
+func (mn *MeshNode) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -97,141 +101,154 @@ func (_m *MeshNode) assignValues(columns []string, values []any) error {
 			if !ok {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
-			_m.ID = int(value.Int64)
+			mn.ID = int(value.Int64)
 		case meshnode.FieldMeshnetID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field meshnet_id", values[i])
 			} else if value.Valid {
-				_m.MeshnetID = value.Int64
+				mn.MeshnetID = value.Int64
 			}
 		case meshnode.FieldNodeKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field node_key", values[i])
 			} else if value.Valid {
-				_m.NodeKey = value.String
+				mn.NodeKey = value.String
 			}
 		case meshnode.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
-				_m.Name = value.String
+				mn.Name = value.String
 			}
 		case meshnode.FieldHostName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field host_name", values[i])
 			} else if value.Valid {
-				_m.HostName = value.String
+				mn.HostName = value.String
 			}
 		case meshnode.FieldNamePinned:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field name_pinned", values[i])
 			} else if value.Valid {
-				_m.NamePinned = value.Bool
+				mn.NamePinned = value.Bool
 			}
 		case meshnode.FieldDiscoKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field disco_key", values[i])
 			} else if value.Valid {
-				_m.DiscoKey = value.String
+				mn.DiscoKey = value.String
 			}
 		case meshnode.FieldOverlay:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field overlay", values[i])
 			} else if value.Valid {
-				_m.Overlay = value.String
+				mn.Overlay = value.String
 			}
 		case meshnode.FieldDerpHome:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field derp_home", values[i])
 			} else if value.Valid {
-				_m.DerpHome = value.String
+				mn.DerpHome = value.String
 			}
 		case meshnode.FieldEndpointsJSON:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field endpoints_json", values[i])
 			} else if value.Valid {
-				_m.EndpointsJSON = value.String
+				mn.EndpointsJSON = value.String
 			}
 		case meshnode.FieldAdvertisedRoutesJSON:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field advertised_routes_json", values[i])
 			} else if value.Valid {
-				_m.AdvertisedRoutesJSON = value.String
+				mn.AdvertisedRoutesJSON = value.String
 			}
 		case meshnode.FieldApprovedRoutesJSON:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field approved_routes_json", values[i])
 			} else if value.Valid {
-				_m.ApprovedRoutesJSON = value.String
+				mn.ApprovedRoutesJSON = value.String
 			}
 		case meshnode.FieldAliasedRoutesJSON:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field aliased_routes_json", values[i])
 			} else if value.Valid {
-				_m.AliasedRoutesJSON = value.String
+				mn.AliasedRoutesJSON = value.String
 			}
 		case meshnode.FieldRouteAliasesJSON:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field route_aliases_json", values[i])
 			} else if value.Valid {
-				_m.RouteAliasesJSON = value.String
+				mn.RouteAliasesJSON = value.String
 			}
 		case meshnode.FieldRoutesReviewed:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field routes_reviewed", values[i])
 			} else if value.Valid {
-				_m.RoutesReviewed = value.Bool
+				mn.RoutesReviewed = value.Bool
 			}
 		case meshnode.FieldOwnerUserID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field owner_user_id", values[i])
 			} else if value.Valid {
-				_m.OwnerUserID = value.Int64
+				mn.OwnerUserID = value.Int64
 			}
 		case meshnode.FieldDeviceFingerprint:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field device_fingerprint", values[i])
 			} else if value.Valid {
-				_m.DeviceFingerprint = value.String
+				mn.DeviceFingerprint = value.String
+			}
+		case meshnode.FieldOs:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field os", values[i])
+			} else if value.Valid {
+				mn.Os = value.String
+			}
+		case meshnode.FieldBlockIncoming:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field block_incoming", values[i])
+			} else if value.Valid {
+				mn.BlockIncoming = new(bool)
+				*mn.BlockIncoming = value.Bool
 			}
 		case meshnode.FieldTagsPinned:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field tags_pinned", values[i])
 			} else if value.Valid {
-				_m.TagsPinned = value.Bool
+				mn.TagsPinned = value.Bool
 			}
 		case meshnode.FieldTagsJSON:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tags_json", values[i])
 			} else if value.Valid {
-				_m.TagsJSON = value.String
+				mn.TagsJSON = value.String
 			}
 		case meshnode.FieldApproved:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field approved", values[i])
 			} else if value.Valid {
-				_m.Approved = value.Bool
+				mn.Approved = value.Bool
 			}
 		case meshnode.FieldDisabled:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field disabled", values[i])
 			} else if value.Valid {
-				_m.Disabled = value.Bool
+				mn.Disabled = value.Bool
 			}
 		case meshnode.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				_m.CreatedAt = value.Time
+				mn.CreatedAt = value.Time
 			}
 		case meshnode.FieldLastSeen:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field last_seen", values[i])
 			} else if value.Valid {
-				_m.LastSeen = value.Time
+				mn.LastSeen = value.Time
 			}
 		default:
-			_m.selectValues.Set(columns[i], values[i])
+			mn.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -239,98 +256,106 @@ func (_m *MeshNode) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the MeshNode.
 // This includes values selected through modifiers, order, etc.
-func (_m *MeshNode) Value(name string) (ent.Value, error) {
-	return _m.selectValues.Get(name)
+func (mn *MeshNode) Value(name string) (ent.Value, error) {
+	return mn.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this MeshNode.
 // Note that you need to call MeshNode.Unwrap() before calling this method if this MeshNode
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (_m *MeshNode) Update() *MeshNodeUpdateOne {
-	return NewMeshNodeClient(_m.config).UpdateOne(_m)
+func (mn *MeshNode) Update() *MeshNodeUpdateOne {
+	return NewMeshNodeClient(mn.config).UpdateOne(mn)
 }
 
 // Unwrap unwraps the MeshNode entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (_m *MeshNode) Unwrap() *MeshNode {
-	_tx, ok := _m.config.driver.(*txDriver)
+func (mn *MeshNode) Unwrap() *MeshNode {
+	_tx, ok := mn.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: MeshNode is not a transactional entity")
 	}
-	_m.config.driver = _tx.drv
-	return _m
+	mn.config.driver = _tx.drv
+	return mn
 }
 
 // String implements the fmt.Stringer.
-func (_m *MeshNode) String() string {
+func (mn *MeshNode) String() string {
 	var builder strings.Builder
 	builder.WriteString("MeshNode(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", mn.ID))
 	builder.WriteString("meshnet_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.MeshnetID))
+	builder.WriteString(fmt.Sprintf("%v", mn.MeshnetID))
 	builder.WriteString(", ")
 	builder.WriteString("node_key=")
-	builder.WriteString(_m.NodeKey)
+	builder.WriteString(mn.NodeKey)
 	builder.WriteString(", ")
 	builder.WriteString("name=")
-	builder.WriteString(_m.Name)
+	builder.WriteString(mn.Name)
 	builder.WriteString(", ")
 	builder.WriteString("host_name=")
-	builder.WriteString(_m.HostName)
+	builder.WriteString(mn.HostName)
 	builder.WriteString(", ")
 	builder.WriteString("name_pinned=")
-	builder.WriteString(fmt.Sprintf("%v", _m.NamePinned))
+	builder.WriteString(fmt.Sprintf("%v", mn.NamePinned))
 	builder.WriteString(", ")
 	builder.WriteString("disco_key=")
-	builder.WriteString(_m.DiscoKey)
+	builder.WriteString(mn.DiscoKey)
 	builder.WriteString(", ")
 	builder.WriteString("overlay=")
-	builder.WriteString(_m.Overlay)
+	builder.WriteString(mn.Overlay)
 	builder.WriteString(", ")
 	builder.WriteString("derp_home=")
-	builder.WriteString(_m.DerpHome)
+	builder.WriteString(mn.DerpHome)
 	builder.WriteString(", ")
 	builder.WriteString("endpoints_json=")
-	builder.WriteString(_m.EndpointsJSON)
+	builder.WriteString(mn.EndpointsJSON)
 	builder.WriteString(", ")
 	builder.WriteString("advertised_routes_json=")
-	builder.WriteString(_m.AdvertisedRoutesJSON)
+	builder.WriteString(mn.AdvertisedRoutesJSON)
 	builder.WriteString(", ")
 	builder.WriteString("approved_routes_json=")
-	builder.WriteString(_m.ApprovedRoutesJSON)
+	builder.WriteString(mn.ApprovedRoutesJSON)
 	builder.WriteString(", ")
 	builder.WriteString("aliased_routes_json=")
-	builder.WriteString(_m.AliasedRoutesJSON)
+	builder.WriteString(mn.AliasedRoutesJSON)
 	builder.WriteString(", ")
 	builder.WriteString("route_aliases_json=")
-	builder.WriteString(_m.RouteAliasesJSON)
+	builder.WriteString(mn.RouteAliasesJSON)
 	builder.WriteString(", ")
 	builder.WriteString("routes_reviewed=")
-	builder.WriteString(fmt.Sprintf("%v", _m.RoutesReviewed))
+	builder.WriteString(fmt.Sprintf("%v", mn.RoutesReviewed))
 	builder.WriteString(", ")
 	builder.WriteString("owner_user_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.OwnerUserID))
+	builder.WriteString(fmt.Sprintf("%v", mn.OwnerUserID))
 	builder.WriteString(", ")
 	builder.WriteString("device_fingerprint=")
-	builder.WriteString(_m.DeviceFingerprint)
+	builder.WriteString(mn.DeviceFingerprint)
+	builder.WriteString(", ")
+	builder.WriteString("os=")
+	builder.WriteString(mn.Os)
+	builder.WriteString(", ")
+	if v := mn.BlockIncoming; v != nil {
+		builder.WriteString("block_incoming=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("tags_pinned=")
-	builder.WriteString(fmt.Sprintf("%v", _m.TagsPinned))
+	builder.WriteString(fmt.Sprintf("%v", mn.TagsPinned))
 	builder.WriteString(", ")
 	builder.WriteString("tags_json=")
-	builder.WriteString(_m.TagsJSON)
+	builder.WriteString(mn.TagsJSON)
 	builder.WriteString(", ")
 	builder.WriteString("approved=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Approved))
+	builder.WriteString(fmt.Sprintf("%v", mn.Approved))
 	builder.WriteString(", ")
 	builder.WriteString("disabled=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Disabled))
+	builder.WriteString(fmt.Sprintf("%v", mn.Disabled))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(mn.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("last_seen=")
-	builder.WriteString(_m.LastSeen.Format(time.ANSIC))
+	builder.WriteString(mn.LastSeen.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }

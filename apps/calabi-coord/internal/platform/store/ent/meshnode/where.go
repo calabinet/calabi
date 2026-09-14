@@ -134,6 +134,16 @@ func DeviceFingerprint(v string) predicate.MeshNode {
 	return predicate.MeshNode(sql.FieldEQ(FieldDeviceFingerprint, v))
 }
 
+// Os applies equality check predicate on the "os" field. It's identical to OsEQ.
+func Os(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldOs, v))
+}
+
+// BlockIncoming applies equality check predicate on the "block_incoming" field. It's identical to BlockIncomingEQ.
+func BlockIncoming(v bool) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldBlockIncoming, v))
+}
+
 // TagsPinned applies equality check predicate on the "tags_pinned" field. It's identical to TagsPinnedEQ.
 func TagsPinned(v bool) predicate.MeshNode {
 	return predicate.MeshNode(sql.FieldEQ(FieldTagsPinned, v))
@@ -1042,6 +1052,91 @@ func DeviceFingerprintEqualFold(v string) predicate.MeshNode {
 // DeviceFingerprintContainsFold applies the ContainsFold predicate on the "device_fingerprint" field.
 func DeviceFingerprintContainsFold(v string) predicate.MeshNode {
 	return predicate.MeshNode(sql.FieldContainsFold(FieldDeviceFingerprint, v))
+}
+
+// OsEQ applies the EQ predicate on the "os" field.
+func OsEQ(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldOs, v))
+}
+
+// OsNEQ applies the NEQ predicate on the "os" field.
+func OsNEQ(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNEQ(FieldOs, v))
+}
+
+// OsIn applies the In predicate on the "os" field.
+func OsIn(vs ...string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldIn(FieldOs, vs...))
+}
+
+// OsNotIn applies the NotIn predicate on the "os" field.
+func OsNotIn(vs ...string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNotIn(FieldOs, vs...))
+}
+
+// OsGT applies the GT predicate on the "os" field.
+func OsGT(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldGT(FieldOs, v))
+}
+
+// OsGTE applies the GTE predicate on the "os" field.
+func OsGTE(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldGTE(FieldOs, v))
+}
+
+// OsLT applies the LT predicate on the "os" field.
+func OsLT(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldLT(FieldOs, v))
+}
+
+// OsLTE applies the LTE predicate on the "os" field.
+func OsLTE(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldLTE(FieldOs, v))
+}
+
+// OsContains applies the Contains predicate on the "os" field.
+func OsContains(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldContains(FieldOs, v))
+}
+
+// OsHasPrefix applies the HasPrefix predicate on the "os" field.
+func OsHasPrefix(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldHasPrefix(FieldOs, v))
+}
+
+// OsHasSuffix applies the HasSuffix predicate on the "os" field.
+func OsHasSuffix(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldHasSuffix(FieldOs, v))
+}
+
+// OsEqualFold applies the EqualFold predicate on the "os" field.
+func OsEqualFold(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEqualFold(FieldOs, v))
+}
+
+// OsContainsFold applies the ContainsFold predicate on the "os" field.
+func OsContainsFold(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldContainsFold(FieldOs, v))
+}
+
+// BlockIncomingEQ applies the EQ predicate on the "block_incoming" field.
+func BlockIncomingEQ(v bool) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldBlockIncoming, v))
+}
+
+// BlockIncomingNEQ applies the NEQ predicate on the "block_incoming" field.
+func BlockIncomingNEQ(v bool) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNEQ(FieldBlockIncoming, v))
+}
+
+// BlockIncomingIsNil applies the IsNil predicate on the "block_incoming" field.
+func BlockIncomingIsNil() predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldIsNull(FieldBlockIncoming))
+}
+
+// BlockIncomingNotNil applies the NotNil predicate on the "block_incoming" field.
+func BlockIncomingNotNil() predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNotNull(FieldBlockIncoming))
 }
 
 // TagsPinnedEQ applies the EQ predicate on the "tags_pinned" field.

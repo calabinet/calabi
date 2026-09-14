@@ -183,6 +183,28 @@ message CreateTunnelRequest {
   // visibility. Edge-internal callers leave it 0 (their rows are claimed, not
   // user-created). See docs/runbook/org-resource-visibility-rbac.md.
   int64  creator_user_id = 14;
+  // client_proposed_security_json — the security block the END USER typed on
+  // the command line (`calabi http 8080 --ip-allow 203.0.113.0/24`), relayed
+  // verbatim by the edge's Persist. Separate from config_json (which is
+  // trusted and carries credentials) precisely because this one is not:
+  // tunnel-svc keeps only the IP allow/deny lists out of it and revalidates
+  // every entry. Field 15 to match upstream — see bridge_drift_test.go.
+  string client_proposed_security_json = 15;
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+message GetTunnelOAuthSecretRequest {
+  int64  tunnel_id     = 1;
+  int64  caller_org_id = 2;  // stamped by bff-edge from the edge's mTLS cert
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+message GetTunnelOAuthSecretResponse {
+  string provider      = 1;
+  string client_id     = 2;
+  string client_secret = 3;
+  repeated string allow_emails  = 4;
+  repeated string allow_domains = 5;
 }
 
 // [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
@@ -548,6 +570,11 @@ message RegisterEdgeNodeRequest {
   // This node's visitor wildcard domain (edge.yaml base_domain), so the
   // console can show the suffix a tunnel created on this node will get.
   string base_domain     = 10;
+  // Edge-node binary version (-ldflags version string). Wire-compatible with
+  // control_plane.RegisterEdgeNodeRequest.version (same field number 11): the
+  // edge sets it, bff-edge forwards the whole request to identity-svc unchanged,
+  // and the consoles read it back from the edge directory. Empty = legacy edge.
+  string version         = 11;
 }
 
 // [mirrored from proto/calabi/v1/control_plane/identity.proto]

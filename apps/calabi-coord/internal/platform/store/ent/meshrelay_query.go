@@ -28,40 +28,40 @@ type MeshRelayQuery struct {
 }
 
 // Where adds a new predicate for the MeshRelayQuery builder.
-func (_q *MeshRelayQuery) Where(ps ...predicate.MeshRelay) *MeshRelayQuery {
-	_q.predicates = append(_q.predicates, ps...)
-	return _q
+func (mrq *MeshRelayQuery) Where(ps ...predicate.MeshRelay) *MeshRelayQuery {
+	mrq.predicates = append(mrq.predicates, ps...)
+	return mrq
 }
 
 // Limit the number of records to be returned by this query.
-func (_q *MeshRelayQuery) Limit(limit int) *MeshRelayQuery {
-	_q.ctx.Limit = &limit
-	return _q
+func (mrq *MeshRelayQuery) Limit(limit int) *MeshRelayQuery {
+	mrq.ctx.Limit = &limit
+	return mrq
 }
 
 // Offset to start from.
-func (_q *MeshRelayQuery) Offset(offset int) *MeshRelayQuery {
-	_q.ctx.Offset = &offset
-	return _q
+func (mrq *MeshRelayQuery) Offset(offset int) *MeshRelayQuery {
+	mrq.ctx.Offset = &offset
+	return mrq
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (_q *MeshRelayQuery) Unique(unique bool) *MeshRelayQuery {
-	_q.ctx.Unique = &unique
-	return _q
+func (mrq *MeshRelayQuery) Unique(unique bool) *MeshRelayQuery {
+	mrq.ctx.Unique = &unique
+	return mrq
 }
 
 // Order specifies how the records should be ordered.
-func (_q *MeshRelayQuery) Order(o ...meshrelay.OrderOption) *MeshRelayQuery {
-	_q.order = append(_q.order, o...)
-	return _q
+func (mrq *MeshRelayQuery) Order(o ...meshrelay.OrderOption) *MeshRelayQuery {
+	mrq.order = append(mrq.order, o...)
+	return mrq
 }
 
 // First returns the first MeshRelay entity from the query.
 // Returns a *NotFoundError when no MeshRelay was found.
-func (_q *MeshRelayQuery) First(ctx context.Context) (*MeshRelay, error) {
-	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
+func (mrq *MeshRelayQuery) First(ctx context.Context) (*MeshRelay, error) {
+	nodes, err := mrq.Limit(1).All(setContextOp(ctx, mrq.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +72,8 @@ func (_q *MeshRelayQuery) First(ctx context.Context) (*MeshRelay, error) {
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (_q *MeshRelayQuery) FirstX(ctx context.Context) *MeshRelay {
-	node, err := _q.First(ctx)
+func (mrq *MeshRelayQuery) FirstX(ctx context.Context) *MeshRelay {
+	node, err := mrq.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -82,9 +82,9 @@ func (_q *MeshRelayQuery) FirstX(ctx context.Context) *MeshRelay {
 
 // FirstID returns the first MeshRelay ID from the query.
 // Returns a *NotFoundError when no MeshRelay ID was found.
-func (_q *MeshRelayQuery) FirstID(ctx context.Context) (id int, err error) {
+func (mrq *MeshRelayQuery) FirstID(ctx context.Context) (id int, err error) {
 	var ids []int
-	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = mrq.Limit(1).IDs(setContextOp(ctx, mrq.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -95,8 +95,8 @@ func (_q *MeshRelayQuery) FirstID(ctx context.Context) (id int, err error) {
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *MeshRelayQuery) FirstIDX(ctx context.Context) int {
-	id, err := _q.FirstID(ctx)
+func (mrq *MeshRelayQuery) FirstIDX(ctx context.Context) int {
+	id, err := mrq.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -106,8 +106,8 @@ func (_q *MeshRelayQuery) FirstIDX(ctx context.Context) int {
 // Only returns a single MeshRelay entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one MeshRelay entity is found.
 // Returns a *NotFoundError when no MeshRelay entities are found.
-func (_q *MeshRelayQuery) Only(ctx context.Context) (*MeshRelay, error) {
-	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
+func (mrq *MeshRelayQuery) Only(ctx context.Context) (*MeshRelay, error) {
+	nodes, err := mrq.Limit(2).All(setContextOp(ctx, mrq.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -122,8 +122,8 @@ func (_q *MeshRelayQuery) Only(ctx context.Context) (*MeshRelay, error) {
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (_q *MeshRelayQuery) OnlyX(ctx context.Context) *MeshRelay {
-	node, err := _q.Only(ctx)
+func (mrq *MeshRelayQuery) OnlyX(ctx context.Context) *MeshRelay {
+	node, err := mrq.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -133,9 +133,9 @@ func (_q *MeshRelayQuery) OnlyX(ctx context.Context) *MeshRelay {
 // OnlyID is like Only, but returns the only MeshRelay ID in the query.
 // Returns a *NotSingularError when more than one MeshRelay ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *MeshRelayQuery) OnlyID(ctx context.Context) (id int, err error) {
+func (mrq *MeshRelayQuery) OnlyID(ctx context.Context) (id int, err error) {
 	var ids []int
-	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = mrq.Limit(2).IDs(setContextOp(ctx, mrq.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -150,8 +150,8 @@ func (_q *MeshRelayQuery) OnlyID(ctx context.Context) (id int, err error) {
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *MeshRelayQuery) OnlyIDX(ctx context.Context) int {
-	id, err := _q.OnlyID(ctx)
+func (mrq *MeshRelayQuery) OnlyIDX(ctx context.Context) int {
+	id, err := mrq.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -159,18 +159,18 @@ func (_q *MeshRelayQuery) OnlyIDX(ctx context.Context) int {
 }
 
 // All executes the query and returns a list of MeshRelays.
-func (_q *MeshRelayQuery) All(ctx context.Context) ([]*MeshRelay, error) {
-	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
-	if err := _q.prepareQuery(ctx); err != nil {
+func (mrq *MeshRelayQuery) All(ctx context.Context) ([]*MeshRelay, error) {
+	ctx = setContextOp(ctx, mrq.ctx, ent.OpQueryAll)
+	if err := mrq.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*MeshRelay, *MeshRelayQuery]()
-	return withInterceptors[[]*MeshRelay](ctx, _q, qr, _q.inters)
+	return withInterceptors[[]*MeshRelay](ctx, mrq, qr, mrq.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (_q *MeshRelayQuery) AllX(ctx context.Context) []*MeshRelay {
-	nodes, err := _q.All(ctx)
+func (mrq *MeshRelayQuery) AllX(ctx context.Context) []*MeshRelay {
+	nodes, err := mrq.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -178,20 +178,20 @@ func (_q *MeshRelayQuery) AllX(ctx context.Context) []*MeshRelay {
 }
 
 // IDs executes the query and returns a list of MeshRelay IDs.
-func (_q *MeshRelayQuery) IDs(ctx context.Context) (ids []int, err error) {
-	if _q.ctx.Unique == nil && _q.path != nil {
-		_q.Unique(true)
+func (mrq *MeshRelayQuery) IDs(ctx context.Context) (ids []int, err error) {
+	if mrq.ctx.Unique == nil && mrq.path != nil {
+		mrq.Unique(true)
 	}
-	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
-	if err = _q.Select(meshrelay.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, mrq.ctx, ent.OpQueryIDs)
+	if err = mrq.Select(meshrelay.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *MeshRelayQuery) IDsX(ctx context.Context) []int {
-	ids, err := _q.IDs(ctx)
+func (mrq *MeshRelayQuery) IDsX(ctx context.Context) []int {
+	ids, err := mrq.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -199,17 +199,17 @@ func (_q *MeshRelayQuery) IDsX(ctx context.Context) []int {
 }
 
 // Count returns the count of the given query.
-func (_q *MeshRelayQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
-	if err := _q.prepareQuery(ctx); err != nil {
+func (mrq *MeshRelayQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, mrq.ctx, ent.OpQueryCount)
+	if err := mrq.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*MeshRelayQuery](), _q.inters)
+	return withInterceptors[int](ctx, mrq, querierCount[*MeshRelayQuery](), mrq.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (_q *MeshRelayQuery) CountX(ctx context.Context) int {
-	count, err := _q.Count(ctx)
+func (mrq *MeshRelayQuery) CountX(ctx context.Context) int {
+	count, err := mrq.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -217,9 +217,9 @@ func (_q *MeshRelayQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (_q *MeshRelayQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
-	switch _, err := _q.FirstID(ctx); {
+func (mrq *MeshRelayQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, mrq.ctx, ent.OpQueryExist)
+	switch _, err := mrq.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -230,8 +230,8 @@ func (_q *MeshRelayQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (_q *MeshRelayQuery) ExistX(ctx context.Context) bool {
-	exist, err := _q.Exist(ctx)
+func (mrq *MeshRelayQuery) ExistX(ctx context.Context) bool {
+	exist, err := mrq.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -240,19 +240,19 @@ func (_q *MeshRelayQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the MeshRelayQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (_q *MeshRelayQuery) Clone() *MeshRelayQuery {
-	if _q == nil {
+func (mrq *MeshRelayQuery) Clone() *MeshRelayQuery {
+	if mrq == nil {
 		return nil
 	}
 	return &MeshRelayQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]meshrelay.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.MeshRelay{}, _q.predicates...),
+		config:     mrq.config,
+		ctx:        mrq.ctx.Clone(),
+		order:      append([]meshrelay.OrderOption{}, mrq.order...),
+		inters:     append([]Interceptor{}, mrq.inters...),
+		predicates: append([]predicate.MeshRelay{}, mrq.predicates...),
 		// clone intermediate query.
-		sql:  _q.sql.Clone(),
-		path: _q.path,
+		sql:  mrq.sql.Clone(),
+		path: mrq.path,
 	}
 }
 
@@ -270,10 +270,10 @@ func (_q *MeshRelayQuery) Clone() *MeshRelayQuery {
 //		GroupBy(meshrelay.FieldMeshnetID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (_q *MeshRelayQuery) GroupBy(field string, fields ...string) *MeshRelayGroupBy {
-	_q.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &MeshRelayGroupBy{build: _q}
-	grbuild.flds = &_q.ctx.Fields
+func (mrq *MeshRelayQuery) GroupBy(field string, fields ...string) *MeshRelayGroupBy {
+	mrq.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &MeshRelayGroupBy{build: mrq}
+	grbuild.flds = &mrq.ctx.Fields
 	grbuild.label = meshrelay.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -291,62 +291,62 @@ func (_q *MeshRelayQuery) GroupBy(field string, fields ...string) *MeshRelayGrou
 //	client.MeshRelay.Query().
 //		Select(meshrelay.FieldMeshnetID).
 //		Scan(ctx, &v)
-func (_q *MeshRelayQuery) Select(fields ...string) *MeshRelaySelect {
-	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
-	sbuild := &MeshRelaySelect{MeshRelayQuery: _q}
+func (mrq *MeshRelayQuery) Select(fields ...string) *MeshRelaySelect {
+	mrq.ctx.Fields = append(mrq.ctx.Fields, fields...)
+	sbuild := &MeshRelaySelect{MeshRelayQuery: mrq}
 	sbuild.label = meshrelay.Label
-	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &mrq.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a MeshRelaySelect configured with the given aggregations.
-func (_q *MeshRelayQuery) Aggregate(fns ...AggregateFunc) *MeshRelaySelect {
-	return _q.Select().Aggregate(fns...)
+func (mrq *MeshRelayQuery) Aggregate(fns ...AggregateFunc) *MeshRelaySelect {
+	return mrq.Select().Aggregate(fns...)
 }
 
-func (_q *MeshRelayQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range _q.inters {
+func (mrq *MeshRelayQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range mrq.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, _q); err != nil {
+			if err := trv.Traverse(ctx, mrq); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range _q.ctx.Fields {
+	for _, f := range mrq.ctx.Fields {
 		if !meshrelay.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if _q.path != nil {
-		prev, err := _q.path(ctx)
+	if mrq.path != nil {
+		prev, err := mrq.path(ctx)
 		if err != nil {
 			return err
 		}
-		_q.sql = prev
+		mrq.sql = prev
 	}
 	return nil
 }
 
-func (_q *MeshRelayQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*MeshRelay, error) {
+func (mrq *MeshRelayQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*MeshRelay, error) {
 	var (
 		nodes = []*MeshRelay{}
-		_spec = _q.querySpec()
+		_spec = mrq.querySpec()
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*MeshRelay).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &MeshRelay{config: _q.config}
+		node := &MeshRelay{config: mrq.config}
 		nodes = append(nodes, node)
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, mrq.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
@@ -355,24 +355,24 @@ func (_q *MeshRelayQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Me
 	return nodes, nil
 }
 
-func (_q *MeshRelayQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := _q.querySpec()
-	_spec.Node.Columns = _q.ctx.Fields
-	if len(_q.ctx.Fields) > 0 {
-		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
+func (mrq *MeshRelayQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := mrq.querySpec()
+	_spec.Node.Columns = mrq.ctx.Fields
+	if len(mrq.ctx.Fields) > 0 {
+		_spec.Unique = mrq.ctx.Unique != nil && *mrq.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
+	return sqlgraph.CountNodes(ctx, mrq.driver, _spec)
 }
 
-func (_q *MeshRelayQuery) querySpec() *sqlgraph.QuerySpec {
+func (mrq *MeshRelayQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(meshrelay.Table, meshrelay.Columns, sqlgraph.NewFieldSpec(meshrelay.FieldID, field.TypeInt))
-	_spec.From = _q.sql
-	if unique := _q.ctx.Unique; unique != nil {
+	_spec.From = mrq.sql
+	if unique := mrq.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if _q.path != nil {
+	} else if mrq.path != nil {
 		_spec.Unique = true
 	}
-	if fields := _q.ctx.Fields; len(fields) > 0 {
+	if fields := mrq.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, meshrelay.FieldID)
 		for i := range fields {
@@ -381,20 +381,20 @@ func (_q *MeshRelayQuery) querySpec() *sqlgraph.QuerySpec {
 			}
 		}
 	}
-	if ps := _q.predicates; len(ps) > 0 {
+	if ps := mrq.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := _q.ctx.Limit; limit != nil {
+	if limit := mrq.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := _q.ctx.Offset; offset != nil {
+	if offset := mrq.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := _q.order; len(ps) > 0 {
+	if ps := mrq.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -404,33 +404,33 @@ func (_q *MeshRelayQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (_q *MeshRelayQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(_q.driver.Dialect())
+func (mrq *MeshRelayQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(mrq.driver.Dialect())
 	t1 := builder.Table(meshrelay.Table)
-	columns := _q.ctx.Fields
+	columns := mrq.ctx.Fields
 	if len(columns) == 0 {
 		columns = meshrelay.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if _q.sql != nil {
-		selector = _q.sql
+	if mrq.sql != nil {
+		selector = mrq.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if _q.ctx.Unique != nil && *_q.ctx.Unique {
+	if mrq.ctx.Unique != nil && *mrq.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range _q.predicates {
+	for _, p := range mrq.predicates {
 		p(selector)
 	}
-	for _, p := range _q.order {
+	for _, p := range mrq.order {
 		p(selector)
 	}
-	if offset := _q.ctx.Offset; offset != nil {
+	if offset := mrq.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := _q.ctx.Limit; limit != nil {
+	if limit := mrq.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -443,41 +443,41 @@ type MeshRelayGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (_g *MeshRelayGroupBy) Aggregate(fns ...AggregateFunc) *MeshRelayGroupBy {
-	_g.fns = append(_g.fns, fns...)
-	return _g
+func (mrgb *MeshRelayGroupBy) Aggregate(fns ...AggregateFunc) *MeshRelayGroupBy {
+	mrgb.fns = append(mrgb.fns, fns...)
+	return mrgb
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_g *MeshRelayGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
-	if err := _g.build.prepareQuery(ctx); err != nil {
+func (mrgb *MeshRelayGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, mrgb.build.ctx, ent.OpQueryGroupBy)
+	if err := mrgb.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*MeshRelayQuery, *MeshRelayGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return scanWithInterceptors[*MeshRelayQuery, *MeshRelayGroupBy](ctx, mrgb.build, mrgb, mrgb.build.inters, v)
 }
 
-func (_g *MeshRelayGroupBy) sqlScan(ctx context.Context, root *MeshRelayQuery, v any) error {
+func (mrgb *MeshRelayGroupBy) sqlScan(ctx context.Context, root *MeshRelayQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(_g.fns))
-	for _, fn := range _g.fns {
+	aggregation := make([]string, 0, len(mrgb.fns))
+	for _, fn := range mrgb.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
-		for _, f := range *_g.flds {
+		columns := make([]string, 0, len(*mrgb.flds)+len(mrgb.fns))
+		for _, f := range *mrgb.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*_g.flds...)...)
+	selector.GroupBy(selector.Columns(*mrgb.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := mrgb.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -491,27 +491,27 @@ type MeshRelaySelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (_s *MeshRelaySelect) Aggregate(fns ...AggregateFunc) *MeshRelaySelect {
-	_s.fns = append(_s.fns, fns...)
-	return _s
+func (mrs *MeshRelaySelect) Aggregate(fns ...AggregateFunc) *MeshRelaySelect {
+	mrs.fns = append(mrs.fns, fns...)
+	return mrs
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_s *MeshRelaySelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
-	if err := _s.prepareQuery(ctx); err != nil {
+func (mrs *MeshRelaySelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, mrs.ctx, ent.OpQuerySelect)
+	if err := mrs.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*MeshRelayQuery, *MeshRelaySelect](ctx, _s.MeshRelayQuery, _s, _s.inters, v)
+	return scanWithInterceptors[*MeshRelayQuery, *MeshRelaySelect](ctx, mrs.MeshRelayQuery, mrs, mrs.inters, v)
 }
 
-func (_s *MeshRelaySelect) sqlScan(ctx context.Context, root *MeshRelayQuery, v any) error {
+func (mrs *MeshRelaySelect) sqlScan(ctx context.Context, root *MeshRelayQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(_s.fns))
-	for _, fn := range _s.fns {
+	aggregation := make([]string, 0, len(mrs.fns))
+	for _, fn := range mrs.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*_s.selector.flds); {
+	switch n := len(*mrs.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -519,7 +519,7 @@ func (_s *MeshRelaySelect) sqlScan(ctx context.Context, root *MeshRelayQuery, v 
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
+	if err := mrs.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

@@ -28,40 +28,40 @@ type MeshNodeQuery struct {
 }
 
 // Where adds a new predicate for the MeshNodeQuery builder.
-func (_q *MeshNodeQuery) Where(ps ...predicate.MeshNode) *MeshNodeQuery {
-	_q.predicates = append(_q.predicates, ps...)
-	return _q
+func (mnq *MeshNodeQuery) Where(ps ...predicate.MeshNode) *MeshNodeQuery {
+	mnq.predicates = append(mnq.predicates, ps...)
+	return mnq
 }
 
 // Limit the number of records to be returned by this query.
-func (_q *MeshNodeQuery) Limit(limit int) *MeshNodeQuery {
-	_q.ctx.Limit = &limit
-	return _q
+func (mnq *MeshNodeQuery) Limit(limit int) *MeshNodeQuery {
+	mnq.ctx.Limit = &limit
+	return mnq
 }
 
 // Offset to start from.
-func (_q *MeshNodeQuery) Offset(offset int) *MeshNodeQuery {
-	_q.ctx.Offset = &offset
-	return _q
+func (mnq *MeshNodeQuery) Offset(offset int) *MeshNodeQuery {
+	mnq.ctx.Offset = &offset
+	return mnq
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (_q *MeshNodeQuery) Unique(unique bool) *MeshNodeQuery {
-	_q.ctx.Unique = &unique
-	return _q
+func (mnq *MeshNodeQuery) Unique(unique bool) *MeshNodeQuery {
+	mnq.ctx.Unique = &unique
+	return mnq
 }
 
 // Order specifies how the records should be ordered.
-func (_q *MeshNodeQuery) Order(o ...meshnode.OrderOption) *MeshNodeQuery {
-	_q.order = append(_q.order, o...)
-	return _q
+func (mnq *MeshNodeQuery) Order(o ...meshnode.OrderOption) *MeshNodeQuery {
+	mnq.order = append(mnq.order, o...)
+	return mnq
 }
 
 // First returns the first MeshNode entity from the query.
 // Returns a *NotFoundError when no MeshNode was found.
-func (_q *MeshNodeQuery) First(ctx context.Context) (*MeshNode, error) {
-	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
+func (mnq *MeshNodeQuery) First(ctx context.Context) (*MeshNode, error) {
+	nodes, err := mnq.Limit(1).All(setContextOp(ctx, mnq.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +72,8 @@ func (_q *MeshNodeQuery) First(ctx context.Context) (*MeshNode, error) {
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (_q *MeshNodeQuery) FirstX(ctx context.Context) *MeshNode {
-	node, err := _q.First(ctx)
+func (mnq *MeshNodeQuery) FirstX(ctx context.Context) *MeshNode {
+	node, err := mnq.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -82,9 +82,9 @@ func (_q *MeshNodeQuery) FirstX(ctx context.Context) *MeshNode {
 
 // FirstID returns the first MeshNode ID from the query.
 // Returns a *NotFoundError when no MeshNode ID was found.
-func (_q *MeshNodeQuery) FirstID(ctx context.Context) (id int, err error) {
+func (mnq *MeshNodeQuery) FirstID(ctx context.Context) (id int, err error) {
 	var ids []int
-	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = mnq.Limit(1).IDs(setContextOp(ctx, mnq.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -95,8 +95,8 @@ func (_q *MeshNodeQuery) FirstID(ctx context.Context) (id int, err error) {
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *MeshNodeQuery) FirstIDX(ctx context.Context) int {
-	id, err := _q.FirstID(ctx)
+func (mnq *MeshNodeQuery) FirstIDX(ctx context.Context) int {
+	id, err := mnq.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -106,8 +106,8 @@ func (_q *MeshNodeQuery) FirstIDX(ctx context.Context) int {
 // Only returns a single MeshNode entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one MeshNode entity is found.
 // Returns a *NotFoundError when no MeshNode entities are found.
-func (_q *MeshNodeQuery) Only(ctx context.Context) (*MeshNode, error) {
-	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
+func (mnq *MeshNodeQuery) Only(ctx context.Context) (*MeshNode, error) {
+	nodes, err := mnq.Limit(2).All(setContextOp(ctx, mnq.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -122,8 +122,8 @@ func (_q *MeshNodeQuery) Only(ctx context.Context) (*MeshNode, error) {
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (_q *MeshNodeQuery) OnlyX(ctx context.Context) *MeshNode {
-	node, err := _q.Only(ctx)
+func (mnq *MeshNodeQuery) OnlyX(ctx context.Context) *MeshNode {
+	node, err := mnq.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -133,9 +133,9 @@ func (_q *MeshNodeQuery) OnlyX(ctx context.Context) *MeshNode {
 // OnlyID is like Only, but returns the only MeshNode ID in the query.
 // Returns a *NotSingularError when more than one MeshNode ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *MeshNodeQuery) OnlyID(ctx context.Context) (id int, err error) {
+func (mnq *MeshNodeQuery) OnlyID(ctx context.Context) (id int, err error) {
 	var ids []int
-	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = mnq.Limit(2).IDs(setContextOp(ctx, mnq.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -150,8 +150,8 @@ func (_q *MeshNodeQuery) OnlyID(ctx context.Context) (id int, err error) {
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *MeshNodeQuery) OnlyIDX(ctx context.Context) int {
-	id, err := _q.OnlyID(ctx)
+func (mnq *MeshNodeQuery) OnlyIDX(ctx context.Context) int {
+	id, err := mnq.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -159,18 +159,18 @@ func (_q *MeshNodeQuery) OnlyIDX(ctx context.Context) int {
 }
 
 // All executes the query and returns a list of MeshNodes.
-func (_q *MeshNodeQuery) All(ctx context.Context) ([]*MeshNode, error) {
-	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
-	if err := _q.prepareQuery(ctx); err != nil {
+func (mnq *MeshNodeQuery) All(ctx context.Context) ([]*MeshNode, error) {
+	ctx = setContextOp(ctx, mnq.ctx, ent.OpQueryAll)
+	if err := mnq.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*MeshNode, *MeshNodeQuery]()
-	return withInterceptors[[]*MeshNode](ctx, _q, qr, _q.inters)
+	return withInterceptors[[]*MeshNode](ctx, mnq, qr, mnq.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (_q *MeshNodeQuery) AllX(ctx context.Context) []*MeshNode {
-	nodes, err := _q.All(ctx)
+func (mnq *MeshNodeQuery) AllX(ctx context.Context) []*MeshNode {
+	nodes, err := mnq.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -178,20 +178,20 @@ func (_q *MeshNodeQuery) AllX(ctx context.Context) []*MeshNode {
 }
 
 // IDs executes the query and returns a list of MeshNode IDs.
-func (_q *MeshNodeQuery) IDs(ctx context.Context) (ids []int, err error) {
-	if _q.ctx.Unique == nil && _q.path != nil {
-		_q.Unique(true)
+func (mnq *MeshNodeQuery) IDs(ctx context.Context) (ids []int, err error) {
+	if mnq.ctx.Unique == nil && mnq.path != nil {
+		mnq.Unique(true)
 	}
-	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
-	if err = _q.Select(meshnode.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, mnq.ctx, ent.OpQueryIDs)
+	if err = mnq.Select(meshnode.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *MeshNodeQuery) IDsX(ctx context.Context) []int {
-	ids, err := _q.IDs(ctx)
+func (mnq *MeshNodeQuery) IDsX(ctx context.Context) []int {
+	ids, err := mnq.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -199,17 +199,17 @@ func (_q *MeshNodeQuery) IDsX(ctx context.Context) []int {
 }
 
 // Count returns the count of the given query.
-func (_q *MeshNodeQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
-	if err := _q.prepareQuery(ctx); err != nil {
+func (mnq *MeshNodeQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, mnq.ctx, ent.OpQueryCount)
+	if err := mnq.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*MeshNodeQuery](), _q.inters)
+	return withInterceptors[int](ctx, mnq, querierCount[*MeshNodeQuery](), mnq.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (_q *MeshNodeQuery) CountX(ctx context.Context) int {
-	count, err := _q.Count(ctx)
+func (mnq *MeshNodeQuery) CountX(ctx context.Context) int {
+	count, err := mnq.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -217,9 +217,9 @@ func (_q *MeshNodeQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (_q *MeshNodeQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
-	switch _, err := _q.FirstID(ctx); {
+func (mnq *MeshNodeQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, mnq.ctx, ent.OpQueryExist)
+	switch _, err := mnq.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -230,8 +230,8 @@ func (_q *MeshNodeQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (_q *MeshNodeQuery) ExistX(ctx context.Context) bool {
-	exist, err := _q.Exist(ctx)
+func (mnq *MeshNodeQuery) ExistX(ctx context.Context) bool {
+	exist, err := mnq.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -240,19 +240,19 @@ func (_q *MeshNodeQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the MeshNodeQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (_q *MeshNodeQuery) Clone() *MeshNodeQuery {
-	if _q == nil {
+func (mnq *MeshNodeQuery) Clone() *MeshNodeQuery {
+	if mnq == nil {
 		return nil
 	}
 	return &MeshNodeQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]meshnode.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.MeshNode{}, _q.predicates...),
+		config:     mnq.config,
+		ctx:        mnq.ctx.Clone(),
+		order:      append([]meshnode.OrderOption{}, mnq.order...),
+		inters:     append([]Interceptor{}, mnq.inters...),
+		predicates: append([]predicate.MeshNode{}, mnq.predicates...),
 		// clone intermediate query.
-		sql:  _q.sql.Clone(),
-		path: _q.path,
+		sql:  mnq.sql.Clone(),
+		path: mnq.path,
 	}
 }
 
@@ -270,10 +270,10 @@ func (_q *MeshNodeQuery) Clone() *MeshNodeQuery {
 //		GroupBy(meshnode.FieldMeshnetID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (_q *MeshNodeQuery) GroupBy(field string, fields ...string) *MeshNodeGroupBy {
-	_q.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &MeshNodeGroupBy{build: _q}
-	grbuild.flds = &_q.ctx.Fields
+func (mnq *MeshNodeQuery) GroupBy(field string, fields ...string) *MeshNodeGroupBy {
+	mnq.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &MeshNodeGroupBy{build: mnq}
+	grbuild.flds = &mnq.ctx.Fields
 	grbuild.label = meshnode.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -291,62 +291,62 @@ func (_q *MeshNodeQuery) GroupBy(field string, fields ...string) *MeshNodeGroupB
 //	client.MeshNode.Query().
 //		Select(meshnode.FieldMeshnetID).
 //		Scan(ctx, &v)
-func (_q *MeshNodeQuery) Select(fields ...string) *MeshNodeSelect {
-	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
-	sbuild := &MeshNodeSelect{MeshNodeQuery: _q}
+func (mnq *MeshNodeQuery) Select(fields ...string) *MeshNodeSelect {
+	mnq.ctx.Fields = append(mnq.ctx.Fields, fields...)
+	sbuild := &MeshNodeSelect{MeshNodeQuery: mnq}
 	sbuild.label = meshnode.Label
-	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &mnq.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a MeshNodeSelect configured with the given aggregations.
-func (_q *MeshNodeQuery) Aggregate(fns ...AggregateFunc) *MeshNodeSelect {
-	return _q.Select().Aggregate(fns...)
+func (mnq *MeshNodeQuery) Aggregate(fns ...AggregateFunc) *MeshNodeSelect {
+	return mnq.Select().Aggregate(fns...)
 }
 
-func (_q *MeshNodeQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range _q.inters {
+func (mnq *MeshNodeQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range mnq.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, _q); err != nil {
+			if err := trv.Traverse(ctx, mnq); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range _q.ctx.Fields {
+	for _, f := range mnq.ctx.Fields {
 		if !meshnode.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if _q.path != nil {
-		prev, err := _q.path(ctx)
+	if mnq.path != nil {
+		prev, err := mnq.path(ctx)
 		if err != nil {
 			return err
 		}
-		_q.sql = prev
+		mnq.sql = prev
 	}
 	return nil
 }
 
-func (_q *MeshNodeQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*MeshNode, error) {
+func (mnq *MeshNodeQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*MeshNode, error) {
 	var (
 		nodes = []*MeshNode{}
-		_spec = _q.querySpec()
+		_spec = mnq.querySpec()
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*MeshNode).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &MeshNode{config: _q.config}
+		node := &MeshNode{config: mnq.config}
 		nodes = append(nodes, node)
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, mnq.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
@@ -355,24 +355,24 @@ func (_q *MeshNodeQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Mes
 	return nodes, nil
 }
 
-func (_q *MeshNodeQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := _q.querySpec()
-	_spec.Node.Columns = _q.ctx.Fields
-	if len(_q.ctx.Fields) > 0 {
-		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
+func (mnq *MeshNodeQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := mnq.querySpec()
+	_spec.Node.Columns = mnq.ctx.Fields
+	if len(mnq.ctx.Fields) > 0 {
+		_spec.Unique = mnq.ctx.Unique != nil && *mnq.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
+	return sqlgraph.CountNodes(ctx, mnq.driver, _spec)
 }
 
-func (_q *MeshNodeQuery) querySpec() *sqlgraph.QuerySpec {
+func (mnq *MeshNodeQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(meshnode.Table, meshnode.Columns, sqlgraph.NewFieldSpec(meshnode.FieldID, field.TypeInt))
-	_spec.From = _q.sql
-	if unique := _q.ctx.Unique; unique != nil {
+	_spec.From = mnq.sql
+	if unique := mnq.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if _q.path != nil {
+	} else if mnq.path != nil {
 		_spec.Unique = true
 	}
-	if fields := _q.ctx.Fields; len(fields) > 0 {
+	if fields := mnq.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, meshnode.FieldID)
 		for i := range fields {
@@ -381,20 +381,20 @@ func (_q *MeshNodeQuery) querySpec() *sqlgraph.QuerySpec {
 			}
 		}
 	}
-	if ps := _q.predicates; len(ps) > 0 {
+	if ps := mnq.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := _q.ctx.Limit; limit != nil {
+	if limit := mnq.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := _q.ctx.Offset; offset != nil {
+	if offset := mnq.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := _q.order; len(ps) > 0 {
+	if ps := mnq.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -404,33 +404,33 @@ func (_q *MeshNodeQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (_q *MeshNodeQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(_q.driver.Dialect())
+func (mnq *MeshNodeQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(mnq.driver.Dialect())
 	t1 := builder.Table(meshnode.Table)
-	columns := _q.ctx.Fields
+	columns := mnq.ctx.Fields
 	if len(columns) == 0 {
 		columns = meshnode.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if _q.sql != nil {
-		selector = _q.sql
+	if mnq.sql != nil {
+		selector = mnq.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if _q.ctx.Unique != nil && *_q.ctx.Unique {
+	if mnq.ctx.Unique != nil && *mnq.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range _q.predicates {
+	for _, p := range mnq.predicates {
 		p(selector)
 	}
-	for _, p := range _q.order {
+	for _, p := range mnq.order {
 		p(selector)
 	}
-	if offset := _q.ctx.Offset; offset != nil {
+	if offset := mnq.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := _q.ctx.Limit; limit != nil {
+	if limit := mnq.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -443,41 +443,41 @@ type MeshNodeGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (_g *MeshNodeGroupBy) Aggregate(fns ...AggregateFunc) *MeshNodeGroupBy {
-	_g.fns = append(_g.fns, fns...)
-	return _g
+func (mngb *MeshNodeGroupBy) Aggregate(fns ...AggregateFunc) *MeshNodeGroupBy {
+	mngb.fns = append(mngb.fns, fns...)
+	return mngb
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_g *MeshNodeGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
-	if err := _g.build.prepareQuery(ctx); err != nil {
+func (mngb *MeshNodeGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, mngb.build.ctx, ent.OpQueryGroupBy)
+	if err := mngb.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*MeshNodeQuery, *MeshNodeGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return scanWithInterceptors[*MeshNodeQuery, *MeshNodeGroupBy](ctx, mngb.build, mngb, mngb.build.inters, v)
 }
 
-func (_g *MeshNodeGroupBy) sqlScan(ctx context.Context, root *MeshNodeQuery, v any) error {
+func (mngb *MeshNodeGroupBy) sqlScan(ctx context.Context, root *MeshNodeQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(_g.fns))
-	for _, fn := range _g.fns {
+	aggregation := make([]string, 0, len(mngb.fns))
+	for _, fn := range mngb.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
-		for _, f := range *_g.flds {
+		columns := make([]string, 0, len(*mngb.flds)+len(mngb.fns))
+		for _, f := range *mngb.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*_g.flds...)...)
+	selector.GroupBy(selector.Columns(*mngb.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := mngb.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -491,27 +491,27 @@ type MeshNodeSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (_s *MeshNodeSelect) Aggregate(fns ...AggregateFunc) *MeshNodeSelect {
-	_s.fns = append(_s.fns, fns...)
-	return _s
+func (mns *MeshNodeSelect) Aggregate(fns ...AggregateFunc) *MeshNodeSelect {
+	mns.fns = append(mns.fns, fns...)
+	return mns
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_s *MeshNodeSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
-	if err := _s.prepareQuery(ctx); err != nil {
+func (mns *MeshNodeSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, mns.ctx, ent.OpQuerySelect)
+	if err := mns.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*MeshNodeQuery, *MeshNodeSelect](ctx, _s.MeshNodeQuery, _s, _s.inters, v)
+	return scanWithInterceptors[*MeshNodeQuery, *MeshNodeSelect](ctx, mns.MeshNodeQuery, mns, mns.inters, v)
 }
 
-func (_s *MeshNodeSelect) sqlScan(ctx context.Context, root *MeshNodeQuery, v any) error {
+func (mns *MeshNodeSelect) sqlScan(ctx context.Context, root *MeshNodeQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(_s.fns))
-	for _, fn := range _s.fns {
+	aggregation := make([]string, 0, len(mns.fns))
+	for _, fn := range mns.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*_s.selector.flds); {
+	switch n := len(*mns.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -519,7 +519,7 @@ func (_s *MeshNodeSelect) sqlScan(ctx context.Context, root *MeshNodeQuery, v an
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
+	if err := mns.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

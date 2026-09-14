@@ -12,10 +12,14 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// CoordSetting is the client for interacting with the CoordSetting builders.
+	CoordSetting *CoordSettingClient
 	// MeshACL is the client for interacting with the MeshACL builders.
 	MeshACL *MeshACLClient
 	// MeshACLRevision is the client for interacting with the MeshACLRevision builders.
 	MeshACLRevision *MeshACLRevisionClient
+	// MeshConnRecord is the client for interacting with the MeshConnRecord builders.
+	MeshConnRecord *MeshConnRecordClient
 	// MeshNode is the client for interacting with the MeshNode builders.
 	MeshNode *MeshNodeClient
 	// MeshRelay is the client for interacting with the MeshRelay builders.
@@ -155,8 +159,10 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.CoordSetting = NewCoordSettingClient(tx.config)
 	tx.MeshACL = NewMeshACLClient(tx.config)
 	tx.MeshACLRevision = NewMeshACLRevisionClient(tx.config)
+	tx.MeshConnRecord = NewMeshConnRecordClient(tx.config)
 	tx.MeshNode = NewMeshNodeClient(tx.config)
 	tx.MeshRelay = NewMeshRelayClient(tx.config)
 	tx.MeshService = NewMeshServiceClient(tx.config)
@@ -170,7 +176,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: MeshACL.QueryXXX(), the query will be executed
+// applies a query, for example: CoordSetting.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

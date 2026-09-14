@@ -84,6 +84,13 @@ type meshConfig struct {
 	// e.g. ["192.168.1.22/32"]. Contains-or-equal: excluding a /24 also refuses
 	// every more-specific prefix inside it.
 	RouteExcludes []string `yaml:"route_excludes,omitempty"`
+	// BlockIncoming refuses every inbound CONNECTION to this machine, whatever
+	// the org's access rules allow; replies to conversations this machine started
+	// still come back. The consumer side again, and for the same reason: an
+	// admin's "accept" is permission to try, not an obligation on this machine to
+	// answer. Platform path sets it from creds (the console switch); a
+	// self-hosted config can set it here.
+	BlockIncoming bool `yaml:"block_incoming,omitempty"`
 	// PinnedHomeRegion pins the relay home to the facility the EDGE session is
 	// anchored to, so switching between two self-hosted nodes moves the relay
 	// with the edge instead of leaving it wherever it measured fastest. Set
@@ -446,6 +453,7 @@ func (r *meshRunner) runControlPlane(ctx context.Context, data *meshDataPlane) e
 		HomePreference:   r.cfg.HomePreference,
 		PinnedHomeRegion: r.cfg.PinnedHomeRegion,
 		Routes:           r.routePolicy(),
+		BlockIncoming:    r.cfg.BlockIncoming,
 		Logger:           r.logger,
 	}
 	// Retained so the status endpoint can read the service self-check. Cleared
@@ -585,9 +593,27 @@ func (r *meshRunner) MeshStatus() localweb.MeshStatus {
 		}
 		ms.AliasBudgetAddrs, ms.AliasUsedAddrs = snap.AliasBudgetAddrs, snap.AliasUsedAddrs
 		ms.Datapath = localweb.MeshDatapath(snap.Datapath)
+		// Peer NAMES come from the netmap, live state from WireGuard, and the
+		// two meet here keyed by node key. The datapath deliberately knows
+		// nothing about labels — it configures tunnels, and a label is not one
+		// of its inputs.
+		var facts map[string]mesh.PeerFacts
+		if ctrl != nil {
+			facts = ctrl.PeerFactsByKey()
+		}
 		for _, p := range snap.Peers {
+			f := facts[p.PublicKey]
+			var svcs []localweb.MeshPeerService
+			for _, sv := range f.Services {
+				svcs = append(svcs, localweb.MeshPeerService{
+					Name: sv.Name, Proto: sv.Proto, Port: sv.Port,
+				})
+			}
 			ms.Peers = append(ms.Peers, localweb.MeshPeer{
 				PublicKey:        p.PublicKey,
+				Name:             f.Name,
+				Services:         svcs,
+				OS:               f.OS,
 				AllowedIPs:       p.AllowedIPs,
 				LastHandshakeSec: p.LastHandshakeSec,
 				RxBytes:          p.RxBytes,
@@ -664,8 +690,8 @@ func resolveAcceptRoutes(explicit *bool, keyFile string, logger *slog.Logger) bo
 	_, statErr := os.Stat(keyFile)
 	seeded := statErr == nil // a key already on disk = this node has meshed before
 	if seeded {
-		logger.Info("mesh: keeping subnet-route acceptance ON for this already-enrolled node " +
-			"(new nodes now default to OFF; change it in the :7400 console under 组网 → 路由)")
+		logger.Info("mesh: keeping subnet-route acceptance ON for this already-enrolled device " +
+			"(new devices now default to OFF; change it in the :7400 console under 组网 → 路由)")
 	} else {
 		logger.Info("mesh: subnet routes from peers are NOT installed by default; " +
 			"enable it in the :7400 console under 组网 → 路由 if you need them")

@@ -75,6 +75,13 @@ func TestMeshRelayProbeShapesAgreeAcrossDaemonKinds(t *testing.T) {
 	assertShapesAgree(t, reflect.TypeOf(localweb.MeshRelayProbe{}), reflect.TypeOf(statusapi.MeshRelayProbe{}))
 }
 
+// nestedStructSlices reports whether both types are slices of structs — the one
+// case where differing Go types are expected rather than a drift.
+func nestedStructSlices(a, b reflect.Type) bool {
+	return a.Kind() == reflect.Slice && b.Kind() == reflect.Slice &&
+		a.Elem().Kind() == reflect.Struct && b.Elem().Kind() == reflect.Struct
+}
+
 func assertShapesAgree(t *testing.T, local, platform reflect.Type) {
 	t.Helper()
 	if local.NumField() != platform.NumField() {
@@ -83,8 +90,20 @@ func assertShapesAgree(t *testing.T, local, platform reflect.Type) {
 	}
 	for i := 0; i < local.NumField(); i++ {
 		l, p := local.Field(i), platform.Field(i)
-		if l.Name != p.Name || l.Type != p.Type {
-			t.Errorf("field %d: localweb %s %s, statusapi %s %s", i, l.Name, l.Type, p.Name, p.Type)
+		switch {
+		case l.Name != p.Name:
+			t.Errorf("field %d: localweb %s, statusapi %s", i, l.Name, p.Name)
+		case l.Type == p.Type:
+			// identical type: nothing more to check
+		case nestedStructSlices(l.Type, p.Type):
+			// A slice of a NAMED struct cannot have the same Go type on both
+			// sides — statusapi must not import localweb — so the types differ
+			// by construction and comparing them by identity would reject every
+			// correct implementation. Recurse instead: the element shapes are
+			// what has to agree, and that is the thing the SPA actually reads.
+			assertShapesAgree(t, l.Type.Elem(), p.Type.Elem())
+		default:
+			t.Errorf("field %s: localweb %s, statusapi %s", l.Name, l.Type, p.Type)
 		}
 		// The wire name matters more than the Go name: the same SPA reads both.
 		if l.Tag.Get("json") != p.Tag.Get("json") {

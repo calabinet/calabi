@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -39,78 +38,48 @@ func bffURL() string {
 	return envOr("CALABI_BFF_CONSOLE", defaultBFFConsole)
 }
 
-// refreshMu serialises refreshBearer. Edge discovery (on a 401) and the mesh (on
-// a refused registration) can both want a fresh token at the same moment, and a
-// refresh token is good for ONE exchange — identity-svc rotates it on use and
-// refuses the replay. Unserialised, both spend the same one and the loser comes
-// back empty-handed.
-var refreshMu sync.Mutex
-
 // refreshBearer exchanges the stored refresh_token for a fresh access
 // token via bff-console /v1/auth/refresh, persists both back to creds,
 // and returns the new access token. Returns "" when there's no refresh
-// token, the exchange fails, or the token didn't change.
+// token or the exchange fails.
 //
 // Two daemon paths use it as a recovery hook, both because nothing else
-// refreshes a login session while no console is open (statusapi.doRefresh
-// only fires on proxied calls):
+// refreshes a login session while no console is open (the local console's
+// proxy only refreshes on proxied calls):
 //   - edgepicker, on a 401: on a cold boot the stored access_token may have
 //     expired while the daemon was down.
 //   - the mesh, when the coordinator refuses its credential: an access token
 //     lives 15 minutes and a long-lived edge session never asks for a new one,
 //     so the mesh's first re-registration after that is refused.
 //
+// The exchange itself is creds.RefreshSession, shared with the local
+// console's proxy: one lock for the whole process (a refresh token is
+// single-use), and a caller whose token was already replaced while it waited
+// gets the replacement instead of spending the refresh token again.
+//
 // CLI one-shot commands deliberately DON'T use this — they fail loud and
 // tell the user to re-run `calabi login`.
 func refreshBearer(ctx context.Context) string {
-	refreshMu.Lock()
-	defer refreshMu.Unlock()
-	cfg, err := creds.Load()
-	if err != nil || cfg == nil || cfg.RefreshToken == "" {
-		return ""
+	// The credential the caller was just refused with is the one on disk now,
+	// before we queue for the exchange lock.
+	refused := ""
+	if c, err := creds.Load(); err == nil && c != nil {
+		refused = c.AccessToken
 	}
-	prev, spent := cfg.AccessToken, cfg.RefreshToken
 	// Refresh is unauthenticated — the refresh_token lives in the body,
 	// not the Authorization header.
 	cli := bffclient.New(bffURL(), "")
-	var out struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-	}
-	if err := cli.Do(ctx, "POST", "/v1/auth/refresh",
-		map[string]string{"refresh_token": spent}, &out); err != nil {
-		return ""
-	}
-	if out.AccessToken == "" || out.AccessToken == prev {
-		return ""
-	}
-	// Re-read before writing. The exchange was a network round trip, and in that
-	// window the rest of the daemon may have written creds — the console saving a
-	// region switch, the session recording the edge it landed on. Saving the copy
-	// loaded before the request would quietly put all of that back.
-	cur, err := creds.Load()
-	if err != nil || cur == nil {
-		cur = cfg
-	}
-	if cur.RefreshToken != spent {
-		// The session itself was replaced meanwhile — a sign-in, an org switch.
-		// What is on disk is newer than what this exchange returned: keep it, and
-		// hand it to the caller if it is a credential the caller has not tried.
-		if cur.AccessToken != "" && cur.AccessToken != prev {
-			return cur.AccessToken
+	return creds.RefreshSession(ctx, refused, func(ctx context.Context, spent string) (string, string, error) {
+		var out struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token"`
 		}
-		return ""
-	}
-	cur.AccessToken = out.AccessToken
-	if out.RefreshToken != "" {
-		cur.RefreshToken = out.RefreshToken
-	}
-	if err := creds.Save(cur); err != nil {
-		// Non-fatal: the returned token still works for this retry; the
-		// next boot just refreshes again.
-		fmt.Fprintln(os.Stderr, "calabi: save refreshed creds:", err)
-	}
-	return out.AccessToken
+		if err := cli.Do(ctx, "POST", "/v1/auth/refresh",
+			map[string]string{"refresh_token": spent}, &out); err != nil {
+			return "", "", err
+		}
+		return out.AccessToken, out.RefreshToken, nil
+	})
 }
 
 // authedClient returns a bffclient.Client carrying the saved access

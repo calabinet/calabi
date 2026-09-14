@@ -18,6 +18,7 @@ import (
 	"github.com/calabi/calabi/apps/client/internal/localweb"
 	"github.com/calabi/calabi/apps/client/internal/session"
 	"github.com/calabi/calabi/apps/client/internal/status"
+	proto "github.com/calabi/calabi/pkg/protocol"
 	"gopkg.in/yaml.v3"
 )
 
@@ -188,6 +189,16 @@ func (sv *localSupervisor) reconcile(sctx context.Context, logger *slog.Logger, 
 		if err != nil {
 			logger.Error("register tunnel failed", "name", eff.Name, "type", p.kind, "err", err)
 			continue
+		}
+		// Same silence, other entry point: this daemon also hands the edge a
+		// policy, and the edge decides whether to honour it. A `--local` daemon
+		// pointed at a BYOI edge (control-plane-wired, so it does NOT) would
+		// otherwise serve a tunnel with none of its L7 rules and say nothing.
+		if assigned.ClientPolicy == proto.ClientPolicyRelayed {
+			logger.Warn("this edge did not apply the tunnel's security policy — it does not "+
+				"accept client-supplied policy (not standalone, or a control plane is wired). "+
+				"IP rules still apply; basic auth / rate limits / headers / OAuth do NOT",
+				"name", p.tun.Name, "proxy_id", assigned.ProxyID)
 		}
 		reg.set(p.id, assigned.ProxyID, p.tun.SecurityConfigJSON, p.tun)
 		sv.markLive(p.id, assigned)

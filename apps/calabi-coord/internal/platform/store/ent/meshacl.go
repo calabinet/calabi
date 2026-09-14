@@ -46,7 +46,7 @@ func (*MeshACL) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the MeshACL fields.
-func (_m *MeshACL) assignValues(columns []string, values []any) error {
+func (ma *MeshACL) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -57,27 +57,27 @@ func (_m *MeshACL) assignValues(columns []string, values []any) error {
 			if !ok {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
-			_m.ID = int(value.Int64)
+			ma.ID = int(value.Int64)
 		case meshacl.FieldMeshnetID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field meshnet_id", values[i])
 			} else if value.Valid {
-				_m.MeshnetID = value.Int64
+				ma.MeshnetID = value.Int64
 			}
 		case meshacl.FieldPolicyJSON:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field policy_json", values[i])
 			} else if value.Valid {
-				_m.PolicyJSON = value.String
+				ma.PolicyJSON = value.String
 			}
 		case meshacl.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				_m.UpdatedAt = value.Time
+				ma.UpdatedAt = value.Time
 			}
 		default:
-			_m.selectValues.Set(columns[i], values[i])
+			ma.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -85,41 +85,41 @@ func (_m *MeshACL) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the MeshACL.
 // This includes values selected through modifiers, order, etc.
-func (_m *MeshACL) Value(name string) (ent.Value, error) {
-	return _m.selectValues.Get(name)
+func (ma *MeshACL) Value(name string) (ent.Value, error) {
+	return ma.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this MeshACL.
 // Note that you need to call MeshACL.Unwrap() before calling this method if this MeshACL
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (_m *MeshACL) Update() *MeshACLUpdateOne {
-	return NewMeshACLClient(_m.config).UpdateOne(_m)
+func (ma *MeshACL) Update() *MeshACLUpdateOne {
+	return NewMeshACLClient(ma.config).UpdateOne(ma)
 }
 
 // Unwrap unwraps the MeshACL entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (_m *MeshACL) Unwrap() *MeshACL {
-	_tx, ok := _m.config.driver.(*txDriver)
+func (ma *MeshACL) Unwrap() *MeshACL {
+	_tx, ok := ma.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: MeshACL is not a transactional entity")
 	}
-	_m.config.driver = _tx.drv
-	return _m
+	ma.config.driver = _tx.drv
+	return ma
 }
 
 // String implements the fmt.Stringer.
-func (_m *MeshACL) String() string {
+func (ma *MeshACL) String() string {
 	var builder strings.Builder
 	builder.WriteString("MeshACL(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", ma.ID))
 	builder.WriteString("meshnet_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.MeshnetID))
+	builder.WriteString(fmt.Sprintf("%v", ma.MeshnetID))
 	builder.WriteString(", ")
 	builder.WriteString("policy_json=")
-	builder.WriteString(_m.PolicyJSON)
+	builder.WriteString(ma.PolicyJSON)
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(ma.UpdatedAt.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }

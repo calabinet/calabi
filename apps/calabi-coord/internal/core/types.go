@@ -94,6 +94,23 @@ type Node struct {
 	// record; nothing here or downstream authorizes on it. Empty when the
 	// daemon has no device registration (self-hosted coord, standalone client).
 	DeviceFingerprint string
+	// OS is the platform the daemon's runtime reported at registration
+	// ("windows", "linux", "darwin"). Self-reported and display-only, like the
+	// fingerprint above: it answers "which of these is the Windows box" and
+	// nothing authorizes on it. Empty for nodes enrolled before it was
+	// collected — a blank, never the word "unknown".
+	OS string
+	// BlockIncoming is the machine's OWN "refuse all inbound connections" switch,
+	// as it last reported. A POINTER because there are three states and only two
+	// of them are booleans: nil means the daemon never told us (too old, or never
+	// re-registered since the field existed). Rendering nil as false would make
+	// every un-upgraded machine claim, positively, that it accepts connections.
+	//
+	// Reported state ONLY. Enforcement lives in the node's own packet filter, on
+	// purpose (it has to hold when the coordinator is unreachable and in orgs
+	// that never wrote an ACL) — so clearing this here would not open a machine
+	// up, it would only make the console lie.
+	BlockIncoming *bool
 	// Approved is device approval (MESH.8e-5): a node enrolled while the meshnet
 	// requires approval starts false and reaches nothing until an admin says yes.
 	// Defaults TRUE everywhere else, so turning the switch on never retroactively

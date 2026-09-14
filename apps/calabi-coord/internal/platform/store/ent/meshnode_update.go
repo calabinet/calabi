@@ -23,325 +23,359 @@ type MeshNodeUpdate struct {
 }
 
 // Where appends a list predicates to the MeshNodeUpdate builder.
-func (_u *MeshNodeUpdate) Where(ps ...predicate.MeshNode) *MeshNodeUpdate {
-	_u.mutation.Where(ps...)
-	return _u
+func (mnu *MeshNodeUpdate) Where(ps ...predicate.MeshNode) *MeshNodeUpdate {
+	mnu.mutation.Where(ps...)
+	return mnu
 }
 
 // SetMeshnetID sets the "meshnet_id" field.
-func (_u *MeshNodeUpdate) SetMeshnetID(v int64) *MeshNodeUpdate {
-	_u.mutation.ResetMeshnetID()
-	_u.mutation.SetMeshnetID(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetMeshnetID(i int64) *MeshNodeUpdate {
+	mnu.mutation.ResetMeshnetID()
+	mnu.mutation.SetMeshnetID(i)
+	return mnu
 }
 
 // SetNillableMeshnetID sets the "meshnet_id" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableMeshnetID(v *int64) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetMeshnetID(*v)
+func (mnu *MeshNodeUpdate) SetNillableMeshnetID(i *int64) *MeshNodeUpdate {
+	if i != nil {
+		mnu.SetMeshnetID(*i)
 	}
-	return _u
+	return mnu
 }
 
-// AddMeshnetID adds value to the "meshnet_id" field.
-func (_u *MeshNodeUpdate) AddMeshnetID(v int64) *MeshNodeUpdate {
-	_u.mutation.AddMeshnetID(v)
-	return _u
+// AddMeshnetID adds i to the "meshnet_id" field.
+func (mnu *MeshNodeUpdate) AddMeshnetID(i int64) *MeshNodeUpdate {
+	mnu.mutation.AddMeshnetID(i)
+	return mnu
 }
 
 // SetNodeKey sets the "node_key" field.
-func (_u *MeshNodeUpdate) SetNodeKey(v string) *MeshNodeUpdate {
-	_u.mutation.SetNodeKey(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetNodeKey(s string) *MeshNodeUpdate {
+	mnu.mutation.SetNodeKey(s)
+	return mnu
 }
 
 // SetNillableNodeKey sets the "node_key" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableNodeKey(v *string) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetNodeKey(*v)
+func (mnu *MeshNodeUpdate) SetNillableNodeKey(s *string) *MeshNodeUpdate {
+	if s != nil {
+		mnu.SetNodeKey(*s)
 	}
-	return _u
+	return mnu
 }
 
 // SetName sets the "name" field.
-func (_u *MeshNodeUpdate) SetName(v string) *MeshNodeUpdate {
-	_u.mutation.SetName(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetName(s string) *MeshNodeUpdate {
+	mnu.mutation.SetName(s)
+	return mnu
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableName(v *string) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetName(*v)
+func (mnu *MeshNodeUpdate) SetNillableName(s *string) *MeshNodeUpdate {
+	if s != nil {
+		mnu.SetName(*s)
 	}
-	return _u
+	return mnu
 }
 
 // SetHostName sets the "host_name" field.
-func (_u *MeshNodeUpdate) SetHostName(v string) *MeshNodeUpdate {
-	_u.mutation.SetHostName(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetHostName(s string) *MeshNodeUpdate {
+	mnu.mutation.SetHostName(s)
+	return mnu
 }
 
 // SetNillableHostName sets the "host_name" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableHostName(v *string) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetHostName(*v)
+func (mnu *MeshNodeUpdate) SetNillableHostName(s *string) *MeshNodeUpdate {
+	if s != nil {
+		mnu.SetHostName(*s)
 	}
-	return _u
+	return mnu
 }
 
 // SetNamePinned sets the "name_pinned" field.
-func (_u *MeshNodeUpdate) SetNamePinned(v bool) *MeshNodeUpdate {
-	_u.mutation.SetNamePinned(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetNamePinned(b bool) *MeshNodeUpdate {
+	mnu.mutation.SetNamePinned(b)
+	return mnu
 }
 
 // SetNillableNamePinned sets the "name_pinned" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableNamePinned(v *bool) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetNamePinned(*v)
+func (mnu *MeshNodeUpdate) SetNillableNamePinned(b *bool) *MeshNodeUpdate {
+	if b != nil {
+		mnu.SetNamePinned(*b)
 	}
-	return _u
+	return mnu
 }
 
 // SetDiscoKey sets the "disco_key" field.
-func (_u *MeshNodeUpdate) SetDiscoKey(v string) *MeshNodeUpdate {
-	_u.mutation.SetDiscoKey(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetDiscoKey(s string) *MeshNodeUpdate {
+	mnu.mutation.SetDiscoKey(s)
+	return mnu
 }
 
 // SetNillableDiscoKey sets the "disco_key" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableDiscoKey(v *string) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetDiscoKey(*v)
+func (mnu *MeshNodeUpdate) SetNillableDiscoKey(s *string) *MeshNodeUpdate {
+	if s != nil {
+		mnu.SetDiscoKey(*s)
 	}
-	return _u
+	return mnu
 }
 
 // SetOverlay sets the "overlay" field.
-func (_u *MeshNodeUpdate) SetOverlay(v string) *MeshNodeUpdate {
-	_u.mutation.SetOverlay(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetOverlay(s string) *MeshNodeUpdate {
+	mnu.mutation.SetOverlay(s)
+	return mnu
 }
 
 // SetNillableOverlay sets the "overlay" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableOverlay(v *string) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetOverlay(*v)
+func (mnu *MeshNodeUpdate) SetNillableOverlay(s *string) *MeshNodeUpdate {
+	if s != nil {
+		mnu.SetOverlay(*s)
 	}
-	return _u
+	return mnu
 }
 
 // SetDerpHome sets the "derp_home" field.
-func (_u *MeshNodeUpdate) SetDerpHome(v string) *MeshNodeUpdate {
-	_u.mutation.SetDerpHome(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetDerpHome(s string) *MeshNodeUpdate {
+	mnu.mutation.SetDerpHome(s)
+	return mnu
 }
 
 // SetNillableDerpHome sets the "derp_home" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableDerpHome(v *string) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetDerpHome(*v)
+func (mnu *MeshNodeUpdate) SetNillableDerpHome(s *string) *MeshNodeUpdate {
+	if s != nil {
+		mnu.SetDerpHome(*s)
 	}
-	return _u
+	return mnu
 }
 
 // SetEndpointsJSON sets the "endpoints_json" field.
-func (_u *MeshNodeUpdate) SetEndpointsJSON(v string) *MeshNodeUpdate {
-	_u.mutation.SetEndpointsJSON(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetEndpointsJSON(s string) *MeshNodeUpdate {
+	mnu.mutation.SetEndpointsJSON(s)
+	return mnu
 }
 
 // SetNillableEndpointsJSON sets the "endpoints_json" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableEndpointsJSON(v *string) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetEndpointsJSON(*v)
+func (mnu *MeshNodeUpdate) SetNillableEndpointsJSON(s *string) *MeshNodeUpdate {
+	if s != nil {
+		mnu.SetEndpointsJSON(*s)
 	}
-	return _u
+	return mnu
 }
 
 // SetAdvertisedRoutesJSON sets the "advertised_routes_json" field.
-func (_u *MeshNodeUpdate) SetAdvertisedRoutesJSON(v string) *MeshNodeUpdate {
-	_u.mutation.SetAdvertisedRoutesJSON(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetAdvertisedRoutesJSON(s string) *MeshNodeUpdate {
+	mnu.mutation.SetAdvertisedRoutesJSON(s)
+	return mnu
 }
 
 // SetNillableAdvertisedRoutesJSON sets the "advertised_routes_json" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableAdvertisedRoutesJSON(v *string) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetAdvertisedRoutesJSON(*v)
+func (mnu *MeshNodeUpdate) SetNillableAdvertisedRoutesJSON(s *string) *MeshNodeUpdate {
+	if s != nil {
+		mnu.SetAdvertisedRoutesJSON(*s)
 	}
-	return _u
+	return mnu
 }
 
 // SetApprovedRoutesJSON sets the "approved_routes_json" field.
-func (_u *MeshNodeUpdate) SetApprovedRoutesJSON(v string) *MeshNodeUpdate {
-	_u.mutation.SetApprovedRoutesJSON(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetApprovedRoutesJSON(s string) *MeshNodeUpdate {
+	mnu.mutation.SetApprovedRoutesJSON(s)
+	return mnu
 }
 
 // SetNillableApprovedRoutesJSON sets the "approved_routes_json" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableApprovedRoutesJSON(v *string) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetApprovedRoutesJSON(*v)
+func (mnu *MeshNodeUpdate) SetNillableApprovedRoutesJSON(s *string) *MeshNodeUpdate {
+	if s != nil {
+		mnu.SetApprovedRoutesJSON(*s)
 	}
-	return _u
+	return mnu
 }
 
 // SetAliasedRoutesJSON sets the "aliased_routes_json" field.
-func (_u *MeshNodeUpdate) SetAliasedRoutesJSON(v string) *MeshNodeUpdate {
-	_u.mutation.SetAliasedRoutesJSON(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetAliasedRoutesJSON(s string) *MeshNodeUpdate {
+	mnu.mutation.SetAliasedRoutesJSON(s)
+	return mnu
 }
 
 // SetNillableAliasedRoutesJSON sets the "aliased_routes_json" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableAliasedRoutesJSON(v *string) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetAliasedRoutesJSON(*v)
+func (mnu *MeshNodeUpdate) SetNillableAliasedRoutesJSON(s *string) *MeshNodeUpdate {
+	if s != nil {
+		mnu.SetAliasedRoutesJSON(*s)
 	}
-	return _u
+	return mnu
 }
 
 // SetRouteAliasesJSON sets the "route_aliases_json" field.
-func (_u *MeshNodeUpdate) SetRouteAliasesJSON(v string) *MeshNodeUpdate {
-	_u.mutation.SetRouteAliasesJSON(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetRouteAliasesJSON(s string) *MeshNodeUpdate {
+	mnu.mutation.SetRouteAliasesJSON(s)
+	return mnu
 }
 
 // SetNillableRouteAliasesJSON sets the "route_aliases_json" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableRouteAliasesJSON(v *string) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetRouteAliasesJSON(*v)
+func (mnu *MeshNodeUpdate) SetNillableRouteAliasesJSON(s *string) *MeshNodeUpdate {
+	if s != nil {
+		mnu.SetRouteAliasesJSON(*s)
 	}
-	return _u
+	return mnu
 }
 
 // SetRoutesReviewed sets the "routes_reviewed" field.
-func (_u *MeshNodeUpdate) SetRoutesReviewed(v bool) *MeshNodeUpdate {
-	_u.mutation.SetRoutesReviewed(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetRoutesReviewed(b bool) *MeshNodeUpdate {
+	mnu.mutation.SetRoutesReviewed(b)
+	return mnu
 }
 
 // SetNillableRoutesReviewed sets the "routes_reviewed" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableRoutesReviewed(v *bool) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetRoutesReviewed(*v)
+func (mnu *MeshNodeUpdate) SetNillableRoutesReviewed(b *bool) *MeshNodeUpdate {
+	if b != nil {
+		mnu.SetRoutesReviewed(*b)
 	}
-	return _u
+	return mnu
 }
 
 // SetOwnerUserID sets the "owner_user_id" field.
-func (_u *MeshNodeUpdate) SetOwnerUserID(v int64) *MeshNodeUpdate {
-	_u.mutation.ResetOwnerUserID()
-	_u.mutation.SetOwnerUserID(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetOwnerUserID(i int64) *MeshNodeUpdate {
+	mnu.mutation.ResetOwnerUserID()
+	mnu.mutation.SetOwnerUserID(i)
+	return mnu
 }
 
 // SetNillableOwnerUserID sets the "owner_user_id" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableOwnerUserID(v *int64) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetOwnerUserID(*v)
+func (mnu *MeshNodeUpdate) SetNillableOwnerUserID(i *int64) *MeshNodeUpdate {
+	if i != nil {
+		mnu.SetOwnerUserID(*i)
 	}
-	return _u
+	return mnu
 }
 
-// AddOwnerUserID adds value to the "owner_user_id" field.
-func (_u *MeshNodeUpdate) AddOwnerUserID(v int64) *MeshNodeUpdate {
-	_u.mutation.AddOwnerUserID(v)
-	return _u
+// AddOwnerUserID adds i to the "owner_user_id" field.
+func (mnu *MeshNodeUpdate) AddOwnerUserID(i int64) *MeshNodeUpdate {
+	mnu.mutation.AddOwnerUserID(i)
+	return mnu
 }
 
 // SetDeviceFingerprint sets the "device_fingerprint" field.
-func (_u *MeshNodeUpdate) SetDeviceFingerprint(v string) *MeshNodeUpdate {
-	_u.mutation.SetDeviceFingerprint(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetDeviceFingerprint(s string) *MeshNodeUpdate {
+	mnu.mutation.SetDeviceFingerprint(s)
+	return mnu
 }
 
 // SetNillableDeviceFingerprint sets the "device_fingerprint" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableDeviceFingerprint(v *string) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetDeviceFingerprint(*v)
+func (mnu *MeshNodeUpdate) SetNillableDeviceFingerprint(s *string) *MeshNodeUpdate {
+	if s != nil {
+		mnu.SetDeviceFingerprint(*s)
 	}
-	return _u
+	return mnu
+}
+
+// SetOs sets the "os" field.
+func (mnu *MeshNodeUpdate) SetOs(s string) *MeshNodeUpdate {
+	mnu.mutation.SetOs(s)
+	return mnu
+}
+
+// SetNillableOs sets the "os" field if the given value is not nil.
+func (mnu *MeshNodeUpdate) SetNillableOs(s *string) *MeshNodeUpdate {
+	if s != nil {
+		mnu.SetOs(*s)
+	}
+	return mnu
+}
+
+// SetBlockIncoming sets the "block_incoming" field.
+func (mnu *MeshNodeUpdate) SetBlockIncoming(b bool) *MeshNodeUpdate {
+	mnu.mutation.SetBlockIncoming(b)
+	return mnu
+}
+
+// SetNillableBlockIncoming sets the "block_incoming" field if the given value is not nil.
+func (mnu *MeshNodeUpdate) SetNillableBlockIncoming(b *bool) *MeshNodeUpdate {
+	if b != nil {
+		mnu.SetBlockIncoming(*b)
+	}
+	return mnu
+}
+
+// ClearBlockIncoming clears the value of the "block_incoming" field.
+func (mnu *MeshNodeUpdate) ClearBlockIncoming() *MeshNodeUpdate {
+	mnu.mutation.ClearBlockIncoming()
+	return mnu
 }
 
 // SetTagsPinned sets the "tags_pinned" field.
-func (_u *MeshNodeUpdate) SetTagsPinned(v bool) *MeshNodeUpdate {
-	_u.mutation.SetTagsPinned(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetTagsPinned(b bool) *MeshNodeUpdate {
+	mnu.mutation.SetTagsPinned(b)
+	return mnu
 }
 
 // SetNillableTagsPinned sets the "tags_pinned" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableTagsPinned(v *bool) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetTagsPinned(*v)
+func (mnu *MeshNodeUpdate) SetNillableTagsPinned(b *bool) *MeshNodeUpdate {
+	if b != nil {
+		mnu.SetTagsPinned(*b)
 	}
-	return _u
+	return mnu
 }
 
 // SetTagsJSON sets the "tags_json" field.
-func (_u *MeshNodeUpdate) SetTagsJSON(v string) *MeshNodeUpdate {
-	_u.mutation.SetTagsJSON(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetTagsJSON(s string) *MeshNodeUpdate {
+	mnu.mutation.SetTagsJSON(s)
+	return mnu
 }
 
 // SetNillableTagsJSON sets the "tags_json" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableTagsJSON(v *string) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetTagsJSON(*v)
+func (mnu *MeshNodeUpdate) SetNillableTagsJSON(s *string) *MeshNodeUpdate {
+	if s != nil {
+		mnu.SetTagsJSON(*s)
 	}
-	return _u
+	return mnu
 }
 
 // SetApproved sets the "approved" field.
-func (_u *MeshNodeUpdate) SetApproved(v bool) *MeshNodeUpdate {
-	_u.mutation.SetApproved(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetApproved(b bool) *MeshNodeUpdate {
+	mnu.mutation.SetApproved(b)
+	return mnu
 }
 
 // SetNillableApproved sets the "approved" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableApproved(v *bool) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetApproved(*v)
+func (mnu *MeshNodeUpdate) SetNillableApproved(b *bool) *MeshNodeUpdate {
+	if b != nil {
+		mnu.SetApproved(*b)
 	}
-	return _u
+	return mnu
 }
 
 // SetDisabled sets the "disabled" field.
-func (_u *MeshNodeUpdate) SetDisabled(v bool) *MeshNodeUpdate {
-	_u.mutation.SetDisabled(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetDisabled(b bool) *MeshNodeUpdate {
+	mnu.mutation.SetDisabled(b)
+	return mnu
 }
 
 // SetNillableDisabled sets the "disabled" field if the given value is not nil.
-func (_u *MeshNodeUpdate) SetNillableDisabled(v *bool) *MeshNodeUpdate {
-	if v != nil {
-		_u.SetDisabled(*v)
+func (mnu *MeshNodeUpdate) SetNillableDisabled(b *bool) *MeshNodeUpdate {
+	if b != nil {
+		mnu.SetDisabled(*b)
 	}
-	return _u
+	return mnu
 }
 
 // SetLastSeen sets the "last_seen" field.
-func (_u *MeshNodeUpdate) SetLastSeen(v time.Time) *MeshNodeUpdate {
-	_u.mutation.SetLastSeen(v)
-	return _u
+func (mnu *MeshNodeUpdate) SetLastSeen(t time.Time) *MeshNodeUpdate {
+	mnu.mutation.SetLastSeen(t)
+	return mnu
 }
 
 // Mutation returns the MeshNodeMutation object of the builder.
-func (_u *MeshNodeUpdate) Mutation() *MeshNodeMutation {
-	return _u.mutation
+func (mnu *MeshNodeUpdate) Mutation() *MeshNodeMutation {
+	return mnu.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (_u *MeshNodeUpdate) Save(ctx context.Context) (int, error) {
-	_u.defaults()
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+func (mnu *MeshNodeUpdate) Save(ctx context.Context) (int, error) {
+	mnu.defaults()
+	return withHooks(ctx, mnu.sqlSave, mnu.mutation, mnu.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_u *MeshNodeUpdate) SaveX(ctx context.Context) int {
-	affected, err := _u.Save(ctx)
+func (mnu *MeshNodeUpdate) SaveX(ctx context.Context) int {
+	affected, err := mnu.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -349,29 +383,29 @@ func (_u *MeshNodeUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (_u *MeshNodeUpdate) Exec(ctx context.Context) error {
-	_, err := _u.Save(ctx)
+func (mnu *MeshNodeUpdate) Exec(ctx context.Context) error {
+	_, err := mnu.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_u *MeshNodeUpdate) ExecX(ctx context.Context) {
-	if err := _u.Exec(ctx); err != nil {
+func (mnu *MeshNodeUpdate) ExecX(ctx context.Context) {
+	if err := mnu.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (_u *MeshNodeUpdate) defaults() {
-	if _, ok := _u.mutation.LastSeen(); !ok {
+func (mnu *MeshNodeUpdate) defaults() {
+	if _, ok := mnu.mutation.LastSeen(); !ok {
 		v := meshnode.UpdateDefaultLastSeen()
-		_u.mutation.SetLastSeen(v)
+		mnu.mutation.SetLastSeen(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (_u *MeshNodeUpdate) check() error {
-	if v, ok := _u.mutation.NodeKey(); ok {
+func (mnu *MeshNodeUpdate) check() error {
+	if v, ok := mnu.mutation.NodeKey(); ok {
 		if err := meshnode.NodeKeyValidator(v); err != nil {
 			return &ValidationError{Name: "node_key", err: fmt.Errorf(`ent: validator failed for field "MeshNode.node_key": %w`, err)}
 		}
@@ -379,88 +413,97 @@ func (_u *MeshNodeUpdate) check() error {
 	return nil
 }
 
-func (_u *MeshNodeUpdate) sqlSave(ctx context.Context) (_node int, err error) {
-	if err := _u.check(); err != nil {
-		return _node, err
+func (mnu *MeshNodeUpdate) sqlSave(ctx context.Context) (n int, err error) {
+	if err := mnu.check(); err != nil {
+		return n, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(meshnode.Table, meshnode.Columns, sqlgraph.NewFieldSpec(meshnode.FieldID, field.TypeInt))
-	if ps := _u.mutation.predicates; len(ps) > 0 {
+	if ps := mnu.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := _u.mutation.MeshnetID(); ok {
+	if value, ok := mnu.mutation.MeshnetID(); ok {
 		_spec.SetField(meshnode.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.AddedMeshnetID(); ok {
+	if value, ok := mnu.mutation.AddedMeshnetID(); ok {
 		_spec.AddField(meshnode.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.NodeKey(); ok {
+	if value, ok := mnu.mutation.NodeKey(); ok {
 		_spec.SetField(meshnode.FieldNodeKey, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Name(); ok {
+	if value, ok := mnu.mutation.Name(); ok {
 		_spec.SetField(meshnode.FieldName, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.HostName(); ok {
+	if value, ok := mnu.mutation.HostName(); ok {
 		_spec.SetField(meshnode.FieldHostName, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.NamePinned(); ok {
+	if value, ok := mnu.mutation.NamePinned(); ok {
 		_spec.SetField(meshnode.FieldNamePinned, field.TypeBool, value)
 	}
-	if value, ok := _u.mutation.DiscoKey(); ok {
+	if value, ok := mnu.mutation.DiscoKey(); ok {
 		_spec.SetField(meshnode.FieldDiscoKey, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Overlay(); ok {
+	if value, ok := mnu.mutation.Overlay(); ok {
 		_spec.SetField(meshnode.FieldOverlay, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.DerpHome(); ok {
+	if value, ok := mnu.mutation.DerpHome(); ok {
 		_spec.SetField(meshnode.FieldDerpHome, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.EndpointsJSON(); ok {
+	if value, ok := mnu.mutation.EndpointsJSON(); ok {
 		_spec.SetField(meshnode.FieldEndpointsJSON, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.AdvertisedRoutesJSON(); ok {
+	if value, ok := mnu.mutation.AdvertisedRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldAdvertisedRoutesJSON, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.ApprovedRoutesJSON(); ok {
+	if value, ok := mnu.mutation.ApprovedRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldApprovedRoutesJSON, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.AliasedRoutesJSON(); ok {
+	if value, ok := mnu.mutation.AliasedRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldAliasedRoutesJSON, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.RouteAliasesJSON(); ok {
+	if value, ok := mnu.mutation.RouteAliasesJSON(); ok {
 		_spec.SetField(meshnode.FieldRouteAliasesJSON, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.RoutesReviewed(); ok {
+	if value, ok := mnu.mutation.RoutesReviewed(); ok {
 		_spec.SetField(meshnode.FieldRoutesReviewed, field.TypeBool, value)
 	}
-	if value, ok := _u.mutation.OwnerUserID(); ok {
+	if value, ok := mnu.mutation.OwnerUserID(); ok {
 		_spec.SetField(meshnode.FieldOwnerUserID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.AddedOwnerUserID(); ok {
+	if value, ok := mnu.mutation.AddedOwnerUserID(); ok {
 		_spec.AddField(meshnode.FieldOwnerUserID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.DeviceFingerprint(); ok {
+	if value, ok := mnu.mutation.DeviceFingerprint(); ok {
 		_spec.SetField(meshnode.FieldDeviceFingerprint, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.TagsPinned(); ok {
+	if value, ok := mnu.mutation.Os(); ok {
+		_spec.SetField(meshnode.FieldOs, field.TypeString, value)
+	}
+	if value, ok := mnu.mutation.BlockIncoming(); ok {
+		_spec.SetField(meshnode.FieldBlockIncoming, field.TypeBool, value)
+	}
+	if mnu.mutation.BlockIncomingCleared() {
+		_spec.ClearField(meshnode.FieldBlockIncoming, field.TypeBool)
+	}
+	if value, ok := mnu.mutation.TagsPinned(); ok {
 		_spec.SetField(meshnode.FieldTagsPinned, field.TypeBool, value)
 	}
-	if value, ok := _u.mutation.TagsJSON(); ok {
+	if value, ok := mnu.mutation.TagsJSON(); ok {
 		_spec.SetField(meshnode.FieldTagsJSON, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Approved(); ok {
+	if value, ok := mnu.mutation.Approved(); ok {
 		_spec.SetField(meshnode.FieldApproved, field.TypeBool, value)
 	}
-	if value, ok := _u.mutation.Disabled(); ok {
+	if value, ok := mnu.mutation.Disabled(); ok {
 		_spec.SetField(meshnode.FieldDisabled, field.TypeBool, value)
 	}
-	if value, ok := _u.mutation.LastSeen(); ok {
+	if value, ok := mnu.mutation.LastSeen(); ok {
 		_spec.SetField(meshnode.FieldLastSeen, field.TypeTime, value)
 	}
-	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
+	if n, err = sqlgraph.UpdateNodes(ctx, mnu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{meshnode.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -468,8 +511,8 @@ func (_u *MeshNodeUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		return 0, err
 	}
-	_u.mutation.done = true
-	return _node, nil
+	mnu.mutation.done = true
+	return n, nil
 }
 
 // MeshNodeUpdateOne is the builder for updating a single MeshNode entity.
@@ -481,332 +524,366 @@ type MeshNodeUpdateOne struct {
 }
 
 // SetMeshnetID sets the "meshnet_id" field.
-func (_u *MeshNodeUpdateOne) SetMeshnetID(v int64) *MeshNodeUpdateOne {
-	_u.mutation.ResetMeshnetID()
-	_u.mutation.SetMeshnetID(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetMeshnetID(i int64) *MeshNodeUpdateOne {
+	mnuo.mutation.ResetMeshnetID()
+	mnuo.mutation.SetMeshnetID(i)
+	return mnuo
 }
 
 // SetNillableMeshnetID sets the "meshnet_id" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableMeshnetID(v *int64) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetMeshnetID(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableMeshnetID(i *int64) *MeshNodeUpdateOne {
+	if i != nil {
+		mnuo.SetMeshnetID(*i)
 	}
-	return _u
+	return mnuo
 }
 
-// AddMeshnetID adds value to the "meshnet_id" field.
-func (_u *MeshNodeUpdateOne) AddMeshnetID(v int64) *MeshNodeUpdateOne {
-	_u.mutation.AddMeshnetID(v)
-	return _u
+// AddMeshnetID adds i to the "meshnet_id" field.
+func (mnuo *MeshNodeUpdateOne) AddMeshnetID(i int64) *MeshNodeUpdateOne {
+	mnuo.mutation.AddMeshnetID(i)
+	return mnuo
 }
 
 // SetNodeKey sets the "node_key" field.
-func (_u *MeshNodeUpdateOne) SetNodeKey(v string) *MeshNodeUpdateOne {
-	_u.mutation.SetNodeKey(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetNodeKey(s string) *MeshNodeUpdateOne {
+	mnuo.mutation.SetNodeKey(s)
+	return mnuo
 }
 
 // SetNillableNodeKey sets the "node_key" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableNodeKey(v *string) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetNodeKey(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableNodeKey(s *string) *MeshNodeUpdateOne {
+	if s != nil {
+		mnuo.SetNodeKey(*s)
 	}
-	return _u
+	return mnuo
 }
 
 // SetName sets the "name" field.
-func (_u *MeshNodeUpdateOne) SetName(v string) *MeshNodeUpdateOne {
-	_u.mutation.SetName(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetName(s string) *MeshNodeUpdateOne {
+	mnuo.mutation.SetName(s)
+	return mnuo
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableName(v *string) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetName(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableName(s *string) *MeshNodeUpdateOne {
+	if s != nil {
+		mnuo.SetName(*s)
 	}
-	return _u
+	return mnuo
 }
 
 // SetHostName sets the "host_name" field.
-func (_u *MeshNodeUpdateOne) SetHostName(v string) *MeshNodeUpdateOne {
-	_u.mutation.SetHostName(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetHostName(s string) *MeshNodeUpdateOne {
+	mnuo.mutation.SetHostName(s)
+	return mnuo
 }
 
 // SetNillableHostName sets the "host_name" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableHostName(v *string) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetHostName(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableHostName(s *string) *MeshNodeUpdateOne {
+	if s != nil {
+		mnuo.SetHostName(*s)
 	}
-	return _u
+	return mnuo
 }
 
 // SetNamePinned sets the "name_pinned" field.
-func (_u *MeshNodeUpdateOne) SetNamePinned(v bool) *MeshNodeUpdateOne {
-	_u.mutation.SetNamePinned(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetNamePinned(b bool) *MeshNodeUpdateOne {
+	mnuo.mutation.SetNamePinned(b)
+	return mnuo
 }
 
 // SetNillableNamePinned sets the "name_pinned" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableNamePinned(v *bool) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetNamePinned(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableNamePinned(b *bool) *MeshNodeUpdateOne {
+	if b != nil {
+		mnuo.SetNamePinned(*b)
 	}
-	return _u
+	return mnuo
 }
 
 // SetDiscoKey sets the "disco_key" field.
-func (_u *MeshNodeUpdateOne) SetDiscoKey(v string) *MeshNodeUpdateOne {
-	_u.mutation.SetDiscoKey(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetDiscoKey(s string) *MeshNodeUpdateOne {
+	mnuo.mutation.SetDiscoKey(s)
+	return mnuo
 }
 
 // SetNillableDiscoKey sets the "disco_key" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableDiscoKey(v *string) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetDiscoKey(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableDiscoKey(s *string) *MeshNodeUpdateOne {
+	if s != nil {
+		mnuo.SetDiscoKey(*s)
 	}
-	return _u
+	return mnuo
 }
 
 // SetOverlay sets the "overlay" field.
-func (_u *MeshNodeUpdateOne) SetOverlay(v string) *MeshNodeUpdateOne {
-	_u.mutation.SetOverlay(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetOverlay(s string) *MeshNodeUpdateOne {
+	mnuo.mutation.SetOverlay(s)
+	return mnuo
 }
 
 // SetNillableOverlay sets the "overlay" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableOverlay(v *string) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetOverlay(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableOverlay(s *string) *MeshNodeUpdateOne {
+	if s != nil {
+		mnuo.SetOverlay(*s)
 	}
-	return _u
+	return mnuo
 }
 
 // SetDerpHome sets the "derp_home" field.
-func (_u *MeshNodeUpdateOne) SetDerpHome(v string) *MeshNodeUpdateOne {
-	_u.mutation.SetDerpHome(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetDerpHome(s string) *MeshNodeUpdateOne {
+	mnuo.mutation.SetDerpHome(s)
+	return mnuo
 }
 
 // SetNillableDerpHome sets the "derp_home" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableDerpHome(v *string) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetDerpHome(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableDerpHome(s *string) *MeshNodeUpdateOne {
+	if s != nil {
+		mnuo.SetDerpHome(*s)
 	}
-	return _u
+	return mnuo
 }
 
 // SetEndpointsJSON sets the "endpoints_json" field.
-func (_u *MeshNodeUpdateOne) SetEndpointsJSON(v string) *MeshNodeUpdateOne {
-	_u.mutation.SetEndpointsJSON(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetEndpointsJSON(s string) *MeshNodeUpdateOne {
+	mnuo.mutation.SetEndpointsJSON(s)
+	return mnuo
 }
 
 // SetNillableEndpointsJSON sets the "endpoints_json" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableEndpointsJSON(v *string) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetEndpointsJSON(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableEndpointsJSON(s *string) *MeshNodeUpdateOne {
+	if s != nil {
+		mnuo.SetEndpointsJSON(*s)
 	}
-	return _u
+	return mnuo
 }
 
 // SetAdvertisedRoutesJSON sets the "advertised_routes_json" field.
-func (_u *MeshNodeUpdateOne) SetAdvertisedRoutesJSON(v string) *MeshNodeUpdateOne {
-	_u.mutation.SetAdvertisedRoutesJSON(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetAdvertisedRoutesJSON(s string) *MeshNodeUpdateOne {
+	mnuo.mutation.SetAdvertisedRoutesJSON(s)
+	return mnuo
 }
 
 // SetNillableAdvertisedRoutesJSON sets the "advertised_routes_json" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableAdvertisedRoutesJSON(v *string) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetAdvertisedRoutesJSON(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableAdvertisedRoutesJSON(s *string) *MeshNodeUpdateOne {
+	if s != nil {
+		mnuo.SetAdvertisedRoutesJSON(*s)
 	}
-	return _u
+	return mnuo
 }
 
 // SetApprovedRoutesJSON sets the "approved_routes_json" field.
-func (_u *MeshNodeUpdateOne) SetApprovedRoutesJSON(v string) *MeshNodeUpdateOne {
-	_u.mutation.SetApprovedRoutesJSON(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetApprovedRoutesJSON(s string) *MeshNodeUpdateOne {
+	mnuo.mutation.SetApprovedRoutesJSON(s)
+	return mnuo
 }
 
 // SetNillableApprovedRoutesJSON sets the "approved_routes_json" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableApprovedRoutesJSON(v *string) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetApprovedRoutesJSON(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableApprovedRoutesJSON(s *string) *MeshNodeUpdateOne {
+	if s != nil {
+		mnuo.SetApprovedRoutesJSON(*s)
 	}
-	return _u
+	return mnuo
 }
 
 // SetAliasedRoutesJSON sets the "aliased_routes_json" field.
-func (_u *MeshNodeUpdateOne) SetAliasedRoutesJSON(v string) *MeshNodeUpdateOne {
-	_u.mutation.SetAliasedRoutesJSON(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetAliasedRoutesJSON(s string) *MeshNodeUpdateOne {
+	mnuo.mutation.SetAliasedRoutesJSON(s)
+	return mnuo
 }
 
 // SetNillableAliasedRoutesJSON sets the "aliased_routes_json" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableAliasedRoutesJSON(v *string) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetAliasedRoutesJSON(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableAliasedRoutesJSON(s *string) *MeshNodeUpdateOne {
+	if s != nil {
+		mnuo.SetAliasedRoutesJSON(*s)
 	}
-	return _u
+	return mnuo
 }
 
 // SetRouteAliasesJSON sets the "route_aliases_json" field.
-func (_u *MeshNodeUpdateOne) SetRouteAliasesJSON(v string) *MeshNodeUpdateOne {
-	_u.mutation.SetRouteAliasesJSON(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetRouteAliasesJSON(s string) *MeshNodeUpdateOne {
+	mnuo.mutation.SetRouteAliasesJSON(s)
+	return mnuo
 }
 
 // SetNillableRouteAliasesJSON sets the "route_aliases_json" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableRouteAliasesJSON(v *string) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetRouteAliasesJSON(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableRouteAliasesJSON(s *string) *MeshNodeUpdateOne {
+	if s != nil {
+		mnuo.SetRouteAliasesJSON(*s)
 	}
-	return _u
+	return mnuo
 }
 
 // SetRoutesReviewed sets the "routes_reviewed" field.
-func (_u *MeshNodeUpdateOne) SetRoutesReviewed(v bool) *MeshNodeUpdateOne {
-	_u.mutation.SetRoutesReviewed(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetRoutesReviewed(b bool) *MeshNodeUpdateOne {
+	mnuo.mutation.SetRoutesReviewed(b)
+	return mnuo
 }
 
 // SetNillableRoutesReviewed sets the "routes_reviewed" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableRoutesReviewed(v *bool) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetRoutesReviewed(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableRoutesReviewed(b *bool) *MeshNodeUpdateOne {
+	if b != nil {
+		mnuo.SetRoutesReviewed(*b)
 	}
-	return _u
+	return mnuo
 }
 
 // SetOwnerUserID sets the "owner_user_id" field.
-func (_u *MeshNodeUpdateOne) SetOwnerUserID(v int64) *MeshNodeUpdateOne {
-	_u.mutation.ResetOwnerUserID()
-	_u.mutation.SetOwnerUserID(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetOwnerUserID(i int64) *MeshNodeUpdateOne {
+	mnuo.mutation.ResetOwnerUserID()
+	mnuo.mutation.SetOwnerUserID(i)
+	return mnuo
 }
 
 // SetNillableOwnerUserID sets the "owner_user_id" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableOwnerUserID(v *int64) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetOwnerUserID(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableOwnerUserID(i *int64) *MeshNodeUpdateOne {
+	if i != nil {
+		mnuo.SetOwnerUserID(*i)
 	}
-	return _u
+	return mnuo
 }
 
-// AddOwnerUserID adds value to the "owner_user_id" field.
-func (_u *MeshNodeUpdateOne) AddOwnerUserID(v int64) *MeshNodeUpdateOne {
-	_u.mutation.AddOwnerUserID(v)
-	return _u
+// AddOwnerUserID adds i to the "owner_user_id" field.
+func (mnuo *MeshNodeUpdateOne) AddOwnerUserID(i int64) *MeshNodeUpdateOne {
+	mnuo.mutation.AddOwnerUserID(i)
+	return mnuo
 }
 
 // SetDeviceFingerprint sets the "device_fingerprint" field.
-func (_u *MeshNodeUpdateOne) SetDeviceFingerprint(v string) *MeshNodeUpdateOne {
-	_u.mutation.SetDeviceFingerprint(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetDeviceFingerprint(s string) *MeshNodeUpdateOne {
+	mnuo.mutation.SetDeviceFingerprint(s)
+	return mnuo
 }
 
 // SetNillableDeviceFingerprint sets the "device_fingerprint" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableDeviceFingerprint(v *string) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetDeviceFingerprint(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableDeviceFingerprint(s *string) *MeshNodeUpdateOne {
+	if s != nil {
+		mnuo.SetDeviceFingerprint(*s)
 	}
-	return _u
+	return mnuo
+}
+
+// SetOs sets the "os" field.
+func (mnuo *MeshNodeUpdateOne) SetOs(s string) *MeshNodeUpdateOne {
+	mnuo.mutation.SetOs(s)
+	return mnuo
+}
+
+// SetNillableOs sets the "os" field if the given value is not nil.
+func (mnuo *MeshNodeUpdateOne) SetNillableOs(s *string) *MeshNodeUpdateOne {
+	if s != nil {
+		mnuo.SetOs(*s)
+	}
+	return mnuo
+}
+
+// SetBlockIncoming sets the "block_incoming" field.
+func (mnuo *MeshNodeUpdateOne) SetBlockIncoming(b bool) *MeshNodeUpdateOne {
+	mnuo.mutation.SetBlockIncoming(b)
+	return mnuo
+}
+
+// SetNillableBlockIncoming sets the "block_incoming" field if the given value is not nil.
+func (mnuo *MeshNodeUpdateOne) SetNillableBlockIncoming(b *bool) *MeshNodeUpdateOne {
+	if b != nil {
+		mnuo.SetBlockIncoming(*b)
+	}
+	return mnuo
+}
+
+// ClearBlockIncoming clears the value of the "block_incoming" field.
+func (mnuo *MeshNodeUpdateOne) ClearBlockIncoming() *MeshNodeUpdateOne {
+	mnuo.mutation.ClearBlockIncoming()
+	return mnuo
 }
 
 // SetTagsPinned sets the "tags_pinned" field.
-func (_u *MeshNodeUpdateOne) SetTagsPinned(v bool) *MeshNodeUpdateOne {
-	_u.mutation.SetTagsPinned(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetTagsPinned(b bool) *MeshNodeUpdateOne {
+	mnuo.mutation.SetTagsPinned(b)
+	return mnuo
 }
 
 // SetNillableTagsPinned sets the "tags_pinned" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableTagsPinned(v *bool) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetTagsPinned(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableTagsPinned(b *bool) *MeshNodeUpdateOne {
+	if b != nil {
+		mnuo.SetTagsPinned(*b)
 	}
-	return _u
+	return mnuo
 }
 
 // SetTagsJSON sets the "tags_json" field.
-func (_u *MeshNodeUpdateOne) SetTagsJSON(v string) *MeshNodeUpdateOne {
-	_u.mutation.SetTagsJSON(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetTagsJSON(s string) *MeshNodeUpdateOne {
+	mnuo.mutation.SetTagsJSON(s)
+	return mnuo
 }
 
 // SetNillableTagsJSON sets the "tags_json" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableTagsJSON(v *string) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetTagsJSON(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableTagsJSON(s *string) *MeshNodeUpdateOne {
+	if s != nil {
+		mnuo.SetTagsJSON(*s)
 	}
-	return _u
+	return mnuo
 }
 
 // SetApproved sets the "approved" field.
-func (_u *MeshNodeUpdateOne) SetApproved(v bool) *MeshNodeUpdateOne {
-	_u.mutation.SetApproved(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetApproved(b bool) *MeshNodeUpdateOne {
+	mnuo.mutation.SetApproved(b)
+	return mnuo
 }
 
 // SetNillableApproved sets the "approved" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableApproved(v *bool) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetApproved(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableApproved(b *bool) *MeshNodeUpdateOne {
+	if b != nil {
+		mnuo.SetApproved(*b)
 	}
-	return _u
+	return mnuo
 }
 
 // SetDisabled sets the "disabled" field.
-func (_u *MeshNodeUpdateOne) SetDisabled(v bool) *MeshNodeUpdateOne {
-	_u.mutation.SetDisabled(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetDisabled(b bool) *MeshNodeUpdateOne {
+	mnuo.mutation.SetDisabled(b)
+	return mnuo
 }
 
 // SetNillableDisabled sets the "disabled" field if the given value is not nil.
-func (_u *MeshNodeUpdateOne) SetNillableDisabled(v *bool) *MeshNodeUpdateOne {
-	if v != nil {
-		_u.SetDisabled(*v)
+func (mnuo *MeshNodeUpdateOne) SetNillableDisabled(b *bool) *MeshNodeUpdateOne {
+	if b != nil {
+		mnuo.SetDisabled(*b)
 	}
-	return _u
+	return mnuo
 }
 
 // SetLastSeen sets the "last_seen" field.
-func (_u *MeshNodeUpdateOne) SetLastSeen(v time.Time) *MeshNodeUpdateOne {
-	_u.mutation.SetLastSeen(v)
-	return _u
+func (mnuo *MeshNodeUpdateOne) SetLastSeen(t time.Time) *MeshNodeUpdateOne {
+	mnuo.mutation.SetLastSeen(t)
+	return mnuo
 }
 
 // Mutation returns the MeshNodeMutation object of the builder.
-func (_u *MeshNodeUpdateOne) Mutation() *MeshNodeMutation {
-	return _u.mutation
+func (mnuo *MeshNodeUpdateOne) Mutation() *MeshNodeMutation {
+	return mnuo.mutation
 }
 
 // Where appends a list predicates to the MeshNodeUpdate builder.
-func (_u *MeshNodeUpdateOne) Where(ps ...predicate.MeshNode) *MeshNodeUpdateOne {
-	_u.mutation.Where(ps...)
-	return _u
+func (mnuo *MeshNodeUpdateOne) Where(ps ...predicate.MeshNode) *MeshNodeUpdateOne {
+	mnuo.mutation.Where(ps...)
+	return mnuo
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (_u *MeshNodeUpdateOne) Select(field string, fields ...string) *MeshNodeUpdateOne {
-	_u.fields = append([]string{field}, fields...)
-	return _u
+func (mnuo *MeshNodeUpdateOne) Select(field string, fields ...string) *MeshNodeUpdateOne {
+	mnuo.fields = append([]string{field}, fields...)
+	return mnuo
 }
 
 // Save executes the query and returns the updated MeshNode entity.
-func (_u *MeshNodeUpdateOne) Save(ctx context.Context) (*MeshNode, error) {
-	_u.defaults()
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+func (mnuo *MeshNodeUpdateOne) Save(ctx context.Context) (*MeshNode, error) {
+	mnuo.defaults()
+	return withHooks(ctx, mnuo.sqlSave, mnuo.mutation, mnuo.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_u *MeshNodeUpdateOne) SaveX(ctx context.Context) *MeshNode {
-	node, err := _u.Save(ctx)
+func (mnuo *MeshNodeUpdateOne) SaveX(ctx context.Context) *MeshNode {
+	node, err := mnuo.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -814,29 +891,29 @@ func (_u *MeshNodeUpdateOne) SaveX(ctx context.Context) *MeshNode {
 }
 
 // Exec executes the query on the entity.
-func (_u *MeshNodeUpdateOne) Exec(ctx context.Context) error {
-	_, err := _u.Save(ctx)
+func (mnuo *MeshNodeUpdateOne) Exec(ctx context.Context) error {
+	_, err := mnuo.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_u *MeshNodeUpdateOne) ExecX(ctx context.Context) {
-	if err := _u.Exec(ctx); err != nil {
+func (mnuo *MeshNodeUpdateOne) ExecX(ctx context.Context) {
+	if err := mnuo.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (_u *MeshNodeUpdateOne) defaults() {
-	if _, ok := _u.mutation.LastSeen(); !ok {
+func (mnuo *MeshNodeUpdateOne) defaults() {
+	if _, ok := mnuo.mutation.LastSeen(); !ok {
 		v := meshnode.UpdateDefaultLastSeen()
-		_u.mutation.SetLastSeen(v)
+		mnuo.mutation.SetLastSeen(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (_u *MeshNodeUpdateOne) check() error {
-	if v, ok := _u.mutation.NodeKey(); ok {
+func (mnuo *MeshNodeUpdateOne) check() error {
+	if v, ok := mnuo.mutation.NodeKey(); ok {
 		if err := meshnode.NodeKeyValidator(v); err != nil {
 			return &ValidationError{Name: "node_key", err: fmt.Errorf(`ent: validator failed for field "MeshNode.node_key": %w`, err)}
 		}
@@ -844,17 +921,17 @@ func (_u *MeshNodeUpdateOne) check() error {
 	return nil
 }
 
-func (_u *MeshNodeUpdateOne) sqlSave(ctx context.Context) (_node *MeshNode, err error) {
-	if err := _u.check(); err != nil {
+func (mnuo *MeshNodeUpdateOne) sqlSave(ctx context.Context) (_node *MeshNode, err error) {
+	if err := mnuo.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(meshnode.Table, meshnode.Columns, sqlgraph.NewFieldSpec(meshnode.FieldID, field.TypeInt))
-	id, ok := _u.mutation.ID()
+	id, ok := mnuo.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "MeshNode.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := _u.fields; len(fields) > 0 {
+	if fields := mnuo.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, meshnode.FieldID)
 		for _, f := range fields {
@@ -866,86 +943,95 @@ func (_u *MeshNodeUpdateOne) sqlSave(ctx context.Context) (_node *MeshNode, err 
 			}
 		}
 	}
-	if ps := _u.mutation.predicates; len(ps) > 0 {
+	if ps := mnuo.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := _u.mutation.MeshnetID(); ok {
+	if value, ok := mnuo.mutation.MeshnetID(); ok {
 		_spec.SetField(meshnode.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.AddedMeshnetID(); ok {
+	if value, ok := mnuo.mutation.AddedMeshnetID(); ok {
 		_spec.AddField(meshnode.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.NodeKey(); ok {
+	if value, ok := mnuo.mutation.NodeKey(); ok {
 		_spec.SetField(meshnode.FieldNodeKey, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Name(); ok {
+	if value, ok := mnuo.mutation.Name(); ok {
 		_spec.SetField(meshnode.FieldName, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.HostName(); ok {
+	if value, ok := mnuo.mutation.HostName(); ok {
 		_spec.SetField(meshnode.FieldHostName, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.NamePinned(); ok {
+	if value, ok := mnuo.mutation.NamePinned(); ok {
 		_spec.SetField(meshnode.FieldNamePinned, field.TypeBool, value)
 	}
-	if value, ok := _u.mutation.DiscoKey(); ok {
+	if value, ok := mnuo.mutation.DiscoKey(); ok {
 		_spec.SetField(meshnode.FieldDiscoKey, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Overlay(); ok {
+	if value, ok := mnuo.mutation.Overlay(); ok {
 		_spec.SetField(meshnode.FieldOverlay, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.DerpHome(); ok {
+	if value, ok := mnuo.mutation.DerpHome(); ok {
 		_spec.SetField(meshnode.FieldDerpHome, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.EndpointsJSON(); ok {
+	if value, ok := mnuo.mutation.EndpointsJSON(); ok {
 		_spec.SetField(meshnode.FieldEndpointsJSON, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.AdvertisedRoutesJSON(); ok {
+	if value, ok := mnuo.mutation.AdvertisedRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldAdvertisedRoutesJSON, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.ApprovedRoutesJSON(); ok {
+	if value, ok := mnuo.mutation.ApprovedRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldApprovedRoutesJSON, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.AliasedRoutesJSON(); ok {
+	if value, ok := mnuo.mutation.AliasedRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldAliasedRoutesJSON, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.RouteAliasesJSON(); ok {
+	if value, ok := mnuo.mutation.RouteAliasesJSON(); ok {
 		_spec.SetField(meshnode.FieldRouteAliasesJSON, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.RoutesReviewed(); ok {
+	if value, ok := mnuo.mutation.RoutesReviewed(); ok {
 		_spec.SetField(meshnode.FieldRoutesReviewed, field.TypeBool, value)
 	}
-	if value, ok := _u.mutation.OwnerUserID(); ok {
+	if value, ok := mnuo.mutation.OwnerUserID(); ok {
 		_spec.SetField(meshnode.FieldOwnerUserID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.AddedOwnerUserID(); ok {
+	if value, ok := mnuo.mutation.AddedOwnerUserID(); ok {
 		_spec.AddField(meshnode.FieldOwnerUserID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.DeviceFingerprint(); ok {
+	if value, ok := mnuo.mutation.DeviceFingerprint(); ok {
 		_spec.SetField(meshnode.FieldDeviceFingerprint, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.TagsPinned(); ok {
+	if value, ok := mnuo.mutation.Os(); ok {
+		_spec.SetField(meshnode.FieldOs, field.TypeString, value)
+	}
+	if value, ok := mnuo.mutation.BlockIncoming(); ok {
+		_spec.SetField(meshnode.FieldBlockIncoming, field.TypeBool, value)
+	}
+	if mnuo.mutation.BlockIncomingCleared() {
+		_spec.ClearField(meshnode.FieldBlockIncoming, field.TypeBool)
+	}
+	if value, ok := mnuo.mutation.TagsPinned(); ok {
 		_spec.SetField(meshnode.FieldTagsPinned, field.TypeBool, value)
 	}
-	if value, ok := _u.mutation.TagsJSON(); ok {
+	if value, ok := mnuo.mutation.TagsJSON(); ok {
 		_spec.SetField(meshnode.FieldTagsJSON, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Approved(); ok {
+	if value, ok := mnuo.mutation.Approved(); ok {
 		_spec.SetField(meshnode.FieldApproved, field.TypeBool, value)
 	}
-	if value, ok := _u.mutation.Disabled(); ok {
+	if value, ok := mnuo.mutation.Disabled(); ok {
 		_spec.SetField(meshnode.FieldDisabled, field.TypeBool, value)
 	}
-	if value, ok := _u.mutation.LastSeen(); ok {
+	if value, ok := mnuo.mutation.LastSeen(); ok {
 		_spec.SetField(meshnode.FieldLastSeen, field.TypeTime, value)
 	}
-	_node = &MeshNode{config: _u.config}
+	_node = &MeshNode{config: mnuo.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, mnuo.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{meshnode.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -953,6 +1039,6 @@ func (_u *MeshNodeUpdateOne) sqlSave(ctx context.Context) (_node *MeshNode, err 
 		}
 		return nil, err
 	}
-	_u.mutation.done = true
+	mnuo.mutation.done = true
 	return _node, nil
 }

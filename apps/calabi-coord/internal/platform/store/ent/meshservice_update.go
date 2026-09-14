@@ -22,171 +22,171 @@ type MeshServiceUpdate struct {
 }
 
 // Where appends a list predicates to the MeshServiceUpdate builder.
-func (_u *MeshServiceUpdate) Where(ps ...predicate.MeshService) *MeshServiceUpdate {
-	_u.mutation.Where(ps...)
-	return _u
+func (msu *MeshServiceUpdate) Where(ps ...predicate.MeshService) *MeshServiceUpdate {
+	msu.mutation.Where(ps...)
+	return msu
 }
 
 // SetMeshnetID sets the "meshnet_id" field.
-func (_u *MeshServiceUpdate) SetMeshnetID(v int64) *MeshServiceUpdate {
-	_u.mutation.ResetMeshnetID()
-	_u.mutation.SetMeshnetID(v)
-	return _u
+func (msu *MeshServiceUpdate) SetMeshnetID(i int64) *MeshServiceUpdate {
+	msu.mutation.ResetMeshnetID()
+	msu.mutation.SetMeshnetID(i)
+	return msu
 }
 
 // SetNillableMeshnetID sets the "meshnet_id" field if the given value is not nil.
-func (_u *MeshServiceUpdate) SetNillableMeshnetID(v *int64) *MeshServiceUpdate {
-	if v != nil {
-		_u.SetMeshnetID(*v)
+func (msu *MeshServiceUpdate) SetNillableMeshnetID(i *int64) *MeshServiceUpdate {
+	if i != nil {
+		msu.SetMeshnetID(*i)
 	}
-	return _u
+	return msu
 }
 
-// AddMeshnetID adds value to the "meshnet_id" field.
-func (_u *MeshServiceUpdate) AddMeshnetID(v int64) *MeshServiceUpdate {
-	_u.mutation.AddMeshnetID(v)
-	return _u
+// AddMeshnetID adds i to the "meshnet_id" field.
+func (msu *MeshServiceUpdate) AddMeshnetID(i int64) *MeshServiceUpdate {
+	msu.mutation.AddMeshnetID(i)
+	return msu
 }
 
 // SetNodeID sets the "node_id" field.
-func (_u *MeshServiceUpdate) SetNodeID(v int64) *MeshServiceUpdate {
-	_u.mutation.ResetNodeID()
-	_u.mutation.SetNodeID(v)
-	return _u
+func (msu *MeshServiceUpdate) SetNodeID(i int64) *MeshServiceUpdate {
+	msu.mutation.ResetNodeID()
+	msu.mutation.SetNodeID(i)
+	return msu
 }
 
 // SetNillableNodeID sets the "node_id" field if the given value is not nil.
-func (_u *MeshServiceUpdate) SetNillableNodeID(v *int64) *MeshServiceUpdate {
-	if v != nil {
-		_u.SetNodeID(*v)
+func (msu *MeshServiceUpdate) SetNillableNodeID(i *int64) *MeshServiceUpdate {
+	if i != nil {
+		msu.SetNodeID(*i)
 	}
-	return _u
+	return msu
 }
 
-// AddNodeID adds value to the "node_id" field.
-func (_u *MeshServiceUpdate) AddNodeID(v int64) *MeshServiceUpdate {
-	_u.mutation.AddNodeID(v)
-	return _u
+// AddNodeID adds i to the "node_id" field.
+func (msu *MeshServiceUpdate) AddNodeID(i int64) *MeshServiceUpdate {
+	msu.mutation.AddNodeID(i)
+	return msu
 }
 
 // SetName sets the "name" field.
-func (_u *MeshServiceUpdate) SetName(v string) *MeshServiceUpdate {
-	_u.mutation.SetName(v)
-	return _u
+func (msu *MeshServiceUpdate) SetName(s string) *MeshServiceUpdate {
+	msu.mutation.SetName(s)
+	return msu
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (_u *MeshServiceUpdate) SetNillableName(v *string) *MeshServiceUpdate {
-	if v != nil {
-		_u.SetName(*v)
+func (msu *MeshServiceUpdate) SetNillableName(s *string) *MeshServiceUpdate {
+	if s != nil {
+		msu.SetName(*s)
 	}
-	return _u
+	return msu
 }
 
 // SetProto sets the "proto" field.
-func (_u *MeshServiceUpdate) SetProto(v string) *MeshServiceUpdate {
-	_u.mutation.SetProto(v)
-	return _u
+func (msu *MeshServiceUpdate) SetProto(s string) *MeshServiceUpdate {
+	msu.mutation.SetProto(s)
+	return msu
 }
 
 // SetNillableProto sets the "proto" field if the given value is not nil.
-func (_u *MeshServiceUpdate) SetNillableProto(v *string) *MeshServiceUpdate {
-	if v != nil {
-		_u.SetProto(*v)
+func (msu *MeshServiceUpdate) SetNillableProto(s *string) *MeshServiceUpdate {
+	if s != nil {
+		msu.SetProto(*s)
 	}
-	return _u
+	return msu
 }
 
 // SetPort sets the "port" field.
-func (_u *MeshServiceUpdate) SetPort(v int) *MeshServiceUpdate {
-	_u.mutation.ResetPort()
-	_u.mutation.SetPort(v)
-	return _u
+func (msu *MeshServiceUpdate) SetPort(i int) *MeshServiceUpdate {
+	msu.mutation.ResetPort()
+	msu.mutation.SetPort(i)
+	return msu
 }
 
 // SetNillablePort sets the "port" field if the given value is not nil.
-func (_u *MeshServiceUpdate) SetNillablePort(v *int) *MeshServiceUpdate {
-	if v != nil {
-		_u.SetPort(*v)
+func (msu *MeshServiceUpdate) SetNillablePort(i *int) *MeshServiceUpdate {
+	if i != nil {
+		msu.SetPort(*i)
 	}
-	return _u
+	return msu
 }
 
-// AddPort adds value to the "port" field.
-func (_u *MeshServiceUpdate) AddPort(v int) *MeshServiceUpdate {
-	_u.mutation.AddPort(v)
-	return _u
+// AddPort adds i to the "port" field.
+func (msu *MeshServiceUpdate) AddPort(i int) *MeshServiceUpdate {
+	msu.mutation.AddPort(i)
+	return msu
 }
 
 // SetTarget sets the "target" field.
-func (_u *MeshServiceUpdate) SetTarget(v string) *MeshServiceUpdate {
-	_u.mutation.SetTarget(v)
-	return _u
+func (msu *MeshServiceUpdate) SetTarget(s string) *MeshServiceUpdate {
+	msu.mutation.SetTarget(s)
+	return msu
 }
 
 // SetNillableTarget sets the "target" field if the given value is not nil.
-func (_u *MeshServiceUpdate) SetNillableTarget(v *string) *MeshServiceUpdate {
-	if v != nil {
-		_u.SetTarget(*v)
+func (msu *MeshServiceUpdate) SetNillableTarget(s *string) *MeshServiceUpdate {
+	if s != nil {
+		msu.SetTarget(*s)
 	}
-	return _u
+	return msu
 }
 
 // SetNote sets the "note" field.
-func (_u *MeshServiceUpdate) SetNote(v string) *MeshServiceUpdate {
-	_u.mutation.SetNote(v)
-	return _u
+func (msu *MeshServiceUpdate) SetNote(s string) *MeshServiceUpdate {
+	msu.mutation.SetNote(s)
+	return msu
 }
 
 // SetNillableNote sets the "note" field if the given value is not nil.
-func (_u *MeshServiceUpdate) SetNillableNote(v *string) *MeshServiceUpdate {
-	if v != nil {
-		_u.SetNote(*v)
+func (msu *MeshServiceUpdate) SetNillableNote(s *string) *MeshServiceUpdate {
+	if s != nil {
+		msu.SetNote(*s)
 	}
-	return _u
+	return msu
 }
 
 // SetSource sets the "source" field.
-func (_u *MeshServiceUpdate) SetSource(v string) *MeshServiceUpdate {
-	_u.mutation.SetSource(v)
-	return _u
+func (msu *MeshServiceUpdate) SetSource(s string) *MeshServiceUpdate {
+	msu.mutation.SetSource(s)
+	return msu
 }
 
 // SetNillableSource sets the "source" field if the given value is not nil.
-func (_u *MeshServiceUpdate) SetNillableSource(v *string) *MeshServiceUpdate {
-	if v != nil {
-		_u.SetSource(*v)
+func (msu *MeshServiceUpdate) SetNillableSource(s *string) *MeshServiceUpdate {
+	if s != nil {
+		msu.SetSource(*s)
 	}
-	return _u
+	return msu
 }
 
 // SetApproved sets the "approved" field.
-func (_u *MeshServiceUpdate) SetApproved(v bool) *MeshServiceUpdate {
-	_u.mutation.SetApproved(v)
-	return _u
+func (msu *MeshServiceUpdate) SetApproved(b bool) *MeshServiceUpdate {
+	msu.mutation.SetApproved(b)
+	return msu
 }
 
 // SetNillableApproved sets the "approved" field if the given value is not nil.
-func (_u *MeshServiceUpdate) SetNillableApproved(v *bool) *MeshServiceUpdate {
-	if v != nil {
-		_u.SetApproved(*v)
+func (msu *MeshServiceUpdate) SetNillableApproved(b *bool) *MeshServiceUpdate {
+	if b != nil {
+		msu.SetApproved(*b)
 	}
-	return _u
+	return msu
 }
 
 // Mutation returns the MeshServiceMutation object of the builder.
-func (_u *MeshServiceUpdate) Mutation() *MeshServiceMutation {
-	return _u.mutation
+func (msu *MeshServiceUpdate) Mutation() *MeshServiceMutation {
+	return msu.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (_u *MeshServiceUpdate) Save(ctx context.Context) (int, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+func (msu *MeshServiceUpdate) Save(ctx context.Context) (int, error) {
+	return withHooks(ctx, msu.sqlSave, msu.mutation, msu.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_u *MeshServiceUpdate) SaveX(ctx context.Context) int {
-	affected, err := _u.Save(ctx)
+func (msu *MeshServiceUpdate) SaveX(ctx context.Context) int {
+	affected, err := msu.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -194,64 +194,64 @@ func (_u *MeshServiceUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (_u *MeshServiceUpdate) Exec(ctx context.Context) error {
-	_, err := _u.Save(ctx)
+func (msu *MeshServiceUpdate) Exec(ctx context.Context) error {
+	_, err := msu.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_u *MeshServiceUpdate) ExecX(ctx context.Context) {
-	if err := _u.Exec(ctx); err != nil {
+func (msu *MeshServiceUpdate) ExecX(ctx context.Context) {
+	if err := msu.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
-func (_u *MeshServiceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+func (msu *MeshServiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(meshservice.Table, meshservice.Columns, sqlgraph.NewFieldSpec(meshservice.FieldID, field.TypeInt))
-	if ps := _u.mutation.predicates; len(ps) > 0 {
+	if ps := msu.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := _u.mutation.MeshnetID(); ok {
+	if value, ok := msu.mutation.MeshnetID(); ok {
 		_spec.SetField(meshservice.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.AddedMeshnetID(); ok {
+	if value, ok := msu.mutation.AddedMeshnetID(); ok {
 		_spec.AddField(meshservice.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.NodeID(); ok {
+	if value, ok := msu.mutation.NodeID(); ok {
 		_spec.SetField(meshservice.FieldNodeID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.AddedNodeID(); ok {
+	if value, ok := msu.mutation.AddedNodeID(); ok {
 		_spec.AddField(meshservice.FieldNodeID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.Name(); ok {
+	if value, ok := msu.mutation.Name(); ok {
 		_spec.SetField(meshservice.FieldName, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Proto(); ok {
+	if value, ok := msu.mutation.Proto(); ok {
 		_spec.SetField(meshservice.FieldProto, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Port(); ok {
+	if value, ok := msu.mutation.Port(); ok {
 		_spec.SetField(meshservice.FieldPort, field.TypeInt, value)
 	}
-	if value, ok := _u.mutation.AddedPort(); ok {
+	if value, ok := msu.mutation.AddedPort(); ok {
 		_spec.AddField(meshservice.FieldPort, field.TypeInt, value)
 	}
-	if value, ok := _u.mutation.Target(); ok {
+	if value, ok := msu.mutation.Target(); ok {
 		_spec.SetField(meshservice.FieldTarget, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Note(); ok {
+	if value, ok := msu.mutation.Note(); ok {
 		_spec.SetField(meshservice.FieldNote, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Source(); ok {
+	if value, ok := msu.mutation.Source(); ok {
 		_spec.SetField(meshservice.FieldSource, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Approved(); ok {
+	if value, ok := msu.mutation.Approved(); ok {
 		_spec.SetField(meshservice.FieldApproved, field.TypeBool, value)
 	}
-	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
+	if n, err = sqlgraph.UpdateNodes(ctx, msu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{meshservice.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -259,8 +259,8 @@ func (_u *MeshServiceUpdate) sqlSave(ctx context.Context) (_node int, err error)
 		}
 		return 0, err
 	}
-	_u.mutation.done = true
-	return _node, nil
+	msu.mutation.done = true
+	return n, nil
 }
 
 // MeshServiceUpdateOne is the builder for updating a single MeshService entity.
@@ -272,178 +272,178 @@ type MeshServiceUpdateOne struct {
 }
 
 // SetMeshnetID sets the "meshnet_id" field.
-func (_u *MeshServiceUpdateOne) SetMeshnetID(v int64) *MeshServiceUpdateOne {
-	_u.mutation.ResetMeshnetID()
-	_u.mutation.SetMeshnetID(v)
-	return _u
+func (msuo *MeshServiceUpdateOne) SetMeshnetID(i int64) *MeshServiceUpdateOne {
+	msuo.mutation.ResetMeshnetID()
+	msuo.mutation.SetMeshnetID(i)
+	return msuo
 }
 
 // SetNillableMeshnetID sets the "meshnet_id" field if the given value is not nil.
-func (_u *MeshServiceUpdateOne) SetNillableMeshnetID(v *int64) *MeshServiceUpdateOne {
-	if v != nil {
-		_u.SetMeshnetID(*v)
+func (msuo *MeshServiceUpdateOne) SetNillableMeshnetID(i *int64) *MeshServiceUpdateOne {
+	if i != nil {
+		msuo.SetMeshnetID(*i)
 	}
-	return _u
+	return msuo
 }
 
-// AddMeshnetID adds value to the "meshnet_id" field.
-func (_u *MeshServiceUpdateOne) AddMeshnetID(v int64) *MeshServiceUpdateOne {
-	_u.mutation.AddMeshnetID(v)
-	return _u
+// AddMeshnetID adds i to the "meshnet_id" field.
+func (msuo *MeshServiceUpdateOne) AddMeshnetID(i int64) *MeshServiceUpdateOne {
+	msuo.mutation.AddMeshnetID(i)
+	return msuo
 }
 
 // SetNodeID sets the "node_id" field.
-func (_u *MeshServiceUpdateOne) SetNodeID(v int64) *MeshServiceUpdateOne {
-	_u.mutation.ResetNodeID()
-	_u.mutation.SetNodeID(v)
-	return _u
+func (msuo *MeshServiceUpdateOne) SetNodeID(i int64) *MeshServiceUpdateOne {
+	msuo.mutation.ResetNodeID()
+	msuo.mutation.SetNodeID(i)
+	return msuo
 }
 
 // SetNillableNodeID sets the "node_id" field if the given value is not nil.
-func (_u *MeshServiceUpdateOne) SetNillableNodeID(v *int64) *MeshServiceUpdateOne {
-	if v != nil {
-		_u.SetNodeID(*v)
+func (msuo *MeshServiceUpdateOne) SetNillableNodeID(i *int64) *MeshServiceUpdateOne {
+	if i != nil {
+		msuo.SetNodeID(*i)
 	}
-	return _u
+	return msuo
 }
 
-// AddNodeID adds value to the "node_id" field.
-func (_u *MeshServiceUpdateOne) AddNodeID(v int64) *MeshServiceUpdateOne {
-	_u.mutation.AddNodeID(v)
-	return _u
+// AddNodeID adds i to the "node_id" field.
+func (msuo *MeshServiceUpdateOne) AddNodeID(i int64) *MeshServiceUpdateOne {
+	msuo.mutation.AddNodeID(i)
+	return msuo
 }
 
 // SetName sets the "name" field.
-func (_u *MeshServiceUpdateOne) SetName(v string) *MeshServiceUpdateOne {
-	_u.mutation.SetName(v)
-	return _u
+func (msuo *MeshServiceUpdateOne) SetName(s string) *MeshServiceUpdateOne {
+	msuo.mutation.SetName(s)
+	return msuo
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (_u *MeshServiceUpdateOne) SetNillableName(v *string) *MeshServiceUpdateOne {
-	if v != nil {
-		_u.SetName(*v)
+func (msuo *MeshServiceUpdateOne) SetNillableName(s *string) *MeshServiceUpdateOne {
+	if s != nil {
+		msuo.SetName(*s)
 	}
-	return _u
+	return msuo
 }
 
 // SetProto sets the "proto" field.
-func (_u *MeshServiceUpdateOne) SetProto(v string) *MeshServiceUpdateOne {
-	_u.mutation.SetProto(v)
-	return _u
+func (msuo *MeshServiceUpdateOne) SetProto(s string) *MeshServiceUpdateOne {
+	msuo.mutation.SetProto(s)
+	return msuo
 }
 
 // SetNillableProto sets the "proto" field if the given value is not nil.
-func (_u *MeshServiceUpdateOne) SetNillableProto(v *string) *MeshServiceUpdateOne {
-	if v != nil {
-		_u.SetProto(*v)
+func (msuo *MeshServiceUpdateOne) SetNillableProto(s *string) *MeshServiceUpdateOne {
+	if s != nil {
+		msuo.SetProto(*s)
 	}
-	return _u
+	return msuo
 }
 
 // SetPort sets the "port" field.
-func (_u *MeshServiceUpdateOne) SetPort(v int) *MeshServiceUpdateOne {
-	_u.mutation.ResetPort()
-	_u.mutation.SetPort(v)
-	return _u
+func (msuo *MeshServiceUpdateOne) SetPort(i int) *MeshServiceUpdateOne {
+	msuo.mutation.ResetPort()
+	msuo.mutation.SetPort(i)
+	return msuo
 }
 
 // SetNillablePort sets the "port" field if the given value is not nil.
-func (_u *MeshServiceUpdateOne) SetNillablePort(v *int) *MeshServiceUpdateOne {
-	if v != nil {
-		_u.SetPort(*v)
+func (msuo *MeshServiceUpdateOne) SetNillablePort(i *int) *MeshServiceUpdateOne {
+	if i != nil {
+		msuo.SetPort(*i)
 	}
-	return _u
+	return msuo
 }
 
-// AddPort adds value to the "port" field.
-func (_u *MeshServiceUpdateOne) AddPort(v int) *MeshServiceUpdateOne {
-	_u.mutation.AddPort(v)
-	return _u
+// AddPort adds i to the "port" field.
+func (msuo *MeshServiceUpdateOne) AddPort(i int) *MeshServiceUpdateOne {
+	msuo.mutation.AddPort(i)
+	return msuo
 }
 
 // SetTarget sets the "target" field.
-func (_u *MeshServiceUpdateOne) SetTarget(v string) *MeshServiceUpdateOne {
-	_u.mutation.SetTarget(v)
-	return _u
+func (msuo *MeshServiceUpdateOne) SetTarget(s string) *MeshServiceUpdateOne {
+	msuo.mutation.SetTarget(s)
+	return msuo
 }
 
 // SetNillableTarget sets the "target" field if the given value is not nil.
-func (_u *MeshServiceUpdateOne) SetNillableTarget(v *string) *MeshServiceUpdateOne {
-	if v != nil {
-		_u.SetTarget(*v)
+func (msuo *MeshServiceUpdateOne) SetNillableTarget(s *string) *MeshServiceUpdateOne {
+	if s != nil {
+		msuo.SetTarget(*s)
 	}
-	return _u
+	return msuo
 }
 
 // SetNote sets the "note" field.
-func (_u *MeshServiceUpdateOne) SetNote(v string) *MeshServiceUpdateOne {
-	_u.mutation.SetNote(v)
-	return _u
+func (msuo *MeshServiceUpdateOne) SetNote(s string) *MeshServiceUpdateOne {
+	msuo.mutation.SetNote(s)
+	return msuo
 }
 
 // SetNillableNote sets the "note" field if the given value is not nil.
-func (_u *MeshServiceUpdateOne) SetNillableNote(v *string) *MeshServiceUpdateOne {
-	if v != nil {
-		_u.SetNote(*v)
+func (msuo *MeshServiceUpdateOne) SetNillableNote(s *string) *MeshServiceUpdateOne {
+	if s != nil {
+		msuo.SetNote(*s)
 	}
-	return _u
+	return msuo
 }
 
 // SetSource sets the "source" field.
-func (_u *MeshServiceUpdateOne) SetSource(v string) *MeshServiceUpdateOne {
-	_u.mutation.SetSource(v)
-	return _u
+func (msuo *MeshServiceUpdateOne) SetSource(s string) *MeshServiceUpdateOne {
+	msuo.mutation.SetSource(s)
+	return msuo
 }
 
 // SetNillableSource sets the "source" field if the given value is not nil.
-func (_u *MeshServiceUpdateOne) SetNillableSource(v *string) *MeshServiceUpdateOne {
-	if v != nil {
-		_u.SetSource(*v)
+func (msuo *MeshServiceUpdateOne) SetNillableSource(s *string) *MeshServiceUpdateOne {
+	if s != nil {
+		msuo.SetSource(*s)
 	}
-	return _u
+	return msuo
 }
 
 // SetApproved sets the "approved" field.
-func (_u *MeshServiceUpdateOne) SetApproved(v bool) *MeshServiceUpdateOne {
-	_u.mutation.SetApproved(v)
-	return _u
+func (msuo *MeshServiceUpdateOne) SetApproved(b bool) *MeshServiceUpdateOne {
+	msuo.mutation.SetApproved(b)
+	return msuo
 }
 
 // SetNillableApproved sets the "approved" field if the given value is not nil.
-func (_u *MeshServiceUpdateOne) SetNillableApproved(v *bool) *MeshServiceUpdateOne {
-	if v != nil {
-		_u.SetApproved(*v)
+func (msuo *MeshServiceUpdateOne) SetNillableApproved(b *bool) *MeshServiceUpdateOne {
+	if b != nil {
+		msuo.SetApproved(*b)
 	}
-	return _u
+	return msuo
 }
 
 // Mutation returns the MeshServiceMutation object of the builder.
-func (_u *MeshServiceUpdateOne) Mutation() *MeshServiceMutation {
-	return _u.mutation
+func (msuo *MeshServiceUpdateOne) Mutation() *MeshServiceMutation {
+	return msuo.mutation
 }
 
 // Where appends a list predicates to the MeshServiceUpdate builder.
-func (_u *MeshServiceUpdateOne) Where(ps ...predicate.MeshService) *MeshServiceUpdateOne {
-	_u.mutation.Where(ps...)
-	return _u
+func (msuo *MeshServiceUpdateOne) Where(ps ...predicate.MeshService) *MeshServiceUpdateOne {
+	msuo.mutation.Where(ps...)
+	return msuo
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (_u *MeshServiceUpdateOne) Select(field string, fields ...string) *MeshServiceUpdateOne {
-	_u.fields = append([]string{field}, fields...)
-	return _u
+func (msuo *MeshServiceUpdateOne) Select(field string, fields ...string) *MeshServiceUpdateOne {
+	msuo.fields = append([]string{field}, fields...)
+	return msuo
 }
 
 // Save executes the query and returns the updated MeshService entity.
-func (_u *MeshServiceUpdateOne) Save(ctx context.Context) (*MeshService, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+func (msuo *MeshServiceUpdateOne) Save(ctx context.Context) (*MeshService, error) {
+	return withHooks(ctx, msuo.sqlSave, msuo.mutation, msuo.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_u *MeshServiceUpdateOne) SaveX(ctx context.Context) *MeshService {
-	node, err := _u.Save(ctx)
+func (msuo *MeshServiceUpdateOne) SaveX(ctx context.Context) *MeshService {
+	node, err := msuo.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -451,26 +451,26 @@ func (_u *MeshServiceUpdateOne) SaveX(ctx context.Context) *MeshService {
 }
 
 // Exec executes the query on the entity.
-func (_u *MeshServiceUpdateOne) Exec(ctx context.Context) error {
-	_, err := _u.Save(ctx)
+func (msuo *MeshServiceUpdateOne) Exec(ctx context.Context) error {
+	_, err := msuo.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_u *MeshServiceUpdateOne) ExecX(ctx context.Context) {
-	if err := _u.Exec(ctx); err != nil {
+func (msuo *MeshServiceUpdateOne) ExecX(ctx context.Context) {
+	if err := msuo.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
-func (_u *MeshServiceUpdateOne) sqlSave(ctx context.Context) (_node *MeshService, err error) {
+func (msuo *MeshServiceUpdateOne) sqlSave(ctx context.Context) (_node *MeshService, err error) {
 	_spec := sqlgraph.NewUpdateSpec(meshservice.Table, meshservice.Columns, sqlgraph.NewFieldSpec(meshservice.FieldID, field.TypeInt))
-	id, ok := _u.mutation.ID()
+	id, ok := msuo.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "MeshService.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := _u.fields; len(fields) > 0 {
+	if fields := msuo.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, meshservice.FieldID)
 		for _, f := range fields {
@@ -482,53 +482,53 @@ func (_u *MeshServiceUpdateOne) sqlSave(ctx context.Context) (_node *MeshService
 			}
 		}
 	}
-	if ps := _u.mutation.predicates; len(ps) > 0 {
+	if ps := msuo.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := _u.mutation.MeshnetID(); ok {
+	if value, ok := msuo.mutation.MeshnetID(); ok {
 		_spec.SetField(meshservice.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.AddedMeshnetID(); ok {
+	if value, ok := msuo.mutation.AddedMeshnetID(); ok {
 		_spec.AddField(meshservice.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.NodeID(); ok {
+	if value, ok := msuo.mutation.NodeID(); ok {
 		_spec.SetField(meshservice.FieldNodeID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.AddedNodeID(); ok {
+	if value, ok := msuo.mutation.AddedNodeID(); ok {
 		_spec.AddField(meshservice.FieldNodeID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.Name(); ok {
+	if value, ok := msuo.mutation.Name(); ok {
 		_spec.SetField(meshservice.FieldName, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Proto(); ok {
+	if value, ok := msuo.mutation.Proto(); ok {
 		_spec.SetField(meshservice.FieldProto, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Port(); ok {
+	if value, ok := msuo.mutation.Port(); ok {
 		_spec.SetField(meshservice.FieldPort, field.TypeInt, value)
 	}
-	if value, ok := _u.mutation.AddedPort(); ok {
+	if value, ok := msuo.mutation.AddedPort(); ok {
 		_spec.AddField(meshservice.FieldPort, field.TypeInt, value)
 	}
-	if value, ok := _u.mutation.Target(); ok {
+	if value, ok := msuo.mutation.Target(); ok {
 		_spec.SetField(meshservice.FieldTarget, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Note(); ok {
+	if value, ok := msuo.mutation.Note(); ok {
 		_spec.SetField(meshservice.FieldNote, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Source(); ok {
+	if value, ok := msuo.mutation.Source(); ok {
 		_spec.SetField(meshservice.FieldSource, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Approved(); ok {
+	if value, ok := msuo.mutation.Approved(); ok {
 		_spec.SetField(meshservice.FieldApproved, field.TypeBool, value)
 	}
-	_node = &MeshService{config: _u.config}
+	_node = &MeshService{config: msuo.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, msuo.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{meshservice.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -536,6 +536,6 @@ func (_u *MeshServiceUpdateOne) sqlSave(ctx context.Context) (_node *MeshService
 		}
 		return nil, err
 	}
-	_u.mutation.done = true
+	msuo.mutation.done = true
 	return _node, nil
 }

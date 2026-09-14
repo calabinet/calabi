@@ -9,10 +9,14 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"sync"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/calabi/calabi/apps/calabi-edge/internal/meshresolver"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/configclient"
@@ -48,7 +52,27 @@ type tunnelPersisterAdapter struct {
 	logger    *slog.Logger
 	edgeLabel string
 	index     *tunnelIDIndex // populated so configclient applier can find proxy_id by tunnel_id
+	// ports is this edge's TCP/UDP allocator. Held here for exactly one job:
+	// when a Claim is refused because the port is already bound, the pool is
+	// what was wrong, and reserving the port is what stops it happening again
+	// for the life of the process.
+	ports portReserver
 }
+
+// portReserver is the sliver of router.PortPool this adapter needs. An
+// interface so the failure path can be tested without a real pool.
+type portReserver interface{ Reserve(port uint32) }
+
+// portUnreserver is the other half, for routeApplier: a DELETE is the one
+// event that frees a reserved number again.
+type portUnreserver interface{ Unreserve(port uint32) }
+
+// portInUseReason is the status_reason prefix stamped on a tunnel whose claim
+// was refused because its remote port is bound to another row on this edge.
+// The port number follows, e.g. "port_in_use:20000". Same shape as
+// store.IdleDisableReason: a code the consoles translate, never a sentence —
+// this column is read by three UIs in ten languages.
+const portInUseReason = "port_in_use:"
 
 func (a *tunnelPersisterAdapter) OnProxyOpened(sess *session.Session, p *session.Proxy) (int64, error) {
 	orgID, wsID := tunnelstore.ParseTenant(sess.TenantID, sess.WorkspaceID)
@@ -72,7 +96,7 @@ func (a *tunnelPersisterAdapter) OnProxyOpened(sess *session.Session, p *session
 			if a.index != nil {
 				a.index.set(res.TunnelID, p.ID)
 			}
-			applyProxyPolicy(a.logger, p, res.ConfigJSON)
+			applyProxyPolicy(a.logger, a.tc, p, res.ConfigJSON)
 			a.logger.Info("claimed pending tunnel",
 				"id", res.TunnelID, "proxy_id", p.ID, "type", string(p.Type))
 			return res.TunnelID, nil
@@ -104,6 +128,40 @@ func (a *tunnelPersisterAdapter) OnProxyOpened(sess *session.Session, p *session
 				"type", string(p.Type), "domain", p.Domain, "remote_port", p.RemotePort)
 			return 0, err
 		}
+		// The port this edge picked is still bound to another live row. Same
+		// hard-fail as the two above — falling through to Persist would adopt
+		// the row that holds the port and then SOFT-DELETE the one the user
+		// created, so the tunnel they just made vanishes and somebody else's
+		// older row takes its place. That is the loop the ErrClaimConflict
+		// comment above describes; this is the case it missed.
+		//
+		// Unlike those two, this one is ours to fix: the number came out of this
+		// process's pool, so reserve it. The pool then never offers it again for
+		// the life of the edge, and the next attempt — a reconnect, or the
+		// client's next NEW_PROXY — gets a port that is actually free.
+		if errors.Is(err, tunnelstore.ErrPortBound) {
+			if a.ports != nil && p.RemotePort != 0 {
+				a.ports.Reserve(p.RemotePort)
+			}
+			// Say it on the ROW, not only in this log. The list otherwise goes
+			// on showing 待接入 — the state of a tunnel nothing has picked up
+			// yet — about one a running client already tried and was refused,
+			// and since nothing retries a refused claim it says that forever.
+			// A code, like tunnel-svc's idle_auto_disabled, not a sentence:
+			// the consoles localize it. The next successful claim reports
+			// "enabled" and clears it.
+			if p.ClaimTunnelID != 0 {
+				a.tc.ReportStatus(context.Background(), p.ClaimTunnelID, "error",
+					fmt.Sprintf("%s%d", portInUseReason, p.RemotePort))
+			}
+			a.logger.Warn("claim refused: this port is already bound on this edge — "+
+				"reserving it and refusing the proxy rather than replacing the user's tunnel row. "+
+				"A cold port pool is the usual cause; check for a port pool DB-seed failure at boot",
+				"claim_tunnel_id", p.ClaimTunnelID, "proxy_id", p.ID,
+				"type", string(p.Type), "remote_port", p.RemotePort,
+				"edge_node_id", a.tc.EdgeNodeID(), "err", err)
+			return 0, err
+		}
 		// log every relevant scoping field at WARN so operators
 		// can tell from the log whether the failure was NotFound, an
 		// Org/Client precondition, or a Unique-index collision.
@@ -132,6 +190,10 @@ func (a *tunnelPersisterAdapter) OnProxyOpened(sess *session.Session, p *session
 		LocalAddr:   p.LocalAddr,
 		Domain:      p.Domain,
 		RemotePort:  int32(p.RemotePort),
+		// What the user typed (`--ip-allow …`). Untrusted; tunnel-svc keeps
+		// only the addresses. Sending it is what makes those flags mean
+		// anything on a managed edge — they used to stop here.
+		ProposedSecurityJSON: p.ProposedSecurityJSON,
 	})
 	if err != nil {
 		// with the (edge_node_id, remote_port) unique check
@@ -147,6 +209,18 @@ func (a *tunnelPersisterAdapter) OnProxyOpened(sess *session.Session, p *session
 		a.logger.Warn("persist tunnel failed",
 			"err", err, "proxy_id", p.ID, "type", string(p.Type),
 			"remote_port", p.RemotePort, "edge_node_id", a.tc.EdgeNodeID())
+		// Tag a governance refusal so the session layer can give the client a
+		// code that means what happened. This side is the only one that may
+		// import gRPC status codes — internal/session matches the sentinel with
+		// errors.Is instead (see internal/session/persist_error.go).
+		//
+		// FailedPrecondition from CreateTunnel is the org security baseline: it
+		// is the only thing that returns it on this path, and the shape of any
+		// future one would be the same — "the control plane will not record a
+		// proxy like this", which is what the code says.
+		if status.Code(err) == codes.FailedPrecondition {
+			return 0, fmt.Errorf("%w: %s", session.ErrProxyPolicyRequired, err)
+		}
 		return 0, err
 	}
 	if res.TunnelID != 0 {
@@ -170,7 +244,7 @@ func (a *tunnelPersisterAdapter) OnProxyOpened(sess *session.Session, p *session
 			"proxy_id", p.ID)
 		a.tc.Delete(context.Background(), p.ClaimTunnelID)
 	}
-	applyProxyPolicy(a.logger, p, res.ConfigJSON)
+	applyProxyPolicy(a.logger, a.tc, p, res.ConfigJSON)
 	a.logger.Debug("persisted tunnel", "id", res.TunnelID, "proxy_id", p.ID)
 	return res.TunnelID, nil
 }
@@ -184,19 +258,70 @@ func (a *tunnelPersisterAdapter) OnProxyOpened(sess *session.Session, p *session
 //
 // Platform-only: a standalone edge applies client-supplied policy directly in
 // session/controlloop.go, not via this server-authoritative path.
-func applyProxyPolicy(logger *slog.Logger, p *session.Proxy, configJSON string) {
+func applyProxyPolicy(logger *slog.Logger, secrets oauthSecretFetcher, p *session.Proxy, configJSON string) {
 	pol, err := policy.Parse(configJSON)
 	if err != nil {
 		logger.Warn("parse tunnel security policy failed; serving without policy",
 			"proxy_id", p.ID, "domain", p.Domain, "err", err)
 		return
 	}
+	resolveOAuthSecret(context.Background(), logger, secrets, p, pol)
 	p.SetPolicy(pol)
 	if pol.HasIPRules() {
 		logger.Info("tunnel security policy applied",
 			"proxy_id", p.ID, "domain", p.Domain,
 			"ip_allow", len(pol.IPAllow), "ip_deny", len(pol.IPDeny))
 	}
+}
+
+// oauthSecretFetcher is the control-plane call that hands this edge the login
+// credential for one tunnel. Satisfied by tunnelstore.Client.
+type oauthSecretFetcher interface {
+	OAuthSecret(ctx context.Context, tunnelID int64) (string, error)
+}
+
+// resolveOAuthSecret completes a policy that references an ORG LOGIN POLICY.
+//
+// The secret is deliberately not in config_json — it lives once, in the control
+// plane — so a policy that names one arrives incomplete and has to be finished
+// here, on the edge that is actually serving the tunnel.
+//
+// FAILING HERE IS NOT NEUTRAL. A policy left unresolved has no OAuth gate at
+// all: the tunnel serves every visitor, and it looks exactly like a tunnel that
+// was never meant to have a login. So a failure is logged at ERROR and the
+// proxy keeps whatever policy it already had rather than being handed the
+// gateless one — an SSO tunnel that stops responding is a bad afternoon, an SSO
+// tunnel that silently stops asking who you are is a breach.
+func resolveOAuthSecret(ctx context.Context, logger *slog.Logger, secrets oauthSecretFetcher, p *session.Proxy, pol *policy.Policy) {
+	if !pol.NeedsOAuthSecret() {
+		return
+	}
+	// A hot-swap can reuse what the live policy already resolved; only a fresh
+	// registration has to go and ask.
+	if live := p.LoadPolicy(); live != nil && live.OAuthPolicyRef() == pol.OAuthPolicyRef() {
+		if err := pol.ResolveOAuthSecret(live.OAuthSecret()); err == nil {
+			return
+		}
+	}
+	if secrets == nil || p.TunnelID == 0 {
+		logger.Error("tunnel references an org login policy but this edge cannot fetch its secret; "+
+			"serving WITHOUT the login",
+			"proxy_id", p.ID, "tunnel_id", p.TunnelID, "policy", pol.OAuthPolicyRef())
+		return
+	}
+	secret, err := secrets.OAuthSecret(ctx, p.TunnelID)
+	if err != nil {
+		logger.Error("fetching the org login secret failed; serving WITHOUT the login",
+			"proxy_id", p.ID, "tunnel_id", p.TunnelID, "policy", pol.OAuthPolicyRef(), "err", err)
+		return
+	}
+	if err := pol.ResolveOAuthSecret(secret); err != nil {
+		logger.Error("the org login secret did not produce a usable config; serving WITHOUT the login",
+			"proxy_id", p.ID, "tunnel_id", p.TunnelID, "policy", pol.OAuthPolicyRef(), "err", err)
+		return
+	}
+	logger.Info("org login policy resolved",
+		"proxy_id", p.ID, "tunnel_id", p.TunnelID, "policy", pol.OAuthPolicyRef())
 }
 
 func (a *tunnelPersisterAdapter) OnProxyClosed(sess *session.Session, p *session.Proxy, reason string) {
@@ -235,10 +360,18 @@ type routeApplier struct {
 	manager    *session.Manager
 	index      *tunnelIDIndex
 	logger     *slog.Logger
+	// secrets fetches an org login policy's credential. nil on a standalone
+	// edge, which has no control plane to ask — resolveOAuthSecret says so
+	// loudly rather than serving the tunnel without its login.
+	secrets oauthSecretFetcher
 	// baseDomain is this edge's HTTPListener.BaseDomain, used to resolve a
 	// console tunnel's requested subdomain PREFIX to <prefix>.<base> before
 	// forwarding the CONFIG_PUSH to the daemon (Phase 2).
 	baseDomain string
+	// ports is this edge's TCP/UDP allocator, held for exactly one job: when a
+	// row is deleted, the number it held becomes free again. Nothing else in
+	// this type touches it.
+	ports portUnreserver
 }
 
 func (a *routeApplier) OnSnapshot(routes []configclient.Route) {
@@ -251,6 +384,14 @@ func (a *routeApplier) OnSnapshot(routes []configclient.Route) {
 func (a *routeApplier) OnLocalDelta(d configclient.Delta) {
 	switch d.Kind {
 	case "delete":
+		// The row is gone, so the port it held is free again. This is the ONLY
+		// place allowed to say that: a proxy merely closing leaves the row live
+		// and still bound to its number — see session.PortAllocator.Reserve.
+		// configclient only calls OnLocalDelta when route.edge_node_id is this
+		// edge, so the number really is one of ours.
+		if a.ports != nil && d.Route.RemotePort > 0 {
+			a.ports.Unreserve(uint32(d.Route.RemotePort))
+		}
 		proxyID, ok := a.index.get(int64(d.Route.ID))
 		if !ok {
 			// Either we never knew this tunnel (stale delta after restart)
@@ -309,6 +450,16 @@ func (a *routeApplier) applyPolicyDelta(d configclient.Delta) {
 	}
 	p := target.Proxy(proxyID)
 	if p == nil {
+		return
+	}
+	// A delta never carries the login secret — config_json does not have one to
+	// carry. Without this the hot-swap would replace a working SSO gate with a
+	// gateless policy every time somebody edited an unrelated field, and nothing
+	// would say so. resolveOAuthSecret reuses what the live policy holds.
+	resolveOAuthSecret(context.Background(), a.logger, a.secrets, p, pol)
+	if pol.NeedsOAuthSecret() {
+		a.logger.Error("hot policy update would drop this tunnel's login; keeping the current policy",
+			"tunnel_id", d.Route.ID, "policy", pol.OAuthPolicyRef())
 		return
 	}
 	p.SetPolicy(pol)

@@ -182,6 +182,13 @@ func ttlFor(path string) time.Duration {
 		return 5 * time.Minute
 	case base == "/v1/clients":
 		return 15 * time.Second
+	case base == "/v1/mesh/nodes":
+		// The org's mesh device list, fetched only to label peers with their
+		// owner. Ownership changes when someone enrolls or leaves — never
+		// within a poll tick — and the mesh page polls every 3s, so without a
+		// TTL here every tick would be a round trip to bff-console for an
+		// answer that did not move.
+		return 60 * time.Second
 	case base == "/v1/edges":
 		// The edge directory shifts only when ops deploy/drain a node;
 		// 30s lag is invisible to the user and saves the daemon a round-

@@ -5,8 +5,10 @@ package ent
 import (
 	"time"
 
+	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/coordsetting"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshacl"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshaclrevision"
+	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshconnrecord"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshnode"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshrelay"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshservice"
@@ -18,6 +20,22 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	coordsettingFields := schema.CoordSetting{}.Fields()
+	_ = coordsettingFields
+	// coordsettingDescKey is the schema descriptor for key field.
+	coordsettingDescKey := coordsettingFields[0].Descriptor()
+	// coordsetting.KeyValidator is a validator for the "key" field. It is called by the builders before save.
+	coordsetting.KeyValidator = coordsettingDescKey.Validators[0].(func(string) error)
+	// coordsettingDescValue is the schema descriptor for value field.
+	coordsettingDescValue := coordsettingFields[1].Descriptor()
+	// coordsetting.DefaultValue holds the default value on creation for the value field.
+	coordsetting.DefaultValue = coordsettingDescValue.Default.(string)
+	// coordsettingDescUpdatedAt is the schema descriptor for updated_at field.
+	coordsettingDescUpdatedAt := coordsettingFields[2].Descriptor()
+	// coordsetting.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	coordsetting.DefaultUpdatedAt = coordsettingDescUpdatedAt.Default.(func() time.Time)
+	// coordsetting.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	coordsetting.UpdateDefaultUpdatedAt = coordsettingDescUpdatedAt.UpdateDefault.(func() time.Time)
 	meshaclFields := schema.MeshACL{}.Fields()
 	_ = meshaclFields
 	// meshaclDescPolicyJSON is the schema descriptor for policy_json field.
@@ -44,6 +62,26 @@ func init() {
 	meshaclrevisionDescCreatedAt := meshaclrevisionFields[3].Descriptor()
 	// meshaclrevision.DefaultCreatedAt holds the default value on creation for the created_at field.
 	meshaclrevision.DefaultCreatedAt = meshaclrevisionDescCreatedAt.Default.(func() time.Time)
+	meshconnrecordFields := schema.MeshConnRecord{}.Fields()
+	_ = meshconnrecordFields
+	// meshconnrecordDescBytesTx is the schema descriptor for bytes_tx field.
+	meshconnrecordDescBytesTx := meshconnrecordFields[4].Descriptor()
+	// meshconnrecord.DefaultBytesTx holds the default value on creation for the bytes_tx field.
+	meshconnrecord.DefaultBytesTx = meshconnrecordDescBytesTx.Default.(int64)
+	// meshconnrecordDescBytesRx is the schema descriptor for bytes_rx field.
+	meshconnrecordDescBytesRx := meshconnrecordFields[5].Descriptor()
+	// meshconnrecord.DefaultBytesRx holds the default value on creation for the bytes_rx field.
+	meshconnrecord.DefaultBytesRx = meshconnrecordDescBytesRx.Default.(int64)
+	// meshconnrecordDescPath is the schema descriptor for path field.
+	meshconnrecordDescPath := meshconnrecordFields[6].Descriptor()
+	// meshconnrecord.DefaultPath holds the default value on creation for the path field.
+	meshconnrecord.DefaultPath = meshconnrecordDescPath.Default.(string)
+	// meshconnrecordDescUpdatedAt is the schema descriptor for updated_at field.
+	meshconnrecordDescUpdatedAt := meshconnrecordFields[7].Descriptor()
+	// meshconnrecord.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	meshconnrecord.DefaultUpdatedAt = meshconnrecordDescUpdatedAt.Default.(func() time.Time)
+	// meshconnrecord.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	meshconnrecord.UpdateDefaultUpdatedAt = meshconnrecordDescUpdatedAt.UpdateDefault.(func() time.Time)
 	meshnodeFields := schema.MeshNode{}.Fields()
 	_ = meshnodeFields
 	// meshnodeDescNodeKey is the schema descriptor for node_key field.
@@ -106,28 +144,32 @@ func init() {
 	meshnodeDescDeviceFingerprint := meshnodeFields[15].Descriptor()
 	// meshnode.DefaultDeviceFingerprint holds the default value on creation for the device_fingerprint field.
 	meshnode.DefaultDeviceFingerprint = meshnodeDescDeviceFingerprint.Default.(string)
+	// meshnodeDescOs is the schema descriptor for os field.
+	meshnodeDescOs := meshnodeFields[16].Descriptor()
+	// meshnode.DefaultOs holds the default value on creation for the os field.
+	meshnode.DefaultOs = meshnodeDescOs.Default.(string)
 	// meshnodeDescTagsPinned is the schema descriptor for tags_pinned field.
-	meshnodeDescTagsPinned := meshnodeFields[16].Descriptor()
+	meshnodeDescTagsPinned := meshnodeFields[18].Descriptor()
 	// meshnode.DefaultTagsPinned holds the default value on creation for the tags_pinned field.
 	meshnode.DefaultTagsPinned = meshnodeDescTagsPinned.Default.(bool)
 	// meshnodeDescTagsJSON is the schema descriptor for tags_json field.
-	meshnodeDescTagsJSON := meshnodeFields[17].Descriptor()
+	meshnodeDescTagsJSON := meshnodeFields[19].Descriptor()
 	// meshnode.DefaultTagsJSON holds the default value on creation for the tags_json field.
 	meshnode.DefaultTagsJSON = meshnodeDescTagsJSON.Default.(string)
 	// meshnodeDescApproved is the schema descriptor for approved field.
-	meshnodeDescApproved := meshnodeFields[18].Descriptor()
+	meshnodeDescApproved := meshnodeFields[20].Descriptor()
 	// meshnode.DefaultApproved holds the default value on creation for the approved field.
 	meshnode.DefaultApproved = meshnodeDescApproved.Default.(bool)
 	// meshnodeDescDisabled is the schema descriptor for disabled field.
-	meshnodeDescDisabled := meshnodeFields[19].Descriptor()
+	meshnodeDescDisabled := meshnodeFields[21].Descriptor()
 	// meshnode.DefaultDisabled holds the default value on creation for the disabled field.
 	meshnode.DefaultDisabled = meshnodeDescDisabled.Default.(bool)
 	// meshnodeDescCreatedAt is the schema descriptor for created_at field.
-	meshnodeDescCreatedAt := meshnodeFields[20].Descriptor()
+	meshnodeDescCreatedAt := meshnodeFields[22].Descriptor()
 	// meshnode.DefaultCreatedAt holds the default value on creation for the created_at field.
 	meshnode.DefaultCreatedAt = meshnodeDescCreatedAt.Default.(func() time.Time)
 	// meshnodeDescLastSeen is the schema descriptor for last_seen field.
-	meshnodeDescLastSeen := meshnodeFields[21].Descriptor()
+	meshnodeDescLastSeen := meshnodeFields[23].Descriptor()
 	// meshnode.DefaultLastSeen holds the default value on creation for the last_seen field.
 	meshnode.DefaultLastSeen = meshnodeDescLastSeen.Default.(func() time.Time)
 	// meshnode.UpdateDefaultLastSeen holds the default value on update for the last_seen field.

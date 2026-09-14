@@ -39,6 +39,7 @@ const (
 	Coordinator_ReportEndpoints_FullMethodName        = "/calabi.mesh.v1.Coordinator/ReportEndpoints"
 	Coordinator_UpdateNodeDeclarations_FullMethodName = "/calabi.mesh.v1.Coordinator/UpdateNodeDeclarations"
 	Coordinator_ReportServiceHealth_FullMethodName    = "/calabi.mesh.v1.Coordinator/ReportServiceHealth"
+	Coordinator_ReportConnections_FullMethodName      = "/calabi.mesh.v1.Coordinator/ReportConnections"
 )
 
 // CoordinatorClient is the client API for Coordinator service.
@@ -104,6 +105,28 @@ type CoordinatorClient interface {
 	// only the CURRENT value and does not persist it — a history of which port
 	// answered when is exactly the kind of record says not to accumulate.
 	ReportServiceHealth(ctx context.Context, in *ReportServiceHealthRequest, opts ...grpc.CallOption) (*ReportServiceHealthResponse, error)
+	// ReportConnections uploads WHO this node exchanged traffic with in a window:
+	// the peer, when, how many bytes each way, and whether the path was direct or
+	// relayed. It is the data-plane half of an audit trail — the control-plane
+	// half (who changed a rule, who approved a device) already lives in
+	// audit-svc's hash chain.
+	//
+	// This REVISES the "current value, never a time series" rule in and the revision is deliberately
+	// narrow. What that rule was protecting is spelled out there: a sequence of a
+	// laptop's ENDPOINT ADDRESSES is a location trail, because a public IP reverse
+	// -resolves to a place and an ISP. So endpoints are still current-value only,
+	// and this message carries none — no endpoint, no public IP, no port. A peer
+	// pair plus a byte count is an access trail, which is the thing an enterprise
+	// buyer is asking for when they ask for audit.
+	//
+	// Still metadata, never content: the coordinator's promise that it cannot
+	// what flows between nodes is unchanged, and nothing here comes close to it.
+	//
+	// SELF-REPORTED, like every other declaration. A compromised endpoint can
+	// under-report its own connections, so this is observational evidence and not
+	// proof — the same status as endpoint telemetry everywhere else. Say so in the
+	// console rather than letting a reader assume it is tamper-proof.
+	ReportConnections(ctx context.Context, in *ReportConnectionsRequest, opts ...grpc.CallOption) (*ReportConnectionsResponse, error)
 }
 
 type coordinatorClient struct {
@@ -183,6 +206,16 @@ func (c *coordinatorClient) ReportServiceHealth(ctx context.Context, in *ReportS
 	return out, nil
 }
 
+func (c *coordinatorClient) ReportConnections(ctx context.Context, in *ReportConnectionsRequest, opts ...grpc.CallOption) (*ReportConnectionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportConnectionsResponse)
+	err := c.cc.Invoke(ctx, Coordinator_ReportConnections_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CoordinatorServer is the server API for Coordinator service.
 // All implementations must embed UnimplementedCoordinatorServer
 // for forward compatibility.
@@ -246,6 +279,28 @@ type CoordinatorServer interface {
 	// only the CURRENT value and does not persist it — a history of which port
 	// answered when is exactly the kind of record says not to accumulate.
 	ReportServiceHealth(context.Context, *ReportServiceHealthRequest) (*ReportServiceHealthResponse, error)
+	// ReportConnections uploads WHO this node exchanged traffic with in a window:
+	// the peer, when, how many bytes each way, and whether the path was direct or
+	// relayed. It is the data-plane half of an audit trail — the control-plane
+	// half (who changed a rule, who approved a device) already lives in
+	// audit-svc's hash chain.
+	//
+	// This REVISES the "current value, never a time series" rule in and the revision is deliberately
+	// narrow. What that rule was protecting is spelled out there: a sequence of a
+	// laptop's ENDPOINT ADDRESSES is a location trail, because a public IP reverse
+	// -resolves to a place and an ISP. So endpoints are still current-value only,
+	// and this message carries none — no endpoint, no public IP, no port. A peer
+	// pair plus a byte count is an access trail, which is the thing an enterprise
+	// buyer is asking for when they ask for audit.
+	//
+	// Still metadata, never content: the coordinator's promise that it cannot
+	// what flows between nodes is unchanged, and nothing here comes close to it.
+	//
+	// SELF-REPORTED, like every other declaration. A compromised endpoint can
+	// under-report its own connections, so this is observational evidence and not
+	// proof — the same status as endpoint telemetry everywhere else. Say so in the
+	// console rather than letting a reader assume it is tamper-proof.
+	ReportConnections(context.Context, *ReportConnectionsRequest) (*ReportConnectionsResponse, error)
 	mustEmbedUnimplementedCoordinatorServer()
 }
 
@@ -273,6 +328,9 @@ func (UnimplementedCoordinatorServer) UpdateNodeDeclarations(context.Context, *U
 }
 func (UnimplementedCoordinatorServer) ReportServiceHealth(context.Context, *ReportServiceHealthRequest) (*ReportServiceHealthResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportServiceHealth not implemented")
+}
+func (UnimplementedCoordinatorServer) ReportConnections(context.Context, *ReportConnectionsRequest) (*ReportConnectionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportConnections not implemented")
 }
 func (UnimplementedCoordinatorServer) mustEmbedUnimplementedCoordinatorServer() {}
 func (UnimplementedCoordinatorServer) testEmbeddedByValue()                     {}
@@ -396,6 +454,24 @@ func _Coordinator_ReportServiceHealth_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Coordinator_ReportConnections_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportConnectionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoordinatorServer).ReportConnections(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Coordinator_ReportConnections_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoordinatorServer).ReportConnections(ctx, req.(*ReportConnectionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Coordinator_ServiceDesc is the grpc.ServiceDesc for Coordinator service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -422,6 +498,10 @@ var Coordinator_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReportServiceHealth",
 			Handler:    _Coordinator_ReportServiceHealth_Handler,
+		},
+		{
+			MethodName: "ReportConnections",
+			Handler:    _Coordinator_ReportConnections_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

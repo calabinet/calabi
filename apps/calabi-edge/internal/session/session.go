@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -57,6 +58,19 @@ type Proxy struct {
 	// duplicate. After OnProxyOpened succeeds, TunnelID is set to the
 	// same value (claimed rows are addressable by the same id afterwards).
 	ClaimTunnelID int64
+
+	// ProposedSecurityJSON is the security block the CLIENT sent in NEW_PROXY
+	// options (`calabi http 8080 --ip-allow …`). UNTRUSTED and never applied
+	// here on a managed edge — it is relayed to the control plane, which keeps
+	// only the IP lists and revalidates them.
+	//
+	// Carried on the Proxy rather than applied where it arrives because the two
+	// uses are different: a STANDALONE edge applies it directly (there is no
+	// control plane to ask), while a managed edge must hand it to the persister
+	// and take back whatever the server decides. It used to be read only on the
+	// standalone branch, which is why the flag silently did nothing on the
+	// platform — it reached the edge and stopped there.
+	ProposedSecurityJSON string
 
 	// secPolicy holds the server-authoritative security policy for this tunnel
 	// (IP allowlist, …), parsed from the tunnel row's config_json — NOT from
@@ -333,6 +347,24 @@ func (s *Session) UnregisterProxy(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.proxies, id)
+}
+
+// OrgID returns the numeric org this session belongs to, or 0 when it cannot
+// be determined (a dev / static-YAML tenant whose id is not a number).
+//
+// Two sources, in order: the ConnGuard installed at handshake carries an org
+// already resolved by quota-svc, and TenantID is the raw handshake value. They
+// agree whenever both exist; the guard is preferred because a session without
+// quota wiring still has the string.
+func (s *Session) OrgID() int64 {
+	if g := s.connGuard.Load(); g != nil && g.OrgID > 0 {
+		return g.OrgID
+	}
+	n, err := strconv.ParseInt(s.TenantID, 10, 64)
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return n
 }
 
 // Proxy returns a registered proxy or nil.

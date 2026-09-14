@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"runtime"
 	"sync"
 
 	"google.golang.org/grpc"
@@ -58,6 +59,13 @@ type RegisterParams struct {
 	// install never registered a device. Display only — the coordinator does
 	// not authorize on it.
 	DeviceFingerprint string
+	// BlockIncoming is this machine's own shields switch, REPORTED so the console
+	// can show it. It is not how the setting takes effect — enforcement is the
+	// node's own packet filter, which is why it holds with the coordinator
+	// unreachable and in orgs that never wrote an ACL. Stamped from
+	// Controller.BlockIncoming on the way out (registerParams), so there is one
+	// source of truth for it.
+	BlockIncoming bool
 	// Services are what this node's config declares it offers. A CLAIM: the
 	// coordinator records them pending and an admin confirms them in the console
 	// before any ACL "svc:" rule matches.
@@ -99,6 +107,14 @@ func (c *CoordClient) Register(ctx context.Context, p RegisterParams) (Registrat
 		Name:              p.Name,
 		ProtocolVersion:   meshproto.ProtocolVersion,
 		DeviceFingerprint: p.DeviceFingerprint,
+		// runtime.GOOS, not a config field: this has to be the truth about the
+		// running binary, and a value an operator could set would only ever be
+		// wrong. It is display-only on the far side, so nothing rests on it.
+		Os: runtime.GOOS,
+		// Always sent (a pointer to a real bool, never nil), so "off" is a
+		// statement rather than silence. Only a daemon too old to know the field
+		// leaves it absent, which is the state the console renders as nothing.
+		BlockIncoming: &p.BlockIncoming,
 	}
 	if !p.DiscoKey.IsZero() {
 		req.DiscoKey = p.DiscoKey.String()
@@ -240,12 +256,42 @@ var ErrNotEnrolled = errors.New("mesh: node is not enrolled in this meshnet")
 //
 // Unauthenticated means the session is gone - the coordinator restarted, or a
 // newer registration replaced it - and re-enrolling is the fix for that too.
+// ReportConnections uploads this node's per-window connection deltas.
+//
+// Only the peer, the window, the byte counts and direct-vs-relay travel: no
+// endpoint, no public IP, no port. That is the line that lets this exist as
+// history at all,
+// and it is enforced here rather than only at the far end because this is the
+// side that HAS the endpoint and could leak it by accident.
+func (c *CoordClient) ReportConnections(ctx context.Context, p RegisterParams, samples []ConnSample) error {
+	req := &meshpb.ReportConnectionsRequest{
+		SessionToken: c.sessionToken(),
+		NodeKey:      p.NodeKey.String(),
+	}
+	for _, s := range samples {
+		req.Samples = append(req.Samples, &meshpb.ConnSample{
+			PeerNodeKey: s.PeerNodeKey,
+			WindowStart: s.WindowStart.Unix(),
+			WindowEnd:   s.WindowEnd.Unix(),
+			BytesTx:     s.BytesTx,
+			BytesRx:     s.BytesRx,
+			Path:        s.Path,
+		})
+	}
+	_, err := c.rpc.ReportConnections(ctx, req)
+	return err
+}
+
 func (c *CoordClient) UpdateDeclarations(ctx context.Context, p RegisterParams) error {
 	req := &meshpb.UpdateNodeDeclarationsRequest{
 		AuthKey:           p.AuthKey,
 		NodeKey:           p.NodeKey.String(),
 		DeviceFingerprint: p.DeviceFingerprint,
 		SessionToken:      c.sessionToken(),
+		// Also on this path, so a daemon upgraded in place fills the column
+		// without waiting for a re-enrollment.
+		Os:            runtime.GOOS,
+		BlockIncoming: &p.BlockIncoming,
 	}
 	for _, s := range p.Services {
 		req.DeclaredServices = append(req.DeclaredServices, &meshpb.DeclaredService{

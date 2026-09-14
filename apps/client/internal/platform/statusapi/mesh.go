@@ -81,6 +81,17 @@ type MeshAdvertise struct {
 	// save from an un-upgraded page would silently switch acceptance off.
 	AcceptRoutes  *bool    `json:"accept_routes,omitempty"`
 	RouteExcludes []string `json:"route_excludes,omitempty"`
+	// BlockIncoming refuses every inbound CONNECTION to this machine, whatever
+	// the org's access rules allow. Replies to conversations this machine started
+	// still come back, so outbound use is unaffected.
+	//
+	// It is here, on the DEVICE, and not in the web console on purpose: it is the
+	// one access-control decision that belongs to the person at the keyboard.
+	// Everything else on the mesh — who may reach whom, which routes are live,
+	// which services count — is an admin's. This is the receiver's own refusal,
+	// and it holds even where the org has never written a rule. Pointer for the
+	// same reason as AcceptRoutes: omitted means leave it alone.
+	BlockIncoming *bool `json:"block_incoming,omitempty"`
 }
 
 // MeshServiceDecl is one service this machine declares on the mesh.
@@ -163,9 +174,28 @@ type MeshSubnetAlias struct {
 	Real  string `json:"real"`
 }
 
+// MeshPeerService is one service a peer offers, as the netmap reported it.
+// Confirmed services only — the coordinator drops unapproved declarations
+// before they reach a client.
+type MeshPeerService struct {
+	Name  string `json:"name"`
+	Proto string `json:"proto"`
+	Port  int    `json:"port"`
+}
+
 // MeshPeer is one peer's live WireGuard state.
 type MeshPeer struct {
-	PublicKey        string   `json:"public_key"`
+	PublicKey string `json:"public_key"`
+	// Name is the peer's MagicDNS label, joined in from the netmap. Empty when
+	// the netmap has not been seen yet (a peer read straight off WireGuard
+	// before the first netmap) — the console falls back to the key then.
+	Name string `json:"name,omitempty"`
+	// Services is what this peer offers, joined in from the netmap alongside the
+	// name. Empty is a real answer ("declares nothing"), not a missing one.
+	Services []MeshPeerService `json:"services,omitempty"`
+	// OS is the peer's platform as it reported at registration. Empty from a
+	// node that enrolled before it was collected — show nothing, not "unknown".
+	OS               string   `json:"os,omitempty"`
 	AllowedIPs       []string `json:"allowed_ips"`
 	LastHandshakeSec int64    `json:"last_handshake_sec"`
 	RxBytes          int64    `json:"rx_bytes"`
@@ -308,13 +338,16 @@ func (s *Server) handleMeshAdvertiseGet(w http.ResponseWriter, _ *http.Request) 
 	}
 	// The consumer side lives in creds, not in the advertise state: it is this
 	// machine's own stance, not something it announces to the meshnet.
-	accept, excludes := false, []string{}
+	accept, excludes, blockIncoming := false, []string{}, false
 	if c, err := creds.Load(); err == nil && c != nil {
 		if c.MeshAcceptRoutes != nil {
 			accept = *c.MeshAcceptRoutes
 		}
 		if c.MeshRouteExcludes != nil {
 			excludes = c.MeshRouteExcludes
+		}
+		if c.MeshBlockIncoming != nil {
+			blockIncoming = *c.MeshBlockIncoming
 		}
 	}
 	out := map[string]any{
@@ -330,6 +363,7 @@ func (s *Server) handleMeshAdvertiseGet(w http.ResponseWriter, _ *http.Request) 
 		"forwarding_supported": subnetRouterSupported(),
 		"accept_routes":        accept,
 		"route_excludes":       excludes,
+		"block_incoming":       blockIncoming,
 	}
 	// alias_supported is OMITTED when the daemon could not find out, which the SPA
 	// already reads as "no answer" and draws nothing for — the same shape an older
@@ -411,6 +445,10 @@ func (s *Server) handleMeshAdvertiseSet(w http.ResponseWriter, r *http.Request) 
 	if in.AcceptRoutes != nil {
 		v := *in.AcceptRoutes
 		cfg.MeshAcceptRoutes = &v
+	}
+	if in.BlockIncoming != nil {
+		v := *in.BlockIncoming
+		cfg.MeshBlockIncoming = &v
 	}
 	if in.RouteExcludes != nil {
 		excludes := make([]string, 0, len(in.RouteExcludes))

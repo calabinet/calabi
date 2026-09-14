@@ -48,7 +48,7 @@ func (*MeshACLRevision) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the MeshACLRevision fields.
-func (_m *MeshACLRevision) assignValues(columns []string, values []any) error {
+func (mar *MeshACLRevision) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -59,33 +59,33 @@ func (_m *MeshACLRevision) assignValues(columns []string, values []any) error {
 			if !ok {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
-			_m.ID = int(value.Int64)
+			mar.ID = int(value.Int64)
 		case meshaclrevision.FieldMeshnetID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field meshnet_id", values[i])
 			} else if value.Valid {
-				_m.MeshnetID = value.Int64
+				mar.MeshnetID = value.Int64
 			}
 		case meshaclrevision.FieldPolicyJSON:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field policy_json", values[i])
 			} else if value.Valid {
-				_m.PolicyJSON = value.String
+				mar.PolicyJSON = value.String
 			}
 		case meshaclrevision.FieldActor:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field actor", values[i])
 			} else if value.Valid {
-				_m.Actor = value.String
+				mar.Actor = value.String
 			}
 		case meshaclrevision.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				_m.CreatedAt = value.Time
+				mar.CreatedAt = value.Time
 			}
 		default:
-			_m.selectValues.Set(columns[i], values[i])
+			mar.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -93,44 +93,44 @@ func (_m *MeshACLRevision) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the MeshACLRevision.
 // This includes values selected through modifiers, order, etc.
-func (_m *MeshACLRevision) Value(name string) (ent.Value, error) {
-	return _m.selectValues.Get(name)
+func (mar *MeshACLRevision) Value(name string) (ent.Value, error) {
+	return mar.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this MeshACLRevision.
 // Note that you need to call MeshACLRevision.Unwrap() before calling this method if this MeshACLRevision
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (_m *MeshACLRevision) Update() *MeshACLRevisionUpdateOne {
-	return NewMeshACLRevisionClient(_m.config).UpdateOne(_m)
+func (mar *MeshACLRevision) Update() *MeshACLRevisionUpdateOne {
+	return NewMeshACLRevisionClient(mar.config).UpdateOne(mar)
 }
 
 // Unwrap unwraps the MeshACLRevision entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (_m *MeshACLRevision) Unwrap() *MeshACLRevision {
-	_tx, ok := _m.config.driver.(*txDriver)
+func (mar *MeshACLRevision) Unwrap() *MeshACLRevision {
+	_tx, ok := mar.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: MeshACLRevision is not a transactional entity")
 	}
-	_m.config.driver = _tx.drv
-	return _m
+	mar.config.driver = _tx.drv
+	return mar
 }
 
 // String implements the fmt.Stringer.
-func (_m *MeshACLRevision) String() string {
+func (mar *MeshACLRevision) String() string {
 	var builder strings.Builder
 	builder.WriteString("MeshACLRevision(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", mar.ID))
 	builder.WriteString("meshnet_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.MeshnetID))
+	builder.WriteString(fmt.Sprintf("%v", mar.MeshnetID))
 	builder.WriteString(", ")
 	builder.WriteString("policy_json=")
-	builder.WriteString(_m.PolicyJSON)
+	builder.WriteString(mar.PolicyJSON)
 	builder.WriteString(", ")
 	builder.WriteString("actor=")
-	builder.WriteString(_m.Actor)
+	builder.WriteString(mar.Actor)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(mar.CreatedAt.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }

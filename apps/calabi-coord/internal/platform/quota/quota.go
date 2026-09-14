@@ -67,3 +67,30 @@ func (c *Client) Admit(ctx context.Context, t core.MeshnetID, current int) (bool
 	}
 	return resp.GetAllowed(), int(resp.GetLimit()), resp.GetReason(), nil
 }
+
+// AdmitMember implements core.MemberNodeQuota: same question as Admit, plus
+// "and does this person have room under their own cap". Degrades OPEN for the
+// same reason Admit does.
+func (c *Client) AdmitMember(ctx context.Context, t core.MeshnetID, ownerUserID int64, current, ownerCurrent int) (bool, int, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+	resp, err := c.rpc.CheckAdmit(ctx, &pb.CheckAdmitRequest{
+		OrgId:         int64(t),
+		Kind:          admitKind,
+		Delta:         1,
+		Current:       int64(current),
+		UserId:        ownerUserID,
+		MemberCurrent: int64(ownerCurrent),
+	})
+	if err != nil {
+		c.logger.Warn("mesh_node member admit rpc failed; degrading open",
+			"meshnet", int64(t), "owner", ownerUserID, "err", err)
+		return true, -1, "", nil
+	}
+	return resp.GetAllowed(), int(resp.GetLimit()), resp.GetReason(), nil
+}
+
+// Compile-time proof that the platform backend answers the member question —
+// coord type-asserts for it, so losing this method would silently downgrade
+// every meshnet to org-only caps.
+var _ core.MemberNodeQuota = (*Client)(nil)

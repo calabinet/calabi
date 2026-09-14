@@ -79,6 +79,13 @@ service BFFEdge {
   rpc ReportStatus(ReportStatusRequest)
     returns (ReportStatusResponse);
 
+  // GetTunnelOAuthSecret — the login credential for ONE tunnel this edge is
+  // serving. The only RPC here that returns a secret: caller_org_id is
+  // OVERWRITTEN from the mTLS cert, and tunnel-svc checks both that the org
+  // owns the tunnel and that the tunnel really references the policy.
+  rpc GetTunnelOAuthSecret(GetTunnelOAuthSecretRequest)
+    returns (GetTunnelOAuthSecretResponse);
+
   // ListTunnels — fan-out queries the edge does to seed its
   // in-memory route table on boot. Org-scoped via the request,
   // not edge-scoped, so no overwrite.
@@ -195,6 +202,21 @@ service BFFEdge {
   // plan cap: a customer's own relay is display-only (edge-relay-merge-plan §八).
   rpc ReportRelayUsage(ReportRelayUsageRequest) returns (ReportRelayUsageResponse);
 
+  // ReportAccess mirrors ReportUsage for the tunnel access log (who reached
+  // which tunnel, from where). bff-edge re-publishes on the cluster NATS as
+  // calabi.access.report → metering-svc's tunnel_access_records.
+  //
+  // It exists so a BYOI self-hosted edge is not a permanent hole in its own
+  // org's audit trail. A trail that is systematically incomplete is worse than
+  // no trail: "no record" gets read as "it did not happen". The alternative was
+  // to ship platform edges only and put a disclaimer in the console, which is
+  // the outcome this avoids.
+  //
+  // Scope is not a worry here the way it is for usage: a BYOI edge only ever
+  // serves its own org (bff-edge's mTLS identity pins that), and the records
+  // describe visitors to that org's own services.
+  rpc ReportAccess(ReportAccessRequest) returns (ReportAccessResponse);
+
   // RegisterRelay lets a merged edge/relay node self-register its relay endpoint
   // into the org's DERP map (edge/derp merge P3-B), mirroring how the edge
   // self-registers via RegisterEdgeNode. bff-edge derives the org from the mTLS
@@ -294,6 +316,37 @@ message ReportUsageRequest {
 
 message ReportUsageResponse {
   // count of reports re-published. Diagnostic only.
+  int32 published = 1;
+}
+
+// ===== Reverse: tunnel access records =====
+
+message AccessRecordRow {
+  int64  org_id     = 1;
+  int64  tunnel_id  = 2;
+  // Empty = the edge's overflow bucket (more distinct addresses that hour than
+  // it names individually). Not a missing value.
+  string visitor_ip = 3;
+  // allowed | denied_ip | denied_auth | denied_rate. bff-edge does not
+  // validate the vocabulary — metering-svc drops anything it does not know,
+  // because `outcome` is a key column there.
+  string outcome    = 4;
+  // Start of the UTC hour, unix seconds.
+  int64  hour       = 5;
+  // Connections in this bucket SINCE THE EDGE'S LAST FLUSH — a delta, which is
+  // why metering-svc adds rather than replaces.
+  int64  conns      = 6;
+}
+
+message ReportAccessRequest {
+  // OVERWRITTEN by bff-edge from the mTLS cert before re-publishing — body
+  // value is ignored, exactly like ReportUsage.
+  int64 edge_node_id = 1;
+  repeated AccessRecordRow rows = 2;
+}
+
+message ReportAccessResponse {
+  // count of rows re-published. Diagnostic only.
   int32 published = 1;
 }
 

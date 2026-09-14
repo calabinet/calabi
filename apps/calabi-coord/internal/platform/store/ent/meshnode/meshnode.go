@@ -45,6 +45,10 @@ const (
 	FieldOwnerUserID = "owner_user_id"
 	// FieldDeviceFingerprint holds the string denoting the device_fingerprint field in the database.
 	FieldDeviceFingerprint = "device_fingerprint"
+	// FieldOs holds the string denoting the os field in the database.
+	FieldOs = "os"
+	// FieldBlockIncoming holds the string denoting the block_incoming field in the database.
+	FieldBlockIncoming = "block_incoming"
 	// FieldTagsPinned holds the string denoting the tags_pinned field in the database.
 	FieldTagsPinned = "tags_pinned"
 	// FieldTagsJSON holds the string denoting the tags_json field in the database.
@@ -80,6 +84,8 @@ var Columns = []string{
 	FieldRoutesReviewed,
 	FieldOwnerUserID,
 	FieldDeviceFingerprint,
+	FieldOs,
+	FieldBlockIncoming,
 	FieldTagsPinned,
 	FieldTagsJSON,
 	FieldApproved,
@@ -129,6 +135,8 @@ var (
 	DefaultOwnerUserID int64
 	// DefaultDeviceFingerprint holds the default value on creation for the "device_fingerprint" field.
 	DefaultDeviceFingerprint string
+	// DefaultOs holds the default value on creation for the "os" field.
+	DefaultOs string
 	// DefaultTagsPinned holds the default value on creation for the "tags_pinned" field.
 	DefaultTagsPinned bool
 	// DefaultTagsJSON holds the default value on creation for the "tags_json" field.
@@ -231,6 +239,16 @@ func ByOwnerUserID(opts ...sql.OrderTermOption) OrderOption {
 // ByDeviceFingerprint orders the results by the device_fingerprint field.
 func ByDeviceFingerprint(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeviceFingerprint, opts...).ToFunc()
+}
+
+// ByOs orders the results by the os field.
+func ByOs(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOs, opts...).ToFunc()
+}
+
+// ByBlockIncoming orders the results by the block_incoming field.
+func ByBlockIncoming(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBlockIncoming, opts...).ToFunc()
 }
 
 // ByTagsPinned orders the results by the tags_pinned field.

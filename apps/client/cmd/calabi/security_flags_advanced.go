@@ -20,7 +20,10 @@ import (
 // reported anywhere: reorderArgs reads them off the FlagSet (valueFlagsOf), so
 // registering a flag is the whole of adding one.
 func (sf *securityFlags) registerAdvancedFlags(fs *flag.FlagSet) {
-	fs.IntVar(&sf.rate, "rate", 0, "max NEW connections per minute (0 = unlimited)")
+	fs.IntVar(&sf.rate, "rate", 0, "max NEW connections per minute across the whole tunnel (0 = unlimited)")
+	fs.IntVar(&sf.ratePerIP, "rate-per-ip", 0,
+		"max NEW connections per minute from ONE visitor address (0 = unlimited); "+
+			"without this, a single visitor can drain --rate and everyone else is turned away")
 	if sf.l7 {
 		fs.Var(&sf.setHeader, "set-header", `set/replace an upstream request header "Name: Value" (repeatable)`)
 		fs.Var(&sf.delHeader, "del-header", "strip an upstream request header by name (repeatable)")
@@ -35,11 +38,22 @@ func (sf *securityFlags) registerAdvancedFlags(fs *flag.FlagSet) {
 // applyAdvanced folds the rate-limit / header-rewrite / OAuth flags into the
 // security block (on top of anything from --security-file).
 func (sf *securityFlags) applyAdvanced(sec *secBlock) error {
-	switch {
-	case sf.rate > 0:
-		sec.RateLimit = &secRate{PerMinute: sf.rate}
-	case sf.rate < 0:
+	if sf.rate < 0 {
 		return fmt.Errorf("--rate must be >= 0")
+	}
+	if sf.ratePerIP < 0 {
+		return fmt.Errorf("--rate-per-ip must be >= 0")
+	}
+	if sf.rate > 0 || sf.ratePerIP > 0 {
+		if sec.RateLimit == nil {
+			sec.RateLimit = &secRate{}
+		}
+		if sf.rate > 0 {
+			sec.RateLimit.PerMinute = sf.rate
+		}
+		if sf.ratePerIP > 0 {
+			sec.RateLimit.PerIPPerMinute = sf.ratePerIP
+		}
 	}
 
 	if len(sf.setHeader) > 0 || len(sf.delHeader) > 0 {

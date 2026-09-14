@@ -59,7 +59,10 @@ func runMode(args []string) int {
 		}
 		fmt.Println("  platform   — managed platform: login / daemon / edge discovery via bff-console")
 		fmt.Println("  standalone — self-hosted: tunnels target your own edge (CALABI_SERVER + CALABI_TOKEN),")
-		fmt.Println("               no bff-console; --ip-allow/--basic-auth/… are applied by your standalone edge")
+		fmt.Println("               no bff-console. --ip-allow works everywhere. Whether --basic-auth /")
+		fmt.Println("               --rate / --set-header / --oauth-* take effect is the EDGE's call")
+		fmt.Println("               (standalone AND no control plane wired) — a BYOI edge is wired to one")
+		fmt.Println("               and drops them. Each tunnel's registration tells you which it did.")
 		return 0
 	}
 	want := strings.ToLower(strings.TrimSpace(args[0]))

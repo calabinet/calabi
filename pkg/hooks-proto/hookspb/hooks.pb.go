@@ -443,8 +443,12 @@ type CheckAdmitRequest struct {
 	// Resource kind, e.g. "mesh_node".
 	Kind string `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
 	// Typically 1 for "create one more".
-	Delta         int64 `protobuf:"varint,3,opt,name=delta,proto3" json:"delta,omitempty"`
-	Current       int64 `protobuf:"varint,4,opt,name=current,proto3" json:"current,omitempty"`
+	Delta   int64 `protobuf:"varint,3,opt,name=delta,proto3" json:"delta,omitempty"`
+	Current int64 `protobuf:"varint,4,opt,name=current,proto3" json:"current,omitempty"`
+	// Member-level admission; 0 skips the member layer.
+	UserId int64 `protobuf:"varint,5,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// Count of `kind` attributed to user_id. Ignored when user_id == 0.
+	MemberCurrent int64 `protobuf:"varint,6,opt,name=member_current,json=memberCurrent,proto3" json:"member_current,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -507,6 +511,20 @@ func (x *CheckAdmitRequest) GetCurrent() int64 {
 	return 0
 }
 
+func (x *CheckAdmitRequest) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *CheckAdmitRequest) GetMemberCurrent() int64 {
+	if x != nil {
+		return x.MemberCurrent
+	}
+	return 0
+}
+
 // [mirrors calabi.v1.control_plane.CheckAdmitResponse]
 type CheckAdmitResponse struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -514,7 +532,9 @@ type CheckAdmitResponse struct {
 	Current int64                  `protobuf:"varint,2,opt,name=current,proto3" json:"current,omitempty"`
 	Limit   int64                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
 	// Populated when allowed=false.
-	Reason        string `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
+	Reason string `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
+	// Which layer produced limit: "org" | "member" | "".
+	LimitScope    string `protobuf:"bytes,5,opt,name=limit_scope,json=limitScope,proto3" json:"limit_scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -573,6 +593,13 @@ func (x *CheckAdmitResponse) GetLimit() int64 {
 func (x *CheckAdmitResponse) GetReason() string {
 	if x != nil {
 		return x.Reason
+	}
+	return ""
+}
+
+func (x *CheckAdmitResponse) GetLimitScope() string {
+	if x != nil {
+		return x.LimitScope
 	}
 	return ""
 }
@@ -863,17 +890,21 @@ const file_hookspb_hooks_proto_rawDesc = "" +
 	"\x06region\x18\x01 \x01(\tR\x06region\x12\x12\n" +
 	"\x04host\x18\x02 \x01(\tR\x04host\x12\x1b\n" +
 	"\tderp_port\x18\x03 \x01(\x05R\bderpPort\x12\x1b\n" +
-	"\tstun_port\x18\x04 \x01(\x05R\bstunPort\"n\n" +
+	"\tstun_port\x18\x04 \x01(\x05R\bstunPort\"\xae\x01\n" +
 	"\x11CheckAdmitRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\x03R\x05orgId\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x14\n" +
 	"\x05delta\x18\x03 \x01(\x03R\x05delta\x12\x18\n" +
-	"\acurrent\x18\x04 \x01(\x03R\acurrent\"v\n" +
+	"\acurrent\x18\x04 \x01(\x03R\acurrent\x12\x17\n" +
+	"\auser_id\x18\x05 \x01(\x03R\x06userId\x12%\n" +
+	"\x0emember_current\x18\x06 \x01(\x03R\rmemberCurrent\"\x97\x01\n" +
 	"\x12CheckAdmitResponse\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x12\x18\n" +
 	"\acurrent\x18\x02 \x01(\x03R\acurrent\x12\x14\n" +
 	"\x05limit\x18\x03 \x01(\x03R\x05limit\x12\x16\n" +
-	"\x06reason\x18\x04 \x01(\tR\x06reason\"\x17\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\x12\x1f\n" +
+	"\vlimit_scope\x18\x05 \x01(\tR\n" +
+	"limitScope\"\x17\n" +
 	"\x15ListDeniedOrgsRequest\"1\n" +
 	"\x16ListDeniedOrgsResponse\x12\x17\n" +
 	"\aorg_ids\x18\x01 \x03(\x03R\x06orgIds\"V\n" +

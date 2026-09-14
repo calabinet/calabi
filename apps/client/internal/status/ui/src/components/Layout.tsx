@@ -737,8 +737,25 @@ export default function Layout() {
               // where username is the local-part of the email. The popup
               // (opens upward) carries the full email, a Language submenu
               // (EN / 中文 with a check on the active one), and Log out.
-              const email = me.user.email || "";
-              const username = (email || "user").split("@")[0] || "user";
+              //
+              // In AGENT mode there is no logged-in human, so me.user is
+              // {id:0} with no email — and the local-part of "" is "", which
+              // fell through to the literal string "user". A console pinned to
+              // an API key therefore identified itself as "user": not merely
+              // unhelpful, but the one question it could not answer about
+              // itself was whose key it was running on.
+              //
+              // acting_user is that person: who MINTED the key (bff-console
+              // resolves it from the principal's actor claim). Shown with an
+              // explicit label in the popup — the row says whose credential
+              // this is, never that they are signed in here.
+              const actingEmail = me.acting_user?.email || "";
+              const email = (agentMode ? actingEmail : me.user.email) || "";
+              // A key minted before creator attribution existed has nobody to
+              // name. Say "Agent" rather than invent a person: the org is on
+              // the top bar, and a wrong name is worse than a missing one.
+              const username =
+                email.split("@")[0] || (agentMode ? t("serviceMode.agentTag") : "user");
               const planName = me.plan?.code ? planLabel(me.plan.code) : "";
               const langStyle = (k: LangCode) => ({
                 display: "inline-flex" as const,
@@ -758,7 +775,11 @@ export default function Layout() {
                         key: "email",
                         label: (
                           <span style={{ color: "#64748b", fontSize: 12 }}>
-                            {email}
+                            {agentMode
+                              ? email
+                                ? t("topbar.keyOwner", { email })
+                                : t("topbar.keyOwnerUnknown")
+                              : email}
                           </span>
                         ),
                         disabled: true,

@@ -20,56 +20,56 @@ type MeshACLRevisionDelete struct {
 }
 
 // Where appends a list predicates to the MeshACLRevisionDelete builder.
-func (_d *MeshACLRevisionDelete) Where(ps ...predicate.MeshACLRevision) *MeshACLRevisionDelete {
-	_d.mutation.Where(ps...)
-	return _d
+func (mard *MeshACLRevisionDelete) Where(ps ...predicate.MeshACLRevision) *MeshACLRevisionDelete {
+	mard.mutation.Where(ps...)
+	return mard
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (_d *MeshACLRevisionDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
+func (mard *MeshACLRevisionDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, mard.sqlExec, mard.mutation, mard.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_d *MeshACLRevisionDelete) ExecX(ctx context.Context) int {
-	n, err := _d.Exec(ctx)
+func (mard *MeshACLRevisionDelete) ExecX(ctx context.Context) int {
+	n, err := mard.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (_d *MeshACLRevisionDelete) sqlExec(ctx context.Context) (int, error) {
+func (mard *MeshACLRevisionDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(meshaclrevision.Table, sqlgraph.NewFieldSpec(meshaclrevision.FieldID, field.TypeInt))
-	if ps := _d.mutation.predicates; len(ps) > 0 {
+	if ps := mard.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, mard.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	_d.mutation.done = true
+	mard.mutation.done = true
 	return affected, err
 }
 
 // MeshACLRevisionDeleteOne is the builder for deleting a single MeshACLRevision entity.
 type MeshACLRevisionDeleteOne struct {
-	_d *MeshACLRevisionDelete
+	mard *MeshACLRevisionDelete
 }
 
 // Where appends a list predicates to the MeshACLRevisionDelete builder.
-func (_d *MeshACLRevisionDeleteOne) Where(ps ...predicate.MeshACLRevision) *MeshACLRevisionDeleteOne {
-	_d._d.mutation.Where(ps...)
-	return _d
+func (mardo *MeshACLRevisionDeleteOne) Where(ps ...predicate.MeshACLRevision) *MeshACLRevisionDeleteOne {
+	mardo.mard.mutation.Where(ps...)
+	return mardo
 }
 
 // Exec executes the deletion query.
-func (_d *MeshACLRevisionDeleteOne) Exec(ctx context.Context) error {
-	n, err := _d._d.Exec(ctx)
+func (mardo *MeshACLRevisionDeleteOne) Exec(ctx context.Context) error {
+	n, err := mardo.mard.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (_d *MeshACLRevisionDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_d *MeshACLRevisionDeleteOne) ExecX(ctx context.Context) {
-	if err := _d.Exec(ctx); err != nil {
+func (mardo *MeshACLRevisionDeleteOne) ExecX(ctx context.Context) {
+	if err := mardo.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

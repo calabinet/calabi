@@ -6,11 +6,17 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// CoordSetting is the predicate function for coordsetting builders.
+type CoordSetting func(*sql.Selector)
+
 // MeshACL is the predicate function for meshacl builders.
 type MeshACL func(*sql.Selector)
 
 // MeshACLRevision is the predicate function for meshaclrevision builders.
 type MeshACLRevision func(*sql.Selector)
+
+// MeshConnRecord is the predicate function for meshconnrecord builders.
+type MeshConnRecord func(*sql.Selector)
 
 // MeshNode is the predicate function for meshnode builders.
 type MeshNode func(*sql.Selector)

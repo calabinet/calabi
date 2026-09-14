@@ -11,8 +11,10 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/coordsetting"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshacl"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshaclrevision"
+	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshconnrecord"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshnode"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshrelay"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshservice"
@@ -29,13 +31,449 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
+	TypeCoordSetting    = "CoordSetting"
 	TypeMeshACL         = "MeshACL"
 	TypeMeshACLRevision = "MeshACLRevision"
+	TypeMeshConnRecord  = "MeshConnRecord"
 	TypeMeshNode        = "MeshNode"
 	TypeMeshRelay       = "MeshRelay"
 	TypeMeshService     = "MeshService"
 	TypeMeshSetting     = "MeshSetting"
 )
+
+// CoordSettingMutation represents an operation that mutates the CoordSetting nodes in the graph.
+type CoordSettingMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	key           *string
+	value         *string
+	updated_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*CoordSetting, error)
+	predicates    []predicate.CoordSetting
+}
+
+var _ ent.Mutation = (*CoordSettingMutation)(nil)
+
+// coordsettingOption allows management of the mutation configuration using functional options.
+type coordsettingOption func(*CoordSettingMutation)
+
+// newCoordSettingMutation creates new mutation for the CoordSetting entity.
+func newCoordSettingMutation(c config, op Op, opts ...coordsettingOption) *CoordSettingMutation {
+	m := &CoordSettingMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCoordSetting,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCoordSettingID sets the ID field of the mutation.
+func withCoordSettingID(id int) coordsettingOption {
+	return func(m *CoordSettingMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *CoordSetting
+		)
+		m.oldValue = func(ctx context.Context) (*CoordSetting, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().CoordSetting.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCoordSetting sets the old CoordSetting of the mutation.
+func withCoordSetting(node *CoordSetting) coordsettingOption {
+	return func(m *CoordSettingMutation) {
+		m.oldValue = func(context.Context) (*CoordSetting, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CoordSettingMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CoordSettingMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CoordSettingMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CoordSettingMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().CoordSetting.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetKey sets the "key" field.
+func (m *CoordSettingMutation) SetKey(s string) {
+	m.key = &s
+}
+
+// Key returns the value of the "key" field in the mutation.
+func (m *CoordSettingMutation) Key() (r string, exists bool) {
+	v := m.key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKey returns the old "key" field's value of the CoordSetting entity.
+// If the CoordSetting object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CoordSettingMutation) OldKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKey: %w", err)
+	}
+	return oldValue.Key, nil
+}
+
+// ResetKey resets all changes to the "key" field.
+func (m *CoordSettingMutation) ResetKey() {
+	m.key = nil
+}
+
+// SetValue sets the "value" field.
+func (m *CoordSettingMutation) SetValue(s string) {
+	m.value = &s
+}
+
+// Value returns the value of the "value" field in the mutation.
+func (m *CoordSettingMutation) Value() (r string, exists bool) {
+	v := m.value
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldValue returns the old "value" field's value of the CoordSetting entity.
+// If the CoordSetting object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CoordSettingMutation) OldValue(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldValue is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldValue requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldValue: %w", err)
+	}
+	return oldValue.Value, nil
+}
+
+// ResetValue resets all changes to the "value" field.
+func (m *CoordSettingMutation) ResetValue() {
+	m.value = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *CoordSettingMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *CoordSettingMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the CoordSetting entity.
+// If the CoordSetting object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CoordSettingMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *CoordSettingMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the CoordSettingMutation builder.
+func (m *CoordSettingMutation) Where(ps ...predicate.CoordSetting) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CoordSettingMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CoordSettingMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.CoordSetting, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CoordSettingMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CoordSettingMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (CoordSetting).
+func (m *CoordSettingMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CoordSettingMutation) Fields() []string {
+	fields := make([]string, 0, 3)
+	if m.key != nil {
+		fields = append(fields, coordsetting.FieldKey)
+	}
+	if m.value != nil {
+		fields = append(fields, coordsetting.FieldValue)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, coordsetting.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CoordSettingMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case coordsetting.FieldKey:
+		return m.Key()
+	case coordsetting.FieldValue:
+		return m.Value()
+	case coordsetting.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CoordSettingMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case coordsetting.FieldKey:
+		return m.OldKey(ctx)
+	case coordsetting.FieldValue:
+		return m.OldValue(ctx)
+	case coordsetting.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown CoordSetting field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CoordSettingMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case coordsetting.FieldKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKey(v)
+		return nil
+	case coordsetting.FieldValue:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetValue(v)
+		return nil
+	case coordsetting.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CoordSetting field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CoordSettingMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CoordSettingMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CoordSettingMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown CoordSetting numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CoordSettingMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CoordSettingMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CoordSettingMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown CoordSetting nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CoordSettingMutation) ResetField(name string) error {
+	switch name {
+	case coordsetting.FieldKey:
+		m.ResetKey()
+		return nil
+	case coordsetting.FieldValue:
+		m.ResetValue()
+		return nil
+	case coordsetting.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown CoordSetting field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CoordSettingMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CoordSettingMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CoordSettingMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CoordSettingMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CoordSettingMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CoordSettingMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CoordSettingMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown CoordSetting unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CoordSettingMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown CoordSetting edge %s", name)
+}
 
 // MeshACLMutation represents an operation that mutates the MeshACL nodes in the graph.
 type MeshACLMutation struct {
@@ -1031,6 +1469,878 @@ func (m *MeshACLRevisionMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown MeshACLRevision edge %s", name)
 }
 
+// MeshConnRecordMutation represents an operation that mutates the MeshConnRecord nodes in the graph.
+type MeshConnRecordMutation struct {
+	config
+	op             Op
+	typ            string
+	id             *int
+	meshnet_id     *int64
+	addmeshnet_id  *int64
+	src_node_id    *int64
+	addsrc_node_id *int64
+	dst_node_id    *int64
+	adddst_node_id *int64
+	hour           *time.Time
+	bytes_tx       *int64
+	addbytes_tx    *int64
+	bytes_rx       *int64
+	addbytes_rx    *int64
+	_path          *string
+	updated_at     *time.Time
+	clearedFields  map[string]struct{}
+	done           bool
+	oldValue       func(context.Context) (*MeshConnRecord, error)
+	predicates     []predicate.MeshConnRecord
+}
+
+var _ ent.Mutation = (*MeshConnRecordMutation)(nil)
+
+// meshconnrecordOption allows management of the mutation configuration using functional options.
+type meshconnrecordOption func(*MeshConnRecordMutation)
+
+// newMeshConnRecordMutation creates new mutation for the MeshConnRecord entity.
+func newMeshConnRecordMutation(c config, op Op, opts ...meshconnrecordOption) *MeshConnRecordMutation {
+	m := &MeshConnRecordMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeMeshConnRecord,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withMeshConnRecordID sets the ID field of the mutation.
+func withMeshConnRecordID(id int) meshconnrecordOption {
+	return func(m *MeshConnRecordMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *MeshConnRecord
+		)
+		m.oldValue = func(ctx context.Context) (*MeshConnRecord, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().MeshConnRecord.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withMeshConnRecord sets the old MeshConnRecord of the mutation.
+func withMeshConnRecord(node *MeshConnRecord) meshconnrecordOption {
+	return func(m *MeshConnRecordMutation) {
+		m.oldValue = func(context.Context) (*MeshConnRecord, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m MeshConnRecordMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m MeshConnRecordMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *MeshConnRecordMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *MeshConnRecordMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().MeshConnRecord.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetMeshnetID sets the "meshnet_id" field.
+func (m *MeshConnRecordMutation) SetMeshnetID(i int64) {
+	m.meshnet_id = &i
+	m.addmeshnet_id = nil
+}
+
+// MeshnetID returns the value of the "meshnet_id" field in the mutation.
+func (m *MeshConnRecordMutation) MeshnetID() (r int64, exists bool) {
+	v := m.meshnet_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMeshnetID returns the old "meshnet_id" field's value of the MeshConnRecord entity.
+// If the MeshConnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshConnRecordMutation) OldMeshnetID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMeshnetID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMeshnetID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMeshnetID: %w", err)
+	}
+	return oldValue.MeshnetID, nil
+}
+
+// AddMeshnetID adds i to the "meshnet_id" field.
+func (m *MeshConnRecordMutation) AddMeshnetID(i int64) {
+	if m.addmeshnet_id != nil {
+		*m.addmeshnet_id += i
+	} else {
+		m.addmeshnet_id = &i
+	}
+}
+
+// AddedMeshnetID returns the value that was added to the "meshnet_id" field in this mutation.
+func (m *MeshConnRecordMutation) AddedMeshnetID() (r int64, exists bool) {
+	v := m.addmeshnet_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetMeshnetID resets all changes to the "meshnet_id" field.
+func (m *MeshConnRecordMutation) ResetMeshnetID() {
+	m.meshnet_id = nil
+	m.addmeshnet_id = nil
+}
+
+// SetSrcNodeID sets the "src_node_id" field.
+func (m *MeshConnRecordMutation) SetSrcNodeID(i int64) {
+	m.src_node_id = &i
+	m.addsrc_node_id = nil
+}
+
+// SrcNodeID returns the value of the "src_node_id" field in the mutation.
+func (m *MeshConnRecordMutation) SrcNodeID() (r int64, exists bool) {
+	v := m.src_node_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSrcNodeID returns the old "src_node_id" field's value of the MeshConnRecord entity.
+// If the MeshConnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshConnRecordMutation) OldSrcNodeID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSrcNodeID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSrcNodeID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSrcNodeID: %w", err)
+	}
+	return oldValue.SrcNodeID, nil
+}
+
+// AddSrcNodeID adds i to the "src_node_id" field.
+func (m *MeshConnRecordMutation) AddSrcNodeID(i int64) {
+	if m.addsrc_node_id != nil {
+		*m.addsrc_node_id += i
+	} else {
+		m.addsrc_node_id = &i
+	}
+}
+
+// AddedSrcNodeID returns the value that was added to the "src_node_id" field in this mutation.
+func (m *MeshConnRecordMutation) AddedSrcNodeID() (r int64, exists bool) {
+	v := m.addsrc_node_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSrcNodeID resets all changes to the "src_node_id" field.
+func (m *MeshConnRecordMutation) ResetSrcNodeID() {
+	m.src_node_id = nil
+	m.addsrc_node_id = nil
+}
+
+// SetDstNodeID sets the "dst_node_id" field.
+func (m *MeshConnRecordMutation) SetDstNodeID(i int64) {
+	m.dst_node_id = &i
+	m.adddst_node_id = nil
+}
+
+// DstNodeID returns the value of the "dst_node_id" field in the mutation.
+func (m *MeshConnRecordMutation) DstNodeID() (r int64, exists bool) {
+	v := m.dst_node_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDstNodeID returns the old "dst_node_id" field's value of the MeshConnRecord entity.
+// If the MeshConnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshConnRecordMutation) OldDstNodeID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDstNodeID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDstNodeID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDstNodeID: %w", err)
+	}
+	return oldValue.DstNodeID, nil
+}
+
+// AddDstNodeID adds i to the "dst_node_id" field.
+func (m *MeshConnRecordMutation) AddDstNodeID(i int64) {
+	if m.adddst_node_id != nil {
+		*m.adddst_node_id += i
+	} else {
+		m.adddst_node_id = &i
+	}
+}
+
+// AddedDstNodeID returns the value that was added to the "dst_node_id" field in this mutation.
+func (m *MeshConnRecordMutation) AddedDstNodeID() (r int64, exists bool) {
+	v := m.adddst_node_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDstNodeID resets all changes to the "dst_node_id" field.
+func (m *MeshConnRecordMutation) ResetDstNodeID() {
+	m.dst_node_id = nil
+	m.adddst_node_id = nil
+}
+
+// SetHour sets the "hour" field.
+func (m *MeshConnRecordMutation) SetHour(t time.Time) {
+	m.hour = &t
+}
+
+// Hour returns the value of the "hour" field in the mutation.
+func (m *MeshConnRecordMutation) Hour() (r time.Time, exists bool) {
+	v := m.hour
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHour returns the old "hour" field's value of the MeshConnRecord entity.
+// If the MeshConnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshConnRecordMutation) OldHour(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHour is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHour requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHour: %w", err)
+	}
+	return oldValue.Hour, nil
+}
+
+// ResetHour resets all changes to the "hour" field.
+func (m *MeshConnRecordMutation) ResetHour() {
+	m.hour = nil
+}
+
+// SetBytesTx sets the "bytes_tx" field.
+func (m *MeshConnRecordMutation) SetBytesTx(i int64) {
+	m.bytes_tx = &i
+	m.addbytes_tx = nil
+}
+
+// BytesTx returns the value of the "bytes_tx" field in the mutation.
+func (m *MeshConnRecordMutation) BytesTx() (r int64, exists bool) {
+	v := m.bytes_tx
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBytesTx returns the old "bytes_tx" field's value of the MeshConnRecord entity.
+// If the MeshConnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshConnRecordMutation) OldBytesTx(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBytesTx is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBytesTx requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBytesTx: %w", err)
+	}
+	return oldValue.BytesTx, nil
+}
+
+// AddBytesTx adds i to the "bytes_tx" field.
+func (m *MeshConnRecordMutation) AddBytesTx(i int64) {
+	if m.addbytes_tx != nil {
+		*m.addbytes_tx += i
+	} else {
+		m.addbytes_tx = &i
+	}
+}
+
+// AddedBytesTx returns the value that was added to the "bytes_tx" field in this mutation.
+func (m *MeshConnRecordMutation) AddedBytesTx() (r int64, exists bool) {
+	v := m.addbytes_tx
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBytesTx resets all changes to the "bytes_tx" field.
+func (m *MeshConnRecordMutation) ResetBytesTx() {
+	m.bytes_tx = nil
+	m.addbytes_tx = nil
+}
+
+// SetBytesRx sets the "bytes_rx" field.
+func (m *MeshConnRecordMutation) SetBytesRx(i int64) {
+	m.bytes_rx = &i
+	m.addbytes_rx = nil
+}
+
+// BytesRx returns the value of the "bytes_rx" field in the mutation.
+func (m *MeshConnRecordMutation) BytesRx() (r int64, exists bool) {
+	v := m.bytes_rx
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBytesRx returns the old "bytes_rx" field's value of the MeshConnRecord entity.
+// If the MeshConnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshConnRecordMutation) OldBytesRx(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBytesRx is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBytesRx requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBytesRx: %w", err)
+	}
+	return oldValue.BytesRx, nil
+}
+
+// AddBytesRx adds i to the "bytes_rx" field.
+func (m *MeshConnRecordMutation) AddBytesRx(i int64) {
+	if m.addbytes_rx != nil {
+		*m.addbytes_rx += i
+	} else {
+		m.addbytes_rx = &i
+	}
+}
+
+// AddedBytesRx returns the value that was added to the "bytes_rx" field in this mutation.
+func (m *MeshConnRecordMutation) AddedBytesRx() (r int64, exists bool) {
+	v := m.addbytes_rx
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBytesRx resets all changes to the "bytes_rx" field.
+func (m *MeshConnRecordMutation) ResetBytesRx() {
+	m.bytes_rx = nil
+	m.addbytes_rx = nil
+}
+
+// SetPath sets the "path" field.
+func (m *MeshConnRecordMutation) SetPath(s string) {
+	m._path = &s
+}
+
+// Path returns the value of the "path" field in the mutation.
+func (m *MeshConnRecordMutation) Path() (r string, exists bool) {
+	v := m._path
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPath returns the old "path" field's value of the MeshConnRecord entity.
+// If the MeshConnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshConnRecordMutation) OldPath(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPath is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPath requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPath: %w", err)
+	}
+	return oldValue.Path, nil
+}
+
+// ResetPath resets all changes to the "path" field.
+func (m *MeshConnRecordMutation) ResetPath() {
+	m._path = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *MeshConnRecordMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *MeshConnRecordMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the MeshConnRecord entity.
+// If the MeshConnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshConnRecordMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *MeshConnRecordMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the MeshConnRecordMutation builder.
+func (m *MeshConnRecordMutation) Where(ps ...predicate.MeshConnRecord) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the MeshConnRecordMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *MeshConnRecordMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.MeshConnRecord, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *MeshConnRecordMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *MeshConnRecordMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (MeshConnRecord).
+func (m *MeshConnRecordMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *MeshConnRecordMutation) Fields() []string {
+	fields := make([]string, 0, 8)
+	if m.meshnet_id != nil {
+		fields = append(fields, meshconnrecord.FieldMeshnetID)
+	}
+	if m.src_node_id != nil {
+		fields = append(fields, meshconnrecord.FieldSrcNodeID)
+	}
+	if m.dst_node_id != nil {
+		fields = append(fields, meshconnrecord.FieldDstNodeID)
+	}
+	if m.hour != nil {
+		fields = append(fields, meshconnrecord.FieldHour)
+	}
+	if m.bytes_tx != nil {
+		fields = append(fields, meshconnrecord.FieldBytesTx)
+	}
+	if m.bytes_rx != nil {
+		fields = append(fields, meshconnrecord.FieldBytesRx)
+	}
+	if m._path != nil {
+		fields = append(fields, meshconnrecord.FieldPath)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, meshconnrecord.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *MeshConnRecordMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case meshconnrecord.FieldMeshnetID:
+		return m.MeshnetID()
+	case meshconnrecord.FieldSrcNodeID:
+		return m.SrcNodeID()
+	case meshconnrecord.FieldDstNodeID:
+		return m.DstNodeID()
+	case meshconnrecord.FieldHour:
+		return m.Hour()
+	case meshconnrecord.FieldBytesTx:
+		return m.BytesTx()
+	case meshconnrecord.FieldBytesRx:
+		return m.BytesRx()
+	case meshconnrecord.FieldPath:
+		return m.Path()
+	case meshconnrecord.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *MeshConnRecordMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case meshconnrecord.FieldMeshnetID:
+		return m.OldMeshnetID(ctx)
+	case meshconnrecord.FieldSrcNodeID:
+		return m.OldSrcNodeID(ctx)
+	case meshconnrecord.FieldDstNodeID:
+		return m.OldDstNodeID(ctx)
+	case meshconnrecord.FieldHour:
+		return m.OldHour(ctx)
+	case meshconnrecord.FieldBytesTx:
+		return m.OldBytesTx(ctx)
+	case meshconnrecord.FieldBytesRx:
+		return m.OldBytesRx(ctx)
+	case meshconnrecord.FieldPath:
+		return m.OldPath(ctx)
+	case meshconnrecord.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown MeshConnRecord field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MeshConnRecordMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case meshconnrecord.FieldMeshnetID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMeshnetID(v)
+		return nil
+	case meshconnrecord.FieldSrcNodeID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSrcNodeID(v)
+		return nil
+	case meshconnrecord.FieldDstNodeID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDstNodeID(v)
+		return nil
+	case meshconnrecord.FieldHour:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHour(v)
+		return nil
+	case meshconnrecord.FieldBytesTx:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBytesTx(v)
+		return nil
+	case meshconnrecord.FieldBytesRx:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBytesRx(v)
+		return nil
+	case meshconnrecord.FieldPath:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPath(v)
+		return nil
+	case meshconnrecord.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MeshConnRecord field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *MeshConnRecordMutation) AddedFields() []string {
+	var fields []string
+	if m.addmeshnet_id != nil {
+		fields = append(fields, meshconnrecord.FieldMeshnetID)
+	}
+	if m.addsrc_node_id != nil {
+		fields = append(fields, meshconnrecord.FieldSrcNodeID)
+	}
+	if m.adddst_node_id != nil {
+		fields = append(fields, meshconnrecord.FieldDstNodeID)
+	}
+	if m.addbytes_tx != nil {
+		fields = append(fields, meshconnrecord.FieldBytesTx)
+	}
+	if m.addbytes_rx != nil {
+		fields = append(fields, meshconnrecord.FieldBytesRx)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *MeshConnRecordMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case meshconnrecord.FieldMeshnetID:
+		return m.AddedMeshnetID()
+	case meshconnrecord.FieldSrcNodeID:
+		return m.AddedSrcNodeID()
+	case meshconnrecord.FieldDstNodeID:
+		return m.AddedDstNodeID()
+	case meshconnrecord.FieldBytesTx:
+		return m.AddedBytesTx()
+	case meshconnrecord.FieldBytesRx:
+		return m.AddedBytesRx()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MeshConnRecordMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case meshconnrecord.FieldMeshnetID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMeshnetID(v)
+		return nil
+	case meshconnrecord.FieldSrcNodeID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSrcNodeID(v)
+		return nil
+	case meshconnrecord.FieldDstNodeID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDstNodeID(v)
+		return nil
+	case meshconnrecord.FieldBytesTx:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBytesTx(v)
+		return nil
+	case meshconnrecord.FieldBytesRx:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBytesRx(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MeshConnRecord numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *MeshConnRecordMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *MeshConnRecordMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *MeshConnRecordMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown MeshConnRecord nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *MeshConnRecordMutation) ResetField(name string) error {
+	switch name {
+	case meshconnrecord.FieldMeshnetID:
+		m.ResetMeshnetID()
+		return nil
+	case meshconnrecord.FieldSrcNodeID:
+		m.ResetSrcNodeID()
+		return nil
+	case meshconnrecord.FieldDstNodeID:
+		m.ResetDstNodeID()
+		return nil
+	case meshconnrecord.FieldHour:
+		m.ResetHour()
+		return nil
+	case meshconnrecord.FieldBytesTx:
+		m.ResetBytesTx()
+		return nil
+	case meshconnrecord.FieldBytesRx:
+		m.ResetBytesRx()
+		return nil
+	case meshconnrecord.FieldPath:
+		m.ResetPath()
+		return nil
+	case meshconnrecord.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown MeshConnRecord field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *MeshConnRecordMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *MeshConnRecordMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *MeshConnRecordMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *MeshConnRecordMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *MeshConnRecordMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *MeshConnRecordMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *MeshConnRecordMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown MeshConnRecord unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *MeshConnRecordMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown MeshConnRecord edge %s", name)
+}
+
 // MeshNodeMutation represents an operation that mutates the MeshNode nodes in the graph.
 type MeshNodeMutation struct {
 	config
@@ -1055,6 +2365,8 @@ type MeshNodeMutation struct {
 	owner_user_id          *int64
 	addowner_user_id       *int64
 	device_fingerprint     *string
+	os                     *string
+	block_incoming         *bool
 	tags_pinned            *bool
 	tags_json              *string
 	approved               *bool
@@ -1781,6 +3093,91 @@ func (m *MeshNodeMutation) ResetDeviceFingerprint() {
 	m.device_fingerprint = nil
 }
 
+// SetOs sets the "os" field.
+func (m *MeshNodeMutation) SetOs(s string) {
+	m.os = &s
+}
+
+// Os returns the value of the "os" field in the mutation.
+func (m *MeshNodeMutation) Os() (r string, exists bool) {
+	v := m.os
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOs returns the old "os" field's value of the MeshNode entity.
+// If the MeshNode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshNodeMutation) OldOs(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOs is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOs requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOs: %w", err)
+	}
+	return oldValue.Os, nil
+}
+
+// ResetOs resets all changes to the "os" field.
+func (m *MeshNodeMutation) ResetOs() {
+	m.os = nil
+}
+
+// SetBlockIncoming sets the "block_incoming" field.
+func (m *MeshNodeMutation) SetBlockIncoming(b bool) {
+	m.block_incoming = &b
+}
+
+// BlockIncoming returns the value of the "block_incoming" field in the mutation.
+func (m *MeshNodeMutation) BlockIncoming() (r bool, exists bool) {
+	v := m.block_incoming
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBlockIncoming returns the old "block_incoming" field's value of the MeshNode entity.
+// If the MeshNode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshNodeMutation) OldBlockIncoming(ctx context.Context) (v *bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBlockIncoming is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBlockIncoming requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBlockIncoming: %w", err)
+	}
+	return oldValue.BlockIncoming, nil
+}
+
+// ClearBlockIncoming clears the value of the "block_incoming" field.
+func (m *MeshNodeMutation) ClearBlockIncoming() {
+	m.block_incoming = nil
+	m.clearedFields[meshnode.FieldBlockIncoming] = struct{}{}
+}
+
+// BlockIncomingCleared returns if the "block_incoming" field was cleared in this mutation.
+func (m *MeshNodeMutation) BlockIncomingCleared() bool {
+	_, ok := m.clearedFields[meshnode.FieldBlockIncoming]
+	return ok
+}
+
+// ResetBlockIncoming resets all changes to the "block_incoming" field.
+func (m *MeshNodeMutation) ResetBlockIncoming() {
+	m.block_incoming = nil
+	delete(m.clearedFields, meshnode.FieldBlockIncoming)
+}
+
 // SetTagsPinned sets the "tags_pinned" field.
 func (m *MeshNodeMutation) SetTagsPinned(b bool) {
 	m.tags_pinned = &b
@@ -2031,7 +3428,7 @@ func (m *MeshNodeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *MeshNodeMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 24)
 	if m.meshnet_id != nil {
 		fields = append(fields, meshnode.FieldMeshnetID)
 	}
@@ -2079,6 +3476,12 @@ func (m *MeshNodeMutation) Fields() []string {
 	}
 	if m.device_fingerprint != nil {
 		fields = append(fields, meshnode.FieldDeviceFingerprint)
+	}
+	if m.os != nil {
+		fields = append(fields, meshnode.FieldOs)
+	}
+	if m.block_incoming != nil {
+		fields = append(fields, meshnode.FieldBlockIncoming)
 	}
 	if m.tags_pinned != nil {
 		fields = append(fields, meshnode.FieldTagsPinned)
@@ -2138,6 +3541,10 @@ func (m *MeshNodeMutation) Field(name string) (ent.Value, bool) {
 		return m.OwnerUserID()
 	case meshnode.FieldDeviceFingerprint:
 		return m.DeviceFingerprint()
+	case meshnode.FieldOs:
+		return m.Os()
+	case meshnode.FieldBlockIncoming:
+		return m.BlockIncoming()
 	case meshnode.FieldTagsPinned:
 		return m.TagsPinned()
 	case meshnode.FieldTagsJSON:
@@ -2191,6 +3598,10 @@ func (m *MeshNodeMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldOwnerUserID(ctx)
 	case meshnode.FieldDeviceFingerprint:
 		return m.OldDeviceFingerprint(ctx)
+	case meshnode.FieldOs:
+		return m.OldOs(ctx)
+	case meshnode.FieldBlockIncoming:
+		return m.OldBlockIncoming(ctx)
 	case meshnode.FieldTagsPinned:
 		return m.OldTagsPinned(ctx)
 	case meshnode.FieldTagsJSON:
@@ -2324,6 +3735,20 @@ func (m *MeshNodeMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDeviceFingerprint(v)
 		return nil
+	case meshnode.FieldOs:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOs(v)
+		return nil
+	case meshnode.FieldBlockIncoming:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBlockIncoming(v)
+		return nil
 	case meshnode.FieldTagsPinned:
 		v, ok := value.(bool)
 		if !ok {
@@ -2422,7 +3847,11 @@ func (m *MeshNodeMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *MeshNodeMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(meshnode.FieldBlockIncoming) {
+		fields = append(fields, meshnode.FieldBlockIncoming)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -2435,6 +3864,11 @@ func (m *MeshNodeMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *MeshNodeMutation) ClearField(name string) error {
+	switch name {
+	case meshnode.FieldBlockIncoming:
+		m.ClearBlockIncoming()
+		return nil
+	}
 	return fmt.Errorf("unknown MeshNode nullable field %s", name)
 }
 
@@ -2489,6 +3923,12 @@ func (m *MeshNodeMutation) ResetField(name string) error {
 		return nil
 	case meshnode.FieldDeviceFingerprint:
 		m.ResetDeviceFingerprint()
+		return nil
+	case meshnode.FieldOs:
+		m.ResetOs()
+		return nil
+	case meshnode.FieldBlockIncoming:
+		m.ResetBlockIncoming()
 		return nil
 	case meshnode.FieldTagsPinned:
 		m.ResetTagsPinned()

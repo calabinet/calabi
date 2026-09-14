@@ -12,6 +12,7 @@ import ConsoleLockGate from "./components/ConsoleLockGate";
 import Layout from "./components/Layout";
 import Overview from "./pages/Overview";
 import Tunnels from "./pages/Tunnels";
+import TunnelNew from "./pages/TunnelNew";
 import Mesh from "./pages/Mesh";
 import Services from "./pages/Services";
 import Logs from "./pages/Logs";
@@ -34,6 +35,11 @@ export default function App() {
           <Route index element={<Navigate to="/overview" replace />} />
           <Route path="overview" element={<Overview />} />
           <Route path="tunnels" element={<Tunnels />} />
+          {/* The create flow is a PAGE, not a dialog the list opens: it has
+              steps, it is linked to from 工具 and 服务, and it has to survive a
+              reload. Nested under /tunnels so the sidebar keeps 隧道 selected
+              (Layout reads the first path segment). */}
+          <Route path="tunnels/new" element={<TunnelNew />} />
           <Route path="mesh" element={<Mesh />} />
           <Route path="services" element={<Services />} />
           <Route path="logs" element={<Logs />} />

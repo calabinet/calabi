@@ -76,6 +76,23 @@ function fmtAgo(unixSec: number, never: string, ago: (d: string) => string): str
   return ago(d);
 }
 
+// GOOS → what people call the platform. An unrecognised value is shown as-is
+// rather than dropped: a new GOOS is information, and hiding it would make a
+// real machine look like one that never reported.
+const OS_LABELS: Record<string, string> = {
+  windows: "Windows",
+  linux: "Linux",
+  darwin: "macOS",
+  freebsd: "FreeBSD",
+  openbsd: "OpenBSD",
+  android: "Android",
+  ios: "iOS",
+};
+function osLabel(os?: string): string {
+  if (!os) return "";
+  return OS_LABELS[os] ?? os;
+}
+
 function shortKey(k: string): string {
   return k.length > 16 ? k.slice(0, 16) + "…" : k;
 }
@@ -83,6 +100,31 @@ function shortKey(k: string): string {
 export default function Mesh() {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  // Peer filter. A fleet of 20 machines turns this table into scrolling, and the
+  // thing you arrive knowing is the machine's NAME — so match on that first,
+  // then on the address you might have pasted from somewhere, then on the key
+  // for the case where you came from `wg show` or a log line.
+  const [peerQuery, setPeerQuery] = useState("");
+
+  // Owner labels. Proxied from bff-console, which is the only place that can
+  // turn owner_user_id into a person (coord only ever knew the number). Fails
+  // on a local daemon and for an api-key agent, and that must cost nothing but
+  // the label: retry is off and the error is swallowed, so the peer table never
+  // waits on it or reports it.
+  const { data: orgNodes } = useQuery({
+    queryKey: ["mesh-org-nodes"],
+    queryFn: api.meshOrgNodes,
+    staleTime: 60_000,
+    retry: false,
+    throwOnError: false,
+  });
+  const ownerByOverlay = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const n of orgNodes?.items ?? []) {
+      if (n.overlay && n.owner_email) m.set(n.overlay, n.owner_email);
+    }
+    return m;
+  }, [orgNodes]);
 
   const { data, error, isLoading } = useQuery<MeshStatus>({
     queryKey: ["mesh"],
@@ -108,6 +150,43 @@ export default function Mesh() {
     refetchInterval: 5_000,
     retry: false,
   });
+  // Same query key the settings card below uses, so it costs no extra fetch. The
+  // page needs it for one thing: a machine that is refusing every inbound
+  // connection looks EXACTLY like a healthy one on this page — up, addressed,
+  // peers listed — and the switch that did it is three clicks away in a tab. A
+  // setting whose effect is invisible from the page it breaks is a support call.
+  const { data: adv } = useQuery<MeshAdvertise>({
+    queryKey: ["mesh-advertise"],
+    queryFn: api.meshAdvertise,
+    retry: false,
+  });
+
+  // Devices this org has that this machine cannot reach. The peer table is the
+  // ACL-FILTERED view, so a colleague's machine that the rules do not allow is
+  // simply absent — and absent looks exactly like "does not exist". Meanwhile
+  // the web console shows every device in the org to every member, so the two
+  // surfaces disagree about the same machine and neither says why.
+  //
+  // Parked and not-yet-approved devices are excluded: they are in NOBODY's
+  // netmap, so calling them blocked-by-policy would send someone to argue with
+  // an admin about a rule that is not the problem.
+  const unreachableCount = useMemo(() => {
+    const items = orgNodes?.items ?? [];
+    if (!items.length || !data?.up) return 0;
+    const reachable = new Set<string>();
+    for (const p of data.peers ?? []) {
+      for (const ip of p.allowed_ips ?? []) reachable.add(ip.replace(/\/\d+$/, ""));
+    }
+    const self = data.overlay || "";
+    return items.filter(
+      (n) =>
+        n.overlay &&
+        n.overlay !== self &&
+        n.approved !== false &&
+        n.disabled !== true &&
+        !reachable.has(n.overlay),
+    ).length;
+  }, [orgNodes, data?.peers, data?.overlay, data?.up]);
 
   const meshOrgID = data?.org_id ?? 0;
   // The org the daemon's CREDENTIAL is scoped to right now. When it disagrees
@@ -166,19 +245,134 @@ export default function Mesh() {
   // answer ("not yet"), not a guess that runs out with a timer.
   const settling = data === undefined && (isLoading || enrolling || (unavailable && !graceOver));
 
+  // Case-insensitive substring over name, allowed prefixes and key. Filtering
+  // here rather than with Table's own column filters: one box that matches
+  // whatever the user happens to know beats three per-column dropdowns on a
+  // table this narrow.
+  const shownPeers = useMemo(() => {
+    const all = data?.peers ?? [];
+    const q = peerQuery.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter(
+      (p) =>
+        (p.name ?? "").toLowerCase().includes(q) ||
+        p.public_key.toLowerCase().includes(q) ||
+        (p.allowed_ips ?? []).some((ip) => ip.toLowerCase().includes(q)) ||
+        // "which machine has postgres on it" is a real way to arrive here.
+        (p.services ?? []).some((sv) => sv.name.toLowerCase().includes(q)) ||
+        // So is "one of kenji's machines".
+        (ownerByOverlay.get((p.allowed_ips ?? [])[0]?.replace(/\/\d+$/, "") ?? "") ?? "")
+          .toLowerCase()
+          .includes(q),
+    );
+  }, [data?.peers, peerQuery, ownerByOverlay]);
+
   const columns = useMemo(
     () => [
       {
+        // The machine's NAME, not its key. This column used to print a truncated
+        // public key: correct, unique, and unreadable — nobody knows which of
+        // their machines "qN3k7x…" is, and the key is not what you type to reach
+        // it. The name is, and it comes from the netmap the node already holds.
+        //
+        // The key stays reachable in the tooltip: it is what the peer is called
+        // in `wg show` and in the logs, so the one moment you need it is when
+        // you are comparing this table against one of those.
+        //
+        // A peer with no name yet (WireGuard state read before the first netmap)
+        // falls back to the short key rather than rendering blank.
         title: t("mesh.colPeer"),
-        dataIndex: "public_key",
         key: "peer",
-        render: (k: string) => <code style={{ fontSize: 12 }}>{shortKey(k)}</code>,
+        render: (_: unknown, p: MeshPeer) => {
+          // Whose machine it is, when we could find out. The local part of the
+          // address reads as a person and fits under the name; the full address
+          // is in the tooltip. Nothing renders when unknown — an empty subline
+          // is quieter than a placeholder, and "unknown owner" is not a fact
+          // worth a row of its own.
+          const owner = ownerByOverlay.get(
+            (p.allowed_ips ?? [])[0]?.replace(/\/\d+$/, "") ?? "",
+          );
+          const sub = owner ? (
+            <Tooltip title={owner}>
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                {owner.split("@")[0]}
+              </Text>
+            </Tooltip>
+          ) : null;
+          return (
+            <Space direction="vertical" size={0}>
+              {p.name ? (
+                <Tooltip title={p.public_key}>
+                  <Text copyable={{ text: p.name }} style={{ fontSize: 13 }}>
+                    {p.name}
+                  </Text>
+                </Tooltip>
+              ) : (
+                <Tooltip title={p.public_key}>
+                  <code style={{ fontSize: 12 }}>{shortKey(p.public_key)}</code>
+                </Tooltip>
+              )}
+              {(sub || p.os) && (
+                <Space size={4}>
+                  {sub}
+                  {p.os && (
+                    <Text type="secondary" style={{ fontSize: 11 }}>
+                      {osLabel(p.os)}
+                    </Text>
+                  )}
+                </Space>
+              )}
+            </Space>
+          );
+        },
       },
       {
+        // Copyable per prefix: the overlay /32 in here is the address you paste
+        // into ssh or a browser, and selecting it out of a Tag by hand is the
+        // kind of friction that makes people go looking for the console instead.
         title: t("mesh.colAllowed"),
         dataIndex: "allowed_ips",
         key: "allowed",
-        render: (ips: string[]) => (ips || []).map((ip) => <Tag key={ip}>{ip}</Tag>),
+        render: (ips: string[]) =>
+          (ips || []).map((ip) => (
+            <Tag key={ip}>
+              <Text copyable={{ text: ip.replace(/\/\d+$/, "") }} style={{ fontSize: 12 }}>
+                {ip}
+              </Text>
+            </Tag>
+          )),
+      },
+      {
+        // What the machine is FOR. A name tells you which box it is; this tells
+        // you why you would dial it — and the port is the other half of the
+        // address, so it is copyable as host:port ready to paste.
+        //
+        // Only confirmed services arrive here (the coordinator drops
+        // unapproved declarations), so an empty cell means "declares nothing",
+        // not "waiting for an admin".
+        title: t("mesh.colServices"),
+        key: "services",
+        render: (_: unknown, p: MeshPeer) => {
+          const svcs = p.services ?? [];
+          if (svcs.length === 0) return <Text type="secondary">—</Text>;
+          const host = (p.allowed_ips ?? [])[0]?.replace(/\/\d+$/, "") ?? "";
+          return (
+            <Space size={4} wrap>
+              {svcs.map((sv) => (
+                <Tooltip key={sv.name + sv.port} title={`${sv.proto}/${sv.port}`}>
+                  <Tag style={{ marginInlineEnd: 0 }}>
+                    <Text
+                      copyable={host ? { text: `${host}:${sv.port}` } : false}
+                      style={{ fontSize: 12 }}
+                    >
+                      {sv.name}
+                    </Text>
+                  </Tag>
+                </Tooltip>
+              ))}
+            </Space>
+          );
+        },
       },
       {
         title: t("mesh.colHandshake"),
@@ -263,7 +457,11 @@ export default function Mesh() {
         ),
       },
     ],
-    [t],
+    // ownerByOverlay belongs here: the render closes over it, so leaving it out
+    // pins the columns to the empty map of the first render and the owner
+    // sublines never appear — a bug with no error and no warning, found only by
+    // looking at the rendered table.
+    [t, ownerByOverlay],
   );
 
   const header = (
@@ -344,6 +542,14 @@ export default function Mesh() {
   } else {
     body = (
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {adv?.block_incoming && (
+          <Alert
+            type="warning"
+            showIcon
+            message={t("mesh.blockedBanner")}
+            description={t("mesh.blockedBannerHelp")}
+          />
+        )}
         <Row gutter={[12, 12]} align="stretch">
           <Col xs={24} sm={12} md={6} style={{ display: "flex" }}>
             <Card size="small" style={{ width: "100%" }}>
@@ -410,18 +616,50 @@ export default function Mesh() {
           </Row>
         </Card>
 
-        <Card title={t("mesh.peers")} size="small">
+        <Card
+          title={t("mesh.peers")}
+          size="small"
+          extra={
+            (data.peers || []).length > 5 ? (
+              <Input
+                allowClear
+                size="small"
+                style={{ width: 200 }}
+                placeholder={t("mesh.peerFilter")}
+                value={peerQuery}
+                onChange={(e) => setPeerQuery(e.target.value)}
+              />
+            ) : undefined
+          }
+        >
           {data.up ? (
             <Table<MeshPeer>
               rowKey="public_key"
               size="small"
               pagination={false}
               columns={columns}
-              dataSource={data.peers || []}
-              locale={{ emptyText: t("mesh.noPeers") }}
+              dataSource={shownPeers}
+              locale={{
+                emptyText:
+                  peerQuery && (data.peers || []).length > 0
+                    ? t("mesh.peerFilterNoMatch")
+                    : t("mesh.noPeers"),
+              }}
             />
           ) : (
             <Empty description={t("mesh.connecting")} />
+          )}
+          {/* A footnote, not a warning: being unable to reach part of the org is
+              the NORMAL outcome of access rules, not a fault. It is here because
+              the alternative is silence — the table shows what you can reach and
+              says nothing about what it left out, so "my colleague's machine is
+              not in the list" reads as "it does not exist". */}
+          {data.up && unreachableCount > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {t("mesh.unreachableNote", { count: unreachableCount })}
+              </Text>
+            </div>
           )}
         </Card>
       </div>
@@ -633,6 +871,7 @@ function MeshAdvertiseCard() {
   const [exitPeer, setExitPeer] = useState("");
   const [acceptOn, setAcceptOn] = useState(false);
   const [excludes, setExcludes] = useState<string[]>([]);
+  const [blockIncoming, setBlockIncoming] = useState(false);
   useEffect(() => {
     if (!data) return;
     setRoutes(data.routes || []);
@@ -642,6 +881,7 @@ function MeshAdvertiseCard() {
     setUseExitOn(!!data.exit_node);
     setAcceptOn(!!data.accept_routes);
     setExcludes(data.route_excludes || []);
+    setBlockIncoming(!!data.block_incoming);
   }, [data]);
 
   const payload = {
@@ -656,6 +896,7 @@ function MeshAdvertiseCard() {
     // every exception — which is how a 192.168.1.0/24 exclusion disappeared and
     // put a LAN's traffic back out through the ISP.
     route_excludes: excludes,
+    block_incoming: blockIncoming,
   };
 
   const save = useMutation({
@@ -676,6 +917,7 @@ function MeshAdvertiseCard() {
   // another one.
   const acceptDirty =
     payload.accept_routes !== !!data.accept_routes ||
+    payload.block_incoming !== !!data.block_incoming ||
     norm(payload.route_excludes) !== norm(data.route_excludes || []);
   const offerDirty =
     norm(payload.routes) !== norm(data.routes || []) ||
@@ -731,6 +973,16 @@ function MeshAdvertiseCard() {
             key: "accept",
             label: label(t("mesh.adv.acceptSection"), acceptDirty),
             children: (
+              <Space direction="vertical" size={16} style={{ width: "100%" }}>
+              {/* First, because it is the one that decides whether this machine
+                  answers at all. Under the route list it would read as a detail
+                  of routing, which it is not. */}
+              <SettingRow
+                title={t("mesh.adv.blockIncoming")}
+                desc={t("mesh.adv.blockIncomingHelp")}
+                checked={blockIncoming}
+                onChange={setBlockIncoming}
+              />
               <SettingRow
                 title={t("mesh.adv.accept")}
                 desc={t("mesh.adv.acceptHelp")}
@@ -754,6 +1006,7 @@ function MeshAdvertiseCard() {
                   </Text>
                 </div>
               </SettingRow>
+              </Space>
             ),
           },
           {

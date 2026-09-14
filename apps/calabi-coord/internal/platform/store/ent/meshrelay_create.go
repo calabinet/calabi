@@ -21,93 +21,93 @@ type MeshRelayCreate struct {
 }
 
 // SetMeshnetID sets the "meshnet_id" field.
-func (_c *MeshRelayCreate) SetMeshnetID(v int64) *MeshRelayCreate {
-	_c.mutation.SetMeshnetID(v)
-	return _c
+func (mrc *MeshRelayCreate) SetMeshnetID(i int64) *MeshRelayCreate {
+	mrc.mutation.SetMeshnetID(i)
+	return mrc
 }
 
 // SetLabel sets the "label" field.
-func (_c *MeshRelayCreate) SetLabel(v string) *MeshRelayCreate {
-	_c.mutation.SetLabel(v)
-	return _c
+func (mrc *MeshRelayCreate) SetLabel(s string) *MeshRelayCreate {
+	mrc.mutation.SetLabel(s)
+	return mrc
 }
 
 // SetHostName sets the "host_name" field.
-func (_c *MeshRelayCreate) SetHostName(v string) *MeshRelayCreate {
-	_c.mutation.SetHostName(v)
-	return _c
+func (mrc *MeshRelayCreate) SetHostName(s string) *MeshRelayCreate {
+	mrc.mutation.SetHostName(s)
+	return mrc
 }
 
 // SetDerpPort sets the "derp_port" field.
-func (_c *MeshRelayCreate) SetDerpPort(v int) *MeshRelayCreate {
-	_c.mutation.SetDerpPort(v)
-	return _c
+func (mrc *MeshRelayCreate) SetDerpPort(i int) *MeshRelayCreate {
+	mrc.mutation.SetDerpPort(i)
+	return mrc
 }
 
 // SetNillableDerpPort sets the "derp_port" field if the given value is not nil.
-func (_c *MeshRelayCreate) SetNillableDerpPort(v *int) *MeshRelayCreate {
-	if v != nil {
-		_c.SetDerpPort(*v)
+func (mrc *MeshRelayCreate) SetNillableDerpPort(i *int) *MeshRelayCreate {
+	if i != nil {
+		mrc.SetDerpPort(*i)
 	}
-	return _c
+	return mrc
 }
 
 // SetStunPort sets the "stun_port" field.
-func (_c *MeshRelayCreate) SetStunPort(v int) *MeshRelayCreate {
-	_c.mutation.SetStunPort(v)
-	return _c
+func (mrc *MeshRelayCreate) SetStunPort(i int) *MeshRelayCreate {
+	mrc.mutation.SetStunPort(i)
+	return mrc
 }
 
 // SetNillableStunPort sets the "stun_port" field if the given value is not nil.
-func (_c *MeshRelayCreate) SetNillableStunPort(v *int) *MeshRelayCreate {
-	if v != nil {
-		_c.SetStunPort(*v)
+func (mrc *MeshRelayCreate) SetNillableStunPort(i *int) *MeshRelayCreate {
+	if i != nil {
+		mrc.SetStunPort(*i)
 	}
-	return _c
+	return mrc
 }
 
 // SetEnabled sets the "enabled" field.
-func (_c *MeshRelayCreate) SetEnabled(v bool) *MeshRelayCreate {
-	_c.mutation.SetEnabled(v)
-	return _c
+func (mrc *MeshRelayCreate) SetEnabled(b bool) *MeshRelayCreate {
+	mrc.mutation.SetEnabled(b)
+	return mrc
 }
 
 // SetNillableEnabled sets the "enabled" field if the given value is not nil.
-func (_c *MeshRelayCreate) SetNillableEnabled(v *bool) *MeshRelayCreate {
-	if v != nil {
-		_c.SetEnabled(*v)
+func (mrc *MeshRelayCreate) SetNillableEnabled(b *bool) *MeshRelayCreate {
+	if b != nil {
+		mrc.SetEnabled(*b)
 	}
-	return _c
+	return mrc
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (_c *MeshRelayCreate) SetCreatedAt(v time.Time) *MeshRelayCreate {
-	_c.mutation.SetCreatedAt(v)
-	return _c
+func (mrc *MeshRelayCreate) SetCreatedAt(t time.Time) *MeshRelayCreate {
+	mrc.mutation.SetCreatedAt(t)
+	return mrc
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_c *MeshRelayCreate) SetNillableCreatedAt(v *time.Time) *MeshRelayCreate {
-	if v != nil {
-		_c.SetCreatedAt(*v)
+func (mrc *MeshRelayCreate) SetNillableCreatedAt(t *time.Time) *MeshRelayCreate {
+	if t != nil {
+		mrc.SetCreatedAt(*t)
 	}
-	return _c
+	return mrc
 }
 
 // Mutation returns the MeshRelayMutation object of the builder.
-func (_c *MeshRelayCreate) Mutation() *MeshRelayMutation {
-	return _c.mutation
+func (mrc *MeshRelayCreate) Mutation() *MeshRelayMutation {
+	return mrc.mutation
 }
 
 // Save creates the MeshRelay in the database.
-func (_c *MeshRelayCreate) Save(ctx context.Context) (*MeshRelay, error) {
-	_c.defaults()
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+func (mrc *MeshRelayCreate) Save(ctx context.Context) (*MeshRelay, error) {
+	mrc.defaults()
+	return withHooks(ctx, mrc.sqlSave, mrc.mutation, mrc.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (_c *MeshRelayCreate) SaveX(ctx context.Context) *MeshRelay {
-	v, err := _c.Save(ctx)
+func (mrc *MeshRelayCreate) SaveX(ctx context.Context) *MeshRelay {
+	v, err := mrc.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -115,70 +115,70 @@ func (_c *MeshRelayCreate) SaveX(ctx context.Context) *MeshRelay {
 }
 
 // Exec executes the query.
-func (_c *MeshRelayCreate) Exec(ctx context.Context) error {
-	_, err := _c.Save(ctx)
+func (mrc *MeshRelayCreate) Exec(ctx context.Context) error {
+	_, err := mrc.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_c *MeshRelayCreate) ExecX(ctx context.Context) {
-	if err := _c.Exec(ctx); err != nil {
+func (mrc *MeshRelayCreate) ExecX(ctx context.Context) {
+	if err := mrc.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (_c *MeshRelayCreate) defaults() {
-	if _, ok := _c.mutation.DerpPort(); !ok {
+func (mrc *MeshRelayCreate) defaults() {
+	if _, ok := mrc.mutation.DerpPort(); !ok {
 		v := meshrelay.DefaultDerpPort
-		_c.mutation.SetDerpPort(v)
+		mrc.mutation.SetDerpPort(v)
 	}
-	if _, ok := _c.mutation.StunPort(); !ok {
+	if _, ok := mrc.mutation.StunPort(); !ok {
 		v := meshrelay.DefaultStunPort
-		_c.mutation.SetStunPort(v)
+		mrc.mutation.SetStunPort(v)
 	}
-	if _, ok := _c.mutation.Enabled(); !ok {
+	if _, ok := mrc.mutation.Enabled(); !ok {
 		v := meshrelay.DefaultEnabled
-		_c.mutation.SetEnabled(v)
+		mrc.mutation.SetEnabled(v)
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
+	if _, ok := mrc.mutation.CreatedAt(); !ok {
 		v := meshrelay.DefaultCreatedAt()
-		_c.mutation.SetCreatedAt(v)
+		mrc.mutation.SetCreatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (_c *MeshRelayCreate) check() error {
-	if _, ok := _c.mutation.MeshnetID(); !ok {
+func (mrc *MeshRelayCreate) check() error {
+	if _, ok := mrc.mutation.MeshnetID(); !ok {
 		return &ValidationError{Name: "meshnet_id", err: errors.New(`ent: missing required field "MeshRelay.meshnet_id"`)}
 	}
-	if _, ok := _c.mutation.Label(); !ok {
+	if _, ok := mrc.mutation.Label(); !ok {
 		return &ValidationError{Name: "label", err: errors.New(`ent: missing required field "MeshRelay.label"`)}
 	}
-	if _, ok := _c.mutation.HostName(); !ok {
+	if _, ok := mrc.mutation.HostName(); !ok {
 		return &ValidationError{Name: "host_name", err: errors.New(`ent: missing required field "MeshRelay.host_name"`)}
 	}
-	if _, ok := _c.mutation.DerpPort(); !ok {
+	if _, ok := mrc.mutation.DerpPort(); !ok {
 		return &ValidationError{Name: "derp_port", err: errors.New(`ent: missing required field "MeshRelay.derp_port"`)}
 	}
-	if _, ok := _c.mutation.StunPort(); !ok {
+	if _, ok := mrc.mutation.StunPort(); !ok {
 		return &ValidationError{Name: "stun_port", err: errors.New(`ent: missing required field "MeshRelay.stun_port"`)}
 	}
-	if _, ok := _c.mutation.Enabled(); !ok {
+	if _, ok := mrc.mutation.Enabled(); !ok {
 		return &ValidationError{Name: "enabled", err: errors.New(`ent: missing required field "MeshRelay.enabled"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
+	if _, ok := mrc.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "MeshRelay.created_at"`)}
 	}
 	return nil
 }
 
-func (_c *MeshRelayCreate) sqlSave(ctx context.Context) (*MeshRelay, error) {
-	if err := _c.check(); err != nil {
+func (mrc *MeshRelayCreate) sqlSave(ctx context.Context) (*MeshRelay, error) {
+	if err := mrc.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := _c.createSpec()
-	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
+	_node, _spec := mrc.createSpec()
+	if err := sqlgraph.CreateNode(ctx, mrc.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -186,41 +186,41 @@ func (_c *MeshRelayCreate) sqlSave(ctx context.Context) (*MeshRelay, error) {
 	}
 	id := _spec.ID.Value.(int64)
 	_node.ID = int(id)
-	_c.mutation.id = &_node.ID
-	_c.mutation.done = true
+	mrc.mutation.id = &_node.ID
+	mrc.mutation.done = true
 	return _node, nil
 }
 
-func (_c *MeshRelayCreate) createSpec() (*MeshRelay, *sqlgraph.CreateSpec) {
+func (mrc *MeshRelayCreate) createSpec() (*MeshRelay, *sqlgraph.CreateSpec) {
 	var (
-		_node = &MeshRelay{config: _c.config}
+		_node = &MeshRelay{config: mrc.config}
 		_spec = sqlgraph.NewCreateSpec(meshrelay.Table, sqlgraph.NewFieldSpec(meshrelay.FieldID, field.TypeInt))
 	)
-	if value, ok := _c.mutation.MeshnetID(); ok {
+	if value, ok := mrc.mutation.MeshnetID(); ok {
 		_spec.SetField(meshrelay.FieldMeshnetID, field.TypeInt64, value)
 		_node.MeshnetID = value
 	}
-	if value, ok := _c.mutation.Label(); ok {
+	if value, ok := mrc.mutation.Label(); ok {
 		_spec.SetField(meshrelay.FieldLabel, field.TypeString, value)
 		_node.Label = value
 	}
-	if value, ok := _c.mutation.HostName(); ok {
+	if value, ok := mrc.mutation.HostName(); ok {
 		_spec.SetField(meshrelay.FieldHostName, field.TypeString, value)
 		_node.HostName = value
 	}
-	if value, ok := _c.mutation.DerpPort(); ok {
+	if value, ok := mrc.mutation.DerpPort(); ok {
 		_spec.SetField(meshrelay.FieldDerpPort, field.TypeInt, value)
 		_node.DerpPort = value
 	}
-	if value, ok := _c.mutation.StunPort(); ok {
+	if value, ok := mrc.mutation.StunPort(); ok {
 		_spec.SetField(meshrelay.FieldStunPort, field.TypeInt, value)
 		_node.StunPort = value
 	}
-	if value, ok := _c.mutation.Enabled(); ok {
+	if value, ok := mrc.mutation.Enabled(); ok {
 		_spec.SetField(meshrelay.FieldEnabled, field.TypeBool, value)
 		_node.Enabled = value
 	}
-	if value, ok := _c.mutation.CreatedAt(); ok {
+	if value, ok := mrc.mutation.CreatedAt(); ok {
 		_spec.SetField(meshrelay.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
@@ -235,16 +235,16 @@ type MeshRelayCreateBulk struct {
 }
 
 // Save creates the MeshRelay entities in the database.
-func (_c *MeshRelayCreateBulk) Save(ctx context.Context) ([]*MeshRelay, error) {
-	if _c.err != nil {
-		return nil, _c.err
+func (mrcb *MeshRelayCreateBulk) Save(ctx context.Context) ([]*MeshRelay, error) {
+	if mrcb.err != nil {
+		return nil, mrcb.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
-	nodes := make([]*MeshRelay, len(_c.builders))
-	mutators := make([]Mutator, len(_c.builders))
-	for i := range _c.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(mrcb.builders))
+	nodes := make([]*MeshRelay, len(mrcb.builders))
+	mutators := make([]Mutator, len(mrcb.builders))
+	for i := range mrcb.builders {
 		func(i int, root context.Context) {
-			builder := _c.builders[i]
+			builder := mrcb.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*MeshRelayMutation)
@@ -258,11 +258,11 @@ func (_c *MeshRelayCreateBulk) Save(ctx context.Context) ([]*MeshRelay, error) {
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, mrcb.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, mrcb.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -286,7 +286,7 @@ func (_c *MeshRelayCreateBulk) Save(ctx context.Context) ([]*MeshRelay, error) {
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, mrcb.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -294,8 +294,8 @@ func (_c *MeshRelayCreateBulk) Save(ctx context.Context) ([]*MeshRelay, error) {
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_c *MeshRelayCreateBulk) SaveX(ctx context.Context) []*MeshRelay {
-	v, err := _c.Save(ctx)
+func (mrcb *MeshRelayCreateBulk) SaveX(ctx context.Context) []*MeshRelay {
+	v, err := mrcb.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -303,14 +303,14 @@ func (_c *MeshRelayCreateBulk) SaveX(ctx context.Context) []*MeshRelay {
 }
 
 // Exec executes the query.
-func (_c *MeshRelayCreateBulk) Exec(ctx context.Context) error {
-	_, err := _c.Save(ctx)
+func (mrcb *MeshRelayCreateBulk) Exec(ctx context.Context) error {
+	_, err := mrcb.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_c *MeshRelayCreateBulk) ExecX(ctx context.Context) {
-	if err := _c.Exec(ctx); err != nil {
+func (mrcb *MeshRelayCreateBulk) ExecX(ctx context.Context) {
+	if err := mrcb.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

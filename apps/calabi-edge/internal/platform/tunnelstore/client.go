@@ -45,6 +45,22 @@ var ErrTunnelDisabled = errors.New("tunnelstore: tunnel disabled by admin")
 // FailedPrecondition here is a real conflict that should surface, not churn.
 var ErrClaimConflict = errors.New("tunnelstore: claim conflict (owned by another edge)")
 
+// ErrPortBound signals that tunnel-svc refused a Claim because the port this
+// edge picked is already bound to another live row on this same edge
+// (the (edge_node_id, remote_port) unique index).
+//
+// It is a sentinel for the same reason the two above are: the Persist fallback
+// must NOT run. That fallback exists for "the pending row vanished between push
+// and claim" and it mints a replacement row, then soft-deletes the original —
+// which here means deleting the tunnel the user just created in the console and
+// re-homing an unrelated older row in its place. The tunnel simply disappears.
+//
+// It is also the one conflict the edge can FIX rather than merely refuse: the
+// port came from this process's own pool, so the pool is what is wrong. The
+// caller reserves the offending port before failing, and the next attempt gets
+// a different one.
+var ErrPortBound = errors.New("tunnelstore: remote port already bound on this edge")
+
 // managedSubdomainSeqRE matches the SubdomainAllocator's output shape
 // ("uNNNNNN.<base>"). The captured digits feed allocator.Seed so the
 // next allocation lands above any existing row.
@@ -55,6 +71,7 @@ var managedSubdomainSeqRE = regexp.MustCompile(`^u(\d+)\.`)
 // 7 method names + signatures match — bff-edge proxies them unchanged.
 type RPC interface {
 	CreateTunnel(ctx context.Context, in *pb.CreateTunnelRequest, opts ...grpc.CallOption) (*pb.Tunnel, error)
+	GetTunnelOAuthSecret(ctx context.Context, in *pb.GetTunnelOAuthSecretRequest, opts ...grpc.CallOption) (*pb.GetTunnelOAuthSecretResponse, error)
 	ClaimTunnel(ctx context.Context, in *pb.ClaimTunnelRequest, opts ...grpc.CallOption) (*pb.Tunnel, error)
 	ReportStatus(ctx context.Context, in *pb.ReportStatusRequest, opts ...grpc.CallOption) (*pb.ReportStatusResponse, error)
 	ListTunnels(ctx context.Context, in *pb.ListTunnelsRequest, opts ...grpc.CallOption) (*pb.ListTunnelsResponse, error)
@@ -121,6 +138,12 @@ type PersistInput struct {
 	LocalAddr   string
 	Domain      string
 	RemotePort  int32
+
+	// ProposedSecurityJSON is the security block the CLIENT supplied in
+	// NEW_PROXY options. Relayed verbatim in its OWN request field — never in
+	// config_json, which is the trusted one — so tunnel-svc can keep just the
+	// IP lists out of it and revalidate them. Empty for every other caller.
+	ProposedSecurityJSON string
 }
 
 // PersistResult captures the row id tunnel-svc assigned so we can later
@@ -165,6 +188,8 @@ func (c *Client) Persist(ctx context.Context, in PersistInput) (PersistResult, e
 		// reject mismatched zone↔edge cross-claims in the per-edge
 		// wildcard DNS mode.
 		BaseDomain: c.baseDomain,
+		// Untrusted, and marked as such by the field it travels in.
+		ClientProposedSecurityJson: in.ProposedSecurityJSON,
 	})
 	if err == nil {
 		return PersistResult{TunnelID: t.GetMeta().GetId(), ConfigJSON: t.GetConfigJson()}, nil
@@ -244,6 +269,13 @@ func (c *Client) Claim(ctx context.Context, in ClaimInput) (PersistResult, error
 		// "pending row vanished between push and claim" case still re-creates.
 		if status.Code(err) == codes.FailedPrecondition {
 			return PersistResult{}, fmt.Errorf("%w: %v", ErrClaimConflict, err)
+		}
+		// AlreadyExists ⇒ the (edge_node_id, remote_port) unique index. The port
+		// this edge handed out is still bound to another live row. Typed, so
+		// OnProxyOpened reserves it and hard-fails instead of falling back to
+		// Persist + orphan-delete — see ErrPortBound.
+		if status.Code(err) == codes.AlreadyExists {
+			return PersistResult{}, fmt.Errorf("%w: %v", ErrPortBound, err)
 		}
 		return PersistResult{}, err
 	}
@@ -511,4 +543,24 @@ func ParseTenant(orgStr, wsStr string) (orgID, wsID int64) {
 		wsID = 1
 	}
 	return orgID, wsID
+}
+
+// OAuthSecret fetches the login credential for a tunnel this edge is serving.
+//
+// The secret is deliberately absent from the tunnel's config_json — it lives
+// once, in the control plane — so this is the only way an edge can complete a
+// policy that references an org login. bff-edge stamps the calling edge's org
+// on the request; tunnel-svc checks both that the org owns the tunnel and that
+// the tunnel really references the policy, so this call cannot be turned into
+// "give me any of my org's secrets".
+func (c *Client) OAuthSecret(ctx context.Context, tunnelID int64) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+	resp, err := c.rpc.GetTunnelOAuthSecret(ctx, &pb.GetTunnelOAuthSecretRequest{
+		TunnelId: tunnelID,
+	})
+	if err != nil {
+		return "", err
+	}
+	return resp.GetClientSecret(), nil
 }

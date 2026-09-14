@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -154,8 +155,12 @@ const (
 //   - a group:<name> selector must reference a group defined in Groups
 //   - a tag:<name> selector must name a non-empty tag
 //   - selectors name MACHINES: no ":port" suffix, no "svc:" on either side
+//   - a user:<id> selector must carry a positive integer account id
+//   - autogroup:<x> must be one this engine implements, and autogroup:self may
+//     appear only in "dst" (it is relative to the source)
 //   - every port entry must parse (see parsePortSpec)
-//   - group MEMBERS are node-names or tags, never nested group: references
+//   - group MEMBERS are node-names, tags or users — never nested groups, never
+//     autogroups
 //
 // It does NOT check that referenced node-names/tags exist (nodes come and go),
 // matching Tailscale — an unmatched name is simply a rule that grants nothing.
@@ -206,6 +211,20 @@ func ValidateACLPolicy(p ACLPolicy) error {
 			if strings.HasPrefix(m, "tag:") && strings.TrimSpace(strings.TrimPrefix(m, "tag:")) == "" {
 				return fmt.Errorf("group %q has an empty tag member", name)
 			}
+			// A group may hold PEOPLE as well as machines — that is what makes a
+			// group named after a team stay correct when someone gets a new
+			// laptop. Autogroups may not: they are already sets, and nesting one
+			// inside a group is a second way to say the same thing that the
+			// engine would then have to keep consistent with the first.
+			if strings.HasPrefix(m, "autogroup:") {
+				return fmt.Errorf(`group %q member %q: an autogroup is already a set — `+
+					`use it directly in "src"/"dst"`, name, m)
+			}
+			if strings.HasPrefix(m, userPrefix) {
+				if err := validateUserSelector("group "+name, m); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	// Rules.
@@ -227,10 +246,10 @@ func ValidateACLPolicy(p ACLPolicy) error {
 		if len(r.Ports) > maxACLSelectors {
 			return fmt.Errorf("rule %d: too many ports", i)
 		}
-		if err := validateSelectors("rule "+itoa(i)+" src", r.Src, p.Groups); err != nil {
+		if err := validateSelectors("rule "+itoa(i)+" src", r.Src, p.Groups, false); err != nil {
 			return err
 		}
-		if err := validateSelectors("rule "+itoa(i)+" dst", r.Dst, p.Groups); err != nil {
+		if err := validateSelectors("rule "+itoa(i)+" dst", r.Dst, p.Groups, true); err != nil {
 			return err
 		}
 		if err := validatePortSpecs("rule "+itoa(i)+" ports", r.Ports); err != nil {
@@ -272,7 +291,7 @@ func validatePortSpecs(where string, specs []string) error {
 // A ":port" suffix is refused for the same reason a source port never was
 // enforceable: ports are a field now, and a selector that looks like it
 // constrains one would not.
-func validateSelectors(where string, sels []string, groups map[string][]string) error {
+func validateSelectors(where string, sels []string, groups map[string][]string, isDst bool) error {
 	for _, s := range sels {
 		s = strings.TrimSpace(s)
 		if s == "" || len(s) > maxSelectorLength {
@@ -297,10 +316,66 @@ func validateSelectors(where string, sels []string, groups map[string][]string) 
 			if strings.TrimSpace(strings.TrimPrefix(s, "tag:")) == "" {
 				return fmt.Errorf("%s: empty tag selector", where)
 			}
+		case strings.HasPrefix(s, "autogroup:"):
+			if err := validateAutogroup(where, s, isDst); err != nil {
+				return err
+			}
+		case strings.HasPrefix(s, userPrefix):
+			if err := validateUserSelector(where, s); err != nil {
+				return err
+			}
 		default:
 			// bare node-name; nothing more to validate structurally (an unknown
 			// name is allowed — nodes come and go — it simply grants nothing).
 		}
+	}
+	return nil
+}
+
+// validateAutogroup accepts the two autogroups the engine implements and refuses
+// everything else BY NAME.
+//
+// Refusing unknown ones matters more here than for node names. An unknown node
+// name is a real shape whose target may simply not exist yet; an unknown
+// autogroup is a typo or a rule copied out of Tailscale documentation, and it
+// falls through matchSelector to "is this the node called autogroup:admin",
+// which is never true. The rule would look like it granted something and grant
+// nothing — the failure mode this whole file exists to prevent.
+func validateAutogroup(where, s string, isDst bool) error {
+	switch {
+	case strings.EqualFold(s, autogroupMember):
+		return nil
+	case strings.EqualFold(s, autogroupSelf):
+		if !isDst {
+			return fmt.Errorf(`%s: %q may only appear in "dst" — it means "the devices of whoever `+
+				`the source belongs to", so as a source it has nobody to be relative to. `+
+				`Write {"src":["autogroup:member"],"dst":["autogroup:self"]}`, where, s)
+		}
+		return nil
+	default:
+		return fmt.Errorf(`%s: unknown autogroup %q. This model has %q (anyone's own device) `+
+			`and %q (dst only: the source owner's devices). Role-based autogroups do not exist `+
+			`here — use tag:<name> to name privileged machines`,
+			where, s, autogroupMember, autogroupSelf)
+	}
+}
+
+// validateUserSelector refuses a user selector that cannot match.
+//
+// The id is what coord stores on a node (Node.OwnerUserID, resolved from the
+// credential that enrolled it) — never an email, because the coordinator has no
+// directory to resolve one against and a self-hosted deployment has no identity
+// service at all. The console shows the address and writes the id.
+func validateUserSelector(where, s string) error {
+	id := strings.TrimPrefix(s, userPrefix)
+	if id == "" {
+		return fmt.Errorf("%s: empty user selector — write user:<id>", where)
+	}
+	n, err := strconv.ParseInt(id, 10, 64)
+	if err != nil || n <= 0 {
+		return fmt.Errorf(`%s: selector %q — a user selector names an account ID, not an address `+
+			`(the coordinator has no directory to resolve one). The console offers the addresses `+
+			`and stores the id`, where, s)
 	}
 	return nil
 }

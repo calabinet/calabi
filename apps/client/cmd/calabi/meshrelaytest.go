@@ -254,14 +254,14 @@ func formatDaemonProbe(cfg relayTestConfig, p localweb.MeshRelayProbe) string {
 	if p.OneWay {
 		// No echo line and no loss line: there is no return path BY DESIGN, and
 		// printing "loss 100%" for it would be a fabricated network fault.
-		fmt.Fprintf(&b, "relay leg test  %s   (this node -> relay, SEND DIRECTION ONLY, %d B frames)\n",
+		fmt.Fprintf(&b, "relay leg test  %s   (this device -> relay, SEND DIRECTION ONLY, %d B frames)\n",
 			p.Relay, cfg.size)
 		fmt.Fprintf(&b, "  accepted  %d frames / %.1f MB    %.1f Mbit/s\n", p.Sent, float64(p.Bytes)/1e6, offered)
 		fmt.Fprintf(&b, "  sender    blocked %dms of %dms\n", p.BlockedMs, p.ElapsedMs)
 		b.WriteString(oneWayReadingGuide)
 		return b.String()
 	}
-	fmt.Fprintf(&b, "relay leg test  %s   (this node -> relay -> this node, %d B frames, via the daemon's live link)\n",
+	fmt.Fprintf(&b, "relay leg test  %s   (this device -> relay -> this device, %d B frames, via the daemon's live link)\n",
 		p.Relay, cfg.size)
 	fmt.Fprintf(&b, "  offered   %d frames / %.1f MB    %.1f Mbit/s\n", p.Sent, float64(p.Bytes)/1e6, offered)
 	fmt.Fprintf(&b, "  echoed    %d frames                %.1f Mbit/s    loss %.1f%%\n", p.Echoed, delivered, loss)
@@ -503,7 +503,7 @@ func printRelayTest(cfg relayTestConfig, r *relayTestResult) {
 		fmt.Print(oneWayReadingGuide)
 		return
 	}
-	fmt.Printf("relay leg test  %s   (this node -> relay -> this node, %d B frames)\n", cfg.addr, cfg.size)
+	fmt.Printf("relay leg test  %s   (this device -> relay -> this device, %d B frames)\n", cfg.addr, cfg.size)
 	fmt.Printf("  offered   %d frames / %.1f MB    %.1f Mbit/s\n", r.sent, float64(r.sentB)/1e6, offered)
 	fmt.Printf("  echoed    %d frames / %.1f MB    %.1f Mbit/s    loss %.1f%%\n",
 		r.echoed, float64(r.echoedB)/1e6, delivered, loss)

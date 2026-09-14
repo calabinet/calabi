@@ -143,6 +143,11 @@ export interface RemoteTunnel {
   domain?: string;
   remote_port?: number;
   status: "enabled" | "disabled" | "error" | "offline";
+  // Why, when status is "error". A CODE, not a sentence (`port_in_use:20000`)
+  // — see tunnel-svc's IdleDisableReason for the convention. bff-console omits
+  // the field entirely when there is nothing to say, and the daemon proxies
+  // /v1/tunnels row-for-row, so it arrives here unchanged.
+  status_reason?: string;
   edge_node_id?: number;
   config_json?: string;
   client_online?: boolean;
@@ -197,6 +202,71 @@ export interface CreateTunnelBody {
   config_json?: string;
 }
 
+// The org's tunnel-security baseline, as the create flow needs it: does this
+// org refuse a tunnel that nobody is allowed to reach, and if the answer is
+// yes, which policy does an unprotected create fall back to.
+//
+// A SUBSET of what bff-console GET /v1/org/security returns — the counts and
+// the idle-disable setting belong to the web console's security page, which is
+// where they are acted on. Read-only here: this machine's local console can see
+// the rule it is held to, but changing what the whole ORG may create is not a
+// decision to take from one desktop.
+export interface OrgSecurity {
+  require_protection: boolean;
+  // The narrower rule: tcp/udp/sni must carry an IP allow list. Its own switch,
+  // independent of require_protection — an org can govern raw ports without
+  // governing every web tunnel.
+  require_bare_port_protection: boolean;
+  // Applied by tunnel-svc to a create that carries no protection. "" = none.
+  default_ip_policy: string;
+}
+
+// A named IP access-control policy belonging to the org. Only `name` ever goes
+// on the wire when a tunnel points at one — tunnel-svc expands it into
+// addresses at create time, so a console can never ship a stale copy of a
+// policy somebody just edited.
+export interface IPPolicy {
+  name: string;
+  description: string;
+  allow: string[] | null;
+  deny: string[] | null;
+  used_by: number;
+}
+
+// One member's quota row from GET /v1/orgs/{id}/member-quotas: what they are
+// allowed and what they already hold. A plain member gets only their own row.
+//
+// `effective` is min(member, org) per dimension, -1 = unlimited. `used` is
+// ABSENT when the member holds nothing at all — not zero-filled — so read it
+// defensively. `exempt` means a manager with no quota set on them by name: the
+// org default does not bind them.
+export interface MemberQuotaRow {
+  user_id: number;
+  role: string;
+  email?: string;
+  exempt: boolean;
+  effective?: Record<string, number>;
+  used?: Record<string, number>;
+}
+
+// An organization's SSO application, stored once in the control plane and
+// pointed at by name from a tunnel's config_json.security.oauth.from_policy.
+//
+// There is no `client_secret` field and there never will be: the server strips
+// it from every read (a tunnel's config_json is visible to every member of a
+// team org). `secret_set` is how the UI tells "configured, hidden" from "not
+// configured" — an empty password box means neither on its own.
+export interface OAuthPolicy {
+  name: string;
+  description: string;
+  provider: string;
+  client_id: string;
+  secret_set: boolean;
+  allow_emails: string[] | null;
+  allow_domains: string[] | null;
+  used_by: number;
+}
+
 // Edit a tunnel's mutable core fields. Omitted / undefined = leave unchanged.
 // Only name + local_addr are editable; the public endpoint stays put.
 export interface UpdateTunnelBody {
@@ -206,6 +276,14 @@ export interface UpdateTunnelBody {
 
 export interface AccountMe {
   user: { id: number; email?: string };
+  // The human who MINTED the API key this console runs under. Present ONLY in
+  // agent mode, and only when the key records its creator — an older key has
+  // nobody to name.
+  //
+  // Separate from `user` on purpose: an agent is not signed in as that person,
+  // it holds a credential they issued. `user` stays {id:0} for an API key,
+  // which is the truthful answer to "who authenticated" — nobody did.
+  acting_user?: { id: number; email?: string };
   org: { id: number; name?: string };
   // Data-plane scopes of the bearer behind this console. Only an API-key
   // principal carries these (e.g. ["tunnel.read","tunnel.write"]); a login
@@ -214,10 +292,10 @@ export interface AccountMe {
   scopes?: string[] | null;
   plan: {
     code: string;
-    // Gating subset of quota-svc features_json (tcp/udp/sni/custom_domain).
-    // Used by TunnelWizard to disable protocol options / custom-domain input
-    // the server would 403. Mirrors apps/bff-console account.go which already
-    // returns this field.
+    // Gating subset of quota-svc features_json (tcp/udp/sni/custom_domain,
+    // plus ip_policy/basic_auth for the create flow's 访问策略 step). Used to
+    // disable protocol options and hide access controls the server would 403.
+    // Mirrors apps/bff-console account.go which already returns this field.
     features_json?: string;
     monthly_traffic_mb?: number;
     max_tunnels?: number;
@@ -482,6 +560,16 @@ export interface DomainList {
 // (WireGuard mesh) state the daemon reports for the local node.
 export interface MeshPeer {
   public_key: string;
+  // MagicDNS label, joined in from the netmap by the daemon. Absent when the
+  // netmap has not arrived yet — render the short key then, never a blank.
+  name?: string;
+  // Services this peer offers. Confirmed ones only — the coordinator drops
+  // unapproved declarations before the netmap, so anything here is something an
+  // admin authorised and an access rule can match.
+  services?: { name: string; proto: string; port: number }[];
+  // Platform as the peer's own runtime reported it: "windows" / "linux" /
+  // "darwin". Absent from a node that enrolled before it was collected.
+  os?: string;
   allowed_ips: string[];
   last_handshake_sec: number; // unix seconds; 0 = never
   rx_bytes: number;
@@ -532,6 +620,23 @@ export interface MeshStatus {
   peers: MeshPeer[];
 }
 
+// MeshOrgNode is one of the ORG's mesh devices as bff-console reports it
+// (proxied through the daemon). Only the fields the peer table joins on are
+// modelled — the console's own row is much wider.
+export interface MeshOrgNode {
+  id: number;
+  name?: string;
+  overlay: string; // the join key: a peer's allowed_ips carries this as a /32
+  owner_user_id: number;
+  owner_email?: string; // resolved by bff-console; absent for unattributed
+  // Needed to tell "the rules do not let you reach it" apart from "nobody can
+  // reach it". A parked or not-yet-approved device is in nobody's netmap, so
+  // counting it as blocked-by-policy would send someone to argue with an admin
+  // about a rule that is not the problem.
+  approved?: boolean;
+  disabled?: boolean;
+}
+
 // MeshServiceDecl is one service THIS machine declares it offers on the mesh
 // (GET/POST /v1/mesh/services). A declaration only — an admin confirms it in the
 // web console before any access rule matches it. from_config entries come from
@@ -571,6 +676,10 @@ export interface MeshAdvertise {
   // return path of connections to services this machine publishes.
   accept_routes?: boolean;
   route_excludes?: string[]; // refused even while accepting the rest
+  // This machine's own refusal of inbound CONNECTIONS, whatever the org's access
+  // rules allow. Replies to conversations it started still come back. Optional
+  // because an older daemon does not report it.
+  block_incoming?: boolean;
   // alias_supported is read-only, and a CAPABILITY rather than a setting: every
   // advertised route is published under a stand-in prefix, so the only question
   // is whether this host can install the rewrite (Linux + iptables NETMAP).

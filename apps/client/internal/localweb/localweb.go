@@ -143,9 +143,28 @@ type MeshSubnetAlias struct {
 	Real  string `json:"real"`
 }
 
+// MeshPeerService is one service a peer offers, as the netmap reported it.
+// Confirmed services only — the coordinator drops unapproved declarations
+// before they reach a client.
+type MeshPeerService struct {
+	Name  string `json:"name"`
+	Proto string `json:"proto"`
+	Port  int    `json:"port"`
+}
+
 // MeshPeer is one peer's live state in /v1/mesh.
 type MeshPeer struct {
-	PublicKey        string   `json:"public_key"`
+	PublicKey string `json:"public_key"`
+	// Name is the peer's MagicDNS label, joined in from the netmap. Empty when
+	// the netmap has not been seen yet (a peer read straight off WireGuard
+	// before the first netmap) — the console falls back to the key then.
+	Name string `json:"name,omitempty"`
+	// Services is what this peer offers, joined in from the netmap alongside the
+	// name. Empty is a real answer ("declares nothing"), not a missing one.
+	Services []MeshPeerService `json:"services,omitempty"`
+	// OS is the peer's platform as it reported at registration. Empty from a
+	// node that enrolled before it was collected — show nothing, not "unknown".
+	OS               string   `json:"os,omitempty"`
 	AllowedIPs       []string `json:"allowed_ips"`
 	LastHandshakeSec int64    `json:"last_handshake_sec"`
 	RxBytes          int64    `json:"rx_bytes"`
@@ -235,6 +254,18 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/v1/tunnels/", s.handleTunnelItem) // GET {id}; DELETE; {id}/security POST
 	mux.HandleFunc("/v1/orgs", s.handleOrgs)
 	mux.HandleFunc("/v1/orgs/switch", notSupported)
+	// Org-level tunnel governance is a control-plane concept; a standalone
+	// edge has no org to hold a baseline. 501 rather than an empty baseline so
+	// the SPA's create flow can tell "this org requires nothing" from "there is
+	// no org here" — it degrades to the same screen either way, but only one of
+	// the two would be a claim about a policy that does not exist.
+	mux.HandleFunc("/v1/org/security", notSupported)
+	mux.HandleFunc("/v1/org/ip-policies", notSupported)
+	mux.HandleFunc("/v1/org/oauth-policies", notSupported)
+	// Member quotas are an org concept; a standalone edge has no org and no
+	// quota service. The create flow degrades to "nothing blocked", which is
+	// correct here — standalone enforces no per-member limit either.
+	mux.HandleFunc("/v1/orgs/", notSupported)
 	mux.HandleFunc("/v1/edges", s.handleEdges)
 	mux.HandleFunc("/v1/clients", s.handleClients)
 	mux.HandleFunc("/v1/usage/current", s.handleUsageNow)

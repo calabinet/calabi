@@ -21,67 +21,67 @@ type MeshACLRevisionCreate struct {
 }
 
 // SetMeshnetID sets the "meshnet_id" field.
-func (_c *MeshACLRevisionCreate) SetMeshnetID(v int64) *MeshACLRevisionCreate {
-	_c.mutation.SetMeshnetID(v)
-	return _c
+func (marc *MeshACLRevisionCreate) SetMeshnetID(i int64) *MeshACLRevisionCreate {
+	marc.mutation.SetMeshnetID(i)
+	return marc
 }
 
 // SetPolicyJSON sets the "policy_json" field.
-func (_c *MeshACLRevisionCreate) SetPolicyJSON(v string) *MeshACLRevisionCreate {
-	_c.mutation.SetPolicyJSON(v)
-	return _c
+func (marc *MeshACLRevisionCreate) SetPolicyJSON(s string) *MeshACLRevisionCreate {
+	marc.mutation.SetPolicyJSON(s)
+	return marc
 }
 
 // SetNillablePolicyJSON sets the "policy_json" field if the given value is not nil.
-func (_c *MeshACLRevisionCreate) SetNillablePolicyJSON(v *string) *MeshACLRevisionCreate {
-	if v != nil {
-		_c.SetPolicyJSON(*v)
+func (marc *MeshACLRevisionCreate) SetNillablePolicyJSON(s *string) *MeshACLRevisionCreate {
+	if s != nil {
+		marc.SetPolicyJSON(*s)
 	}
-	return _c
+	return marc
 }
 
 // SetActor sets the "actor" field.
-func (_c *MeshACLRevisionCreate) SetActor(v string) *MeshACLRevisionCreate {
-	_c.mutation.SetActor(v)
-	return _c
+func (marc *MeshACLRevisionCreate) SetActor(s string) *MeshACLRevisionCreate {
+	marc.mutation.SetActor(s)
+	return marc
 }
 
 // SetNillableActor sets the "actor" field if the given value is not nil.
-func (_c *MeshACLRevisionCreate) SetNillableActor(v *string) *MeshACLRevisionCreate {
-	if v != nil {
-		_c.SetActor(*v)
+func (marc *MeshACLRevisionCreate) SetNillableActor(s *string) *MeshACLRevisionCreate {
+	if s != nil {
+		marc.SetActor(*s)
 	}
-	return _c
+	return marc
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (_c *MeshACLRevisionCreate) SetCreatedAt(v time.Time) *MeshACLRevisionCreate {
-	_c.mutation.SetCreatedAt(v)
-	return _c
+func (marc *MeshACLRevisionCreate) SetCreatedAt(t time.Time) *MeshACLRevisionCreate {
+	marc.mutation.SetCreatedAt(t)
+	return marc
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_c *MeshACLRevisionCreate) SetNillableCreatedAt(v *time.Time) *MeshACLRevisionCreate {
-	if v != nil {
-		_c.SetCreatedAt(*v)
+func (marc *MeshACLRevisionCreate) SetNillableCreatedAt(t *time.Time) *MeshACLRevisionCreate {
+	if t != nil {
+		marc.SetCreatedAt(*t)
 	}
-	return _c
+	return marc
 }
 
 // Mutation returns the MeshACLRevisionMutation object of the builder.
-func (_c *MeshACLRevisionCreate) Mutation() *MeshACLRevisionMutation {
-	return _c.mutation
+func (marc *MeshACLRevisionCreate) Mutation() *MeshACLRevisionMutation {
+	return marc.mutation
 }
 
 // Save creates the MeshACLRevision in the database.
-func (_c *MeshACLRevisionCreate) Save(ctx context.Context) (*MeshACLRevision, error) {
-	_c.defaults()
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+func (marc *MeshACLRevisionCreate) Save(ctx context.Context) (*MeshACLRevision, error) {
+	marc.defaults()
+	return withHooks(ctx, marc.sqlSave, marc.mutation, marc.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (_c *MeshACLRevisionCreate) SaveX(ctx context.Context) *MeshACLRevision {
-	v, err := _c.Save(ctx)
+func (marc *MeshACLRevisionCreate) SaveX(ctx context.Context) *MeshACLRevision {
+	v, err := marc.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -89,57 +89,57 @@ func (_c *MeshACLRevisionCreate) SaveX(ctx context.Context) *MeshACLRevision {
 }
 
 // Exec executes the query.
-func (_c *MeshACLRevisionCreate) Exec(ctx context.Context) error {
-	_, err := _c.Save(ctx)
+func (marc *MeshACLRevisionCreate) Exec(ctx context.Context) error {
+	_, err := marc.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_c *MeshACLRevisionCreate) ExecX(ctx context.Context) {
-	if err := _c.Exec(ctx); err != nil {
+func (marc *MeshACLRevisionCreate) ExecX(ctx context.Context) {
+	if err := marc.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (_c *MeshACLRevisionCreate) defaults() {
-	if _, ok := _c.mutation.PolicyJSON(); !ok {
+func (marc *MeshACLRevisionCreate) defaults() {
+	if _, ok := marc.mutation.PolicyJSON(); !ok {
 		v := meshaclrevision.DefaultPolicyJSON
-		_c.mutation.SetPolicyJSON(v)
+		marc.mutation.SetPolicyJSON(v)
 	}
-	if _, ok := _c.mutation.Actor(); !ok {
+	if _, ok := marc.mutation.Actor(); !ok {
 		v := meshaclrevision.DefaultActor
-		_c.mutation.SetActor(v)
+		marc.mutation.SetActor(v)
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
+	if _, ok := marc.mutation.CreatedAt(); !ok {
 		v := meshaclrevision.DefaultCreatedAt()
-		_c.mutation.SetCreatedAt(v)
+		marc.mutation.SetCreatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (_c *MeshACLRevisionCreate) check() error {
-	if _, ok := _c.mutation.MeshnetID(); !ok {
+func (marc *MeshACLRevisionCreate) check() error {
+	if _, ok := marc.mutation.MeshnetID(); !ok {
 		return &ValidationError{Name: "meshnet_id", err: errors.New(`ent: missing required field "MeshACLRevision.meshnet_id"`)}
 	}
-	if _, ok := _c.mutation.PolicyJSON(); !ok {
+	if _, ok := marc.mutation.PolicyJSON(); !ok {
 		return &ValidationError{Name: "policy_json", err: errors.New(`ent: missing required field "MeshACLRevision.policy_json"`)}
 	}
-	if _, ok := _c.mutation.Actor(); !ok {
+	if _, ok := marc.mutation.Actor(); !ok {
 		return &ValidationError{Name: "actor", err: errors.New(`ent: missing required field "MeshACLRevision.actor"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
+	if _, ok := marc.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "MeshACLRevision.created_at"`)}
 	}
 	return nil
 }
 
-func (_c *MeshACLRevisionCreate) sqlSave(ctx context.Context) (*MeshACLRevision, error) {
-	if err := _c.check(); err != nil {
+func (marc *MeshACLRevisionCreate) sqlSave(ctx context.Context) (*MeshACLRevision, error) {
+	if err := marc.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := _c.createSpec()
-	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
+	_node, _spec := marc.createSpec()
+	if err := sqlgraph.CreateNode(ctx, marc.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -147,29 +147,29 @@ func (_c *MeshACLRevisionCreate) sqlSave(ctx context.Context) (*MeshACLRevision,
 	}
 	id := _spec.ID.Value.(int64)
 	_node.ID = int(id)
-	_c.mutation.id = &_node.ID
-	_c.mutation.done = true
+	marc.mutation.id = &_node.ID
+	marc.mutation.done = true
 	return _node, nil
 }
 
-func (_c *MeshACLRevisionCreate) createSpec() (*MeshACLRevision, *sqlgraph.CreateSpec) {
+func (marc *MeshACLRevisionCreate) createSpec() (*MeshACLRevision, *sqlgraph.CreateSpec) {
 	var (
-		_node = &MeshACLRevision{config: _c.config}
+		_node = &MeshACLRevision{config: marc.config}
 		_spec = sqlgraph.NewCreateSpec(meshaclrevision.Table, sqlgraph.NewFieldSpec(meshaclrevision.FieldID, field.TypeInt))
 	)
-	if value, ok := _c.mutation.MeshnetID(); ok {
+	if value, ok := marc.mutation.MeshnetID(); ok {
 		_spec.SetField(meshaclrevision.FieldMeshnetID, field.TypeInt64, value)
 		_node.MeshnetID = value
 	}
-	if value, ok := _c.mutation.PolicyJSON(); ok {
+	if value, ok := marc.mutation.PolicyJSON(); ok {
 		_spec.SetField(meshaclrevision.FieldPolicyJSON, field.TypeString, value)
 		_node.PolicyJSON = value
 	}
-	if value, ok := _c.mutation.Actor(); ok {
+	if value, ok := marc.mutation.Actor(); ok {
 		_spec.SetField(meshaclrevision.FieldActor, field.TypeString, value)
 		_node.Actor = value
 	}
-	if value, ok := _c.mutation.CreatedAt(); ok {
+	if value, ok := marc.mutation.CreatedAt(); ok {
 		_spec.SetField(meshaclrevision.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
@@ -184,16 +184,16 @@ type MeshACLRevisionCreateBulk struct {
 }
 
 // Save creates the MeshACLRevision entities in the database.
-func (_c *MeshACLRevisionCreateBulk) Save(ctx context.Context) ([]*MeshACLRevision, error) {
-	if _c.err != nil {
-		return nil, _c.err
+func (marcb *MeshACLRevisionCreateBulk) Save(ctx context.Context) ([]*MeshACLRevision, error) {
+	if marcb.err != nil {
+		return nil, marcb.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
-	nodes := make([]*MeshACLRevision, len(_c.builders))
-	mutators := make([]Mutator, len(_c.builders))
-	for i := range _c.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(marcb.builders))
+	nodes := make([]*MeshACLRevision, len(marcb.builders))
+	mutators := make([]Mutator, len(marcb.builders))
+	for i := range marcb.builders {
 		func(i int, root context.Context) {
-			builder := _c.builders[i]
+			builder := marcb.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*MeshACLRevisionMutation)
@@ -207,11 +207,11 @@ func (_c *MeshACLRevisionCreateBulk) Save(ctx context.Context) ([]*MeshACLRevisi
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, marcb.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, marcb.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -235,7 +235,7 @@ func (_c *MeshACLRevisionCreateBulk) Save(ctx context.Context) ([]*MeshACLRevisi
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, marcb.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -243,8 +243,8 @@ func (_c *MeshACLRevisionCreateBulk) Save(ctx context.Context) ([]*MeshACLRevisi
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_c *MeshACLRevisionCreateBulk) SaveX(ctx context.Context) []*MeshACLRevision {
-	v, err := _c.Save(ctx)
+func (marcb *MeshACLRevisionCreateBulk) SaveX(ctx context.Context) []*MeshACLRevision {
+	v, err := marcb.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -252,14 +252,14 @@ func (_c *MeshACLRevisionCreateBulk) SaveX(ctx context.Context) []*MeshACLRevisi
 }
 
 // Exec executes the query.
-func (_c *MeshACLRevisionCreateBulk) Exec(ctx context.Context) error {
-	_, err := _c.Save(ctx)
+func (marcb *MeshACLRevisionCreateBulk) Exec(ctx context.Context) error {
+	_, err := marcb.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_c *MeshACLRevisionCreateBulk) ExecX(ctx context.Context) {
-	if err := _c.Exec(ctx); err != nil {
+func (marcb *MeshACLRevisionCreateBulk) ExecX(ctx context.Context) {
+	if err := marcb.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -81,7 +81,13 @@ const (
 	CodePortOutOfRange     = 3005
 	CodeTypeNotEnabled     = 3006
 	CodeLocalDialFailed    = 3007
-	CodeQuotaTunnels       = 4001
+	// CodeProxyPolicyRequired: the control plane refused to record this proxy
+	// because the organization requires every tunnel to have access protection
+	// and this one has none. Distinct from CodeProxyDuplicate because it is a
+	// different thing to do about it — nothing about the port is wrong, and the
+	// message carries the two ways out.
+	CodeProxyPolicyRequired = 3008
+	CodeQuotaTunnels        = 4001
 	// CodeQuotaExceeded is the generic over-cap signal. Specific dim
 	// codes (tunnels, online_clients) ride in the MessageKey instead so
 	// the wire stays open to adding new dimensions without a code
@@ -234,7 +240,35 @@ type NewProxyResponse struct {
 	RemotePort uint32        `json:"remote_port,omitempty"`
 	TTLSeconds uint32        `json:"ttl_seconds,omitempty"`
 	Error      *ErrorPayload `json:"error,omitempty"`
+	// ClientPolicy says what the edge DID with the security policy the client
+	// offered in ProxyOptions.security_config_json. Set only when one was
+	// offered; empty otherwise — and also empty from an edge too old to answer,
+	// which is why the caller must treat "" as "unknown", not as "applied".
+	//
+	// It exists because the client cannot work this out for itself. Whether a
+	// proposed policy is honoured is the EDGE's decision (standalone mode AND no
+	// control plane wired); the client only knows what it declared locally, and
+	// a declaration is not an observation. `calabi --standalone` silencing the
+	// "these flags are ignored" note was exactly that mistake: the flag suppressed
+	// a warning about a decision it had no part in, so a BYOI edge — standalone
+	// in spirit, control-plane-wired in fact — dropped --basic-auth in silence.
+	ClientPolicy ClientPolicyResult `json:"client_policy,omitempty"`
 }
+
+// ClientPolicyResult is the vocabulary of NewProxyResponse.ClientPolicy.
+type ClientPolicyResult string
+
+const (
+	// ClientPolicyApplied — this edge trusts client-supplied policy and put the
+	// whole blob into effect locally.
+	ClientPolicyApplied ClientPolicyResult = "applied"
+	// ClientPolicyRelayed — this edge does not apply client-supplied policy. It
+	// forwarded the blob to the control plane, which keeps the IP rules and
+	// drops the L7 ones (basic auth, rate limits, headers, OAuth). "relayed",
+	// not "ignored": the IP half does survive, and a note that said otherwise
+	// would be wrong in the other direction.
+	ClientPolicyRelayed ClientPolicyResult = "relayed"
+)
 
 // ---- 0x12 CLOSE_PROXY --------------------------------------------------
 

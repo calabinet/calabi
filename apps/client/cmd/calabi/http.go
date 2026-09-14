@@ -105,7 +105,7 @@ func resolveFingerprint(logger *slog.Logger) string {
 	if err != nil {
 		if logger != nil {
 			logger.Warn("could not read this install's device fingerprint; "+
-				"mesh will enrol without it and the console can't link this node to its client record",
+				"mesh will enrol without it and the console can't link this device to its client record",
 				"err", err)
 		}
 		return ""
@@ -195,6 +195,8 @@ func runHTTP(args []string) int {
 		fmt.Fprintln(os.Stderr, "calabi: register tunnel:", err)
 		return 1
 	}
+	// What the EDGE did with the policy we sent — not what we assumed it would.
+	sec.NoteEdgePolicy(assigned.ClientPolicy)
 	state.AddTunnel(status.TunnelInfo{
 		ProxyID:    assigned.ProxyID,
 		Name:       *name,

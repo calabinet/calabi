@@ -243,9 +243,9 @@ func runDaemon(args []string) int {
 	meshServices := fs.String("mesh-service", envOr("CALABI_MESH_SERVICES", ""),
 		"declare services this machine offers on the mesh, e.g. \"db:tcp:5432,web:443\" (proto defaults to tcp). A DECLARATION: each entry lands in the console as pending until an admin confirms it")
 	meshAdvertiseExit := fs.Bool("advertise-exit-node", envBool("CALABI_MESH_ADVERTISE_EXIT_NODE", false),
-		"mesh: advertise this node as an exit node (offer to forward peers' default route)")
+		"mesh: advertise this device as an exit device (offer to forward peers' default route)")
 	meshExitNode := fs.String("exit-node", envOr("CALABI_MESH_EXIT_NODE", ""),
-		"mesh: route THIS node's default traffic through the named exit-node peer (name or overlay IP)")
+		"mesh: route THIS device's default traffic through the named exit device (name or overlay IP)")
 	statusAddr := registerStatusAddrFlag(fs)
 	if err := fs.Parse(reorderArgs(args, valueFlagsOf(fs))); err != nil {
 		return 2

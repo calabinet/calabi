@@ -19,7 +19,7 @@ func TestRateLimit(t *testing.T) {
 	// (refill is 1/sec — no real time passes), so ~10 pass and the rest shed.
 	allowed := 0
 	for i := 0; i < 50; i++ {
-		if p.AllowRate() {
+		if p.AllowRate("203.0.113.1") {
 			allowed++
 		}
 	}
@@ -38,7 +38,7 @@ func TestRateLimit_ZeroIsUnlimited(t *testing.T) {
 		t.Fatalf("per_minute=0 must yield no policy, got %+v", p)
 	}
 	var nilP *Policy
-	if !nilP.AllowRate() || nilP.HasRateLimit() {
+	if !nilP.AllowRate("203.0.113.1") || nilP.HasRateLimit() {
 		t.Fatalf("nil policy must be unlimited")
 	}
 }

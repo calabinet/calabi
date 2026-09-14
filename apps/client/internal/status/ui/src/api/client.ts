@@ -20,10 +20,15 @@ import type {
   DomainList,
   Healthz,
   HTTPCaptureRow,
+  IPPolicy,
+  MemberQuotaRow,
   MeshAdvertise,
+  MeshOrgNode,
   MeshServiceDecl,
   MeshStatus,
+  OAuthPolicy,
   OrgListResponse,
+  OrgSecurity,
   OrgSwitchResponse,
   ProbeHealth,
   ProbeCheck,
@@ -173,6 +178,35 @@ export const api = {
     jsonOrThrow<MeshUsage>(await fetch("/v1/usage/mesh?days=" + days)),
   tunnels: async (): Promise<TunnelList> =>
     jsonOrThrow<TunnelList>(await fetch("/v1/tunnels")),
+  // ONE tunnel, by id. The create flow's last step watches the row it just made
+  // until an edge claims it — by id rather than by searching the list, because
+  // a list is filtered (this daemon's device), paged and time-ordered, and none
+  // of that has anything to do with whether this particular row exists. A 404
+  // here is an answer; an absence from the list is not.
+  tunnel: async (id: number): Promise<RemoteTunnel> =>
+    jsonOrThrow<RemoteTunnel>(await fetch("/v1/tunnels/" + id)),
+  // The org's tunnel-security baseline + its named IP policies. Both are
+  // best-effort at every call site: a standalone daemon answers 501 (no org
+  // exists to hold a baseline) and a control-plane blip must not stop somebody
+  // creating a tunnel. tunnel-svc enforces the rule either way, so the worst
+  // case of a failed read is the old behaviour — a refusal after submit.
+  orgSecurity: async (): Promise<OrgSecurity> =>
+    jsonOrThrow<OrgSecurity>(await fetch("/v1/org/security")),
+  orgIPPolicies: async (): Promise<{ items: IPPolicy[] }> =>
+    jsonOrThrow<{ items: IPPolicy[] }>(await fetch("/v1/org/ip-policies")),
+  // The org's named login policies, offered by the per-tunnel security drawer.
+  // Best-effort like the other two: standalone answers 501, and a tunnel that
+  // already points at a policy keeps doing so whether or not we can list them.
+  orgOAuthPolicies: async (): Promise<{ items: OAuthPolicy[] }> =>
+    jsonOrThrow<{ items: OAuthPolicy[] }>(await fetch("/v1/org/oauth-policies")),
+  // The caller's own member quota + current usage, so the create flow can grey
+  // the button rather than refuse a filled-in form. Best-effort at the call
+  // site: standalone answers 501 and an org with no member quotas returns no
+  // row for us.
+  memberQuotas: async (orgID: number): Promise<{ items: MemberQuotaRow[] }> =>
+    jsonOrThrow<{ items: MemberQuotaRow[] }>(
+      await fetch("/v1/orgs/" + orgID + "/member-quotas"),
+    ),
   clients: async (): Promise<ClientDevicesList> =>
     jsonOrThrow<ClientDevicesList>(await fetch("/v1/clients")),
   // Edge directory — Tunnels page joins this against each row's
@@ -224,12 +258,20 @@ export const api = {
     exit_node: string;
     accept_routes?: boolean;
     route_excludes?: string[];
+    block_incoming?: boolean;
   }): Promise<MeshAdvertise> =>
     jsonOrThrow<MeshAdvertise>(await writeRequest("POST", "/v1/mesh/advertise", body)),
 
   // What this machine declares it offers on the mesh.
   meshServices: async (): Promise<{ items: MeshServiceDecl[] }> =>
     jsonOrThrow<{ items: MeshServiceDecl[] }>(await fetch("/v1/mesh/services")),
+
+  // The ORG's mesh devices, proxied from bff-console — used only to label peers
+  // with their owner. Absent on a local daemon and 401 for an api-key agent, so
+  // every caller must treat a failure as "no labels" rather than an error worth
+  // showing: the peer list is the page, the owner column is a nicety on top.
+  meshOrgNodes: async (): Promise<{ items: MeshOrgNode[] }> =>
+    jsonOrThrow<{ items: MeshOrgNode[] }>(await fetch("/v1/mesh/nodes")),
 
   // Replace the console-managed declarations. Local-token gated; restarts the
   // mesh session so the new set is re-declared to the coordinator.

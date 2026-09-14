@@ -19,8 +19,10 @@ import (
 
 	bffedge "github.com/calabi/calabi/pkg/edge-proto/edgepb"
 
+	"github.com/calabi/calabi/apps/calabi-edge/internal/accesslog"
 	eventbus "github.com/calabi/calabi/apps/calabi-edge/internal/bus"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/meshresolver"
+	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/access"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/acmechallenge"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/bffedgeclient"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/certclient"
@@ -104,18 +106,31 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 			logger:    logger.With("component", "persister"),
 			edgeLabel: cfg.NodeLabel,
 			index:     localIndex,
+			ports:     in.ports,
 		}
 
-		// These two startup seeds query platform-cluster tunnel-svc directly and
-		// only make sense for an in-cluster platform edge. A BYOI / remote edge
-		// (multi_region.mode=bff-edge) reaches tunnel-svc through the bff-edge
-		// gateway, which doesn't serve these admin-ish seed RPCs — so they just
-		// time out (DeadlineExceeded) and scare self-hosters. Skip them in
-		// bff-edge mode: the fallbacks (file-backed subdomain seq, cold port
-		// pool) are exactly the right behaviour for a single-tenant edge serving
-		// its own domain.
+		// Two startup seeds, and they are NOT the same case — which is what the
+		// single `if` they used to share got wrong.
+		//
+		// MaxManagedSubdomainSeq is an in-cluster admin RPC that bff-edge does not
+		// serve, so a remote edge asking for it just waits out the deadline. It
+		// stays skipped, and the file-backed sequence is the right fallback.
+		//
+		// ListEdgeClaimedPorts IS served by bff-edge, scoped to the caller's own
+		// edge id from its certificate. Skipping it cost a real bug: `IsBFFEdge()`
+		// is true for every edge that reaches tunnel-svc through the gateway —
+		// PLATFORM edges outside the main region included, not just the BYOI nodes
+		// the old comment had in mind — so those edges booted with a COLD pool,
+		// handed out the first port in the range, and collided with whatever live
+		// row still held it. The claim then failed with AlreadyExists and the
+		// fallback path DELETED the console-created row: the user's tunnel
+		// disappeared and a re-homed older row took its place.
+		//
+		// A cold pool was never "exactly right for a single-tenant edge" either. A
+		// BYOI edge has tunnel rows with remote_port bound just the same, and will
+		// re-issue them just the same.
 		if cfg.MultiRegion.IsBFFEdge() {
-			logger.Info("bff-edge mode: skipping platform subdomain/port-pool DB seeds (using local state)",
+			logger.Info("bff-edge mode: skipping the subdomain-seq DB seed (not served by the gateway); using local state",
 				"base", cfg.HTTP.BaseDomain)
 		} else {
 			// Seed the SubdomainAllocator above the highest u<N>.<base> seq already
@@ -131,20 +146,27 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 				in.domains.SeedIfBehind(dbMax)
 				logger.Info("subdomain seq DB-synced", "base", cfg.HTTP.BaseDomain, "db_max", dbMax)
 			}
-			// seed the port pool with every port already claimed by a live
-			// tunnel row on this edge, so a fresh boot doesn't re-issue numbers still
-			// parked at another member's tunnel. Best-effort.
-			if claimed, err := tc.ListEdgeClaimedPorts(context.Background()); err != nil {
-				logger.Warn("port pool DB-seed failed; pool starts cold",
-					"edge_node_id", tc.EdgeNodeID(), "err", err)
-			} else if len(claimed) > 0 {
-				for _, p := range claimed {
-					if p > 0 {
-						in.ports.Reserve(uint32(p))
-					}
+		}
+
+		// seed the port pool with every port already claimed by a live
+		// tunnel row on this edge, so a fresh boot doesn't re-issue numbers still
+		// parked at another tunnel. Runs in EVERY mode — see above.
+		//
+		// Best-effort, but loudly so: an edge whose pool starts cold will delete
+		// somebody's tunnel the first time it hands out a port that is still bound,
+		// and that has to be findable in the log afterwards rather than inferred.
+		if claimed, err := tc.ListEdgeClaimedPorts(context.Background()); err != nil {
+			logger.Warn("port pool DB-seed FAILED; the pool starts cold and may re-issue a port "+
+				"that a live tunnel still holds — the resulting claim conflict is recoverable "+
+				"but logged as a WARN in the persister",
+				"edge_node_id", tc.EdgeNodeID(), "err", err)
+		} else {
+			for _, p := range claimed {
+				if p > 0 {
+					in.ports.Reserve(uint32(p))
 				}
-				logger.Info("port pool DB-seeded", "edge_node_id", tc.EdgeNodeID(), "reserved", len(claimed))
 			}
+			logger.Info("port pool DB-seeded", "edge_node_id", tc.EdgeNodeID(), "reserved", len(claimed))
 		}
 
 		if cpBFF == nil {
@@ -168,7 +190,9 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 			manager:    in.mgr,
 			index:      localIndex,
 			logger:     logger.With("component", "route-applier"),
+			secrets:    oauthSecretsOf(tunnelCli),
 			baseDomain: cfg.HTTP.BaseDomain,
+			ports:      in.ports,
 		}
 		cc, err := configclient.StartWithClient(ctx, logger,
 			bffedgeclient.NewConfigAdapter(cpBFF.Client),
@@ -335,6 +359,18 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 		}
 	}
 
+	// Tunnel access log (who connected to which tunnel, and what we did with
+	// them). Installed ONLY when there is a bus to publish on: without one the
+	// recorder would accumulate to its cap and hold rows nobody ever reads, and
+	// a community/standalone edge has no store to send them to anyway. No sink
+	// installed = the listeners' Note() is an atomic load that finds nothing.
+	var accessReporter *access.Reporter
+	if bus != nil {
+		rec := access.New()
+		accesslog.SetSink(rec)
+		accessReporter = access.NewReporter(logger, bus, rec, in.edgeID, cfg.NodeLabel, 0)
+	}
+
 	// Usage reporter + deny hook. Reuses the bus dialed above.
 	usageReporter := usage.NewReporter(logger, bus, in.mgr, in.edgeID, cfg.NodeLabel, usageReportInterval(logger))
 	denyHook := usage.NewDenyHook(logger, bus)
@@ -367,6 +403,16 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 
 	deps.runners = []namedRunner{
 		{"usage-reporter", usageReporter.Run},
+		{"access-reporter", func(ctx context.Context) error {
+			if accessReporter == nil {
+				// namedRunner contract: block until ctx, never return early —
+				// a bare `return nil` kills the whole edge about a second
+				// after boot, with exit 0 and no log line.
+				<-ctx.Done()
+				return nil
+			}
+			return accessReporter.Run(ctx)
+		}},
 		{"deny-sweeper", func(ctx context.Context) error { return runDenySweeper(ctx, logger, in.mgr, denyHook) }},
 		{"presence-reporter", func(ctx context.Context) error {
 			return runPresenceReporter(ctx, logger, identityCli, in.mgr, in.edgeID, cfg.NodeLabel, cfg.Presence.PresenceInterval(), in.presenceKick)
@@ -399,6 +445,7 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 				EdgeClass:     cfg.EdgeClass,
 				RelayDerpPort: platformRelayDerp,
 				RelayStunPort: platformRelayStun,
+				Version:       version,
 			})
 		}},
 		{"evict-consumer", func(ctx context.Context) error {
@@ -457,4 +504,18 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 
 	deps.closers = closers
 	return deps, nil
+}
+
+// oauthSecretsOf adapts the tunnel-store client to the fetcher the policy
+// resolver needs, and turns a nil client into a nil INTERFACE.
+//
+// Returning the typed nil directly would give a non-nil interface holding a nil
+// pointer — the `secrets == nil` guard in resolveOAuthSecret would not fire and
+// the edge would call a method on nothing. That guard is what makes a standalone
+// edge log "cannot fetch the secret" instead of panicking.
+func oauthSecretsOf(c *tunnelstore.Client) oauthSecretFetcher {
+	if c == nil {
+		return nil
+	}
+	return c
 }

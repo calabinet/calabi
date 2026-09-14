@@ -37,10 +37,10 @@ export default function Tools() {
   }
 
   function go(port: number) {
-    // Open the new-tunnel wizard pre-filled by passing through query.
-    // For simplicity, just navigate; the user can paste the port into
-    // the wizard. Future: deep-link to the wizard with a prefill state.
-    navigate("/tunnels?prefill_port=" + port);
+    // Straight into the create flow with the scanned port already filled in.
+    // A query parameter rather than router state, because the create flow is a
+    // page now: it has to mean the same thing after a reload.
+    navigate("/tunnels/new?prefill_port=" + port);
   }
 
   return (

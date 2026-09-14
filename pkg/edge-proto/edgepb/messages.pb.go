@@ -544,8 +544,15 @@ type CreateTunnelRequest struct {
 	// visibility. Edge-internal callers leave it 0 (their rows are claimed, not
 	// user-created).
 	CreatorUserId int64 `protobuf:"varint,14,opt,name=creator_user_id,json=creatorUserId,proto3" json:"creator_user_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// client_proposed_security_json — the security block the END USER typed on
+	// the command line (`calabi http 8080 --ip-allow 203.0.113.0/24`), relayed
+	// verbatim by the edge's Persist. Separate from config_json (which is
+	// trusted and carries credentials) precisely because this one is not:
+	// tunnel-svc keeps only the IP allow/deny lists out of it and revalidates
+	// every entry. Field 15 to match upstream — see bridge_drift_test.go.
+	ClientProposedSecurityJson string `protobuf:"bytes,15,opt,name=client_proposed_security_json,json=clientProposedSecurityJson,proto3" json:"client_proposed_security_json,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *CreateTunnelRequest) Reset() {
@@ -676,6 +683,143 @@ func (x *CreateTunnelRequest) GetCreatorUserId() int64 {
 	return 0
 }
 
+func (x *CreateTunnelRequest) GetClientProposedSecurityJson() string {
+	if x != nil {
+		return x.ClientProposedSecurityJson
+	}
+	return ""
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+type GetTunnelOAuthSecretRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TunnelId      int64                  `protobuf:"varint,1,opt,name=tunnel_id,json=tunnelId,proto3" json:"tunnel_id,omitempty"`
+	CallerOrgId   int64                  `protobuf:"varint,2,opt,name=caller_org_id,json=callerOrgId,proto3" json:"caller_org_id,omitempty"` // stamped by bff-edge from the edge's mTLS cert
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTunnelOAuthSecretRequest) Reset() {
+	*x = GetTunnelOAuthSecretRequest{}
+	mi := &file_edgepb_messages_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTunnelOAuthSecretRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTunnelOAuthSecretRequest) ProtoMessage() {}
+
+func (x *GetTunnelOAuthSecretRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_edgepb_messages_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTunnelOAuthSecretRequest.ProtoReflect.Descriptor instead.
+func (*GetTunnelOAuthSecretRequest) Descriptor() ([]byte, []int) {
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *GetTunnelOAuthSecretRequest) GetTunnelId() int64 {
+	if x != nil {
+		return x.TunnelId
+	}
+	return 0
+}
+
+func (x *GetTunnelOAuthSecretRequest) GetCallerOrgId() int64 {
+	if x != nil {
+		return x.CallerOrgId
+	}
+	return 0
+}
+
+// [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
+type GetTunnelOAuthSecretResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
+	ClientId      string                 `protobuf:"bytes,2,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
+	ClientSecret  string                 `protobuf:"bytes,3,opt,name=client_secret,json=clientSecret,proto3" json:"client_secret,omitempty"`
+	AllowEmails   []string               `protobuf:"bytes,4,rep,name=allow_emails,json=allowEmails,proto3" json:"allow_emails,omitempty"`
+	AllowDomains  []string               `protobuf:"bytes,5,rep,name=allow_domains,json=allowDomains,proto3" json:"allow_domains,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTunnelOAuthSecretResponse) Reset() {
+	*x = GetTunnelOAuthSecretResponse{}
+	mi := &file_edgepb_messages_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTunnelOAuthSecretResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTunnelOAuthSecretResponse) ProtoMessage() {}
+
+func (x *GetTunnelOAuthSecretResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_edgepb_messages_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTunnelOAuthSecretResponse.ProtoReflect.Descriptor instead.
+func (*GetTunnelOAuthSecretResponse) Descriptor() ([]byte, []int) {
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *GetTunnelOAuthSecretResponse) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *GetTunnelOAuthSecretResponse) GetClientId() string {
+	if x != nil {
+		return x.ClientId
+	}
+	return ""
+}
+
+func (x *GetTunnelOAuthSecretResponse) GetClientSecret() string {
+	if x != nil {
+		return x.ClientSecret
+	}
+	return ""
+}
+
+func (x *GetTunnelOAuthSecretResponse) GetAllowEmails() []string {
+	if x != nil {
+		return x.AllowEmails
+	}
+	return nil
+}
+
+func (x *GetTunnelOAuthSecretResponse) GetAllowDomains() []string {
+	if x != nil {
+		return x.AllowDomains
+	}
+	return nil
+}
+
 // [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
 type DeleteTunnelRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -690,7 +834,7 @@ type DeleteTunnelRequest struct {
 
 func (x *DeleteTunnelRequest) Reset() {
 	*x = DeleteTunnelRequest{}
-	mi := &file_edgepb_messages_proto_msgTypes[5]
+	mi := &file_edgepb_messages_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -702,7 +846,7 @@ func (x *DeleteTunnelRequest) String() string {
 func (*DeleteTunnelRequest) ProtoMessage() {}
 
 func (x *DeleteTunnelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[5]
+	mi := &file_edgepb_messages_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -715,7 +859,7 @@ func (x *DeleteTunnelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteTunnelRequest.ProtoReflect.Descriptor instead.
 func (*DeleteTunnelRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{5}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *DeleteTunnelRequest) GetId() int64 {
@@ -741,7 +885,7 @@ type DeleteTunnelResponse struct {
 
 func (x *DeleteTunnelResponse) Reset() {
 	*x = DeleteTunnelResponse{}
-	mi := &file_edgepb_messages_proto_msgTypes[6]
+	mi := &file_edgepb_messages_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -753,7 +897,7 @@ func (x *DeleteTunnelResponse) String() string {
 func (*DeleteTunnelResponse) ProtoMessage() {}
 
 func (x *DeleteTunnelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[6]
+	mi := &file_edgepb_messages_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -766,7 +910,7 @@ func (x *DeleteTunnelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteTunnelResponse.ProtoReflect.Descriptor instead.
 func (*DeleteTunnelResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{6}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{8}
 }
 
 // [mirrored from proto/calabi/v1/control_plane/config.proto]
@@ -781,7 +925,7 @@ type Delta struct {
 
 func (x *Delta) Reset() {
 	*x = Delta{}
-	mi := &file_edgepb_messages_proto_msgTypes[7]
+	mi := &file_edgepb_messages_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -793,7 +937,7 @@ func (x *Delta) String() string {
 func (*Delta) ProtoMessage() {}
 
 func (x *Delta) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[7]
+	mi := &file_edgepb_messages_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -806,7 +950,7 @@ func (x *Delta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Delta.ProtoReflect.Descriptor instead.
 func (*Delta) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{7}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Delta) GetDeltaId() string {
@@ -849,7 +993,7 @@ type DrainEdgeRequest struct {
 
 func (x *DrainEdgeRequest) Reset() {
 	*x = DrainEdgeRequest{}
-	mi := &file_edgepb_messages_proto_msgTypes[8]
+	mi := &file_edgepb_messages_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -861,7 +1005,7 @@ func (x *DrainEdgeRequest) String() string {
 func (*DrainEdgeRequest) ProtoMessage() {}
 
 func (x *DrainEdgeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[8]
+	mi := &file_edgepb_messages_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -874,7 +1018,7 @@ func (x *DrainEdgeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainEdgeRequest.ProtoReflect.Descriptor instead.
 func (*DrainEdgeRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{8}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *DrainEdgeRequest) GetEdgeNodeId() int64 {
@@ -908,7 +1052,7 @@ type DrainEdgeResponse struct {
 
 func (x *DrainEdgeResponse) Reset() {
 	*x = DrainEdgeResponse{}
-	mi := &file_edgepb_messages_proto_msgTypes[9]
+	mi := &file_edgepb_messages_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -920,7 +1064,7 @@ func (x *DrainEdgeResponse) String() string {
 func (*DrainEdgeResponse) ProtoMessage() {}
 
 func (x *DrainEdgeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[9]
+	mi := &file_edgepb_messages_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -933,7 +1077,7 @@ func (x *DrainEdgeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainEdgeResponse.ProtoReflect.Descriptor instead.
 func (*DrainEdgeResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{9}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *DrainEdgeResponse) GetDrained() int32 {
@@ -958,7 +1102,7 @@ type EdgeMessage struct {
 
 func (x *EdgeMessage) Reset() {
 	*x = EdgeMessage{}
-	mi := &file_edgepb_messages_proto_msgTypes[10]
+	mi := &file_edgepb_messages_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -970,7 +1114,7 @@ func (x *EdgeMessage) String() string {
 func (*EdgeMessage) ProtoMessage() {}
 
 func (x *EdgeMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[10]
+	mi := &file_edgepb_messages_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -983,7 +1127,7 @@ func (x *EdgeMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EdgeMessage.ProtoReflect.Descriptor instead.
 func (*EdgeMessage) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{10}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *EdgeMessage) GetKind() isEdgeMessage_Kind {
@@ -1125,7 +1269,7 @@ type EdgeNode struct {
 
 func (x *EdgeNode) Reset() {
 	*x = EdgeNode{}
-	mi := &file_edgepb_messages_proto_msgTypes[11]
+	mi := &file_edgepb_messages_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1137,7 +1281,7 @@ func (x *EdgeNode) String() string {
 func (*EdgeNode) ProtoMessage() {}
 
 func (x *EdgeNode) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[11]
+	mi := &file_edgepb_messages_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1150,7 +1294,7 @@ func (x *EdgeNode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EdgeNode.ProtoReflect.Descriptor instead.
 func (*EdgeNode) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{11}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *EdgeNode) GetEdgeNodeId() int64 {
@@ -1265,7 +1409,7 @@ type EffectiveQuota struct {
 
 func (x *EffectiveQuota) Reset() {
 	*x = EffectiveQuota{}
-	mi := &file_edgepb_messages_proto_msgTypes[12]
+	mi := &file_edgepb_messages_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1277,7 +1421,7 @@ func (x *EffectiveQuota) String() string {
 func (*EffectiveQuota) ProtoMessage() {}
 
 func (x *EffectiveQuota) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[12]
+	mi := &file_edgepb_messages_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1290,7 +1434,7 @@ func (x *EffectiveQuota) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EffectiveQuota.ProtoReflect.Descriptor instead.
 func (*EffectiveQuota) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{12}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *EffectiveQuota) GetOrgId() int64 {
@@ -1337,7 +1481,7 @@ type ErrorDetail struct {
 
 func (x *ErrorDetail) Reset() {
 	*x = ErrorDetail{}
-	mi := &file_edgepb_messages_proto_msgTypes[13]
+	mi := &file_edgepb_messages_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1349,7 +1493,7 @@ func (x *ErrorDetail) String() string {
 func (*ErrorDetail) ProtoMessage() {}
 
 func (x *ErrorDetail) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[13]
+	mi := &file_edgepb_messages_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1362,7 +1506,7 @@ func (x *ErrorDetail) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ErrorDetail.ProtoReflect.Descriptor instead.
 func (*ErrorDetail) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{13}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ErrorDetail) GetCode() uint32 {
@@ -1406,7 +1550,7 @@ type GetCertRequest struct {
 
 func (x *GetCertRequest) Reset() {
 	*x = GetCertRequest{}
-	mi := &file_edgepb_messages_proto_msgTypes[14]
+	mi := &file_edgepb_messages_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1418,7 +1562,7 @@ func (x *GetCertRequest) String() string {
 func (*GetCertRequest) ProtoMessage() {}
 
 func (x *GetCertRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[14]
+	mi := &file_edgepb_messages_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1431,7 +1575,7 @@ func (x *GetCertRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCertRequest.ProtoReflect.Descriptor instead.
 func (*GetCertRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{14}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *GetCertRequest) GetId() int64 {
@@ -1468,7 +1612,7 @@ type GetCertResponse struct {
 
 func (x *GetCertResponse) Reset() {
 	*x = GetCertResponse{}
-	mi := &file_edgepb_messages_proto_msgTypes[15]
+	mi := &file_edgepb_messages_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1480,7 +1624,7 @@ func (x *GetCertResponse) String() string {
 func (*GetCertResponse) ProtoMessage() {}
 
 func (x *GetCertResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[15]
+	mi := &file_edgepb_messages_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1493,7 +1637,7 @@ func (x *GetCertResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCertResponse.ProtoReflect.Descriptor instead.
 func (*GetCertResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{15}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *GetCertResponse) GetCert() *CertMeta {
@@ -1534,7 +1678,7 @@ type GetEffectiveRequest struct {
 
 func (x *GetEffectiveRequest) Reset() {
 	*x = GetEffectiveRequest{}
-	mi := &file_edgepb_messages_proto_msgTypes[16]
+	mi := &file_edgepb_messages_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1546,7 +1690,7 @@ func (x *GetEffectiveRequest) String() string {
 func (*GetEffectiveRequest) ProtoMessage() {}
 
 func (x *GetEffectiveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[16]
+	mi := &file_edgepb_messages_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1559,7 +1703,7 @@ func (x *GetEffectiveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEffectiveRequest.ProtoReflect.Descriptor instead.
 func (*GetEffectiveRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{16}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GetEffectiveRequest) GetOrgId() int64 {
@@ -1582,7 +1726,7 @@ type GetOrgOnlineCountRequest struct {
 
 func (x *GetOrgOnlineCountRequest) Reset() {
 	*x = GetOrgOnlineCountRequest{}
-	mi := &file_edgepb_messages_proto_msgTypes[17]
+	mi := &file_edgepb_messages_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1594,7 +1738,7 @@ func (x *GetOrgOnlineCountRequest) String() string {
 func (*GetOrgOnlineCountRequest) ProtoMessage() {}
 
 func (x *GetOrgOnlineCountRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[17]
+	mi := &file_edgepb_messages_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1607,7 +1751,7 @@ func (x *GetOrgOnlineCountRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOrgOnlineCountRequest.ProtoReflect.Descriptor instead.
 func (*GetOrgOnlineCountRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{17}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetOrgOnlineCountRequest) GetOrgId() int64 {
@@ -1635,7 +1779,7 @@ type GetOrgOnlineCountResponse struct {
 
 func (x *GetOrgOnlineCountResponse) Reset() {
 	*x = GetOrgOnlineCountResponse{}
-	mi := &file_edgepb_messages_proto_msgTypes[18]
+	mi := &file_edgepb_messages_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1647,7 +1791,7 @@ func (x *GetOrgOnlineCountResponse) String() string {
 func (*GetOrgOnlineCountResponse) ProtoMessage() {}
 
 func (x *GetOrgOnlineCountResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[18]
+	mi := &file_edgepb_messages_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1660,7 +1804,7 @@ func (x *GetOrgOnlineCountResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOrgOnlineCountResponse.ProtoReflect.Descriptor instead.
 func (*GetOrgOnlineCountResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{18}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GetOrgOnlineCountResponse) GetCount() int32 {
@@ -1680,7 +1824,7 @@ type Heartbeat struct {
 
 func (x *Heartbeat) Reset() {
 	*x = Heartbeat{}
-	mi := &file_edgepb_messages_proto_msgTypes[19]
+	mi := &file_edgepb_messages_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1692,7 +1836,7 @@ func (x *Heartbeat) String() string {
 func (*Heartbeat) ProtoMessage() {}
 
 func (x *Heartbeat) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[19]
+	mi := &file_edgepb_messages_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1705,7 +1849,7 @@ func (x *Heartbeat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Heartbeat.ProtoReflect.Descriptor instead.
 func (*Heartbeat) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{19}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *Heartbeat) GetTs() *timestamppb.Timestamp {
@@ -1730,7 +1874,7 @@ type HelloEdge struct {
 
 func (x *HelloEdge) Reset() {
 	*x = HelloEdge{}
-	mi := &file_edgepb_messages_proto_msgTypes[20]
+	mi := &file_edgepb_messages_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1742,7 +1886,7 @@ func (x *HelloEdge) String() string {
 func (*HelloEdge) ProtoMessage() {}
 
 func (x *HelloEdge) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[20]
+	mi := &file_edgepb_messages_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1755,7 +1899,7 @@ func (x *HelloEdge) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HelloEdge.ProtoReflect.Descriptor instead.
 func (*HelloEdge) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{20}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *HelloEdge) GetEdgeNodeId() int64 {
@@ -1812,7 +1956,7 @@ type IssueEdgeCertResponse struct {
 
 func (x *IssueEdgeCertResponse) Reset() {
 	*x = IssueEdgeCertResponse{}
-	mi := &file_edgepb_messages_proto_msgTypes[21]
+	mi := &file_edgepb_messages_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1824,7 +1968,7 @@ func (x *IssueEdgeCertResponse) String() string {
 func (*IssueEdgeCertResponse) ProtoMessage() {}
 
 func (x *IssueEdgeCertResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[21]
+	mi := &file_edgepb_messages_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1837,7 +1981,7 @@ func (x *IssueEdgeCertResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IssueEdgeCertResponse.ProtoReflect.Descriptor instead.
 func (*IssueEdgeCertResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{21}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *IssueEdgeCertResponse) GetCertPem() []byte {
@@ -1907,7 +2051,7 @@ type ListCertsRequest struct {
 
 func (x *ListCertsRequest) Reset() {
 	*x = ListCertsRequest{}
-	mi := &file_edgepb_messages_proto_msgTypes[22]
+	mi := &file_edgepb_messages_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1919,7 +2063,7 @@ func (x *ListCertsRequest) String() string {
 func (*ListCertsRequest) ProtoMessage() {}
 
 func (x *ListCertsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[22]
+	mi := &file_edgepb_messages_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1932,7 +2076,7 @@ func (x *ListCertsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCertsRequest.ProtoReflect.Descriptor instead.
 func (*ListCertsRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{22}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ListCertsRequest) GetOrgId() int64 {
@@ -1967,7 +2111,7 @@ type ListCertsResponse struct {
 
 func (x *ListCertsResponse) Reset() {
 	*x = ListCertsResponse{}
-	mi := &file_edgepb_messages_proto_msgTypes[23]
+	mi := &file_edgepb_messages_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1979,7 +2123,7 @@ func (x *ListCertsResponse) String() string {
 func (*ListCertsResponse) ProtoMessage() {}
 
 func (x *ListCertsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[23]
+	mi := &file_edgepb_messages_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1992,7 +2136,7 @@ func (x *ListCertsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCertsResponse.ProtoReflect.Descriptor instead.
 func (*ListCertsResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{23}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ListCertsResponse) GetItems() []*CertMeta {
@@ -2020,7 +2164,7 @@ type ListEdgeClaimedPortsRequest struct {
 
 func (x *ListEdgeClaimedPortsRequest) Reset() {
 	*x = ListEdgeClaimedPortsRequest{}
-	mi := &file_edgepb_messages_proto_msgTypes[24]
+	mi := &file_edgepb_messages_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2032,7 +2176,7 @@ func (x *ListEdgeClaimedPortsRequest) String() string {
 func (*ListEdgeClaimedPortsRequest) ProtoMessage() {}
 
 func (x *ListEdgeClaimedPortsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[24]
+	mi := &file_edgepb_messages_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2045,7 +2189,7 @@ func (x *ListEdgeClaimedPortsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEdgeClaimedPortsRequest.ProtoReflect.Descriptor instead.
 func (*ListEdgeClaimedPortsRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{24}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ListEdgeClaimedPortsRequest) GetEdgeNodeId() int64 {
@@ -2069,7 +2213,7 @@ type ListEdgeClaimedPortsResponse struct {
 
 func (x *ListEdgeClaimedPortsResponse) Reset() {
 	*x = ListEdgeClaimedPortsResponse{}
-	mi := &file_edgepb_messages_proto_msgTypes[25]
+	mi := &file_edgepb_messages_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2081,7 +2225,7 @@ func (x *ListEdgeClaimedPortsResponse) String() string {
 func (*ListEdgeClaimedPortsResponse) ProtoMessage() {}
 
 func (x *ListEdgeClaimedPortsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[25]
+	mi := &file_edgepb_messages_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2094,7 +2238,7 @@ func (x *ListEdgeClaimedPortsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEdgeClaimedPortsResponse.ProtoReflect.Descriptor instead.
 func (*ListEdgeClaimedPortsResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{25}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ListEdgeClaimedPortsResponse) GetPorts() []int32 {
@@ -2118,7 +2262,7 @@ type ListEdgesRequest struct {
 
 func (x *ListEdgesRequest) Reset() {
 	*x = ListEdgesRequest{}
-	mi := &file_edgepb_messages_proto_msgTypes[26]
+	mi := &file_edgepb_messages_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2130,7 +2274,7 @@ func (x *ListEdgesRequest) String() string {
 func (*ListEdgesRequest) ProtoMessage() {}
 
 func (x *ListEdgesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[26]
+	mi := &file_edgepb_messages_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2143,7 +2287,7 @@ func (x *ListEdgesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEdgesRequest.ProtoReflect.Descriptor instead.
 func (*ListEdgesRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{26}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ListEdgesRequest) GetRegion() string {
@@ -2170,7 +2314,7 @@ type ListEdgesResponse struct {
 
 func (x *ListEdgesResponse) Reset() {
 	*x = ListEdgesResponse{}
-	mi := &file_edgepb_messages_proto_msgTypes[27]
+	mi := &file_edgepb_messages_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2182,7 +2326,7 @@ func (x *ListEdgesResponse) String() string {
 func (*ListEdgesResponse) ProtoMessage() {}
 
 func (x *ListEdgesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[27]
+	mi := &file_edgepb_messages_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2195,7 +2339,7 @@ func (x *ListEdgesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEdgesResponse.ProtoReflect.Descriptor instead.
 func (*ListEdgesResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{27}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ListEdgesResponse) GetItems() []*EdgeNode {
@@ -2218,7 +2362,7 @@ type ListTunnelsRequest struct {
 
 func (x *ListTunnelsRequest) Reset() {
 	*x = ListTunnelsRequest{}
-	mi := &file_edgepb_messages_proto_msgTypes[28]
+	mi := &file_edgepb_messages_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2230,7 +2374,7 @@ func (x *ListTunnelsRequest) String() string {
 func (*ListTunnelsRequest) ProtoMessage() {}
 
 func (x *ListTunnelsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[28]
+	mi := &file_edgepb_messages_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2243,7 +2387,7 @@ func (x *ListTunnelsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTunnelsRequest.ProtoReflect.Descriptor instead.
 func (*ListTunnelsRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{28}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ListTunnelsRequest) GetOrgId() int64 {
@@ -2285,7 +2429,7 @@ type ListTunnelsResponse struct {
 
 func (x *ListTunnelsResponse) Reset() {
 	*x = ListTunnelsResponse{}
-	mi := &file_edgepb_messages_proto_msgTypes[29]
+	mi := &file_edgepb_messages_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2297,7 +2441,7 @@ func (x *ListTunnelsResponse) String() string {
 func (*ListTunnelsResponse) ProtoMessage() {}
 
 func (x *ListTunnelsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[29]
+	mi := &file_edgepb_messages_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2310,7 +2454,7 @@ func (x *ListTunnelsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTunnelsResponse.ProtoReflect.Descriptor instead.
 func (*ListTunnelsResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{29}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ListTunnelsResponse) GetItems() []*Tunnel {
@@ -2338,7 +2482,7 @@ type OwnerEntry struct {
 
 func (x *OwnerEntry) Reset() {
 	*x = OwnerEntry{}
-	mi := &file_edgepb_messages_proto_msgTypes[30]
+	mi := &file_edgepb_messages_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2350,7 +2494,7 @@ func (x *OwnerEntry) String() string {
 func (*OwnerEntry) ProtoMessage() {}
 
 func (x *OwnerEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[30]
+	mi := &file_edgepb_messages_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2363,7 +2507,7 @@ func (x *OwnerEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OwnerEntry.ProtoReflect.Descriptor instead.
 func (*OwnerEntry) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{30}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *OwnerEntry) GetDomain() string {
@@ -2393,7 +2537,7 @@ type PageRequest struct {
 
 func (x *PageRequest) Reset() {
 	*x = PageRequest{}
-	mi := &file_edgepb_messages_proto_msgTypes[31]
+	mi := &file_edgepb_messages_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2405,7 +2549,7 @@ func (x *PageRequest) String() string {
 func (*PageRequest) ProtoMessage() {}
 
 func (x *PageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[31]
+	mi := &file_edgepb_messages_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2418,7 +2562,7 @@ func (x *PageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PageRequest.ProtoReflect.Descriptor instead.
 func (*PageRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{31}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *PageRequest) GetPageToken() string {
@@ -2448,7 +2592,7 @@ type PageResponse struct {
 
 func (x *PageResponse) Reset() {
 	*x = PageResponse{}
-	mi := &file_edgepb_messages_proto_msgTypes[32]
+	mi := &file_edgepb_messages_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2460,7 +2604,7 @@ func (x *PageResponse) String() string {
 func (*PageResponse) ProtoMessage() {}
 
 func (x *PageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[32]
+	mi := &file_edgepb_messages_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2473,7 +2617,7 @@ func (x *PageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PageResponse.ProtoReflect.Descriptor instead.
 func (*PageResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{32}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *PageResponse) GetNextPageToken() string {
@@ -2519,7 +2663,7 @@ type PresenceClient struct {
 
 func (x *PresenceClient) Reset() {
 	*x = PresenceClient{}
-	mi := &file_edgepb_messages_proto_msgTypes[33]
+	mi := &file_edgepb_messages_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2531,7 +2675,7 @@ func (x *PresenceClient) String() string {
 func (*PresenceClient) ProtoMessage() {}
 
 func (x *PresenceClient) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[33]
+	mi := &file_edgepb_messages_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2544,7 +2688,7 @@ func (x *PresenceClient) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PresenceClient.ProtoReflect.Descriptor instead.
 func (*PresenceClient) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{33}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *PresenceClient) GetClientId() int64 {
@@ -2591,7 +2735,7 @@ type ReclaimTunnelRequest struct {
 
 func (x *ReclaimTunnelRequest) Reset() {
 	*x = ReclaimTunnelRequest{}
-	mi := &file_edgepb_messages_proto_msgTypes[34]
+	mi := &file_edgepb_messages_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2603,7 +2747,7 @@ func (x *ReclaimTunnelRequest) String() string {
 func (*ReclaimTunnelRequest) ProtoMessage() {}
 
 func (x *ReclaimTunnelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[34]
+	mi := &file_edgepb_messages_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2616,7 +2760,7 @@ func (x *ReclaimTunnelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReclaimTunnelRequest.ProtoReflect.Descriptor instead.
 func (*ReclaimTunnelRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{34}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ReclaimTunnelRequest) GetTunnelId() int64 {
@@ -2681,7 +2825,7 @@ type ReclaimTunnelResponse struct {
 
 func (x *ReclaimTunnelResponse) Reset() {
 	*x = ReclaimTunnelResponse{}
-	mi := &file_edgepb_messages_proto_msgTypes[35]
+	mi := &file_edgepb_messages_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2693,7 +2837,7 @@ func (x *ReclaimTunnelResponse) String() string {
 func (*ReclaimTunnelResponse) ProtoMessage() {}
 
 func (x *ReclaimTunnelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[35]
+	mi := &file_edgepb_messages_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2706,7 +2850,7 @@ func (x *ReclaimTunnelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReclaimTunnelResponse.ProtoReflect.Descriptor instead.
 func (*ReclaimTunnelResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{35}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ReclaimTunnelResponse) GetTunnel() *Tunnel {
@@ -2745,14 +2889,19 @@ type RegisterEdgeNodeRequest struct {
 	RelayStunPort int32 `protobuf:"varint,9,opt,name=relay_stun_port,json=relayStunPort,proto3" json:"relay_stun_port,omitempty"`
 	// This node's visitor wildcard domain (edge.yaml base_domain), so the
 	// console can show the suffix a tunnel created on this node will get.
-	BaseDomain    string `protobuf:"bytes,10,opt,name=base_domain,json=baseDomain,proto3" json:"base_domain,omitempty"`
+	BaseDomain string `protobuf:"bytes,10,opt,name=base_domain,json=baseDomain,proto3" json:"base_domain,omitempty"`
+	// Edge-node binary version (-ldflags version string). Wire-compatible with
+	// control_plane.RegisterEdgeNodeRequest.version (same field number 11): the
+	// edge sets it, bff-edge forwards the whole request to identity-svc unchanged,
+	// and the consoles read it back from the edge directory. Empty = legacy edge.
+	Version       string `protobuf:"bytes,11,opt,name=version,proto3" json:"version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RegisterEdgeNodeRequest) Reset() {
 	*x = RegisterEdgeNodeRequest{}
-	mi := &file_edgepb_messages_proto_msgTypes[36]
+	mi := &file_edgepb_messages_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2764,7 +2913,7 @@ func (x *RegisterEdgeNodeRequest) String() string {
 func (*RegisterEdgeNodeRequest) ProtoMessage() {}
 
 func (x *RegisterEdgeNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[36]
+	mi := &file_edgepb_messages_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2777,7 +2926,7 @@ func (x *RegisterEdgeNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterEdgeNodeRequest.ProtoReflect.Descriptor instead.
 func (*RegisterEdgeNodeRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{36}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *RegisterEdgeNodeRequest) GetEdgeNodeId() int64 {
@@ -2850,6 +2999,13 @@ func (x *RegisterEdgeNodeRequest) GetBaseDomain() string {
 	return ""
 }
 
+func (x *RegisterEdgeNodeRequest) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
 // [mirrored from proto/calabi/v1/control_plane/identity.proto]
 type RegisterEdgeNodeResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -2859,7 +3015,7 @@ type RegisterEdgeNodeResponse struct {
 
 func (x *RegisterEdgeNodeResponse) Reset() {
 	*x = RegisterEdgeNodeResponse{}
-	mi := &file_edgepb_messages_proto_msgTypes[37]
+	mi := &file_edgepb_messages_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2871,7 +3027,7 @@ func (x *RegisterEdgeNodeResponse) String() string {
 func (*RegisterEdgeNodeResponse) ProtoMessage() {}
 
 func (x *RegisterEdgeNodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[37]
+	mi := &file_edgepb_messages_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2884,7 +3040,7 @@ func (x *RegisterEdgeNodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterEdgeNodeResponse.ProtoReflect.Descriptor instead.
 func (*RegisterEdgeNodeResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{37}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{39}
 }
 
 // [mirrored from proto/calabi/v1/control_plane/identity.proto]
@@ -2907,7 +3063,7 @@ type ReportClientPresenceRequest struct {
 
 func (x *ReportClientPresenceRequest) Reset() {
 	*x = ReportClientPresenceRequest{}
-	mi := &file_edgepb_messages_proto_msgTypes[38]
+	mi := &file_edgepb_messages_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2919,7 +3075,7 @@ func (x *ReportClientPresenceRequest) String() string {
 func (*ReportClientPresenceRequest) ProtoMessage() {}
 
 func (x *ReportClientPresenceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[38]
+	mi := &file_edgepb_messages_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2932,7 +3088,7 @@ func (x *ReportClientPresenceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportClientPresenceRequest.ProtoReflect.Descriptor instead.
 func (*ReportClientPresenceRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{38}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *ReportClientPresenceRequest) GetEdgeNodeId() int64 {
@@ -2975,7 +3131,7 @@ type ReportClientPresenceResponse struct {
 
 func (x *ReportClientPresenceResponse) Reset() {
 	*x = ReportClientPresenceResponse{}
-	mi := &file_edgepb_messages_proto_msgTypes[39]
+	mi := &file_edgepb_messages_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2987,7 +3143,7 @@ func (x *ReportClientPresenceResponse) String() string {
 func (*ReportClientPresenceResponse) ProtoMessage() {}
 
 func (x *ReportClientPresenceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[39]
+	mi := &file_edgepb_messages_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3000,7 +3156,7 @@ func (x *ReportClientPresenceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportClientPresenceResponse.ProtoReflect.Descriptor instead.
 func (*ReportClientPresenceResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{39}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *ReportClientPresenceResponse) GetUpsertedCount() int32 {
@@ -3025,7 +3181,7 @@ type ReportStatusRequest struct {
 
 func (x *ReportStatusRequest) Reset() {
 	*x = ReportStatusRequest{}
-	mi := &file_edgepb_messages_proto_msgTypes[40]
+	mi := &file_edgepb_messages_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3037,7 +3193,7 @@ func (x *ReportStatusRequest) String() string {
 func (*ReportStatusRequest) ProtoMessage() {}
 
 func (x *ReportStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[40]
+	mi := &file_edgepb_messages_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3050,7 +3206,7 @@ func (x *ReportStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportStatusRequest.ProtoReflect.Descriptor instead.
 func (*ReportStatusRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{40}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ReportStatusRequest) GetTunnelId() int64 {
@@ -3090,7 +3246,7 @@ type ReportStatusResponse struct {
 
 func (x *ReportStatusResponse) Reset() {
 	*x = ReportStatusResponse{}
-	mi := &file_edgepb_messages_proto_msgTypes[41]
+	mi := &file_edgepb_messages_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3102,7 +3258,7 @@ func (x *ReportStatusResponse) String() string {
 func (*ReportStatusResponse) ProtoMessage() {}
 
 func (x *ReportStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[41]
+	mi := &file_edgepb_messages_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3115,7 +3271,7 @@ func (x *ReportStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportStatusResponse.ProtoReflect.Descriptor instead.
 func (*ReportStatusResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{41}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{43}
 }
 
 // [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
@@ -3139,7 +3295,7 @@ type ResolveOwnersRequest struct {
 
 func (x *ResolveOwnersRequest) Reset() {
 	*x = ResolveOwnersRequest{}
-	mi := &file_edgepb_messages_proto_msgTypes[42]
+	mi := &file_edgepb_messages_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3151,7 +3307,7 @@ func (x *ResolveOwnersRequest) String() string {
 func (*ResolveOwnersRequest) ProtoMessage() {}
 
 func (x *ResolveOwnersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[42]
+	mi := &file_edgepb_messages_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3164,7 +3320,7 @@ func (x *ResolveOwnersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveOwnersRequest.ProtoReflect.Descriptor instead.
 func (*ResolveOwnersRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{42}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *ResolveOwnersRequest) GetBaseDomain() string {
@@ -3201,7 +3357,7 @@ type ResolveOwnersResponse struct {
 
 func (x *ResolveOwnersResponse) Reset() {
 	*x = ResolveOwnersResponse{}
-	mi := &file_edgepb_messages_proto_msgTypes[43]
+	mi := &file_edgepb_messages_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3213,7 +3369,7 @@ func (x *ResolveOwnersResponse) String() string {
 func (*ResolveOwnersResponse) ProtoMessage() {}
 
 func (x *ResolveOwnersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[43]
+	mi := &file_edgepb_messages_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3226,7 +3382,7 @@ func (x *ResolveOwnersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveOwnersResponse.ProtoReflect.Descriptor instead.
 func (*ResolveOwnersResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{43}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *ResolveOwnersResponse) GetItems() []*OwnerEntry {
@@ -3267,7 +3423,7 @@ type ResolveRequest struct {
 
 func (x *ResolveRequest) Reset() {
 	*x = ResolveRequest{}
-	mi := &file_edgepb_messages_proto_msgTypes[44]
+	mi := &file_edgepb_messages_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3279,7 +3435,7 @@ func (x *ResolveRequest) String() string {
 func (*ResolveRequest) ProtoMessage() {}
 
 func (x *ResolveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[44]
+	mi := &file_edgepb_messages_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3292,7 +3448,7 @@ func (x *ResolveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveRequest.ProtoReflect.Descriptor instead.
 func (*ResolveRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{44}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *ResolveRequest) GetDomain() string {
@@ -3335,7 +3491,7 @@ type ResolveResponse struct {
 
 func (x *ResolveResponse) Reset() {
 	*x = ResolveResponse{}
-	mi := &file_edgepb_messages_proto_msgTypes[45]
+	mi := &file_edgepb_messages_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3347,7 +3503,7 @@ func (x *ResolveResponse) String() string {
 func (*ResolveResponse) ProtoMessage() {}
 
 func (x *ResolveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[45]
+	mi := &file_edgepb_messages_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3360,7 +3516,7 @@ func (x *ResolveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveResponse.ProtoReflect.Descriptor instead.
 func (*ResolveResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{45}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *ResolveResponse) GetFound() bool {
@@ -3400,7 +3556,7 @@ type ResourceMeta struct {
 
 func (x *ResourceMeta) Reset() {
 	*x = ResourceMeta{}
-	mi := &file_edgepb_messages_proto_msgTypes[46]
+	mi := &file_edgepb_messages_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3412,7 +3568,7 @@ func (x *ResourceMeta) String() string {
 func (*ResourceMeta) ProtoMessage() {}
 
 func (x *ResourceMeta) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[46]
+	mi := &file_edgepb_messages_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3425,7 +3581,7 @@ func (x *ResourceMeta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceMeta.ProtoReflect.Descriptor instead.
 func (*ResourceMeta) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{46}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *ResourceMeta) GetId() int64 {
@@ -3471,7 +3627,7 @@ type Snapshot struct {
 
 func (x *Snapshot) Reset() {
 	*x = Snapshot{}
-	mi := &file_edgepb_messages_proto_msgTypes[47]
+	mi := &file_edgepb_messages_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3483,7 +3639,7 @@ func (x *Snapshot) String() string {
 func (*Snapshot) ProtoMessage() {}
 
 func (x *Snapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[47]
+	mi := &file_edgepb_messages_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3496,7 +3652,7 @@ func (x *Snapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Snapshot.ProtoReflect.Descriptor instead.
 func (*Snapshot) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{47}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *Snapshot) GetSha() string {
@@ -3600,7 +3756,7 @@ type Tunnel struct {
 
 func (x *Tunnel) Reset() {
 	*x = Tunnel{}
-	mi := &file_edgepb_messages_proto_msgTypes[48]
+	mi := &file_edgepb_messages_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3612,7 +3768,7 @@ func (x *Tunnel) String() string {
 func (*Tunnel) ProtoMessage() {}
 
 func (x *Tunnel) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[48]
+	mi := &file_edgepb_messages_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3625,7 +3781,7 @@ func (x *Tunnel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Tunnel.ProtoReflect.Descriptor instead.
 func (*Tunnel) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{48}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *Tunnel) GetMeta() *ResourceMeta {
@@ -3798,7 +3954,7 @@ type ValidateTokenRequest struct {
 
 func (x *ValidateTokenRequest) Reset() {
 	*x = ValidateTokenRequest{}
-	mi := &file_edgepb_messages_proto_msgTypes[49]
+	mi := &file_edgepb_messages_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3810,7 +3966,7 @@ func (x *ValidateTokenRequest) String() string {
 func (*ValidateTokenRequest) ProtoMessage() {}
 
 func (x *ValidateTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[49]
+	mi := &file_edgepb_messages_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3823,7 +3979,7 @@ func (x *ValidateTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateTokenRequest.ProtoReflect.Descriptor instead.
 func (*ValidateTokenRequest) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{49}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *ValidateTokenRequest) GetAccessToken() string {
@@ -3855,7 +4011,7 @@ type ValidateTokenResponse struct {
 
 func (x *ValidateTokenResponse) Reset() {
 	*x = ValidateTokenResponse{}
-	mi := &file_edgepb_messages_proto_msgTypes[50]
+	mi := &file_edgepb_messages_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3867,7 +4023,7 @@ func (x *ValidateTokenResponse) String() string {
 func (*ValidateTokenResponse) ProtoMessage() {}
 
 func (x *ValidateTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_edgepb_messages_proto_msgTypes[50]
+	mi := &file_edgepb_messages_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3880,7 +4036,7 @@ func (x *ValidateTokenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateTokenResponse.ProtoReflect.Descriptor instead.
 func (*ValidateTokenResponse) Descriptor() ([]byte, []int) {
-	return file_edgepb_messages_proto_rawDescGZIP(), []int{50}
+	return file_edgepb_messages_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *ValidateTokenResponse) GetValid() bool {
@@ -3967,7 +4123,7 @@ const file_edgepb_messages_proto_rawDesc = "" +
 	"\rConfigMessage\x12:\n" +
 	"\bsnapshot\x18\x01 \x01(\v2\x1c.calabi.v1.bff_edge.SnapshotH\x00R\bsnapshot\x121\n" +
 	"\x05delta\x18\x02 \x01(\v2\x19.calabi.v1.bff_edge.DeltaH\x00R\x05deltaB\x06\n" +
-	"\x04kind\"\xba\x03\n" +
+	"\x04kind\"\xfd\x03\n" +
 	"\x13CreateTunnelRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\x03R\x05orgId\x12!\n" +
 	"\fworkspace_id\x18\x02 \x01(\x03R\vworkspaceId\x12\x1b\n" +
@@ -3988,7 +4144,17 @@ const file_edgepb_messages_proto_rawDesc = "" +
 	"baseDomain\x12\x1c\n" +
 	"\tsubdomain\x18\f \x01(\tR\tsubdomain\x12\"\n" +
 	"\rcaller_org_id\x18\r \x01(\x03R\vcallerOrgId\x12&\n" +
-	"\x0fcreator_user_id\x18\x0e \x01(\x03R\rcreatorUserId\"I\n" +
+	"\x0fcreator_user_id\x18\x0e \x01(\x03R\rcreatorUserId\x12A\n" +
+	"\x1dclient_proposed_security_json\x18\x0f \x01(\tR\x1aclientProposedSecurityJson\"^\n" +
+	"\x1bGetTunnelOAuthSecretRequest\x12\x1b\n" +
+	"\ttunnel_id\x18\x01 \x01(\x03R\btunnelId\x12\"\n" +
+	"\rcaller_org_id\x18\x02 \x01(\x03R\vcallerOrgId\"\xc4\x01\n" +
+	"\x1cGetTunnelOAuthSecretResponse\x12\x1a\n" +
+	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x1b\n" +
+	"\tclient_id\x18\x02 \x01(\tR\bclientId\x12#\n" +
+	"\rclient_secret\x18\x03 \x01(\tR\fclientSecret\x12!\n" +
+	"\fallow_emails\x18\x04 \x03(\tR\vallowEmails\x12#\n" +
+	"\rallow_domains\x18\x05 \x03(\tR\fallowDomains\"I\n" +
 	"\x13DeleteTunnelRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\"\n" +
 	"\rcaller_org_id\x18\x02 \x01(\x03R\vcallerOrgId\"\x16\n" +
@@ -4134,7 +4300,7 @@ const file_edgepb_messages_proto_rawDesc = "" +
 	"\rfencing_token\x18\a \x01(\x03R\ffencingToken\"i\n" +
 	"\x15ReclaimTunnelResponse\x122\n" +
 	"\x06tunnel\x18\x01 \x01(\v2\x1a.calabi.v1.bff_edge.TunnelR\x06tunnel\x12\x1c\n" +
-	"\treclaimed\x18\x02 \x01(\bR\treclaimed\"\xef\x02\n" +
+	"\treclaimed\x18\x02 \x01(\bR\treclaimed\"\x89\x03\n" +
 	"\x17RegisterEdgeNodeRequest\x12 \n" +
 	"\fedge_node_id\x18\x01 \x01(\x03R\n" +
 	"edgeNodeId\x12\x1d\n" +
@@ -4151,7 +4317,8 @@ const file_edgepb_messages_proto_rawDesc = "" +
 	"\x0frelay_stun_port\x18\t \x01(\x05R\rrelayStunPort\x12\x1f\n" +
 	"\vbase_domain\x18\n" +
 	" \x01(\tR\n" +
-	"baseDomain\"\x1a\n" +
+	"baseDomain\x12\x18\n" +
+	"\aversion\x18\v \x01(\tR\aversion\"\x1a\n" +
 	"\x18RegisterEdgeNodeResponse\"\xc4\x01\n" +
 	"\x1bReportClientPresenceRequest\x12 \n" +
 	"\fedge_node_id\x18\x01 \x01(\x03R\n" +
@@ -4253,97 +4420,99 @@ func file_edgepb_messages_proto_rawDescGZIP() []byte {
 	return file_edgepb_messages_proto_rawDescData
 }
 
-var file_edgepb_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 51)
+var file_edgepb_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 53)
 var file_edgepb_messages_proto_goTypes = []any{
 	(*Ack)(nil),                          // 0: calabi.v1.bff_edge.Ack
 	(*CertMeta)(nil),                     // 1: calabi.v1.bff_edge.CertMeta
 	(*ClaimTunnelRequest)(nil),           // 2: calabi.v1.bff_edge.ClaimTunnelRequest
 	(*ConfigMessage)(nil),                // 3: calabi.v1.bff_edge.ConfigMessage
 	(*CreateTunnelRequest)(nil),          // 4: calabi.v1.bff_edge.CreateTunnelRequest
-	(*DeleteTunnelRequest)(nil),          // 5: calabi.v1.bff_edge.DeleteTunnelRequest
-	(*DeleteTunnelResponse)(nil),         // 6: calabi.v1.bff_edge.DeleteTunnelResponse
-	(*Delta)(nil),                        // 7: calabi.v1.bff_edge.Delta
-	(*DrainEdgeRequest)(nil),             // 8: calabi.v1.bff_edge.DrainEdgeRequest
-	(*DrainEdgeResponse)(nil),            // 9: calabi.v1.bff_edge.DrainEdgeResponse
-	(*EdgeMessage)(nil),                  // 10: calabi.v1.bff_edge.EdgeMessage
-	(*EdgeNode)(nil),                     // 11: calabi.v1.bff_edge.EdgeNode
-	(*EffectiveQuota)(nil),               // 12: calabi.v1.bff_edge.EffectiveQuota
-	(*ErrorDetail)(nil),                  // 13: calabi.v1.bff_edge.ErrorDetail
-	(*GetCertRequest)(nil),               // 14: calabi.v1.bff_edge.GetCertRequest
-	(*GetCertResponse)(nil),              // 15: calabi.v1.bff_edge.GetCertResponse
-	(*GetEffectiveRequest)(nil),          // 16: calabi.v1.bff_edge.GetEffectiveRequest
-	(*GetOrgOnlineCountRequest)(nil),     // 17: calabi.v1.bff_edge.GetOrgOnlineCountRequest
-	(*GetOrgOnlineCountResponse)(nil),    // 18: calabi.v1.bff_edge.GetOrgOnlineCountResponse
-	(*Heartbeat)(nil),                    // 19: calabi.v1.bff_edge.Heartbeat
-	(*HelloEdge)(nil),                    // 20: calabi.v1.bff_edge.HelloEdge
-	(*IssueEdgeCertResponse)(nil),        // 21: calabi.v1.bff_edge.IssueEdgeCertResponse
-	(*ListCertsRequest)(nil),             // 22: calabi.v1.bff_edge.ListCertsRequest
-	(*ListCertsResponse)(nil),            // 23: calabi.v1.bff_edge.ListCertsResponse
-	(*ListEdgeClaimedPortsRequest)(nil),  // 24: calabi.v1.bff_edge.ListEdgeClaimedPortsRequest
-	(*ListEdgeClaimedPortsResponse)(nil), // 25: calabi.v1.bff_edge.ListEdgeClaimedPortsResponse
-	(*ListEdgesRequest)(nil),             // 26: calabi.v1.bff_edge.ListEdgesRequest
-	(*ListEdgesResponse)(nil),            // 27: calabi.v1.bff_edge.ListEdgesResponse
-	(*ListTunnelsRequest)(nil),           // 28: calabi.v1.bff_edge.ListTunnelsRequest
-	(*ListTunnelsResponse)(nil),          // 29: calabi.v1.bff_edge.ListTunnelsResponse
-	(*OwnerEntry)(nil),                   // 30: calabi.v1.bff_edge.OwnerEntry
-	(*PageRequest)(nil),                  // 31: calabi.v1.bff_edge.PageRequest
-	(*PageResponse)(nil),                 // 32: calabi.v1.bff_edge.PageResponse
-	(*PresenceClient)(nil),               // 33: calabi.v1.bff_edge.PresenceClient
-	(*ReclaimTunnelRequest)(nil),         // 34: calabi.v1.bff_edge.ReclaimTunnelRequest
-	(*ReclaimTunnelResponse)(nil),        // 35: calabi.v1.bff_edge.ReclaimTunnelResponse
-	(*RegisterEdgeNodeRequest)(nil),      // 36: calabi.v1.bff_edge.RegisterEdgeNodeRequest
-	(*RegisterEdgeNodeResponse)(nil),     // 37: calabi.v1.bff_edge.RegisterEdgeNodeResponse
-	(*ReportClientPresenceRequest)(nil),  // 38: calabi.v1.bff_edge.ReportClientPresenceRequest
-	(*ReportClientPresenceResponse)(nil), // 39: calabi.v1.bff_edge.ReportClientPresenceResponse
-	(*ReportStatusRequest)(nil),          // 40: calabi.v1.bff_edge.ReportStatusRequest
-	(*ReportStatusResponse)(nil),         // 41: calabi.v1.bff_edge.ReportStatusResponse
-	(*ResolveOwnersRequest)(nil),         // 42: calabi.v1.bff_edge.ResolveOwnersRequest
-	(*ResolveOwnersResponse)(nil),        // 43: calabi.v1.bff_edge.ResolveOwnersResponse
-	(*ResolveRequest)(nil),               // 44: calabi.v1.bff_edge.ResolveRequest
-	(*ResolveResponse)(nil),              // 45: calabi.v1.bff_edge.ResolveResponse
-	(*ResourceMeta)(nil),                 // 46: calabi.v1.bff_edge.ResourceMeta
-	(*Snapshot)(nil),                     // 47: calabi.v1.bff_edge.Snapshot
-	(*Tunnel)(nil),                       // 48: calabi.v1.bff_edge.Tunnel
-	(*ValidateTokenRequest)(nil),         // 49: calabi.v1.bff_edge.ValidateTokenRequest
-	(*ValidateTokenResponse)(nil),        // 50: calabi.v1.bff_edge.ValidateTokenResponse
-	(*timestamppb.Timestamp)(nil),        // 51: google.protobuf.Timestamp
+	(*GetTunnelOAuthSecretRequest)(nil),  // 5: calabi.v1.bff_edge.GetTunnelOAuthSecretRequest
+	(*GetTunnelOAuthSecretResponse)(nil), // 6: calabi.v1.bff_edge.GetTunnelOAuthSecretResponse
+	(*DeleteTunnelRequest)(nil),          // 7: calabi.v1.bff_edge.DeleteTunnelRequest
+	(*DeleteTunnelResponse)(nil),         // 8: calabi.v1.bff_edge.DeleteTunnelResponse
+	(*Delta)(nil),                        // 9: calabi.v1.bff_edge.Delta
+	(*DrainEdgeRequest)(nil),             // 10: calabi.v1.bff_edge.DrainEdgeRequest
+	(*DrainEdgeResponse)(nil),            // 11: calabi.v1.bff_edge.DrainEdgeResponse
+	(*EdgeMessage)(nil),                  // 12: calabi.v1.bff_edge.EdgeMessage
+	(*EdgeNode)(nil),                     // 13: calabi.v1.bff_edge.EdgeNode
+	(*EffectiveQuota)(nil),               // 14: calabi.v1.bff_edge.EffectiveQuota
+	(*ErrorDetail)(nil),                  // 15: calabi.v1.bff_edge.ErrorDetail
+	(*GetCertRequest)(nil),               // 16: calabi.v1.bff_edge.GetCertRequest
+	(*GetCertResponse)(nil),              // 17: calabi.v1.bff_edge.GetCertResponse
+	(*GetEffectiveRequest)(nil),          // 18: calabi.v1.bff_edge.GetEffectiveRequest
+	(*GetOrgOnlineCountRequest)(nil),     // 19: calabi.v1.bff_edge.GetOrgOnlineCountRequest
+	(*GetOrgOnlineCountResponse)(nil),    // 20: calabi.v1.bff_edge.GetOrgOnlineCountResponse
+	(*Heartbeat)(nil),                    // 21: calabi.v1.bff_edge.Heartbeat
+	(*HelloEdge)(nil),                    // 22: calabi.v1.bff_edge.HelloEdge
+	(*IssueEdgeCertResponse)(nil),        // 23: calabi.v1.bff_edge.IssueEdgeCertResponse
+	(*ListCertsRequest)(nil),             // 24: calabi.v1.bff_edge.ListCertsRequest
+	(*ListCertsResponse)(nil),            // 25: calabi.v1.bff_edge.ListCertsResponse
+	(*ListEdgeClaimedPortsRequest)(nil),  // 26: calabi.v1.bff_edge.ListEdgeClaimedPortsRequest
+	(*ListEdgeClaimedPortsResponse)(nil), // 27: calabi.v1.bff_edge.ListEdgeClaimedPortsResponse
+	(*ListEdgesRequest)(nil),             // 28: calabi.v1.bff_edge.ListEdgesRequest
+	(*ListEdgesResponse)(nil),            // 29: calabi.v1.bff_edge.ListEdgesResponse
+	(*ListTunnelsRequest)(nil),           // 30: calabi.v1.bff_edge.ListTunnelsRequest
+	(*ListTunnelsResponse)(nil),          // 31: calabi.v1.bff_edge.ListTunnelsResponse
+	(*OwnerEntry)(nil),                   // 32: calabi.v1.bff_edge.OwnerEntry
+	(*PageRequest)(nil),                  // 33: calabi.v1.bff_edge.PageRequest
+	(*PageResponse)(nil),                 // 34: calabi.v1.bff_edge.PageResponse
+	(*PresenceClient)(nil),               // 35: calabi.v1.bff_edge.PresenceClient
+	(*ReclaimTunnelRequest)(nil),         // 36: calabi.v1.bff_edge.ReclaimTunnelRequest
+	(*ReclaimTunnelResponse)(nil),        // 37: calabi.v1.bff_edge.ReclaimTunnelResponse
+	(*RegisterEdgeNodeRequest)(nil),      // 38: calabi.v1.bff_edge.RegisterEdgeNodeRequest
+	(*RegisterEdgeNodeResponse)(nil),     // 39: calabi.v1.bff_edge.RegisterEdgeNodeResponse
+	(*ReportClientPresenceRequest)(nil),  // 40: calabi.v1.bff_edge.ReportClientPresenceRequest
+	(*ReportClientPresenceResponse)(nil), // 41: calabi.v1.bff_edge.ReportClientPresenceResponse
+	(*ReportStatusRequest)(nil),          // 42: calabi.v1.bff_edge.ReportStatusRequest
+	(*ReportStatusResponse)(nil),         // 43: calabi.v1.bff_edge.ReportStatusResponse
+	(*ResolveOwnersRequest)(nil),         // 44: calabi.v1.bff_edge.ResolveOwnersRequest
+	(*ResolveOwnersResponse)(nil),        // 45: calabi.v1.bff_edge.ResolveOwnersResponse
+	(*ResolveRequest)(nil),               // 46: calabi.v1.bff_edge.ResolveRequest
+	(*ResolveResponse)(nil),              // 47: calabi.v1.bff_edge.ResolveResponse
+	(*ResourceMeta)(nil),                 // 48: calabi.v1.bff_edge.ResourceMeta
+	(*Snapshot)(nil),                     // 49: calabi.v1.bff_edge.Snapshot
+	(*Tunnel)(nil),                       // 50: calabi.v1.bff_edge.Tunnel
+	(*ValidateTokenRequest)(nil),         // 51: calabi.v1.bff_edge.ValidateTokenRequest
+	(*ValidateTokenResponse)(nil),        // 52: calabi.v1.bff_edge.ValidateTokenResponse
+	(*timestamppb.Timestamp)(nil),        // 53: google.protobuf.Timestamp
 }
 var file_edgepb_messages_proto_depIdxs = []int32{
-	46, // 0: calabi.v1.bff_edge.CertMeta.meta:type_name -> calabi.v1.bff_edge.ResourceMeta
-	51, // 1: calabi.v1.bff_edge.CertMeta.not_before:type_name -> google.protobuf.Timestamp
-	51, // 2: calabi.v1.bff_edge.CertMeta.not_after:type_name -> google.protobuf.Timestamp
-	51, // 3: calabi.v1.bff_edge.CertMeta.renew_at:type_name -> google.protobuf.Timestamp
-	51, // 4: calabi.v1.bff_edge.CertMeta.revoked_at:type_name -> google.protobuf.Timestamp
-	47, // 5: calabi.v1.bff_edge.ConfigMessage.snapshot:type_name -> calabi.v1.bff_edge.Snapshot
-	7,  // 6: calabi.v1.bff_edge.ConfigMessage.delta:type_name -> calabi.v1.bff_edge.Delta
-	20, // 7: calabi.v1.bff_edge.EdgeMessage.hello:type_name -> calabi.v1.bff_edge.HelloEdge
+	48, // 0: calabi.v1.bff_edge.CertMeta.meta:type_name -> calabi.v1.bff_edge.ResourceMeta
+	53, // 1: calabi.v1.bff_edge.CertMeta.not_before:type_name -> google.protobuf.Timestamp
+	53, // 2: calabi.v1.bff_edge.CertMeta.not_after:type_name -> google.protobuf.Timestamp
+	53, // 3: calabi.v1.bff_edge.CertMeta.renew_at:type_name -> google.protobuf.Timestamp
+	53, // 4: calabi.v1.bff_edge.CertMeta.revoked_at:type_name -> google.protobuf.Timestamp
+	49, // 5: calabi.v1.bff_edge.ConfigMessage.snapshot:type_name -> calabi.v1.bff_edge.Snapshot
+	9,  // 6: calabi.v1.bff_edge.ConfigMessage.delta:type_name -> calabi.v1.bff_edge.Delta
+	22, // 7: calabi.v1.bff_edge.EdgeMessage.hello:type_name -> calabi.v1.bff_edge.HelloEdge
 	0,  // 8: calabi.v1.bff_edge.EdgeMessage.ack:type_name -> calabi.v1.bff_edge.Ack
-	19, // 9: calabi.v1.bff_edge.EdgeMessage.beat:type_name -> calabi.v1.bff_edge.Heartbeat
-	51, // 10: calabi.v1.bff_edge.EdgeNode.last_seen_at:type_name -> google.protobuf.Timestamp
+	21, // 9: calabi.v1.bff_edge.EdgeMessage.beat:type_name -> calabi.v1.bff_edge.Heartbeat
+	53, // 10: calabi.v1.bff_edge.EdgeNode.last_seen_at:type_name -> google.protobuf.Timestamp
 	1,  // 11: calabi.v1.bff_edge.GetCertResponse.cert:type_name -> calabi.v1.bff_edge.CertMeta
-	13, // 12: calabi.v1.bff_edge.GetCertResponse.error:type_name -> calabi.v1.bff_edge.ErrorDetail
-	51, // 13: calabi.v1.bff_edge.Heartbeat.ts:type_name -> google.protobuf.Timestamp
-	51, // 14: calabi.v1.bff_edge.IssueEdgeCertResponse.not_before:type_name -> google.protobuf.Timestamp
-	51, // 15: calabi.v1.bff_edge.IssueEdgeCertResponse.not_after:type_name -> google.protobuf.Timestamp
-	31, // 16: calabi.v1.bff_edge.ListCertsRequest.page:type_name -> calabi.v1.bff_edge.PageRequest
+	15, // 12: calabi.v1.bff_edge.GetCertResponse.error:type_name -> calabi.v1.bff_edge.ErrorDetail
+	53, // 13: calabi.v1.bff_edge.Heartbeat.ts:type_name -> google.protobuf.Timestamp
+	53, // 14: calabi.v1.bff_edge.IssueEdgeCertResponse.not_before:type_name -> google.protobuf.Timestamp
+	53, // 15: calabi.v1.bff_edge.IssueEdgeCertResponse.not_after:type_name -> google.protobuf.Timestamp
+	33, // 16: calabi.v1.bff_edge.ListCertsRequest.page:type_name -> calabi.v1.bff_edge.PageRequest
 	1,  // 17: calabi.v1.bff_edge.ListCertsResponse.items:type_name -> calabi.v1.bff_edge.CertMeta
-	32, // 18: calabi.v1.bff_edge.ListCertsResponse.page:type_name -> calabi.v1.bff_edge.PageResponse
-	11, // 19: calabi.v1.bff_edge.ListEdgesResponse.items:type_name -> calabi.v1.bff_edge.EdgeNode
-	31, // 20: calabi.v1.bff_edge.ListTunnelsRequest.page:type_name -> calabi.v1.bff_edge.PageRequest
-	48, // 21: calabi.v1.bff_edge.ListTunnelsResponse.items:type_name -> calabi.v1.bff_edge.Tunnel
-	32, // 22: calabi.v1.bff_edge.ListTunnelsResponse.page:type_name -> calabi.v1.bff_edge.PageResponse
-	48, // 23: calabi.v1.bff_edge.ReclaimTunnelResponse.tunnel:type_name -> calabi.v1.bff_edge.Tunnel
-	33, // 24: calabi.v1.bff_edge.ReportClientPresenceRequest.clients:type_name -> calabi.v1.bff_edge.PresenceClient
-	30, // 25: calabi.v1.bff_edge.ResolveOwnersResponse.items:type_name -> calabi.v1.bff_edge.OwnerEntry
-	48, // 26: calabi.v1.bff_edge.ResolveResponse.tunnel:type_name -> calabi.v1.bff_edge.Tunnel
-	13, // 27: calabi.v1.bff_edge.ResolveResponse.error:type_name -> calabi.v1.bff_edge.ErrorDetail
-	51, // 28: calabi.v1.bff_edge.ResourceMeta.created_at:type_name -> google.protobuf.Timestamp
-	51, // 29: calabi.v1.bff_edge.ResourceMeta.updated_at:type_name -> google.protobuf.Timestamp
-	51, // 30: calabi.v1.bff_edge.ResourceMeta.deleted_at:type_name -> google.protobuf.Timestamp
-	46, // 31: calabi.v1.bff_edge.Tunnel.meta:type_name -> calabi.v1.bff_edge.ResourceMeta
-	51, // 32: calabi.v1.bff_edge.Tunnel.client_last_seen_at:type_name -> google.protobuf.Timestamp
-	51, // 33: calabi.v1.bff_edge.ValidateTokenResponse.expires_at:type_name -> google.protobuf.Timestamp
-	13, // 34: calabi.v1.bff_edge.ValidateTokenResponse.error:type_name -> calabi.v1.bff_edge.ErrorDetail
+	34, // 18: calabi.v1.bff_edge.ListCertsResponse.page:type_name -> calabi.v1.bff_edge.PageResponse
+	13, // 19: calabi.v1.bff_edge.ListEdgesResponse.items:type_name -> calabi.v1.bff_edge.EdgeNode
+	33, // 20: calabi.v1.bff_edge.ListTunnelsRequest.page:type_name -> calabi.v1.bff_edge.PageRequest
+	50, // 21: calabi.v1.bff_edge.ListTunnelsResponse.items:type_name -> calabi.v1.bff_edge.Tunnel
+	34, // 22: calabi.v1.bff_edge.ListTunnelsResponse.page:type_name -> calabi.v1.bff_edge.PageResponse
+	50, // 23: calabi.v1.bff_edge.ReclaimTunnelResponse.tunnel:type_name -> calabi.v1.bff_edge.Tunnel
+	35, // 24: calabi.v1.bff_edge.ReportClientPresenceRequest.clients:type_name -> calabi.v1.bff_edge.PresenceClient
+	32, // 25: calabi.v1.bff_edge.ResolveOwnersResponse.items:type_name -> calabi.v1.bff_edge.OwnerEntry
+	50, // 26: calabi.v1.bff_edge.ResolveResponse.tunnel:type_name -> calabi.v1.bff_edge.Tunnel
+	15, // 27: calabi.v1.bff_edge.ResolveResponse.error:type_name -> calabi.v1.bff_edge.ErrorDetail
+	53, // 28: calabi.v1.bff_edge.ResourceMeta.created_at:type_name -> google.protobuf.Timestamp
+	53, // 29: calabi.v1.bff_edge.ResourceMeta.updated_at:type_name -> google.protobuf.Timestamp
+	53, // 30: calabi.v1.bff_edge.ResourceMeta.deleted_at:type_name -> google.protobuf.Timestamp
+	48, // 31: calabi.v1.bff_edge.Tunnel.meta:type_name -> calabi.v1.bff_edge.ResourceMeta
+	53, // 32: calabi.v1.bff_edge.Tunnel.client_last_seen_at:type_name -> google.protobuf.Timestamp
+	53, // 33: calabi.v1.bff_edge.ValidateTokenResponse.expires_at:type_name -> google.protobuf.Timestamp
+	15, // 34: calabi.v1.bff_edge.ValidateTokenResponse.error:type_name -> calabi.v1.bff_edge.ErrorDetail
 	35, // [35:35] is the sub-list for method output_type
 	35, // [35:35] is the sub-list for method input_type
 	35, // [35:35] is the sub-list for extension type_name
@@ -4360,7 +4529,7 @@ func file_edgepb_messages_proto_init() {
 		(*ConfigMessage_Snapshot)(nil),
 		(*ConfigMessage_Delta)(nil),
 	}
-	file_edgepb_messages_proto_msgTypes[10].OneofWrappers = []any{
+	file_edgepb_messages_proto_msgTypes[12].OneofWrappers = []any{
 		(*EdgeMessage_Hello)(nil),
 		(*EdgeMessage_Ack)(nil),
 		(*EdgeMessage_Beat)(nil),
@@ -4371,7 +4540,7 @@ func file_edgepb_messages_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_edgepb_messages_proto_rawDesc), len(file_edgepb_messages_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   51,
+			NumMessages:   53,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

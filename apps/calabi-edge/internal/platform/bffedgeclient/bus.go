@@ -35,9 +35,9 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	bffedge "github.com/calabi/calabi/pkg/edge-proto/edgepb"
-	"github.com/calabi/calabi/pkg/certevents"
 	eventbus "github.com/calabi/calabi/apps/calabi-edge/internal/bus"
+	"github.com/calabi/calabi/pkg/certevents"
+	bffedge "github.com/calabi/calabi/pkg/edge-proto/edgepb"
 )
 
 // Bus implements eventbus.Bus on top of bff_edge.BFFEdgeClient. Safe
@@ -52,9 +52,9 @@ type Bus struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	mu        sync.Mutex
-	subs      []*subscription
-	closed    bool
+	mu     sync.Mutex
+	subs   []*subscription
+	closed bool
 }
 
 // NewBus wraps client with the eventbus.Bus surface. The parent ctx
@@ -83,6 +83,9 @@ func (b *Bus) Publish(subject string, payload []byte) error {
 	if subject == "calabi.usage.relay" {
 		return b.publishRelayUsageReport(payload)
 	}
+	if subject == "calabi.access.report" {
+		return b.publishAccessReport(payload)
+	}
 	b.logger.Warn("bff-edge Publish: unmapped subject; dropping",
 		"subject", subject, "bytes", len(payload))
 	return nil
@@ -93,15 +96,22 @@ func (b *Bus) Publish(subject string, payload []byte) error {
 // Errors that aren't transport-level get demoted to "warn + drop"
 // so a single malformed report doesn't poison the tick.
 func (b *Bus) publishUsageReport(payload []byte) error {
-	// Mirror apps/calabi-edge/internal/usage.Report — fields named to
-	// match the legacy wire format used on cluster NATS.
+	// Mirror apps/calabi-edge/internal/usage.Report. We deliberately DON'T decode
+	// edge_node_id / node_label: bff-edge re-stamps the edge identity from the
+	// authenticated cert (see ReportUsage), so this bridge never needs them — and
+	// decoding edge_node_id was actively harmful. The 2026-09 cutover changed it
+	// from a string (node label) to a NUMBER (numeric edge id); a `string`-typed
+	// field here made json.Unmarshal fail on every post-cutover report, and the
+	// error path below silently drops it (returns nil). That zeroed out ALL usage
+	// for cross-region / BYOI edges (which publish through this bridge) for weeks,
+	// with no error anywhere downstream. Omitting the field makes the decode
+	// immune to whatever type edge_node_id carries.
 	var rep struct {
-		EdgeNodeID string `json:"edge_node_id"`
-		OrgID      int64  `json:"org_id"`
-		TunnelID   int64  `json:"tunnel_id"`
-		Timestamp  int64  `json:"ts"`
-		BytesIn    uint64 `json:"bytes_in"`
-		BytesOut   uint64 `json:"bytes_out"`
+		OrgID     int64  `json:"org_id"`
+		TunnelID  int64  `json:"tunnel_id"`
+		Timestamp int64  `json:"ts"`
+		BytesIn   uint64 `json:"bytes_in"`
+		BytesOut  uint64 `json:"bytes_out"`
 	}
 	if err := json.Unmarshal(payload, &rep); err != nil {
 		b.logger.Warn("bff-edge Publish: unmarshal usage report failed",
@@ -123,6 +133,55 @@ func (b *Bus) publishUsageReport(payload []byte) error {
 	}
 	if _, err := b.client.ReportUsage(ctx, req); err != nil {
 		return fmt.Errorf("bff-edge ReportUsage: %w", err)
+	}
+	return nil
+}
+
+// publishAccessReport forwards a batch of tunnel access records.
+//
+// Without this mapping a BYOI edge's records would hit the unmapped-subject
+// branch above: a warning line every minute and a permanently empty audit trail
+// for exactly the orgs that paid for their own edge. A trail that is
+// systematically incomplete is worse than none, because "no record" reads as
+// "it did not happen".
+//
+// A whole batch goes in ONE RPC. The edge already split its flush into messages
+// of at most 500 rows, so a batch is bounded, and one round trip per flush is
+// the amortization this transport exists for.
+func (b *Bus) publishAccessReport(payload []byte) error {
+	// Mirror apps/calabi-edge/internal/platform/access.Report.
+	var rep struct {
+		Rows []struct {
+			OrgID     int64  `json:"org_id"`
+			TunnelID  int64  `json:"tunnel_id"`
+			VisitorIP string `json:"visitor_ip"`
+			Outcome   string `json:"outcome"`
+			Hour      int64  `json:"hour"`
+			Conns     int64  `json:"conns"`
+		} `json:"rows"`
+	}
+	if err := json.Unmarshal(payload, &rep); err != nil {
+		b.logger.Warn("bff-edge Publish: unmarshal access report failed", "err", err)
+		return nil
+	}
+	if len(rep.Rows) == 0 {
+		return nil
+	}
+	rows := make([]*bffedge.AccessRecordRow, 0, len(rep.Rows))
+	for _, r := range rep.Rows {
+		rows = append(rows, &bffedge.AccessRecordRow{
+			OrgId:     r.OrgID,
+			TunnelId:  r.TunnelID,
+			VisitorIp: r.VisitorIP,
+			Outcome:   r.Outcome,
+			Hour:      r.Hour,
+			Conns:     r.Conns,
+		})
+	}
+	ctx, cancel := context.WithTimeout(b.ctx, 5*time.Second)
+	defer cancel()
+	if _, err := b.client.ReportAccess(ctx, &bffedge.ReportAccessRequest{Rows: rows}); err != nil {
+		return fmt.Errorf("bff-edge ReportAccess: %w", err)
 	}
 	return nil
 }
@@ -226,9 +285,9 @@ func (b *Bus) Close() error {
 // ===================== Stream subscription glue =====================
 
 type subscription struct {
-	logger  *slog.Logger
-	cancel  context.CancelFunc
-	doneCh  chan struct{}
+	logger *slog.Logger
+	cancel context.CancelFunc
+	doneCh chan struct{}
 }
 
 func (s *subscription) Drain() error {

@@ -25,6 +25,20 @@ type NodeQuota interface {
 	Admit(ctx context.Context, t MeshnetID, current int) (allowed bool, limit int, reason string, err error)
 }
 
+// MemberNodeQuota is the member-aware half, kept as a SEPARATE interface on
+// purpose: NodeQuota is what a self-hoster implements to plug this coordinator
+// into their own platform, and widening it would break every outside
+// implementation along with StaticNodeQuota and UnlimitedNodeQuota below. A
+// backend that understands per-member caps implements both; the coordinator
+// type-asserts for this one and falls back to NodeQuota when it is absent.
+//
+// ownerCurrent is how many ACTIVE nodes ownerUserID already has — the same
+// caller-supplies-the-count contract as current, narrowed to one person.
+type MemberNodeQuota interface {
+	NodeQuota
+	AdmitMember(ctx context.Context, t MeshnetID, ownerUserID int64, current, ownerCurrent int) (allowed bool, limit int, reason string, err error)
+}
+
 // UnlimitedNodeQuota admits everything. Default when no cap is configured (dev,
 // and self-hosted self-hosts that don't set CALABI_COORD_NODE_QUOTA).
 type UnlimitedNodeQuota struct{}

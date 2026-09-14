@@ -9,6 +9,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/calabi/calabi/apps/calabi-edge/internal/accesslog"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/ratelimit"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
 	proto "github.com/calabi/calabi/pkg/protocol"
@@ -88,12 +89,14 @@ func handleTCPConn(logger *slog.Logger, visitor net.Conn, sess *session.Session,
 				if obs != nil {
 					obs.OnVisitorRequest("tcp", "ip_denied")
 				}
+				noteAccessAddr(sess, proxyID, visitor.RemoteAddr(), accesslog.DeniedIP)
 				return
 			}
-			if pol.HasRateLimit() && !pol.AllowRate() {
+			if pol.HasRateLimit() && !pol.AllowRate(extractIP(visitor.RemoteAddr())) {
 				if obs != nil {
 					obs.OnVisitorRequest("tcp", "rate_limited")
 				}
+				noteAccessAddr(sess, proxyID, visitor.RemoteAddr(), accesslog.DeniedRate)
 				return
 			}
 		}
@@ -142,6 +145,7 @@ func handleTCPConn(logger *slog.Logger, visitor net.Conn, sess *session.Session,
 		return
 	}
 	defer stream.Close()
+	noteAccessAddr(sess, proxyID, visitor.RemoteAddr(), accesslog.Allowed)
 
 	if obs != nil {
 		obs.OnVisitorRequest("tcp", "ok")

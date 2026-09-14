@@ -16,10 +16,11 @@
 // deployments point at their own console.
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Form, Input, Space, Typography } from "antd";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../api/client";
+import type { AccountMe } from "../api/types";
 import Logo from "../components/Logo";
 import { useServiceMode } from "../hooks/use-service-mode";
 import { useTranslation } from "react-i18next";
@@ -70,6 +71,18 @@ export default function Login() {
   // Agent mode pins one identity and the daemon 403s login — there's nothing to
   // sign into here, and /v1/me already authed us. Bounce to the console.
   const { agentMode, consoleWebUrl } = useServiceMode();
+  // Landing here doesn't prove the session is gone: one transient 401 on
+  // AuthGate's /v1/me poll is enough to send the page here. Ask again on arrival
+  // and whenever the tab regains focus, and go back as soon as the daemon's
+  // session answers. isSuccess, not data: a failed refetch keeps the old data,
+  // and navigating on that would bounce between here and AuthGate forever.
+  const me = useQuery<AccountMe>({
+    queryKey: ["me"],
+    queryFn: api.me,
+    retry: false,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  });
 
   const login = useMutation({
     mutationFn: (body: LoginForm) => api.login(body),
@@ -107,7 +120,7 @@ export default function Login() {
     },
   });
 
-  if (agentMode) {
+  if (agentMode || me.isSuccess) {
     return <Navigate to="/overview" replace />;
   }
 

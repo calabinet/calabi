@@ -62,7 +62,7 @@ func (*MeshService) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the MeshService fields.
-func (_m *MeshService) assignValues(columns []string, values []any) error {
+func (ms *MeshService) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -73,69 +73,69 @@ func (_m *MeshService) assignValues(columns []string, values []any) error {
 			if !ok {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
-			_m.ID = int(value.Int64)
+			ms.ID = int(value.Int64)
 		case meshservice.FieldMeshnetID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field meshnet_id", values[i])
 			} else if value.Valid {
-				_m.MeshnetID = value.Int64
+				ms.MeshnetID = value.Int64
 			}
 		case meshservice.FieldNodeID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field node_id", values[i])
 			} else if value.Valid {
-				_m.NodeID = value.Int64
+				ms.NodeID = value.Int64
 			}
 		case meshservice.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
-				_m.Name = value.String
+				ms.Name = value.String
 			}
 		case meshservice.FieldProto:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field proto", values[i])
 			} else if value.Valid {
-				_m.Proto = value.String
+				ms.Proto = value.String
 			}
 		case meshservice.FieldPort:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field port", values[i])
 			} else if value.Valid {
-				_m.Port = int(value.Int64)
+				ms.Port = int(value.Int64)
 			}
 		case meshservice.FieldTarget:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field target", values[i])
 			} else if value.Valid {
-				_m.Target = value.String
+				ms.Target = value.String
 			}
 		case meshservice.FieldNote:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field note", values[i])
 			} else if value.Valid {
-				_m.Note = value.String
+				ms.Note = value.String
 			}
 		case meshservice.FieldSource:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field source", values[i])
 			} else if value.Valid {
-				_m.Source = value.String
+				ms.Source = value.String
 			}
 		case meshservice.FieldApproved:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field approved", values[i])
 			} else if value.Valid {
-				_m.Approved = value.Bool
+				ms.Approved = value.Bool
 			}
 		case meshservice.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				_m.CreatedAt = value.Time
+				ms.CreatedAt = value.Time
 			}
 		default:
-			_m.selectValues.Set(columns[i], values[i])
+			ms.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -143,62 +143,62 @@ func (_m *MeshService) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the MeshService.
 // This includes values selected through modifiers, order, etc.
-func (_m *MeshService) Value(name string) (ent.Value, error) {
-	return _m.selectValues.Get(name)
+func (ms *MeshService) Value(name string) (ent.Value, error) {
+	return ms.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this MeshService.
 // Note that you need to call MeshService.Unwrap() before calling this method if this MeshService
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (_m *MeshService) Update() *MeshServiceUpdateOne {
-	return NewMeshServiceClient(_m.config).UpdateOne(_m)
+func (ms *MeshService) Update() *MeshServiceUpdateOne {
+	return NewMeshServiceClient(ms.config).UpdateOne(ms)
 }
 
 // Unwrap unwraps the MeshService entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (_m *MeshService) Unwrap() *MeshService {
-	_tx, ok := _m.config.driver.(*txDriver)
+func (ms *MeshService) Unwrap() *MeshService {
+	_tx, ok := ms.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: MeshService is not a transactional entity")
 	}
-	_m.config.driver = _tx.drv
-	return _m
+	ms.config.driver = _tx.drv
+	return ms
 }
 
 // String implements the fmt.Stringer.
-func (_m *MeshService) String() string {
+func (ms *MeshService) String() string {
 	var builder strings.Builder
 	builder.WriteString("MeshService(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", ms.ID))
 	builder.WriteString("meshnet_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.MeshnetID))
+	builder.WriteString(fmt.Sprintf("%v", ms.MeshnetID))
 	builder.WriteString(", ")
 	builder.WriteString("node_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.NodeID))
+	builder.WriteString(fmt.Sprintf("%v", ms.NodeID))
 	builder.WriteString(", ")
 	builder.WriteString("name=")
-	builder.WriteString(_m.Name)
+	builder.WriteString(ms.Name)
 	builder.WriteString(", ")
 	builder.WriteString("proto=")
-	builder.WriteString(_m.Proto)
+	builder.WriteString(ms.Proto)
 	builder.WriteString(", ")
 	builder.WriteString("port=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Port))
+	builder.WriteString(fmt.Sprintf("%v", ms.Port))
 	builder.WriteString(", ")
 	builder.WriteString("target=")
-	builder.WriteString(_m.Target)
+	builder.WriteString(ms.Target)
 	builder.WriteString(", ")
 	builder.WriteString("note=")
-	builder.WriteString(_m.Note)
+	builder.WriteString(ms.Note)
 	builder.WriteString(", ")
 	builder.WriteString("source=")
-	builder.WriteString(_m.Source)
+	builder.WriteString(ms.Source)
 	builder.WriteString(", ")
 	builder.WriteString("approved=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Approved))
+	builder.WriteString(fmt.Sprintf("%v", ms.Approved))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(ms.CreatedAt.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }

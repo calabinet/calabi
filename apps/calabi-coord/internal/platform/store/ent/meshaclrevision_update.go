@@ -22,73 +22,73 @@ type MeshACLRevisionUpdate struct {
 }
 
 // Where appends a list predicates to the MeshACLRevisionUpdate builder.
-func (_u *MeshACLRevisionUpdate) Where(ps ...predicate.MeshACLRevision) *MeshACLRevisionUpdate {
-	_u.mutation.Where(ps...)
-	return _u
+func (maru *MeshACLRevisionUpdate) Where(ps ...predicate.MeshACLRevision) *MeshACLRevisionUpdate {
+	maru.mutation.Where(ps...)
+	return maru
 }
 
 // SetMeshnetID sets the "meshnet_id" field.
-func (_u *MeshACLRevisionUpdate) SetMeshnetID(v int64) *MeshACLRevisionUpdate {
-	_u.mutation.ResetMeshnetID()
-	_u.mutation.SetMeshnetID(v)
-	return _u
+func (maru *MeshACLRevisionUpdate) SetMeshnetID(i int64) *MeshACLRevisionUpdate {
+	maru.mutation.ResetMeshnetID()
+	maru.mutation.SetMeshnetID(i)
+	return maru
 }
 
 // SetNillableMeshnetID sets the "meshnet_id" field if the given value is not nil.
-func (_u *MeshACLRevisionUpdate) SetNillableMeshnetID(v *int64) *MeshACLRevisionUpdate {
-	if v != nil {
-		_u.SetMeshnetID(*v)
+func (maru *MeshACLRevisionUpdate) SetNillableMeshnetID(i *int64) *MeshACLRevisionUpdate {
+	if i != nil {
+		maru.SetMeshnetID(*i)
 	}
-	return _u
+	return maru
 }
 
-// AddMeshnetID adds value to the "meshnet_id" field.
-func (_u *MeshACLRevisionUpdate) AddMeshnetID(v int64) *MeshACLRevisionUpdate {
-	_u.mutation.AddMeshnetID(v)
-	return _u
+// AddMeshnetID adds i to the "meshnet_id" field.
+func (maru *MeshACLRevisionUpdate) AddMeshnetID(i int64) *MeshACLRevisionUpdate {
+	maru.mutation.AddMeshnetID(i)
+	return maru
 }
 
 // SetPolicyJSON sets the "policy_json" field.
-func (_u *MeshACLRevisionUpdate) SetPolicyJSON(v string) *MeshACLRevisionUpdate {
-	_u.mutation.SetPolicyJSON(v)
-	return _u
+func (maru *MeshACLRevisionUpdate) SetPolicyJSON(s string) *MeshACLRevisionUpdate {
+	maru.mutation.SetPolicyJSON(s)
+	return maru
 }
 
 // SetNillablePolicyJSON sets the "policy_json" field if the given value is not nil.
-func (_u *MeshACLRevisionUpdate) SetNillablePolicyJSON(v *string) *MeshACLRevisionUpdate {
-	if v != nil {
-		_u.SetPolicyJSON(*v)
+func (maru *MeshACLRevisionUpdate) SetNillablePolicyJSON(s *string) *MeshACLRevisionUpdate {
+	if s != nil {
+		maru.SetPolicyJSON(*s)
 	}
-	return _u
+	return maru
 }
 
 // SetActor sets the "actor" field.
-func (_u *MeshACLRevisionUpdate) SetActor(v string) *MeshACLRevisionUpdate {
-	_u.mutation.SetActor(v)
-	return _u
+func (maru *MeshACLRevisionUpdate) SetActor(s string) *MeshACLRevisionUpdate {
+	maru.mutation.SetActor(s)
+	return maru
 }
 
 // SetNillableActor sets the "actor" field if the given value is not nil.
-func (_u *MeshACLRevisionUpdate) SetNillableActor(v *string) *MeshACLRevisionUpdate {
-	if v != nil {
-		_u.SetActor(*v)
+func (maru *MeshACLRevisionUpdate) SetNillableActor(s *string) *MeshACLRevisionUpdate {
+	if s != nil {
+		maru.SetActor(*s)
 	}
-	return _u
+	return maru
 }
 
 // Mutation returns the MeshACLRevisionMutation object of the builder.
-func (_u *MeshACLRevisionUpdate) Mutation() *MeshACLRevisionMutation {
-	return _u.mutation
+func (maru *MeshACLRevisionUpdate) Mutation() *MeshACLRevisionMutation {
+	return maru.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (_u *MeshACLRevisionUpdate) Save(ctx context.Context) (int, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+func (maru *MeshACLRevisionUpdate) Save(ctx context.Context) (int, error) {
+	return withHooks(ctx, maru.sqlSave, maru.mutation, maru.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_u *MeshACLRevisionUpdate) SaveX(ctx context.Context) int {
-	affected, err := _u.Save(ctx)
+func (maru *MeshACLRevisionUpdate) SaveX(ctx context.Context) int {
+	affected, err := maru.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -96,40 +96,40 @@ func (_u *MeshACLRevisionUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (_u *MeshACLRevisionUpdate) Exec(ctx context.Context) error {
-	_, err := _u.Save(ctx)
+func (maru *MeshACLRevisionUpdate) Exec(ctx context.Context) error {
+	_, err := maru.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_u *MeshACLRevisionUpdate) ExecX(ctx context.Context) {
-	if err := _u.Exec(ctx); err != nil {
+func (maru *MeshACLRevisionUpdate) ExecX(ctx context.Context) {
+	if err := maru.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
-func (_u *MeshACLRevisionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+func (maru *MeshACLRevisionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(meshaclrevision.Table, meshaclrevision.Columns, sqlgraph.NewFieldSpec(meshaclrevision.FieldID, field.TypeInt))
-	if ps := _u.mutation.predicates; len(ps) > 0 {
+	if ps := maru.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := _u.mutation.MeshnetID(); ok {
+	if value, ok := maru.mutation.MeshnetID(); ok {
 		_spec.SetField(meshaclrevision.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.AddedMeshnetID(); ok {
+	if value, ok := maru.mutation.AddedMeshnetID(); ok {
 		_spec.AddField(meshaclrevision.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.PolicyJSON(); ok {
+	if value, ok := maru.mutation.PolicyJSON(); ok {
 		_spec.SetField(meshaclrevision.FieldPolicyJSON, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Actor(); ok {
+	if value, ok := maru.mutation.Actor(); ok {
 		_spec.SetField(meshaclrevision.FieldActor, field.TypeString, value)
 	}
-	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
+	if n, err = sqlgraph.UpdateNodes(ctx, maru.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{meshaclrevision.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -137,8 +137,8 @@ func (_u *MeshACLRevisionUpdate) sqlSave(ctx context.Context) (_node int, err er
 		}
 		return 0, err
 	}
-	_u.mutation.done = true
-	return _node, nil
+	maru.mutation.done = true
+	return n, nil
 }
 
 // MeshACLRevisionUpdateOne is the builder for updating a single MeshACLRevision entity.
@@ -150,80 +150,80 @@ type MeshACLRevisionUpdateOne struct {
 }
 
 // SetMeshnetID sets the "meshnet_id" field.
-func (_u *MeshACLRevisionUpdateOne) SetMeshnetID(v int64) *MeshACLRevisionUpdateOne {
-	_u.mutation.ResetMeshnetID()
-	_u.mutation.SetMeshnetID(v)
-	return _u
+func (maruo *MeshACLRevisionUpdateOne) SetMeshnetID(i int64) *MeshACLRevisionUpdateOne {
+	maruo.mutation.ResetMeshnetID()
+	maruo.mutation.SetMeshnetID(i)
+	return maruo
 }
 
 // SetNillableMeshnetID sets the "meshnet_id" field if the given value is not nil.
-func (_u *MeshACLRevisionUpdateOne) SetNillableMeshnetID(v *int64) *MeshACLRevisionUpdateOne {
-	if v != nil {
-		_u.SetMeshnetID(*v)
+func (maruo *MeshACLRevisionUpdateOne) SetNillableMeshnetID(i *int64) *MeshACLRevisionUpdateOne {
+	if i != nil {
+		maruo.SetMeshnetID(*i)
 	}
-	return _u
+	return maruo
 }
 
-// AddMeshnetID adds value to the "meshnet_id" field.
-func (_u *MeshACLRevisionUpdateOne) AddMeshnetID(v int64) *MeshACLRevisionUpdateOne {
-	_u.mutation.AddMeshnetID(v)
-	return _u
+// AddMeshnetID adds i to the "meshnet_id" field.
+func (maruo *MeshACLRevisionUpdateOne) AddMeshnetID(i int64) *MeshACLRevisionUpdateOne {
+	maruo.mutation.AddMeshnetID(i)
+	return maruo
 }
 
 // SetPolicyJSON sets the "policy_json" field.
-func (_u *MeshACLRevisionUpdateOne) SetPolicyJSON(v string) *MeshACLRevisionUpdateOne {
-	_u.mutation.SetPolicyJSON(v)
-	return _u
+func (maruo *MeshACLRevisionUpdateOne) SetPolicyJSON(s string) *MeshACLRevisionUpdateOne {
+	maruo.mutation.SetPolicyJSON(s)
+	return maruo
 }
 
 // SetNillablePolicyJSON sets the "policy_json" field if the given value is not nil.
-func (_u *MeshACLRevisionUpdateOne) SetNillablePolicyJSON(v *string) *MeshACLRevisionUpdateOne {
-	if v != nil {
-		_u.SetPolicyJSON(*v)
+func (maruo *MeshACLRevisionUpdateOne) SetNillablePolicyJSON(s *string) *MeshACLRevisionUpdateOne {
+	if s != nil {
+		maruo.SetPolicyJSON(*s)
 	}
-	return _u
+	return maruo
 }
 
 // SetActor sets the "actor" field.
-func (_u *MeshACLRevisionUpdateOne) SetActor(v string) *MeshACLRevisionUpdateOne {
-	_u.mutation.SetActor(v)
-	return _u
+func (maruo *MeshACLRevisionUpdateOne) SetActor(s string) *MeshACLRevisionUpdateOne {
+	maruo.mutation.SetActor(s)
+	return maruo
 }
 
 // SetNillableActor sets the "actor" field if the given value is not nil.
-func (_u *MeshACLRevisionUpdateOne) SetNillableActor(v *string) *MeshACLRevisionUpdateOne {
-	if v != nil {
-		_u.SetActor(*v)
+func (maruo *MeshACLRevisionUpdateOne) SetNillableActor(s *string) *MeshACLRevisionUpdateOne {
+	if s != nil {
+		maruo.SetActor(*s)
 	}
-	return _u
+	return maruo
 }
 
 // Mutation returns the MeshACLRevisionMutation object of the builder.
-func (_u *MeshACLRevisionUpdateOne) Mutation() *MeshACLRevisionMutation {
-	return _u.mutation
+func (maruo *MeshACLRevisionUpdateOne) Mutation() *MeshACLRevisionMutation {
+	return maruo.mutation
 }
 
 // Where appends a list predicates to the MeshACLRevisionUpdate builder.
-func (_u *MeshACLRevisionUpdateOne) Where(ps ...predicate.MeshACLRevision) *MeshACLRevisionUpdateOne {
-	_u.mutation.Where(ps...)
-	return _u
+func (maruo *MeshACLRevisionUpdateOne) Where(ps ...predicate.MeshACLRevision) *MeshACLRevisionUpdateOne {
+	maruo.mutation.Where(ps...)
+	return maruo
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (_u *MeshACLRevisionUpdateOne) Select(field string, fields ...string) *MeshACLRevisionUpdateOne {
-	_u.fields = append([]string{field}, fields...)
-	return _u
+func (maruo *MeshACLRevisionUpdateOne) Select(field string, fields ...string) *MeshACLRevisionUpdateOne {
+	maruo.fields = append([]string{field}, fields...)
+	return maruo
 }
 
 // Save executes the query and returns the updated MeshACLRevision entity.
-func (_u *MeshACLRevisionUpdateOne) Save(ctx context.Context) (*MeshACLRevision, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+func (maruo *MeshACLRevisionUpdateOne) Save(ctx context.Context) (*MeshACLRevision, error) {
+	return withHooks(ctx, maruo.sqlSave, maruo.mutation, maruo.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_u *MeshACLRevisionUpdateOne) SaveX(ctx context.Context) *MeshACLRevision {
-	node, err := _u.Save(ctx)
+func (maruo *MeshACLRevisionUpdateOne) SaveX(ctx context.Context) *MeshACLRevision {
+	node, err := maruo.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -231,26 +231,26 @@ func (_u *MeshACLRevisionUpdateOne) SaveX(ctx context.Context) *MeshACLRevision 
 }
 
 // Exec executes the query on the entity.
-func (_u *MeshACLRevisionUpdateOne) Exec(ctx context.Context) error {
-	_, err := _u.Save(ctx)
+func (maruo *MeshACLRevisionUpdateOne) Exec(ctx context.Context) error {
+	_, err := maruo.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_u *MeshACLRevisionUpdateOne) ExecX(ctx context.Context) {
-	if err := _u.Exec(ctx); err != nil {
+func (maruo *MeshACLRevisionUpdateOne) ExecX(ctx context.Context) {
+	if err := maruo.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
-func (_u *MeshACLRevisionUpdateOne) sqlSave(ctx context.Context) (_node *MeshACLRevision, err error) {
+func (maruo *MeshACLRevisionUpdateOne) sqlSave(ctx context.Context) (_node *MeshACLRevision, err error) {
 	_spec := sqlgraph.NewUpdateSpec(meshaclrevision.Table, meshaclrevision.Columns, sqlgraph.NewFieldSpec(meshaclrevision.FieldID, field.TypeInt))
-	id, ok := _u.mutation.ID()
+	id, ok := maruo.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "MeshACLRevision.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := _u.fields; len(fields) > 0 {
+	if fields := maruo.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, meshaclrevision.FieldID)
 		for _, f := range fields {
@@ -262,29 +262,29 @@ func (_u *MeshACLRevisionUpdateOne) sqlSave(ctx context.Context) (_node *MeshACL
 			}
 		}
 	}
-	if ps := _u.mutation.predicates; len(ps) > 0 {
+	if ps := maruo.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := _u.mutation.MeshnetID(); ok {
+	if value, ok := maruo.mutation.MeshnetID(); ok {
 		_spec.SetField(meshaclrevision.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.AddedMeshnetID(); ok {
+	if value, ok := maruo.mutation.AddedMeshnetID(); ok {
 		_spec.AddField(meshaclrevision.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.PolicyJSON(); ok {
+	if value, ok := maruo.mutation.PolicyJSON(); ok {
 		_spec.SetField(meshaclrevision.FieldPolicyJSON, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Actor(); ok {
+	if value, ok := maruo.mutation.Actor(); ok {
 		_spec.SetField(meshaclrevision.FieldActor, field.TypeString, value)
 	}
-	_node = &MeshACLRevision{config: _u.config}
+	_node = &MeshACLRevision{config: maruo.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, maruo.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{meshaclrevision.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -292,6 +292,6 @@ func (_u *MeshACLRevisionUpdateOne) sqlSave(ctx context.Context) (_node *MeshACL
 		}
 		return nil, err
 	}
-	_u.mutation.done = true
+	maruo.mutation.done = true
 	return _node, nil
 }

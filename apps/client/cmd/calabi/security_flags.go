@@ -3,14 +3,28 @@
 // (the same shape the console writes) which the client sends to the edge in
 // NEW_PROXY (ProxyOptions.security_config_json).
 //
-// IMPORTANT: this policy only takes effect against a STANDALONE / self-hosted
-// edge (one running with `mode: standalone` / CALABI_EDGE_MODE=standalone and no
-// control plane wired). A managed or BYOI edge IGNORES client-supplied policy —
-// there, access control is configured via the web console and gated per plan.
-// Unless the client is in standalone mode (`calabi mode standalone` /
-// CALABI_MODE=standalone) or the caller passes --standalone, we print a one-line
-// hint to stderr so a managed-platform user isn't lulled into thinking the
-// tunnel is protected.
+// WHERE EACH PART TAKES EFFECT. The IP rules (--ip-allow / --ip-deny) work
+// everywhere: a managed edge relays them to the control plane, which keeps just
+// the addresses, revalidates them, and writes them onto the tunnel row. The L7
+// knobs — --basic-auth, --rate, --set-header, --del-header, --oauth-* — still
+// only apply on a STANDALONE / self-hosted edge; on the managed platform those
+// are configured in the web console and gated per plan, because a client that
+// could mint its own credentials could mint whatever it liked.
+//
+// That split is why the note is conditional on what was actually passed. It
+// used to fire for any policy at all and say the whole lot was ignored — which
+// was true when Persist did not forward anything, and became a lie about the IP
+// flags the moment it did. A footgun warning that is wrong is worse than none:
+// it teaches people to ignore the next one.
+//
+// WHO DECIDES, AND WHO GETS TO SAY SO. The note now fires on the EDGE's answer
+// (NEW_PROXY_RESP.client_policy), not on `--standalone` / `calabi mode
+// standalone`. Those are client-side declarations, and whether a policy is
+// honoured is decided edge-side — standalone mode AND no control plane wired.
+// A BYOI edge is standalone in spirit and control-plane-wired in fact, so it
+// drops the L7 half; declaring standalone used to SILENCE the note about
+// exactly that, which is how a tunnel everybody believed had a password turned
+// out to have none. A flag may not silence a fact it has no part in deciding.
 package main
 
 import (
@@ -21,6 +35,8 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
+
+	proto "github.com/calabi/calabi/pkg/protocol"
 )
 
 // stringList is a flag.Value accumulating one entry per occurrence — repeat the
@@ -44,9 +60,15 @@ type securityFlags struct {
 	file       string
 	standalone bool // declared self-hosted target → suppress the managed-edge warning
 
-	ipAllow stringList
-	ipDeny  stringList
-	rate    int
+	ipAllow   stringList
+	ipDeny    stringList
+	rate      int
+	ratePerIP int
+
+	// l7Proposed names the L7 knobs this run actually passed, in the flag
+	// spelling the user typed. Filled by buildConfigJSON, read by
+	// NoteEdgePolicy once the edge has said what it did with them.
+	l7Proposed []string
 
 	basicAuth         stringList
 	setHeader         stringList
@@ -75,7 +97,9 @@ func registerSecurityFlags(fs *flag.FlagSet, l7 bool) *securityFlags {
 	// Default follows the client mode (`calabi mode standalone` / CALABI_MODE);
 	// the flag is a per-command override for a one-off standalone target.
 	fs.BoolVar(&sf.standalone, "standalone", clientIsStandalone(),
-		"declare the target edge is self-hosted (mode: standalone); suppresses the managed-edge warning")
+		"declare the target edge is self-hosted (mode: standalone). Only affects the "+
+			"footgun note, and only against an edge too old to report what it did — a "+
+			"current edge's own answer wins over this either way")
 	fs.Var(&sf.ipAllow, "ip-allow", "allowlist CIDR/IP (repeatable); only these may connect")
 	fs.Var(&sf.ipDeny, "ip-deny", "denylist CIDR/IP (repeatable); always blocked, wins over allow")
 	fs.StringVar(&sf.file, "security-file", "", `JSON file with a full {"security":{…}} block; flags merge on top`)
@@ -100,7 +124,11 @@ type secBasicAuth struct {
 	Users []secUser `json:"users"`
 }
 type secRate struct {
-	PerMinute int `json:"per_minute"`
+	PerMinute int `json:"per_minute,omitempty"`
+	// PerIPPerMinute caps a single visitor address. omitempty on both so a
+	// tunnel that sets only one does not ship a zero the edge would have to
+	// read as "unlimited" by convention rather than by absence.
+	PerIPPerMinute int `json:"per_ip_per_minute,omitempty"`
 }
 type secHeaders struct {
 	Set    map[string]string `json:"set,omitempty"`
@@ -182,14 +210,53 @@ func (sf *securityFlags) buildConfigJSON() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Footgun guard: a managed / BYOI edge silently ignores this. Warn so the
-	// user doesn't assume protection they won't get — unless they passed
-	// --standalone (or CALABI_STANDALONE=1) to declare a self-hosted target.
-	if !sf.standalone {
-		fmt.Fprintln(os.Stderr,
-			"note: security flags only take effect on a self-hosted (mode: standalone) edge; "+
-				"the managed platform configures access control via the web console. "+
-				"Run `calabi mode standalone` (or pass --standalone) to silence this if your edge is self-hosted.")
-	}
+	// Remember which L7 knobs were passed; the note itself waits for the edge's
+	// answer (NoteEdgePolicy). Nothing is printed here — at this point all we
+	// know is what the user typed, and the question is what the edge does.
+	sf.l7Proposed = managedEdgeIgnores(sec)
 	return string(out), nil
+}
+
+// NoteEdgePolicy prints the footgun note, once the edge has said what it did
+// with the policy we sent. Call it right after a successful registration.
+//
+//	applied  — the edge put the whole blob into effect. Say nothing.
+//	relayed  — the edge does not apply client policy: the control plane keeps
+//	           the IP rules and drops the L7 ones. Say so, naming them.
+//	""       — nothing was offered, or the edge is too old to answer. Fall back
+//	           to the old local guess, which is the best an old edge allows.
+//
+// The fallback still honours --standalone, and that is the one place it still
+// can: an edge that never answers tells us nothing to override the guess with.
+func (sf *securityFlags) NoteEdgePolicy(result proto.ClientPolicyResult) {
+	if len(sf.l7Proposed) == 0 || result == proto.ClientPolicyApplied {
+		return
+	}
+	if result == "" && sf.standalone {
+		return // old edge + declared standalone: no better answer available
+	}
+	fmt.Fprintln(os.Stderr,
+		"note: "+strings.Join(sf.l7Proposed, ", ")+" were NOT applied — this edge does not "+
+			"accept client-supplied policy (it is not standalone, or it is wired to a control "+
+			"plane, which a self-hosted/BYOI edge is). Your IP rules were applied. Configure "+
+			"these in the web console instead; until you do, this tunnel has none of them.")
+}
+
+// managedEdgeIgnores names the parts of a policy a managed edge will not apply,
+// in the flag spelling the user typed.
+func managedEdgeIgnores(sec *secBlock) []string {
+	var out []string
+	if sec.BasicAuth != nil {
+		out = append(out, "--basic-auth")
+	}
+	if sec.RateLimit != nil {
+		out = append(out, "--rate / --rate-per-ip")
+	}
+	if sec.RequestHeaders != nil {
+		out = append(out, "--set-header / --del-header")
+	}
+	if sec.OAuth != nil {
+		out = append(out, "--oauth-*")
+	}
+	return out
 }

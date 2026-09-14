@@ -35,6 +35,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/calabi/calabi/apps/calabi-edge/internal/accesslog"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/mesh"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/ratelimit"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/router"
@@ -168,10 +169,12 @@ func (s *SNI) handle(visitor net.Conn) {
 		if pol := p.LoadPolicy(); pol != nil {
 			if pol.HasIPRules() && !pol.AllowIPString(extractIP(visitor.RemoteAddr())) {
 				s.observeRequest("ip_denied")
+				noteAccessAddr(sess, target.ProxyID, visitor.RemoteAddr(), accesslog.DeniedIP)
 				return
 			}
-			if pol.HasRateLimit() && !pol.AllowRate() {
+			if pol.HasRateLimit() && !pol.AllowRate(extractIP(visitor.RemoteAddr())) {
 				s.observeRequest("rate_limited")
+				noteAccessAddr(sess, target.ProxyID, visitor.RemoteAddr(), accesslog.DeniedRate)
 				return
 			}
 		}
@@ -213,6 +216,7 @@ func (s *SNI) handle(visitor net.Conn) {
 		return
 	}
 	defer stream.Close()
+	noteAccessAddr(sess, target.ProxyID, visitor.RemoteAddr(), accesslog.Allowed)
 
 	// Replay the buffered ClientHello bytes verbatim so the client's
 	// local TLS terminator sees a complete handshake.

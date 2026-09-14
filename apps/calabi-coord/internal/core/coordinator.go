@@ -41,6 +41,18 @@ type Coordinator struct {
 	ACL ACLStore
 	// Settings holds per-meshnet switches (device approval). Nil = defaults only.
 	Settings SettingsStore
+	// ConnRecords keeps the data-plane audit trail (who exchanged traffic with
+	// whom, by the hour). Nil = this deployment does not keep one: reports are
+	// accepted and discarded rather than refused, so a node built against a
+	// coordinator that keeps them still works against one that does not.
+	ConnRecords ConnRecordStore
+	// PlatformSettings holds operator-set values (retention, and whatever comes
+	// after). Nil = no store: every accessor returns its default, which is what a
+	// deployment without a DB should do.
+	PlatformSettings PlatformSettingStore
+	// ConnRecordRetentionDefaultDays is the retention used until an operator sets
+	// one in the console. 0 = the built-in default (see DefaultConnRecordRetentionDays).
+	ConnRecordRetentionDefaultDays int
 	// Relays is the registry of relays each ORG runs itself (R2, relay.go). Nil =
 	// no self-hosted relays; every meshnet then sees exactly the platform map.
 	Relays RelayStore
@@ -119,6 +131,12 @@ type RegisterInput struct {
 	Tags []string
 	// DeviceFingerprint is the daemon's per-install id (a claim; display only).
 	DeviceFingerprint string
+	// OS is the platform the daemon's runtime reported (windows/linux/darwin).
+	// A claim, display only — nothing authorizes on it.
+	OS string
+	// BlockIncoming is the node's own shields switch. nil = not reported (an
+	// older daemon), which must leave a stored value alone rather than clear it.
+	BlockIncoming *bool
 	// DeclaredServices are the services the node's OWN CONFIG declares. A
 	// claim: they land pending and an admin confirms them before any ACL
 	// "svc:" rule matches. Only Name/Proto/Port/Note are read.
@@ -208,6 +226,17 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 		if in.DeviceFingerprint != "" {
 			existing.DeviceFingerprint = in.DeviceFingerprint
 		}
+		// Applied only when non-empty, same reasoning as the fingerprint above:
+		// "" is what an older daemon sends, and overwriting a good value with it
+		// would blank the column the first time a node re-registers from a
+		// build that predates this field.
+		if in.BlockIncoming != nil {
+			v := *in.BlockIncoming
+			existing.BlockIncoming = &v
+		}
+		if in.OS != "" {
+			existing.OS = in.OS
+		}
 		existing.AdvertisedRoutes = in.AdvertisedRoutes
 		if existing.RoutesReviewed {
 			// An admin has managed this node: keep their decision, but drop
@@ -251,7 +280,21 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 	// whether one more is allowed, BEFORE allocating an address.
 	if c.Quota != nil {
 		active, _ := seatCounts(peers)
-		allowed, limit, reason, err := c.Quota.Admit(ctx, in.Meshnet, active)
+		var (
+			allowed bool
+			limit   int
+			reason  string
+			err     error
+		)
+		// A node enrolled by a person also counts against that person's own
+		// allowance, when the backend knows how to answer that. Owner 0 —
+		// self-hosted StaticAuth, legacy api-keys — has nobody to charge and
+		// takes the org-only path exactly as before.
+		if mq, ok := c.Quota.(MemberNodeQuota); ok && in.OwnerUserID > 0 {
+			allowed, limit, reason, err = mq.AdmitMember(ctx, in.Meshnet, in.OwnerUserID, active, ownerSeatCount(peers, in.OwnerUserID))
+		} else {
+			allowed, limit, reason, err = c.Quota.Admit(ctx, in.Meshnet, active)
+		}
 		switch {
 		case err != nil:
 			// Degrade OPEN: a quota backend hiccup must not lock a meshnet out of
@@ -303,6 +346,8 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 		AliasedRoutes:     in.AliasedRoutes,
 		Overlay:           addr,
 		DeviceFingerprint: in.DeviceFingerprint,
+		OS:                in.OS,
+		BlockIncoming:     in.BlockIncoming,
 		Approved:          approved,
 		DERPHome:          c.DefaultDERPHome, // deployment home region until the node reports its own
 	}
@@ -587,6 +632,20 @@ func (c *Coordinator) UpdateSettings(ctx context.Context, t MeshnetID, in Meshne
 	if err := c.Settings.SetSettings(ctx, t, in); err != nil {
 		return fmt.Errorf("core: save settings: %w", err)
 	}
+	// Switching the trail off deletes what is already there for this meshnet.
+	// The setting is saved FIRST: if the purge then fails, the org is at least no
+	// longer collecting, and a retry finishes the job — the other order could
+	// leave it deleted but still recording, which is the worst of both.
+	if in.ConnRecordsDisabled && !prev.ConnRecordsDisabled && c.ConnRecords != nil {
+		n, perr := c.ConnRecords.PurgeConnRecordsOf(ctx, t)
+		if perr != nil {
+			return fmt.Errorf("core: connection records are now off for this meshnet, but deleting the stored ones failed (retry to finish): %w", perr)
+		}
+		if c.Logger != nil && n > 0 {
+			c.Logger.Info("mesh: connection records turned off for a meshnet; stored rows deleted",
+				"meshnet", t, "rows", n)
+		}
+	}
 	if in.RequireDeviceApproval && !prev.RequireDeviceApproval {
 		nodes, err := c.Nodes.ListMeshnet(ctx, t)
 		if err != nil {
@@ -821,6 +880,23 @@ func (c *Coordinator) SeatUsage(ctx context.Context, t MeshnetID) (SeatUsage, er
 	return SeatUsage{Meshnet: t, Total: len(nodes), Active: active, Disabled: disabled, Limit: limit}, nil
 }
 
+// ownerSeatCount counts the ACTIVE nodes belonging to one person. Disabled
+// nodes free a member's seat exactly as they free the org's — if the two
+// layers disagreed about what a seat is, an admin disabling a device would fix
+// the org total and leave its owner still locked out.
+func ownerSeatCount(nodes []*Node, ownerUserID int64) int {
+	if ownerUserID == 0 {
+		return 0
+	}
+	n := 0
+	for _, nd := range nodes {
+		if !nd.Disabled && nd.OwnerUserID == ownerUserID {
+			n++
+		}
+	}
+	return n
+}
+
 // seatCounts splits a node set into active (seat-occupying) and disabled counts.
 func seatCounts(nodes []*Node) (active, disabled int) {
 	for _, n := range nodes {
@@ -848,6 +924,14 @@ type UpdateDeclarationsInput struct {
 	// config momentarily won't read; erasing a good value over the second is a
 	// self-inflicted outage of the console's client link.
 	DeviceFingerprint string
+	// OS, same non-empty rule. Carried on this path as well as registration so
+	// an upgraded daemon fills the column on its next declaration push instead
+	// of only after a full re-enrollment.
+	OS string
+	// BlockIncoming, same "nil = no change" rule, carried here for the same
+	// reason: flipping the switch must reach the console on the next declaration
+	// push, not only after a re-enrollment (which tears down WireGuard).
+	BlockIncoming *bool
 }
 
 // UpdateDeclarations records new declarations for an already-enrolled node.
@@ -875,6 +959,13 @@ func (c *Coordinator) UpdateDeclarations(ctx context.Context, in UpdateDeclarati
 	}
 	if in.DeviceFingerprint != "" {
 		existing.DeviceFingerprint = in.DeviceFingerprint
+	}
+	if in.BlockIncoming != nil {
+		v := *in.BlockIncoming
+		existing.BlockIncoming = &v
+	}
+	if in.OS != "" {
+		existing.OS = in.OS
 	}
 	stored, err := c.Nodes.Upsert(ctx, existing)
 	if err != nil {

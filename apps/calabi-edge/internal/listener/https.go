@@ -28,11 +28,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/calabi/calabi/apps/calabi-edge/internal/accesslog"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/mesh"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/policy"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/ratelimit"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/router"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
+	"github.com/calabi/calabi/apps/calabi-edge/internal/visitorerr"
 	proto "github.com/calabi/calabi/pkg/protocol"
 )
 
@@ -145,13 +147,13 @@ func (h *HTTPS) handle(visitor net.Conn) {
 			mesh.KindHTTPS, host, path, visitor, br, head) {
 			return
 		}
-		writeStatus(visitor, 502, fmt.Sprintf("no tunnel for host %q", host))
+		writeVisitorError(visitor, head, 502, visitorerr.ErrNoTunnel)
 		h.observeRequest("no_tunnel")
 		return
 	}
 	sess, ok := target.Session.(*session.Session)
 	if !ok {
-		writeStatus(visitor, 500, "internal: routing target type mismatch")
+		writeVisitorError(visitor, head, 500, visitorerr.ErrInternal)
 		h.observeRequest("internal_error")
 		return
 	}
@@ -164,25 +166,29 @@ func (h *HTTPS) handle(visitor net.Conn) {
 	}
 	if pol != nil {
 		if pol.HasIPRules() && !pol.AllowIPString(extractIP(visitor.RemoteAddr())) {
-			writeStatus(visitor, 403, "forbidden: source IP not allowed")
+			writeVisitorError(visitor, head, 403, visitorerr.ErrIPBlocked)
 			h.observeRequest("ip_denied")
+			noteAccessAddr(sess, target.ProxyID, visitor.RemoteAddr(), accesslog.DeniedIP)
 			return
 		}
 		// Basic auth — see http.go. TLS is already terminated here.
 		if pol.HasBasicAuth() && !pol.CheckBasicAuth(headerValue(head, "Authorization")) {
-			write401(visitor, basicAuthRealm)
+			write401(visitor, head, basicAuthRealm)
 			h.observeRequest("auth_required")
+			noteAccessAddr(sess, target.ProxyID, visitor.RemoteAddr(), accesslog.DeniedAuth)
 			return
 		}
-		if pol.HasRateLimit() && !pol.AllowRate() {
-			writeStatus(visitor, 429, "rate limit exceeded")
+		if pol.HasRateLimit() && !pol.AllowRate(extractIP(visitor.RemoteAddr())) {
+			writeVisitorError(visitor, head, 429, visitorerr.ErrRateLimited)
 			h.observeRequest("rate_limited")
+			noteAccessAddr(sess, target.ProxyID, visitor.RemoteAddr(), accesslog.DeniedRate)
 			return
 		}
 		// OAuth authentication — see http.go. HTTPS=true so the redirect_uri is https.
 		if pol.HasOAuth() {
 			if pol.GateOAuth(visitor, path, host, true, headerValue(head, "Cookie"), time.Now()) {
 				h.observeRequest("oauth_redirect")
+				noteAccessAddr(sess, target.ProxyID, visitor.RemoteAddr(), accesslog.DeniedAuth)
 				return
 			}
 		}
@@ -192,13 +198,13 @@ func (h *HTTPS) handle(visitor net.Conn) {
 	// shares the HTTP new-connection rate bucket; concurrent cap is shared
 	// across all listener types for the org.
 	if err := sess.AllowHTTPConn(); err != nil {
-		writeStatus(visitor, 429, "rate limit exceeded")
+		writeVisitorError(visitor, head, 429, visitorerr.ErrUnavailable)
 		h.observeRequest("rate_limited")
 		return
 	}
 	release, err := sess.AcquireConn()
 	if err != nil {
-		writeStatus(visitor, 503, "connection limit reached")
+		writeVisitorError(visitor, head, 503, visitorerr.ErrConnLimit)
 		h.observeRequest("conn_capped")
 		return
 	}
@@ -208,7 +214,7 @@ func (h *HTTPS) handle(visitor net.Conn) {
 	// head); subsequent requests are counted by the request-boundary parser
 	// wrapping the visitor→stream copy below.
 	if err := sess.AllowHTTPReq(); err != nil {
-		writeStatus(visitor, 429, "daily request limit exceeded")
+		writeVisitorError(visitor, head, 429, visitorerr.ErrDailyCap)
 		h.observeRequest("daily_req_capped")
 		return
 	}
@@ -224,11 +230,12 @@ func (h *HTTPS) handle(visitor net.Conn) {
 	})
 	if err != nil {
 		h.logger.Info("open upstream", "err", err, "host", host)
-		writeStatus(visitor, 502, "upstream unavailable: "+err.Error())
+		writeVisitorError(visitor, head, 502, upstreamErrCode(err))
 		h.observeRequest("open_upstream_failed")
 		return
 	}
 	defer stream.Close()
+	noteAccessAddr(sess, target.ProxyID, visitor.RemoteAddr(), accesslog.Allowed)
 
 	// Stamp reverse-proxy forwarding headers (real visitor IP, scheme=https,
 	// host) on every request so the backend sees the real client; a per-tunnel

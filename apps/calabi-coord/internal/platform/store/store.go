@@ -84,6 +84,11 @@ func (s *Store) Upsert(ctx context.Context, n *core.Node) (*core.Node, error) {
 			SetRoutesReviewed(n.RoutesReviewed).
 			SetOwnerUserID(n.OwnerUserID).
 			SetDeviceFingerprint(n.DeviceFingerprint).
+			SetOs(n.OS).
+			// Nillable: SetNillableBlockIncoming leaves the column NULL when the
+			// node said nothing, which is the "too old to say" state — distinct
+			// from a reported false.
+			SetNillableBlockIncoming(n.BlockIncoming).
 			SetTagsPinned(n.TagsPinned).
 			SetApproved(n.Approved).
 			SetTagsJSON(tags).
@@ -118,6 +123,13 @@ func (s *Store) Upsert(ctx context.Context, n *core.Node) (*core.Node, error) {
 		// one: the value arrived, core merged it, and this dropped it on the
 		// floor — silently, since Upsert returns the row it just wrote.
 		SetDeviceFingerprint(n.DeviceFingerprint).
+		SetOs(n.OS).
+		// core.Register / UpdateDeclarations already decided whether this
+		// changed (nil = the node said nothing = leave the stored value alone),
+		// so by the time it gets here n.BlockIncoming IS the value to persist.
+		// Same lesson as device_fingerprint above: a field the merge honours and
+		// the UPDATE drops can never actually change.
+		SetNillableBlockIncoming(n.BlockIncoming).
 		SetTagsJSON(tags).
 		Save(ctx)
 	if err != nil {
@@ -585,6 +597,8 @@ func toNode(m *ent.MeshNode) (*core.Node, error) {
 	n.RoutesReviewed = m.RoutesReviewed
 	n.OwnerUserID = m.OwnerUserID
 	n.DeviceFingerprint = m.DeviceFingerprint
+	n.OS = m.Os
+	n.BlockIncoming = m.BlockIncoming
 	n.TagsPinned = m.TagsPinned
 	n.Approved = m.Approved
 	if n.Tags, err = unmarshalStrings(m.TagsJSON); err != nil {

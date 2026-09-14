@@ -22,129 +22,129 @@ type MeshRelayUpdate struct {
 }
 
 // Where appends a list predicates to the MeshRelayUpdate builder.
-func (_u *MeshRelayUpdate) Where(ps ...predicate.MeshRelay) *MeshRelayUpdate {
-	_u.mutation.Where(ps...)
-	return _u
+func (mru *MeshRelayUpdate) Where(ps ...predicate.MeshRelay) *MeshRelayUpdate {
+	mru.mutation.Where(ps...)
+	return mru
 }
 
 // SetMeshnetID sets the "meshnet_id" field.
-func (_u *MeshRelayUpdate) SetMeshnetID(v int64) *MeshRelayUpdate {
-	_u.mutation.ResetMeshnetID()
-	_u.mutation.SetMeshnetID(v)
-	return _u
+func (mru *MeshRelayUpdate) SetMeshnetID(i int64) *MeshRelayUpdate {
+	mru.mutation.ResetMeshnetID()
+	mru.mutation.SetMeshnetID(i)
+	return mru
 }
 
 // SetNillableMeshnetID sets the "meshnet_id" field if the given value is not nil.
-func (_u *MeshRelayUpdate) SetNillableMeshnetID(v *int64) *MeshRelayUpdate {
-	if v != nil {
-		_u.SetMeshnetID(*v)
+func (mru *MeshRelayUpdate) SetNillableMeshnetID(i *int64) *MeshRelayUpdate {
+	if i != nil {
+		mru.SetMeshnetID(*i)
 	}
-	return _u
+	return mru
 }
 
-// AddMeshnetID adds value to the "meshnet_id" field.
-func (_u *MeshRelayUpdate) AddMeshnetID(v int64) *MeshRelayUpdate {
-	_u.mutation.AddMeshnetID(v)
-	return _u
+// AddMeshnetID adds i to the "meshnet_id" field.
+func (mru *MeshRelayUpdate) AddMeshnetID(i int64) *MeshRelayUpdate {
+	mru.mutation.AddMeshnetID(i)
+	return mru
 }
 
 // SetLabel sets the "label" field.
-func (_u *MeshRelayUpdate) SetLabel(v string) *MeshRelayUpdate {
-	_u.mutation.SetLabel(v)
-	return _u
+func (mru *MeshRelayUpdate) SetLabel(s string) *MeshRelayUpdate {
+	mru.mutation.SetLabel(s)
+	return mru
 }
 
 // SetNillableLabel sets the "label" field if the given value is not nil.
-func (_u *MeshRelayUpdate) SetNillableLabel(v *string) *MeshRelayUpdate {
-	if v != nil {
-		_u.SetLabel(*v)
+func (mru *MeshRelayUpdate) SetNillableLabel(s *string) *MeshRelayUpdate {
+	if s != nil {
+		mru.SetLabel(*s)
 	}
-	return _u
+	return mru
 }
 
 // SetHostName sets the "host_name" field.
-func (_u *MeshRelayUpdate) SetHostName(v string) *MeshRelayUpdate {
-	_u.mutation.SetHostName(v)
-	return _u
+func (mru *MeshRelayUpdate) SetHostName(s string) *MeshRelayUpdate {
+	mru.mutation.SetHostName(s)
+	return mru
 }
 
 // SetNillableHostName sets the "host_name" field if the given value is not nil.
-func (_u *MeshRelayUpdate) SetNillableHostName(v *string) *MeshRelayUpdate {
-	if v != nil {
-		_u.SetHostName(*v)
+func (mru *MeshRelayUpdate) SetNillableHostName(s *string) *MeshRelayUpdate {
+	if s != nil {
+		mru.SetHostName(*s)
 	}
-	return _u
+	return mru
 }
 
 // SetDerpPort sets the "derp_port" field.
-func (_u *MeshRelayUpdate) SetDerpPort(v int) *MeshRelayUpdate {
-	_u.mutation.ResetDerpPort()
-	_u.mutation.SetDerpPort(v)
-	return _u
+func (mru *MeshRelayUpdate) SetDerpPort(i int) *MeshRelayUpdate {
+	mru.mutation.ResetDerpPort()
+	mru.mutation.SetDerpPort(i)
+	return mru
 }
 
 // SetNillableDerpPort sets the "derp_port" field if the given value is not nil.
-func (_u *MeshRelayUpdate) SetNillableDerpPort(v *int) *MeshRelayUpdate {
-	if v != nil {
-		_u.SetDerpPort(*v)
+func (mru *MeshRelayUpdate) SetNillableDerpPort(i *int) *MeshRelayUpdate {
+	if i != nil {
+		mru.SetDerpPort(*i)
 	}
-	return _u
+	return mru
 }
 
-// AddDerpPort adds value to the "derp_port" field.
-func (_u *MeshRelayUpdate) AddDerpPort(v int) *MeshRelayUpdate {
-	_u.mutation.AddDerpPort(v)
-	return _u
+// AddDerpPort adds i to the "derp_port" field.
+func (mru *MeshRelayUpdate) AddDerpPort(i int) *MeshRelayUpdate {
+	mru.mutation.AddDerpPort(i)
+	return mru
 }
 
 // SetStunPort sets the "stun_port" field.
-func (_u *MeshRelayUpdate) SetStunPort(v int) *MeshRelayUpdate {
-	_u.mutation.ResetStunPort()
-	_u.mutation.SetStunPort(v)
-	return _u
+func (mru *MeshRelayUpdate) SetStunPort(i int) *MeshRelayUpdate {
+	mru.mutation.ResetStunPort()
+	mru.mutation.SetStunPort(i)
+	return mru
 }
 
 // SetNillableStunPort sets the "stun_port" field if the given value is not nil.
-func (_u *MeshRelayUpdate) SetNillableStunPort(v *int) *MeshRelayUpdate {
-	if v != nil {
-		_u.SetStunPort(*v)
+func (mru *MeshRelayUpdate) SetNillableStunPort(i *int) *MeshRelayUpdate {
+	if i != nil {
+		mru.SetStunPort(*i)
 	}
-	return _u
+	return mru
 }
 
-// AddStunPort adds value to the "stun_port" field.
-func (_u *MeshRelayUpdate) AddStunPort(v int) *MeshRelayUpdate {
-	_u.mutation.AddStunPort(v)
-	return _u
+// AddStunPort adds i to the "stun_port" field.
+func (mru *MeshRelayUpdate) AddStunPort(i int) *MeshRelayUpdate {
+	mru.mutation.AddStunPort(i)
+	return mru
 }
 
 // SetEnabled sets the "enabled" field.
-func (_u *MeshRelayUpdate) SetEnabled(v bool) *MeshRelayUpdate {
-	_u.mutation.SetEnabled(v)
-	return _u
+func (mru *MeshRelayUpdate) SetEnabled(b bool) *MeshRelayUpdate {
+	mru.mutation.SetEnabled(b)
+	return mru
 }
 
 // SetNillableEnabled sets the "enabled" field if the given value is not nil.
-func (_u *MeshRelayUpdate) SetNillableEnabled(v *bool) *MeshRelayUpdate {
-	if v != nil {
-		_u.SetEnabled(*v)
+func (mru *MeshRelayUpdate) SetNillableEnabled(b *bool) *MeshRelayUpdate {
+	if b != nil {
+		mru.SetEnabled(*b)
 	}
-	return _u
+	return mru
 }
 
 // Mutation returns the MeshRelayMutation object of the builder.
-func (_u *MeshRelayUpdate) Mutation() *MeshRelayMutation {
-	return _u.mutation
+func (mru *MeshRelayUpdate) Mutation() *MeshRelayMutation {
+	return mru.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (_u *MeshRelayUpdate) Save(ctx context.Context) (int, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+func (mru *MeshRelayUpdate) Save(ctx context.Context) (int, error) {
+	return withHooks(ctx, mru.sqlSave, mru.mutation, mru.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_u *MeshRelayUpdate) SaveX(ctx context.Context) int {
-	affected, err := _u.Save(ctx)
+func (mru *MeshRelayUpdate) SaveX(ctx context.Context) int {
+	affected, err := mru.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -152,55 +152,55 @@ func (_u *MeshRelayUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (_u *MeshRelayUpdate) Exec(ctx context.Context) error {
-	_, err := _u.Save(ctx)
+func (mru *MeshRelayUpdate) Exec(ctx context.Context) error {
+	_, err := mru.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_u *MeshRelayUpdate) ExecX(ctx context.Context) {
-	if err := _u.Exec(ctx); err != nil {
+func (mru *MeshRelayUpdate) ExecX(ctx context.Context) {
+	if err := mru.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
-func (_u *MeshRelayUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+func (mru *MeshRelayUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(meshrelay.Table, meshrelay.Columns, sqlgraph.NewFieldSpec(meshrelay.FieldID, field.TypeInt))
-	if ps := _u.mutation.predicates; len(ps) > 0 {
+	if ps := mru.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := _u.mutation.MeshnetID(); ok {
+	if value, ok := mru.mutation.MeshnetID(); ok {
 		_spec.SetField(meshrelay.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.AddedMeshnetID(); ok {
+	if value, ok := mru.mutation.AddedMeshnetID(); ok {
 		_spec.AddField(meshrelay.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.Label(); ok {
+	if value, ok := mru.mutation.Label(); ok {
 		_spec.SetField(meshrelay.FieldLabel, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.HostName(); ok {
+	if value, ok := mru.mutation.HostName(); ok {
 		_spec.SetField(meshrelay.FieldHostName, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.DerpPort(); ok {
+	if value, ok := mru.mutation.DerpPort(); ok {
 		_spec.SetField(meshrelay.FieldDerpPort, field.TypeInt, value)
 	}
-	if value, ok := _u.mutation.AddedDerpPort(); ok {
+	if value, ok := mru.mutation.AddedDerpPort(); ok {
 		_spec.AddField(meshrelay.FieldDerpPort, field.TypeInt, value)
 	}
-	if value, ok := _u.mutation.StunPort(); ok {
+	if value, ok := mru.mutation.StunPort(); ok {
 		_spec.SetField(meshrelay.FieldStunPort, field.TypeInt, value)
 	}
-	if value, ok := _u.mutation.AddedStunPort(); ok {
+	if value, ok := mru.mutation.AddedStunPort(); ok {
 		_spec.AddField(meshrelay.FieldStunPort, field.TypeInt, value)
 	}
-	if value, ok := _u.mutation.Enabled(); ok {
+	if value, ok := mru.mutation.Enabled(); ok {
 		_spec.SetField(meshrelay.FieldEnabled, field.TypeBool, value)
 	}
-	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
+	if n, err = sqlgraph.UpdateNodes(ctx, mru.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{meshrelay.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -208,8 +208,8 @@ func (_u *MeshRelayUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		return 0, err
 	}
-	_u.mutation.done = true
-	return _node, nil
+	mru.mutation.done = true
+	return n, nil
 }
 
 // MeshRelayUpdateOne is the builder for updating a single MeshRelay entity.
@@ -221,136 +221,136 @@ type MeshRelayUpdateOne struct {
 }
 
 // SetMeshnetID sets the "meshnet_id" field.
-func (_u *MeshRelayUpdateOne) SetMeshnetID(v int64) *MeshRelayUpdateOne {
-	_u.mutation.ResetMeshnetID()
-	_u.mutation.SetMeshnetID(v)
-	return _u
+func (mruo *MeshRelayUpdateOne) SetMeshnetID(i int64) *MeshRelayUpdateOne {
+	mruo.mutation.ResetMeshnetID()
+	mruo.mutation.SetMeshnetID(i)
+	return mruo
 }
 
 // SetNillableMeshnetID sets the "meshnet_id" field if the given value is not nil.
-func (_u *MeshRelayUpdateOne) SetNillableMeshnetID(v *int64) *MeshRelayUpdateOne {
-	if v != nil {
-		_u.SetMeshnetID(*v)
+func (mruo *MeshRelayUpdateOne) SetNillableMeshnetID(i *int64) *MeshRelayUpdateOne {
+	if i != nil {
+		mruo.SetMeshnetID(*i)
 	}
-	return _u
+	return mruo
 }
 
-// AddMeshnetID adds value to the "meshnet_id" field.
-func (_u *MeshRelayUpdateOne) AddMeshnetID(v int64) *MeshRelayUpdateOne {
-	_u.mutation.AddMeshnetID(v)
-	return _u
+// AddMeshnetID adds i to the "meshnet_id" field.
+func (mruo *MeshRelayUpdateOne) AddMeshnetID(i int64) *MeshRelayUpdateOne {
+	mruo.mutation.AddMeshnetID(i)
+	return mruo
 }
 
 // SetLabel sets the "label" field.
-func (_u *MeshRelayUpdateOne) SetLabel(v string) *MeshRelayUpdateOne {
-	_u.mutation.SetLabel(v)
-	return _u
+func (mruo *MeshRelayUpdateOne) SetLabel(s string) *MeshRelayUpdateOne {
+	mruo.mutation.SetLabel(s)
+	return mruo
 }
 
 // SetNillableLabel sets the "label" field if the given value is not nil.
-func (_u *MeshRelayUpdateOne) SetNillableLabel(v *string) *MeshRelayUpdateOne {
-	if v != nil {
-		_u.SetLabel(*v)
+func (mruo *MeshRelayUpdateOne) SetNillableLabel(s *string) *MeshRelayUpdateOne {
+	if s != nil {
+		mruo.SetLabel(*s)
 	}
-	return _u
+	return mruo
 }
 
 // SetHostName sets the "host_name" field.
-func (_u *MeshRelayUpdateOne) SetHostName(v string) *MeshRelayUpdateOne {
-	_u.mutation.SetHostName(v)
-	return _u
+func (mruo *MeshRelayUpdateOne) SetHostName(s string) *MeshRelayUpdateOne {
+	mruo.mutation.SetHostName(s)
+	return mruo
 }
 
 // SetNillableHostName sets the "host_name" field if the given value is not nil.
-func (_u *MeshRelayUpdateOne) SetNillableHostName(v *string) *MeshRelayUpdateOne {
-	if v != nil {
-		_u.SetHostName(*v)
+func (mruo *MeshRelayUpdateOne) SetNillableHostName(s *string) *MeshRelayUpdateOne {
+	if s != nil {
+		mruo.SetHostName(*s)
 	}
-	return _u
+	return mruo
 }
 
 // SetDerpPort sets the "derp_port" field.
-func (_u *MeshRelayUpdateOne) SetDerpPort(v int) *MeshRelayUpdateOne {
-	_u.mutation.ResetDerpPort()
-	_u.mutation.SetDerpPort(v)
-	return _u
+func (mruo *MeshRelayUpdateOne) SetDerpPort(i int) *MeshRelayUpdateOne {
+	mruo.mutation.ResetDerpPort()
+	mruo.mutation.SetDerpPort(i)
+	return mruo
 }
 
 // SetNillableDerpPort sets the "derp_port" field if the given value is not nil.
-func (_u *MeshRelayUpdateOne) SetNillableDerpPort(v *int) *MeshRelayUpdateOne {
-	if v != nil {
-		_u.SetDerpPort(*v)
+func (mruo *MeshRelayUpdateOne) SetNillableDerpPort(i *int) *MeshRelayUpdateOne {
+	if i != nil {
+		mruo.SetDerpPort(*i)
 	}
-	return _u
+	return mruo
 }
 
-// AddDerpPort adds value to the "derp_port" field.
-func (_u *MeshRelayUpdateOne) AddDerpPort(v int) *MeshRelayUpdateOne {
-	_u.mutation.AddDerpPort(v)
-	return _u
+// AddDerpPort adds i to the "derp_port" field.
+func (mruo *MeshRelayUpdateOne) AddDerpPort(i int) *MeshRelayUpdateOne {
+	mruo.mutation.AddDerpPort(i)
+	return mruo
 }
 
 // SetStunPort sets the "stun_port" field.
-func (_u *MeshRelayUpdateOne) SetStunPort(v int) *MeshRelayUpdateOne {
-	_u.mutation.ResetStunPort()
-	_u.mutation.SetStunPort(v)
-	return _u
+func (mruo *MeshRelayUpdateOne) SetStunPort(i int) *MeshRelayUpdateOne {
+	mruo.mutation.ResetStunPort()
+	mruo.mutation.SetStunPort(i)
+	return mruo
 }
 
 // SetNillableStunPort sets the "stun_port" field if the given value is not nil.
-func (_u *MeshRelayUpdateOne) SetNillableStunPort(v *int) *MeshRelayUpdateOne {
-	if v != nil {
-		_u.SetStunPort(*v)
+func (mruo *MeshRelayUpdateOne) SetNillableStunPort(i *int) *MeshRelayUpdateOne {
+	if i != nil {
+		mruo.SetStunPort(*i)
 	}
-	return _u
+	return mruo
 }
 
-// AddStunPort adds value to the "stun_port" field.
-func (_u *MeshRelayUpdateOne) AddStunPort(v int) *MeshRelayUpdateOne {
-	_u.mutation.AddStunPort(v)
-	return _u
+// AddStunPort adds i to the "stun_port" field.
+func (mruo *MeshRelayUpdateOne) AddStunPort(i int) *MeshRelayUpdateOne {
+	mruo.mutation.AddStunPort(i)
+	return mruo
 }
 
 // SetEnabled sets the "enabled" field.
-func (_u *MeshRelayUpdateOne) SetEnabled(v bool) *MeshRelayUpdateOne {
-	_u.mutation.SetEnabled(v)
-	return _u
+func (mruo *MeshRelayUpdateOne) SetEnabled(b bool) *MeshRelayUpdateOne {
+	mruo.mutation.SetEnabled(b)
+	return mruo
 }
 
 // SetNillableEnabled sets the "enabled" field if the given value is not nil.
-func (_u *MeshRelayUpdateOne) SetNillableEnabled(v *bool) *MeshRelayUpdateOne {
-	if v != nil {
-		_u.SetEnabled(*v)
+func (mruo *MeshRelayUpdateOne) SetNillableEnabled(b *bool) *MeshRelayUpdateOne {
+	if b != nil {
+		mruo.SetEnabled(*b)
 	}
-	return _u
+	return mruo
 }
 
 // Mutation returns the MeshRelayMutation object of the builder.
-func (_u *MeshRelayUpdateOne) Mutation() *MeshRelayMutation {
-	return _u.mutation
+func (mruo *MeshRelayUpdateOne) Mutation() *MeshRelayMutation {
+	return mruo.mutation
 }
 
 // Where appends a list predicates to the MeshRelayUpdate builder.
-func (_u *MeshRelayUpdateOne) Where(ps ...predicate.MeshRelay) *MeshRelayUpdateOne {
-	_u.mutation.Where(ps...)
-	return _u
+func (mruo *MeshRelayUpdateOne) Where(ps ...predicate.MeshRelay) *MeshRelayUpdateOne {
+	mruo.mutation.Where(ps...)
+	return mruo
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (_u *MeshRelayUpdateOne) Select(field string, fields ...string) *MeshRelayUpdateOne {
-	_u.fields = append([]string{field}, fields...)
-	return _u
+func (mruo *MeshRelayUpdateOne) Select(field string, fields ...string) *MeshRelayUpdateOne {
+	mruo.fields = append([]string{field}, fields...)
+	return mruo
 }
 
 // Save executes the query and returns the updated MeshRelay entity.
-func (_u *MeshRelayUpdateOne) Save(ctx context.Context) (*MeshRelay, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+func (mruo *MeshRelayUpdateOne) Save(ctx context.Context) (*MeshRelay, error) {
+	return withHooks(ctx, mruo.sqlSave, mruo.mutation, mruo.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_u *MeshRelayUpdateOne) SaveX(ctx context.Context) *MeshRelay {
-	node, err := _u.Save(ctx)
+func (mruo *MeshRelayUpdateOne) SaveX(ctx context.Context) *MeshRelay {
+	node, err := mruo.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -358,26 +358,26 @@ func (_u *MeshRelayUpdateOne) SaveX(ctx context.Context) *MeshRelay {
 }
 
 // Exec executes the query on the entity.
-func (_u *MeshRelayUpdateOne) Exec(ctx context.Context) error {
-	_, err := _u.Save(ctx)
+func (mruo *MeshRelayUpdateOne) Exec(ctx context.Context) error {
+	_, err := mruo.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_u *MeshRelayUpdateOne) ExecX(ctx context.Context) {
-	if err := _u.Exec(ctx); err != nil {
+func (mruo *MeshRelayUpdateOne) ExecX(ctx context.Context) {
+	if err := mruo.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
-func (_u *MeshRelayUpdateOne) sqlSave(ctx context.Context) (_node *MeshRelay, err error) {
+func (mruo *MeshRelayUpdateOne) sqlSave(ctx context.Context) (_node *MeshRelay, err error) {
 	_spec := sqlgraph.NewUpdateSpec(meshrelay.Table, meshrelay.Columns, sqlgraph.NewFieldSpec(meshrelay.FieldID, field.TypeInt))
-	id, ok := _u.mutation.ID()
+	id, ok := mruo.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "MeshRelay.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := _u.fields; len(fields) > 0 {
+	if fields := mruo.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, meshrelay.FieldID)
 		for _, f := range fields {
@@ -389,44 +389,44 @@ func (_u *MeshRelayUpdateOne) sqlSave(ctx context.Context) (_node *MeshRelay, er
 			}
 		}
 	}
-	if ps := _u.mutation.predicates; len(ps) > 0 {
+	if ps := mruo.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := _u.mutation.MeshnetID(); ok {
+	if value, ok := mruo.mutation.MeshnetID(); ok {
 		_spec.SetField(meshrelay.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.AddedMeshnetID(); ok {
+	if value, ok := mruo.mutation.AddedMeshnetID(); ok {
 		_spec.AddField(meshrelay.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.Label(); ok {
+	if value, ok := mruo.mutation.Label(); ok {
 		_spec.SetField(meshrelay.FieldLabel, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.HostName(); ok {
+	if value, ok := mruo.mutation.HostName(); ok {
 		_spec.SetField(meshrelay.FieldHostName, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.DerpPort(); ok {
+	if value, ok := mruo.mutation.DerpPort(); ok {
 		_spec.SetField(meshrelay.FieldDerpPort, field.TypeInt, value)
 	}
-	if value, ok := _u.mutation.AddedDerpPort(); ok {
+	if value, ok := mruo.mutation.AddedDerpPort(); ok {
 		_spec.AddField(meshrelay.FieldDerpPort, field.TypeInt, value)
 	}
-	if value, ok := _u.mutation.StunPort(); ok {
+	if value, ok := mruo.mutation.StunPort(); ok {
 		_spec.SetField(meshrelay.FieldStunPort, field.TypeInt, value)
 	}
-	if value, ok := _u.mutation.AddedStunPort(); ok {
+	if value, ok := mruo.mutation.AddedStunPort(); ok {
 		_spec.AddField(meshrelay.FieldStunPort, field.TypeInt, value)
 	}
-	if value, ok := _u.mutation.Enabled(); ok {
+	if value, ok := mruo.mutation.Enabled(); ok {
 		_spec.SetField(meshrelay.FieldEnabled, field.TypeBool, value)
 	}
-	_node = &MeshRelay{config: _u.config}
+	_node = &MeshRelay{config: mruo.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, mruo.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{meshrelay.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -434,6 +434,6 @@ func (_u *MeshRelayUpdateOne) sqlSave(ctx context.Context) (_node *MeshRelay, er
 		}
 		return nil, err
 	}
-	_u.mutation.done = true
+	mruo.mutation.done = true
 	return _node, nil
 }

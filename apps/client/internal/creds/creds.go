@@ -162,6 +162,16 @@ type Config struct {
 	// one (start safe). resolveAcceptRoutes seeds it once and it is never nil
 	// again.
 	MeshAcceptRoutes *bool `json:"mesh_accept_routes,omitempty"`
+	// MeshBlockIncoming refuses every inbound CONNECTION to this machine on the
+	// mesh, whatever the org's access rules allow. Replies to conversations this
+	// machine started still come back, so outbound use is unaffected — the same
+	// meaning as Tailscale's "Block incoming connections".
+	//
+	// Absent = off, and that is the right default: the machine joined a mesh in
+	// order to be reachable. A POINTER only so a save from a console that
+	// predates the field leaves it alone rather than clearing it (the same reason
+	// MeshAcceptRoutes is one); there is no "never decided" state to seed here.
+	MeshBlockIncoming *bool `json:"mesh_block_incoming,omitempty"`
 	// MeshMagicDNS opts this node into MagicDNS, which rewrites the system
 	// resolver config so mesh names resolve. Default OFF (absent = off): it is
 	// Linux-only, it was withdrawn from all customer-facing documentation on

@@ -57,16 +57,16 @@ func runMesh(args []string) int {
 func runMeshUp(args []string) int {
 	fs := flag.NewFlagSet("mesh up", flag.ContinueOnError)
 	coordAddr := fs.String("coord", "", "coordinator address host:port (in production: your bff-console entrypoint)")
-	relayAddr := fs.String("relay", "", "relay address host:port (this node's DERP home)")
+	relayAddr := fs.String("relay", "", "relay address host:port (this device's DERP home)")
 	authKey := fs.String("auth-key", "", "tk_ auth key (platform) or pre-shared key (self-hosted)")
-	name := fs.String("name", defaultNodeName(), "node name (how this machine is labelled in the console)")
+	name := fs.String("name", defaultNodeName(), "device name (how this machine is labelled in the console)")
 	mtu := fs.Int("mtu", mesh.DefaultMTU, "tun MTU (576-1500); LOWER it to test a path that black-holes full-size packets")
-	keyFile := fs.String("key-file", defaultMeshKeyPath(), "path to the node's WireGuard private key (created if absent)")
-	magicDNS := fs.Bool("magic-dns", false, "resolve mesh node names by REWRITING this machine's /etc/resolv.conf (Linux only; off by default — an ungraceful exit leaves the host with no DNS)")
+	keyFile := fs.String("key-file", defaultMeshKeyPath(), "path to this device's WireGuard private key (created if absent)")
+	magicDNS := fs.Bool("magic-dns", false, "resolve mesh device names by REWRITING this machine's /etc/resolv.conf (Linux only; off by default — an ungraceful exit leaves the host with no DNS)")
 	advertise := fs.String("advertise-routes", "", "comma-separated subnets to advertise as a subnet router, /24 or smaller (e.g. 192.168.1.0/24). A bare address is a single host: 192.168.1.22")
 	aliasRoutes := fs.String("alias-routes", "", "DEPRECATED and ignored: every advertised route is aliased where the host supports it")
-	advertiseExit := fs.Bool("advertise-exit-node", false, "advertise this node as an exit node (offer to forward peers' default route to the internet)")
-	exitNode := fs.String("exit-node", "", "route this node's default traffic through the named exit-node peer (name or overlay IP)")
+	advertiseExit := fs.Bool("advertise-exit-node", false, "advertise this device as an exit device (offer to forward peers' default route to the internet)")
+	exitNode := fs.String("exit-node", "", "route this device's default traffic through the named exit device (name or overlay IP)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -202,10 +202,10 @@ func defaultNodeName() string {
 // thing — there, something actually went wrong, and it stays a warning.
 func logMagicDNSUnavailable(logger *slog.Logger, err error) {
 	if errors.Is(err, mesh.ErrMagicDNSUnsupported) {
-		logger.Debug("mesh: MagicDNS OS integration not wired on this platform; node names won't resolve via the OS", "err", err)
+		logger.Debug("mesh: MagicDNS OS integration not wired on this platform; device names won't resolve via the OS", "err", err)
 		return
 	}
-	logger.Warn("mesh: MagicDNS unavailable; node names won't resolve via the OS", "err", err)
+	logger.Warn("mesh: MagicDNS unavailable; device names won't resolve via the OS", "err", err)
 }
 
 // meshNodeLabel turns a raw name into a MagicDNS label: lowercase, only
@@ -523,7 +523,7 @@ func runMeshStatus(_ []string) int {
 		state = "up"
 	}
 	fmt.Printf("mesh: %s\n", state)
-	fmt.Printf("  node:    %s\n", st.Name)
+	fmt.Printf("  device:  %s\n", st.Name)
 	fmt.Printf("  overlay: %s\n", orDash(st.Overlay))
 	fmt.Printf("  coord:   %s\n", st.Coord)
 	fmt.Printf("  relay:   %s\n", st.Relay)

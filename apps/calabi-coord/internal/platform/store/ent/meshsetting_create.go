@@ -21,67 +21,67 @@ type MeshSettingCreate struct {
 }
 
 // SetMeshnetID sets the "meshnet_id" field.
-func (_c *MeshSettingCreate) SetMeshnetID(v int64) *MeshSettingCreate {
-	_c.mutation.SetMeshnetID(v)
-	return _c
+func (msc *MeshSettingCreate) SetMeshnetID(i int64) *MeshSettingCreate {
+	msc.mutation.SetMeshnetID(i)
+	return msc
 }
 
 // SetAliasAddrBudget sets the "alias_addr_budget" field.
-func (_c *MeshSettingCreate) SetAliasAddrBudget(v int) *MeshSettingCreate {
-	_c.mutation.SetAliasAddrBudget(v)
-	return _c
+func (msc *MeshSettingCreate) SetAliasAddrBudget(i int) *MeshSettingCreate {
+	msc.mutation.SetAliasAddrBudget(i)
+	return msc
 }
 
 // SetNillableAliasAddrBudget sets the "alias_addr_budget" field if the given value is not nil.
-func (_c *MeshSettingCreate) SetNillableAliasAddrBudget(v *int) *MeshSettingCreate {
-	if v != nil {
-		_c.SetAliasAddrBudget(*v)
+func (msc *MeshSettingCreate) SetNillableAliasAddrBudget(i *int) *MeshSettingCreate {
+	if i != nil {
+		msc.SetAliasAddrBudget(*i)
 	}
-	return _c
+	return msc
 }
 
 // SetRequireDeviceApproval sets the "require_device_approval" field.
-func (_c *MeshSettingCreate) SetRequireDeviceApproval(v bool) *MeshSettingCreate {
-	_c.mutation.SetRequireDeviceApproval(v)
-	return _c
+func (msc *MeshSettingCreate) SetRequireDeviceApproval(b bool) *MeshSettingCreate {
+	msc.mutation.SetRequireDeviceApproval(b)
+	return msc
 }
 
 // SetNillableRequireDeviceApproval sets the "require_device_approval" field if the given value is not nil.
-func (_c *MeshSettingCreate) SetNillableRequireDeviceApproval(v *bool) *MeshSettingCreate {
-	if v != nil {
-		_c.SetRequireDeviceApproval(*v)
+func (msc *MeshSettingCreate) SetNillableRequireDeviceApproval(b *bool) *MeshSettingCreate {
+	if b != nil {
+		msc.SetRequireDeviceApproval(*b)
 	}
-	return _c
+	return msc
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (_c *MeshSettingCreate) SetUpdatedAt(v time.Time) *MeshSettingCreate {
-	_c.mutation.SetUpdatedAt(v)
-	return _c
+func (msc *MeshSettingCreate) SetUpdatedAt(t time.Time) *MeshSettingCreate {
+	msc.mutation.SetUpdatedAt(t)
+	return msc
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_c *MeshSettingCreate) SetNillableUpdatedAt(v *time.Time) *MeshSettingCreate {
-	if v != nil {
-		_c.SetUpdatedAt(*v)
+func (msc *MeshSettingCreate) SetNillableUpdatedAt(t *time.Time) *MeshSettingCreate {
+	if t != nil {
+		msc.SetUpdatedAt(*t)
 	}
-	return _c
+	return msc
 }
 
 // Mutation returns the MeshSettingMutation object of the builder.
-func (_c *MeshSettingCreate) Mutation() *MeshSettingMutation {
-	return _c.mutation
+func (msc *MeshSettingCreate) Mutation() *MeshSettingMutation {
+	return msc.mutation
 }
 
 // Save creates the MeshSetting in the database.
-func (_c *MeshSettingCreate) Save(ctx context.Context) (*MeshSetting, error) {
-	_c.defaults()
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+func (msc *MeshSettingCreate) Save(ctx context.Context) (*MeshSetting, error) {
+	msc.defaults()
+	return withHooks(ctx, msc.sqlSave, msc.mutation, msc.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (_c *MeshSettingCreate) SaveX(ctx context.Context) *MeshSetting {
-	v, err := _c.Save(ctx)
+func (msc *MeshSettingCreate) SaveX(ctx context.Context) *MeshSetting {
+	v, err := msc.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -89,57 +89,57 @@ func (_c *MeshSettingCreate) SaveX(ctx context.Context) *MeshSetting {
 }
 
 // Exec executes the query.
-func (_c *MeshSettingCreate) Exec(ctx context.Context) error {
-	_, err := _c.Save(ctx)
+func (msc *MeshSettingCreate) Exec(ctx context.Context) error {
+	_, err := msc.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_c *MeshSettingCreate) ExecX(ctx context.Context) {
-	if err := _c.Exec(ctx); err != nil {
+func (msc *MeshSettingCreate) ExecX(ctx context.Context) {
+	if err := msc.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (_c *MeshSettingCreate) defaults() {
-	if _, ok := _c.mutation.AliasAddrBudget(); !ok {
+func (msc *MeshSettingCreate) defaults() {
+	if _, ok := msc.mutation.AliasAddrBudget(); !ok {
 		v := meshsetting.DefaultAliasAddrBudget
-		_c.mutation.SetAliasAddrBudget(v)
+		msc.mutation.SetAliasAddrBudget(v)
 	}
-	if _, ok := _c.mutation.RequireDeviceApproval(); !ok {
+	if _, ok := msc.mutation.RequireDeviceApproval(); !ok {
 		v := meshsetting.DefaultRequireDeviceApproval
-		_c.mutation.SetRequireDeviceApproval(v)
+		msc.mutation.SetRequireDeviceApproval(v)
 	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
+	if _, ok := msc.mutation.UpdatedAt(); !ok {
 		v := meshsetting.DefaultUpdatedAt()
-		_c.mutation.SetUpdatedAt(v)
+		msc.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (_c *MeshSettingCreate) check() error {
-	if _, ok := _c.mutation.MeshnetID(); !ok {
+func (msc *MeshSettingCreate) check() error {
+	if _, ok := msc.mutation.MeshnetID(); !ok {
 		return &ValidationError{Name: "meshnet_id", err: errors.New(`ent: missing required field "MeshSetting.meshnet_id"`)}
 	}
-	if _, ok := _c.mutation.AliasAddrBudget(); !ok {
+	if _, ok := msc.mutation.AliasAddrBudget(); !ok {
 		return &ValidationError{Name: "alias_addr_budget", err: errors.New(`ent: missing required field "MeshSetting.alias_addr_budget"`)}
 	}
-	if _, ok := _c.mutation.RequireDeviceApproval(); !ok {
+	if _, ok := msc.mutation.RequireDeviceApproval(); !ok {
 		return &ValidationError{Name: "require_device_approval", err: errors.New(`ent: missing required field "MeshSetting.require_device_approval"`)}
 	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
+	if _, ok := msc.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "MeshSetting.updated_at"`)}
 	}
 	return nil
 }
 
-func (_c *MeshSettingCreate) sqlSave(ctx context.Context) (*MeshSetting, error) {
-	if err := _c.check(); err != nil {
+func (msc *MeshSettingCreate) sqlSave(ctx context.Context) (*MeshSetting, error) {
+	if err := msc.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := _c.createSpec()
-	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
+	_node, _spec := msc.createSpec()
+	if err := sqlgraph.CreateNode(ctx, msc.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -147,29 +147,29 @@ func (_c *MeshSettingCreate) sqlSave(ctx context.Context) (*MeshSetting, error) 
 	}
 	id := _spec.ID.Value.(int64)
 	_node.ID = int(id)
-	_c.mutation.id = &_node.ID
-	_c.mutation.done = true
+	msc.mutation.id = &_node.ID
+	msc.mutation.done = true
 	return _node, nil
 }
 
-func (_c *MeshSettingCreate) createSpec() (*MeshSetting, *sqlgraph.CreateSpec) {
+func (msc *MeshSettingCreate) createSpec() (*MeshSetting, *sqlgraph.CreateSpec) {
 	var (
-		_node = &MeshSetting{config: _c.config}
+		_node = &MeshSetting{config: msc.config}
 		_spec = sqlgraph.NewCreateSpec(meshsetting.Table, sqlgraph.NewFieldSpec(meshsetting.FieldID, field.TypeInt))
 	)
-	if value, ok := _c.mutation.MeshnetID(); ok {
+	if value, ok := msc.mutation.MeshnetID(); ok {
 		_spec.SetField(meshsetting.FieldMeshnetID, field.TypeInt64, value)
 		_node.MeshnetID = value
 	}
-	if value, ok := _c.mutation.AliasAddrBudget(); ok {
+	if value, ok := msc.mutation.AliasAddrBudget(); ok {
 		_spec.SetField(meshsetting.FieldAliasAddrBudget, field.TypeInt, value)
 		_node.AliasAddrBudget = value
 	}
-	if value, ok := _c.mutation.RequireDeviceApproval(); ok {
+	if value, ok := msc.mutation.RequireDeviceApproval(); ok {
 		_spec.SetField(meshsetting.FieldRequireDeviceApproval, field.TypeBool, value)
 		_node.RequireDeviceApproval = value
 	}
-	if value, ok := _c.mutation.UpdatedAt(); ok {
+	if value, ok := msc.mutation.UpdatedAt(); ok {
 		_spec.SetField(meshsetting.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
@@ -184,16 +184,16 @@ type MeshSettingCreateBulk struct {
 }
 
 // Save creates the MeshSetting entities in the database.
-func (_c *MeshSettingCreateBulk) Save(ctx context.Context) ([]*MeshSetting, error) {
-	if _c.err != nil {
-		return nil, _c.err
+func (mscb *MeshSettingCreateBulk) Save(ctx context.Context) ([]*MeshSetting, error) {
+	if mscb.err != nil {
+		return nil, mscb.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
-	nodes := make([]*MeshSetting, len(_c.builders))
-	mutators := make([]Mutator, len(_c.builders))
-	for i := range _c.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(mscb.builders))
+	nodes := make([]*MeshSetting, len(mscb.builders))
+	mutators := make([]Mutator, len(mscb.builders))
+	for i := range mscb.builders {
 		func(i int, root context.Context) {
-			builder := _c.builders[i]
+			builder := mscb.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*MeshSettingMutation)
@@ -207,11 +207,11 @@ func (_c *MeshSettingCreateBulk) Save(ctx context.Context) ([]*MeshSetting, erro
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, mscb.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, mscb.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -235,7 +235,7 @@ func (_c *MeshSettingCreateBulk) Save(ctx context.Context) ([]*MeshSetting, erro
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, mscb.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -243,8 +243,8 @@ func (_c *MeshSettingCreateBulk) Save(ctx context.Context) ([]*MeshSetting, erro
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_c *MeshSettingCreateBulk) SaveX(ctx context.Context) []*MeshSetting {
-	v, err := _c.Save(ctx)
+func (mscb *MeshSettingCreateBulk) SaveX(ctx context.Context) []*MeshSetting {
+	v, err := mscb.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -252,14 +252,14 @@ func (_c *MeshSettingCreateBulk) SaveX(ctx context.Context) []*MeshSetting {
 }
 
 // Exec executes the query.
-func (_c *MeshSettingCreateBulk) Exec(ctx context.Context) error {
-	_, err := _c.Save(ctx)
+func (mscb *MeshSettingCreateBulk) Exec(ctx context.Context) error {
+	_, err := mscb.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_c *MeshSettingCreateBulk) ExecX(ctx context.Context) {
-	if err := _c.Exec(ctx); err != nil {
+func (mscb *MeshSettingCreateBulk) ExecX(ctx context.Context) {
+	if err := mscb.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

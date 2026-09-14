@@ -137,6 +137,9 @@ type EdgeRegistration struct {
 	// host = host(PublicAddr).
 	RelayDerpPort int32
 	RelayStunPort int32
+	// Version is this calabi-edge's binary version (-ldflags), published so the
+	// consoles can show which build the edge is running.
+	Version string
 }
 
 // RegisterEdgeNode upserts this edge's directory row. Best-effort —
@@ -159,6 +162,7 @@ func (v *Verifier) RegisterEdgeNode(ctx context.Context, in EdgeRegistration) er
 		EdgeClass:     in.EdgeClass,
 		RelayDerpPort: in.RelayDerpPort,
 		RelayStunPort: in.RelayStunPort,
+		Version:       in.Version,
 	})
 	return err
 }

@@ -10,6 +10,172 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## 1.10.0 — 2026-09-14
+
+The largest release since the mesh shipped, and most of it answers one question
+asked twice: **who may reach this, and can you find out afterwards who did.**
+Tunnels gain organization-wide access rules, a per-visitor rate limit and access
+records. The mesh gains access rules written about *people* rather than
+machines, a switch that belongs to the device's owner, and connection records.
+Client and edge move together, as always.
+
+**Three things behave differently for setups that already exist.**
+
+- An IP allow list of `0.0.0.0/0` no longer counts as access protection, and
+  neither does a deny list on its own. If your organization requires protection,
+  tunnels configured that way now appear in the violations list. Nothing that is
+  running is stopped.
+- `--ip-allow` and `--ip-deny` now take effect on calabi.net. They used to be
+  accepted, noted as self-hosted-only, and discarded; a tunnel started with them
+  is now really restricted by them.
+- **Upgrade your self-hosted edges along with the client.** An edge older than
+  1.10.0 does not understand a tunnel that references an organization's sign-in
+  application, and serves that tunnel **with no sign-in at all** rather than
+  refusing. Older edges also collect no access records.
+
+### Tunnels
+
+- **Added** — **Access records.** The edge now records, per tunnel and per hour,
+  which visitor addresses connected and how each connection ended. Off by
+  default, enabled per organization, with a retention period you choose. These
+  are connections, not requests: one keep-alive connection carrying fifty
+  requests is one row. Request lines, paths, headers and user agents are not
+  recorded — that is the local console's job, on your own machine. A tunnel
+  being scanned cannot make the table grow without bound: at most 256 distinct
+  addresses per tunnel per hour are listed individually, and the rest are
+  counted together.
+- **Added** — **Reusable IP policies, and an organization baseline.** Name an
+  allow/deny list once and reference it from any number of tunnels instead of
+  copying addresses into each. An organization can require that every tunnel it
+  publishes has access protection, and can name a default IP policy applied to
+  new tunnels that arrive without any — without which `calabi http 8080` is not
+  governed by the baseline, it is refused by it.
+- **Added** — A second baseline covering **raw ports only**: TCP, UDP and SNI
+  tunnels must carry IP rules. The people willing to publish an unprotected demo
+  link and the people willing to publish an unprotected database port are not
+  the same people, and one switch for both made them choose neither. This also
+  closes a gap: a raw-port tunnel carrying Basic Auth used to count as
+  protected, while the edge — which passes those bytes through untouched — never
+  asked anyone for a password.
+- **Added** — **Organization sign-in applications.** An OAuth client secret is
+  now stored once for the organization instead of being copied into every
+  tunnel's configuration, where anything that could read the tunnel list could
+  read it. Tunnels reference the application by name, and the edge fetches the
+  credential over its own authenticated connection when it serves one. Deleting
+  an application that tunnels still reference is refused, and says how many.
+- **Added** — **A per-visitor rate limit** (`per_ip_per_minute`) beside the
+  existing per-tunnel one. A single cap shared by all visitors is also the lever
+  an abuser pulls to take the tunnel down for everyone; the two now apply
+  together, and the existing setting still means exactly what it meant before.
+- **Added** — **Offline notification**, per tunnel and off by default. A tunnel
+  that stops serving can email you instead of waiting for somebody to hit a 502.
+  Ten minutes of grace, so a reconnect or a deploy does not trigger it, and one
+  message per outage rather than one per report.
+- **Added** — Tunnels can be **disabled automatically after N days with no
+  visitor**. This is the only setting here that touches something already
+  running, so it acts only when it can tell "nobody used it" apart from "we were
+  not watching": access records must be on, and must have been on long enough.
+- **Changed** — **Every refusal the edge serves now looks the same.** Being
+  turned away by a password prompt, by a sign-in that was declined, or by a
+  sign-in that did not complete used to produce a bare line of internal text
+  with nothing to quote at support, while an IP refusal produced a proper page.
+  All of them now carry the same page, a `CAL-xxxx` code and a warning mark —
+  and none of them tell a stranger anything about the organization's account.
+- **Fixed** — The client now reports whether the edge **applied** the security
+  flags it was given, instead of inferring it from its own `--standalone`
+  setting. A self-hosted edge wired to a control plane does not apply them,
+  which the client had no way to detect: `--basic-auth` went nowhere, both
+  consoles correctly showed no protection, and the warning that would have said
+  so was suppressed by the very flag that made it wrong.
+- **Fixed** — Two ways the edge's port pool disagreed with the tunnels that
+  actually exist. At startup the pool was empty, so the first claim could hand
+  out a port a live tunnel held — and the loser was deleted. And a port
+  persisted during a session was not marked as taken, so the same number was
+  offered again and the claim was refused with "remote port already bound",
+  leaving a tunnel waiting for a client that was already connected. Ports are
+  now reserved when the tunnel is persisted and released when it is deleted.
+- **Fixed** — An installed agent never reported whether it could reach the
+  service it forwards to. The console showed such tunnels as online while the
+  local probe had been failing since the agent started; only interactive
+  sessions reported. Agents carry their credential in the environment, and the
+  health reporter was the one code path that looked only in the credentials
+  file.
+- **Fixed** — A tunnel that has not been claimed no longer has its configuration
+  broadcast to every edge, self-hosted edges included.
+- **Changed** — The edge reports its own version, so both consoles can show what
+  each edge is running.
+
+### Mesh
+
+- **Added** — **Access rules can name people.** Selectors were all machines —
+  names, tags, groups of machines — so "each person may reach only their own
+  devices" could not be written down at all; it had to be maintained by hand,
+  per person, per laptop. There are now `user:`, `autogroup:member` and
+  `autogroup:self`, and a group may contain users, so a rule keeps meaning the
+  right thing after somebody replaces a machine.
+- **Added** — **Block incoming connections**, on the device, for its owner. The
+  device stays visible and can still start connections, but accepts none. It is
+  enforced on the machine itself rather than by the coordinator, so it holds
+  when the coordinator is unreachable and in the many organizations that never
+  wrote a rule at all, and it outranks any rule that would have allowed the
+  connection. Replies on connections the machine itself started still arrive.
+- **Added** — **Connection records.** Which device talked to which, in which
+  hour, how many bytes, and whether it went direct or through a relay. No
+  endpoint addresses and no public IPs are in it — the location trail those
+  would form is exactly what the mesh deliberately does not keep. Retention is
+  set by the operator; an organization can switch the records off and delete
+  what is stored. They are reported by the clients themselves, which the console
+  says plainly: this is evidence, not proof, and it is never an input to an
+  authorization decision.
+- **Added** — **Members can manage their own devices** — rename, disable, delete
+  — instead of looking at a page of greyed-out buttons. The thirteen actions
+  that decide how the *network* behaves (approvals, tags, routes, rules, relays,
+  services) stay with administrators. A device carrying a tag belongs to the
+  organization rather than to a person, and a device publishing an approved
+  route cannot be deleted by its owner until the route is withdrawn.
+- **Added** — Removing a member now **disables the devices in their name**
+  before the membership goes, and the confirmation says so. A coordinator
+  session had no expiry and a node re-authenticated only at enrollment, so a
+  laptop that never disconnected stayed inside the private network
+  indefinitely. Tagged devices are left alone: stopping a CI runner because
+  whoever installed it left is an incident, not offboarding.
+- **Added** — Devices report their operating system; the peer list shows the
+  machine name instead of a public key, says who owns each device and which
+  services it offers, and can be filtered by name, address or service.
+- **Added** — A device waiting for approval is told so, and a client that cannot
+  connect can say why.
+- **Fixed** — A device carrying a tag had no personal owner, which left a hole in
+  the rule that lets members manage their own devices.
+
+### Accounts and organizations
+
+- **Added** — **Per-member quotas.** An organization can set a default quota that
+  new members inherit, and override it for one person: tunnels, raw-port tunnels
+  and mesh devices. Personal limits are not reserved capacity — the organization
+  total is still the ceiling, and the limit that applies is the smaller of the
+  two. Administrators are not bound by the default, but are bound by a limit set
+  for them specifically. Going over only blocks creating something new; nothing
+  existing is stopped.
+- **Removed** — The limit on how many clients an organization may register. This
+  product does not charge for machines, and the limit had never been enforced
+  anywhere; it is gone rather than quietly switched on.
+- **Changed** — Removing a member now also stops their tunnels and revokes the
+  API keys they minted. Until now a removed member's connected daemon kept
+  serving on the organization's domain and their keys kept managing its tunnels
+  — the console door closed, the data plane's did not. Tunnels running on an
+  organization agent are left alone.
+- **Changed** — Switching organizations ends the session you switched away from.
+
+### Local console
+
+- **Fixed** — The console occasionally bounced to its login screen, and opening a
+  new tab worked. Two parts of the daemon refreshed the sign-in at the same time
+  and one of them was told to sign in again; every part now shares one refresh.
+- **Changed** — The tunnel pages were rebuilt to match the web console: creating
+  one is a series of steps rather than one long form, the protocol is shown as a
+  badge, and the quota a member has left is shown before they start instead of
+  when the create fails.
+
 ## 1.9.0 — 2026-09-11
 
 A security release. Most of it closes holes found in a review of the mesh after

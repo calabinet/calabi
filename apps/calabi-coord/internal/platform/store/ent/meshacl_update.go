@@ -23,66 +23,66 @@ type MeshACLUpdate struct {
 }
 
 // Where appends a list predicates to the MeshACLUpdate builder.
-func (_u *MeshACLUpdate) Where(ps ...predicate.MeshACL) *MeshACLUpdate {
-	_u.mutation.Where(ps...)
-	return _u
+func (mau *MeshACLUpdate) Where(ps ...predicate.MeshACL) *MeshACLUpdate {
+	mau.mutation.Where(ps...)
+	return mau
 }
 
 // SetMeshnetID sets the "meshnet_id" field.
-func (_u *MeshACLUpdate) SetMeshnetID(v int64) *MeshACLUpdate {
-	_u.mutation.ResetMeshnetID()
-	_u.mutation.SetMeshnetID(v)
-	return _u
+func (mau *MeshACLUpdate) SetMeshnetID(i int64) *MeshACLUpdate {
+	mau.mutation.ResetMeshnetID()
+	mau.mutation.SetMeshnetID(i)
+	return mau
 }
 
 // SetNillableMeshnetID sets the "meshnet_id" field if the given value is not nil.
-func (_u *MeshACLUpdate) SetNillableMeshnetID(v *int64) *MeshACLUpdate {
-	if v != nil {
-		_u.SetMeshnetID(*v)
+func (mau *MeshACLUpdate) SetNillableMeshnetID(i *int64) *MeshACLUpdate {
+	if i != nil {
+		mau.SetMeshnetID(*i)
 	}
-	return _u
+	return mau
 }
 
-// AddMeshnetID adds value to the "meshnet_id" field.
-func (_u *MeshACLUpdate) AddMeshnetID(v int64) *MeshACLUpdate {
-	_u.mutation.AddMeshnetID(v)
-	return _u
+// AddMeshnetID adds i to the "meshnet_id" field.
+func (mau *MeshACLUpdate) AddMeshnetID(i int64) *MeshACLUpdate {
+	mau.mutation.AddMeshnetID(i)
+	return mau
 }
 
 // SetPolicyJSON sets the "policy_json" field.
-func (_u *MeshACLUpdate) SetPolicyJSON(v string) *MeshACLUpdate {
-	_u.mutation.SetPolicyJSON(v)
-	return _u
+func (mau *MeshACLUpdate) SetPolicyJSON(s string) *MeshACLUpdate {
+	mau.mutation.SetPolicyJSON(s)
+	return mau
 }
 
 // SetNillablePolicyJSON sets the "policy_json" field if the given value is not nil.
-func (_u *MeshACLUpdate) SetNillablePolicyJSON(v *string) *MeshACLUpdate {
-	if v != nil {
-		_u.SetPolicyJSON(*v)
+func (mau *MeshACLUpdate) SetNillablePolicyJSON(s *string) *MeshACLUpdate {
+	if s != nil {
+		mau.SetPolicyJSON(*s)
 	}
-	return _u
+	return mau
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (_u *MeshACLUpdate) SetUpdatedAt(v time.Time) *MeshACLUpdate {
-	_u.mutation.SetUpdatedAt(v)
-	return _u
+func (mau *MeshACLUpdate) SetUpdatedAt(t time.Time) *MeshACLUpdate {
+	mau.mutation.SetUpdatedAt(t)
+	return mau
 }
 
 // Mutation returns the MeshACLMutation object of the builder.
-func (_u *MeshACLUpdate) Mutation() *MeshACLMutation {
-	return _u.mutation
+func (mau *MeshACLUpdate) Mutation() *MeshACLMutation {
+	return mau.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (_u *MeshACLUpdate) Save(ctx context.Context) (int, error) {
-	_u.defaults()
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+func (mau *MeshACLUpdate) Save(ctx context.Context) (int, error) {
+	mau.defaults()
+	return withHooks(ctx, mau.sqlSave, mau.mutation, mau.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_u *MeshACLUpdate) SaveX(ctx context.Context) int {
-	affected, err := _u.Save(ctx)
+func (mau *MeshACLUpdate) SaveX(ctx context.Context) int {
+	affected, err := mau.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -90,48 +90,48 @@ func (_u *MeshACLUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (_u *MeshACLUpdate) Exec(ctx context.Context) error {
-	_, err := _u.Save(ctx)
+func (mau *MeshACLUpdate) Exec(ctx context.Context) error {
+	_, err := mau.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_u *MeshACLUpdate) ExecX(ctx context.Context) {
-	if err := _u.Exec(ctx); err != nil {
+func (mau *MeshACLUpdate) ExecX(ctx context.Context) {
+	if err := mau.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (_u *MeshACLUpdate) defaults() {
-	if _, ok := _u.mutation.UpdatedAt(); !ok {
+func (mau *MeshACLUpdate) defaults() {
+	if _, ok := mau.mutation.UpdatedAt(); !ok {
 		v := meshacl.UpdateDefaultUpdatedAt()
-		_u.mutation.SetUpdatedAt(v)
+		mau.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (_u *MeshACLUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+func (mau *MeshACLUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(meshacl.Table, meshacl.Columns, sqlgraph.NewFieldSpec(meshacl.FieldID, field.TypeInt))
-	if ps := _u.mutation.predicates; len(ps) > 0 {
+	if ps := mau.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := _u.mutation.MeshnetID(); ok {
+	if value, ok := mau.mutation.MeshnetID(); ok {
 		_spec.SetField(meshacl.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.AddedMeshnetID(); ok {
+	if value, ok := mau.mutation.AddedMeshnetID(); ok {
 		_spec.AddField(meshacl.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.PolicyJSON(); ok {
+	if value, ok := mau.mutation.PolicyJSON(); ok {
 		_spec.SetField(meshacl.FieldPolicyJSON, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.UpdatedAt(); ok {
+	if value, ok := mau.mutation.UpdatedAt(); ok {
 		_spec.SetField(meshacl.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
+	if n, err = sqlgraph.UpdateNodes(ctx, mau.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{meshacl.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -139,8 +139,8 @@ func (_u *MeshACLUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		return 0, err
 	}
-	_u.mutation.done = true
-	return _node, nil
+	mau.mutation.done = true
+	return n, nil
 }
 
 // MeshACLUpdateOne is the builder for updating a single MeshACL entity.
@@ -152,73 +152,73 @@ type MeshACLUpdateOne struct {
 }
 
 // SetMeshnetID sets the "meshnet_id" field.
-func (_u *MeshACLUpdateOne) SetMeshnetID(v int64) *MeshACLUpdateOne {
-	_u.mutation.ResetMeshnetID()
-	_u.mutation.SetMeshnetID(v)
-	return _u
+func (mauo *MeshACLUpdateOne) SetMeshnetID(i int64) *MeshACLUpdateOne {
+	mauo.mutation.ResetMeshnetID()
+	mauo.mutation.SetMeshnetID(i)
+	return mauo
 }
 
 // SetNillableMeshnetID sets the "meshnet_id" field if the given value is not nil.
-func (_u *MeshACLUpdateOne) SetNillableMeshnetID(v *int64) *MeshACLUpdateOne {
-	if v != nil {
-		_u.SetMeshnetID(*v)
+func (mauo *MeshACLUpdateOne) SetNillableMeshnetID(i *int64) *MeshACLUpdateOne {
+	if i != nil {
+		mauo.SetMeshnetID(*i)
 	}
-	return _u
+	return mauo
 }
 
-// AddMeshnetID adds value to the "meshnet_id" field.
-func (_u *MeshACLUpdateOne) AddMeshnetID(v int64) *MeshACLUpdateOne {
-	_u.mutation.AddMeshnetID(v)
-	return _u
+// AddMeshnetID adds i to the "meshnet_id" field.
+func (mauo *MeshACLUpdateOne) AddMeshnetID(i int64) *MeshACLUpdateOne {
+	mauo.mutation.AddMeshnetID(i)
+	return mauo
 }
 
 // SetPolicyJSON sets the "policy_json" field.
-func (_u *MeshACLUpdateOne) SetPolicyJSON(v string) *MeshACLUpdateOne {
-	_u.mutation.SetPolicyJSON(v)
-	return _u
+func (mauo *MeshACLUpdateOne) SetPolicyJSON(s string) *MeshACLUpdateOne {
+	mauo.mutation.SetPolicyJSON(s)
+	return mauo
 }
 
 // SetNillablePolicyJSON sets the "policy_json" field if the given value is not nil.
-func (_u *MeshACLUpdateOne) SetNillablePolicyJSON(v *string) *MeshACLUpdateOne {
-	if v != nil {
-		_u.SetPolicyJSON(*v)
+func (mauo *MeshACLUpdateOne) SetNillablePolicyJSON(s *string) *MeshACLUpdateOne {
+	if s != nil {
+		mauo.SetPolicyJSON(*s)
 	}
-	return _u
+	return mauo
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (_u *MeshACLUpdateOne) SetUpdatedAt(v time.Time) *MeshACLUpdateOne {
-	_u.mutation.SetUpdatedAt(v)
-	return _u
+func (mauo *MeshACLUpdateOne) SetUpdatedAt(t time.Time) *MeshACLUpdateOne {
+	mauo.mutation.SetUpdatedAt(t)
+	return mauo
 }
 
 // Mutation returns the MeshACLMutation object of the builder.
-func (_u *MeshACLUpdateOne) Mutation() *MeshACLMutation {
-	return _u.mutation
+func (mauo *MeshACLUpdateOne) Mutation() *MeshACLMutation {
+	return mauo.mutation
 }
 
 // Where appends a list predicates to the MeshACLUpdate builder.
-func (_u *MeshACLUpdateOne) Where(ps ...predicate.MeshACL) *MeshACLUpdateOne {
-	_u.mutation.Where(ps...)
-	return _u
+func (mauo *MeshACLUpdateOne) Where(ps ...predicate.MeshACL) *MeshACLUpdateOne {
+	mauo.mutation.Where(ps...)
+	return mauo
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (_u *MeshACLUpdateOne) Select(field string, fields ...string) *MeshACLUpdateOne {
-	_u.fields = append([]string{field}, fields...)
-	return _u
+func (mauo *MeshACLUpdateOne) Select(field string, fields ...string) *MeshACLUpdateOne {
+	mauo.fields = append([]string{field}, fields...)
+	return mauo
 }
 
 // Save executes the query and returns the updated MeshACL entity.
-func (_u *MeshACLUpdateOne) Save(ctx context.Context) (*MeshACL, error) {
-	_u.defaults()
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+func (mauo *MeshACLUpdateOne) Save(ctx context.Context) (*MeshACL, error) {
+	mauo.defaults()
+	return withHooks(ctx, mauo.sqlSave, mauo.mutation, mauo.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_u *MeshACLUpdateOne) SaveX(ctx context.Context) *MeshACL {
-	node, err := _u.Save(ctx)
+func (mauo *MeshACLUpdateOne) SaveX(ctx context.Context) *MeshACL {
+	node, err := mauo.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -226,34 +226,34 @@ func (_u *MeshACLUpdateOne) SaveX(ctx context.Context) *MeshACL {
 }
 
 // Exec executes the query on the entity.
-func (_u *MeshACLUpdateOne) Exec(ctx context.Context) error {
-	_, err := _u.Save(ctx)
+func (mauo *MeshACLUpdateOne) Exec(ctx context.Context) error {
+	_, err := mauo.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_u *MeshACLUpdateOne) ExecX(ctx context.Context) {
-	if err := _u.Exec(ctx); err != nil {
+func (mauo *MeshACLUpdateOne) ExecX(ctx context.Context) {
+	if err := mauo.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (_u *MeshACLUpdateOne) defaults() {
-	if _, ok := _u.mutation.UpdatedAt(); !ok {
+func (mauo *MeshACLUpdateOne) defaults() {
+	if _, ok := mauo.mutation.UpdatedAt(); !ok {
 		v := meshacl.UpdateDefaultUpdatedAt()
-		_u.mutation.SetUpdatedAt(v)
+		mauo.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (_u *MeshACLUpdateOne) sqlSave(ctx context.Context) (_node *MeshACL, err error) {
+func (mauo *MeshACLUpdateOne) sqlSave(ctx context.Context) (_node *MeshACL, err error) {
 	_spec := sqlgraph.NewUpdateSpec(meshacl.Table, meshacl.Columns, sqlgraph.NewFieldSpec(meshacl.FieldID, field.TypeInt))
-	id, ok := _u.mutation.ID()
+	id, ok := mauo.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "MeshACL.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := _u.fields; len(fields) > 0 {
+	if fields := mauo.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, meshacl.FieldID)
 		for _, f := range fields {
@@ -265,29 +265,29 @@ func (_u *MeshACLUpdateOne) sqlSave(ctx context.Context) (_node *MeshACL, err er
 			}
 		}
 	}
-	if ps := _u.mutation.predicates; len(ps) > 0 {
+	if ps := mauo.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := _u.mutation.MeshnetID(); ok {
+	if value, ok := mauo.mutation.MeshnetID(); ok {
 		_spec.SetField(meshacl.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.AddedMeshnetID(); ok {
+	if value, ok := mauo.mutation.AddedMeshnetID(); ok {
 		_spec.AddField(meshacl.FieldMeshnetID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.PolicyJSON(); ok {
+	if value, ok := mauo.mutation.PolicyJSON(); ok {
 		_spec.SetField(meshacl.FieldPolicyJSON, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.UpdatedAt(); ok {
+	if value, ok := mauo.mutation.UpdatedAt(); ok {
 		_spec.SetField(meshacl.FieldUpdatedAt, field.TypeTime, value)
 	}
-	_node = &MeshACL{config: _u.config}
+	_node = &MeshACL{config: mauo.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, mauo.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{meshacl.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -295,6 +295,6 @@ func (_u *MeshACLUpdateOne) sqlSave(ctx context.Context) (_node *MeshACL, err er
 		}
 		return nil, err
 	}
-	_u.mutation.done = true
+	mauo.mutation.done = true
 	return _node, nil
 }

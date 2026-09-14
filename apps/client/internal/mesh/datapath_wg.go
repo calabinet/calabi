@@ -420,6 +420,12 @@ func (d *WGDatapath) SetConfig(cfg WGConfig) error {
 		d.logger.Info("mesh access rules applied (inbound)",
 			"enforcing", cfg.FilterEnabled, "rules", len(cfg.Filter))
 	}
+	// This machine's own switch, applied in the same breath so the two can never
+	// be one netmap apart.
+	if d.filter.SetShields(cfg.BlockIncoming) {
+		d.logger.Info("mesh: inbound connections blocked by this machine's own setting",
+			"blocked", cfg.BlockIncoming)
+	}
 	// Keep the relay links aligned with the map: our own home relay (where peers
 	// reach us) plus a warm link to every relay a peer is homed at (MESH.4 B2b).
 	// Before Reconcile: the dials it starts must already carry the current

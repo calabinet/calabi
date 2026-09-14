@@ -73,7 +73,7 @@ func matchingRule(p *ACLPolicy, src, dst *Node) int {
 		if !strings.EqualFold(strings.TrimSpace(r.Action), "accept") {
 			continue
 		}
-		if matchAny(r.Src, src, p.Groups) && matchAny(r.Dst, dst, p.Groups) {
+		if matchAny(r.Src, src, p.Groups) && matchDst(r.Dst, src, dst, p.Groups) {
 			return i
 		}
 	}

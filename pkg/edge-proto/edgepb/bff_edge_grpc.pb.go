@@ -50,6 +50,7 @@ const (
 	BFFEdge_CreateTunnel_FullMethodName                = "/calabi.v1.bff_edge.BFFEdge/CreateTunnel"
 	BFFEdge_ClaimTunnel_FullMethodName                 = "/calabi.v1.bff_edge.BFFEdge/ClaimTunnel"
 	BFFEdge_ReportStatus_FullMethodName                = "/calabi.v1.bff_edge.BFFEdge/ReportStatus"
+	BFFEdge_GetTunnelOAuthSecret_FullMethodName        = "/calabi.v1.bff_edge.BFFEdge/GetTunnelOAuthSecret"
 	BFFEdge_ListTunnels_FullMethodName                 = "/calabi.v1.bff_edge.BFFEdge/ListTunnels"
 	BFFEdge_ListEdgeClaimedPorts_FullMethodName        = "/calabi.v1.bff_edge.BFFEdge/ListEdgeClaimedPorts"
 	BFFEdge_DeleteTunnel_FullMethodName                = "/calabi.v1.bff_edge.BFFEdge/DeleteTunnel"
@@ -68,6 +69,7 @@ const (
 	BFFEdge_SubscribeUsageEvents_FullMethodName        = "/calabi.v1.bff_edge.BFFEdge/SubscribeUsageEvents"
 	BFFEdge_ReportUsage_FullMethodName                 = "/calabi.v1.bff_edge.BFFEdge/ReportUsage"
 	BFFEdge_ReportRelayUsage_FullMethodName            = "/calabi.v1.bff_edge.BFFEdge/ReportRelayUsage"
+	BFFEdge_ReportAccess_FullMethodName                = "/calabi.v1.bff_edge.BFFEdge/ReportAccess"
 	BFFEdge_RegisterRelay_FullMethodName               = "/calabi.v1.bff_edge.BFFEdge/RegisterRelay"
 )
 
@@ -101,6 +103,11 @@ type BFFEdgeClient interface {
 	ClaimTunnel(ctx context.Context, in *ClaimTunnelRequest, opts ...grpc.CallOption) (*Tunnel, error)
 	// ReportStatus — overwrite edge_node_id.
 	ReportStatus(ctx context.Context, in *ReportStatusRequest, opts ...grpc.CallOption) (*ReportStatusResponse, error)
+	// GetTunnelOAuthSecret — the login credential for ONE tunnel this edge is
+	// serving. The only RPC here that returns a secret: caller_org_id is
+	// OVERWRITTEN from the mTLS cert, and tunnel-svc checks both that the org
+	// owns the tunnel and that the tunnel really references the policy.
+	GetTunnelOAuthSecret(ctx context.Context, in *GetTunnelOAuthSecretRequest, opts ...grpc.CallOption) (*GetTunnelOAuthSecretResponse, error)
 	// ListTunnels — fan-out queries the edge does to seed its
 	// in-memory route table on boot. Org-scoped via the request,
 	// not edge-scoped, so no overwrite.
@@ -167,6 +174,20 @@ type BFFEdgeClient interface {
 	// The region carries a "self-<label>" code, which metering keeps OUT of the
 	// plan cap: a customer's own relay is display-only.
 	ReportRelayUsage(ctx context.Context, in *ReportRelayUsageRequest, opts ...grpc.CallOption) (*ReportRelayUsageResponse, error)
+	// ReportAccess mirrors ReportUsage for the tunnel access log (who reached
+	// which tunnel, from where). bff-edge re-publishes on the cluster NATS as
+	// calabi.access.report → metering-svc's tunnel_access_records.
+	//
+	// It exists so a BYOI self-hosted edge is not a permanent hole in its own
+	// org's audit trail. A trail that is systematically incomplete is worse than
+	// no trail: "no record" gets read as "it did not happen". The alternative was
+	// to ship platform edges only and put a disclaimer in the console, which is
+	// the outcome this avoids.
+	//
+	// Scope is not a worry here the way it is for usage: a BYOI edge only ever
+	// serves its own org (bff-edge's mTLS identity pins that), and the records
+	// describe visitors to that org's own services.
+	ReportAccess(ctx context.Context, in *ReportAccessRequest, opts ...grpc.CallOption) (*ReportAccessResponse, error)
 	// RegisterRelay lets a merged edge/relay node self-register its relay endpoint
 	// into the org's DERP map (edge/derp merge-B), mirroring how the edge
 	// self-registers via RegisterEdgeNode. bff-edge derives the org from the mTLS
@@ -258,6 +279,16 @@ func (c *bFFEdgeClient) ReportStatus(ctx context.Context, in *ReportStatusReques
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReportStatusResponse)
 	err := c.cc.Invoke(ctx, BFFEdge_ReportStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bFFEdgeClient) GetTunnelOAuthSecret(ctx context.Context, in *GetTunnelOAuthSecretRequest, opts ...grpc.CallOption) (*GetTunnelOAuthSecretResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetTunnelOAuthSecretResponse)
+	err := c.cc.Invoke(ctx, BFFEdge_GetTunnelOAuthSecret_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -483,6 +514,16 @@ func (c *bFFEdgeClient) ReportRelayUsage(ctx context.Context, in *ReportRelayUsa
 	return out, nil
 }
 
+func (c *bFFEdgeClient) ReportAccess(ctx context.Context, in *ReportAccessRequest, opts ...grpc.CallOption) (*ReportAccessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportAccessResponse)
+	err := c.cc.Invoke(ctx, BFFEdge_ReportAccess_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *bFFEdgeClient) RegisterRelay(ctx context.Context, in *RegisterRelayRequest, opts ...grpc.CallOption) (*RegisterRelayResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RegisterRelayResponse)
@@ -523,6 +564,11 @@ type BFFEdgeServer interface {
 	ClaimTunnel(context.Context, *ClaimTunnelRequest) (*Tunnel, error)
 	// ReportStatus — overwrite edge_node_id.
 	ReportStatus(context.Context, *ReportStatusRequest) (*ReportStatusResponse, error)
+	// GetTunnelOAuthSecret — the login credential for ONE tunnel this edge is
+	// serving. The only RPC here that returns a secret: caller_org_id is
+	// OVERWRITTEN from the mTLS cert, and tunnel-svc checks both that the org
+	// owns the tunnel and that the tunnel really references the policy.
+	GetTunnelOAuthSecret(context.Context, *GetTunnelOAuthSecretRequest) (*GetTunnelOAuthSecretResponse, error)
 	// ListTunnels — fan-out queries the edge does to seed its
 	// in-memory route table on boot. Org-scoped via the request,
 	// not edge-scoped, so no overwrite.
@@ -589,6 +635,20 @@ type BFFEdgeServer interface {
 	// The region carries a "self-<label>" code, which metering keeps OUT of the
 	// plan cap: a customer's own relay is display-only.
 	ReportRelayUsage(context.Context, *ReportRelayUsageRequest) (*ReportRelayUsageResponse, error)
+	// ReportAccess mirrors ReportUsage for the tunnel access log (who reached
+	// which tunnel, from where). bff-edge re-publishes on the cluster NATS as
+	// calabi.access.report → metering-svc's tunnel_access_records.
+	//
+	// It exists so a BYOI self-hosted edge is not a permanent hole in its own
+	// org's audit trail. A trail that is systematically incomplete is worse than
+	// no trail: "no record" gets read as "it did not happen". The alternative was
+	// to ship platform edges only and put a disclaimer in the console, which is
+	// the outcome this avoids.
+	//
+	// Scope is not a worry here the way it is for usage: a BYOI edge only ever
+	// serves its own org (bff-edge's mTLS identity pins that), and the records
+	// describe visitors to that org's own services.
+	ReportAccess(context.Context, *ReportAccessRequest) (*ReportAccessResponse, error)
 	// RegisterRelay lets a merged edge/relay node self-register its relay endpoint
 	// into the org's DERP map (edge/derp merge-B), mirroring how the edge
 	// self-registers via RegisterEdgeNode. bff-edge derives the org from the mTLS
@@ -629,6 +689,9 @@ func (UnimplementedBFFEdgeServer) ClaimTunnel(context.Context, *ClaimTunnelReque
 }
 func (UnimplementedBFFEdgeServer) ReportStatus(context.Context, *ReportStatusRequest) (*ReportStatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportStatus not implemented")
+}
+func (UnimplementedBFFEdgeServer) GetTunnelOAuthSecret(context.Context, *GetTunnelOAuthSecretRequest) (*GetTunnelOAuthSecretResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTunnelOAuthSecret not implemented")
 }
 func (UnimplementedBFFEdgeServer) ListTunnels(context.Context, *ListTunnelsRequest) (*ListTunnelsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListTunnels not implemented")
@@ -683,6 +746,9 @@ func (UnimplementedBFFEdgeServer) ReportUsage(context.Context, *ReportUsageReque
 }
 func (UnimplementedBFFEdgeServer) ReportRelayUsage(context.Context, *ReportRelayUsageRequest) (*ReportRelayUsageResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportRelayUsage not implemented")
+}
+func (UnimplementedBFFEdgeServer) ReportAccess(context.Context, *ReportAccessRequest) (*ReportAccessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportAccess not implemented")
 }
 func (UnimplementedBFFEdgeServer) RegisterRelay(context.Context, *RegisterRelayRequest) (*RegisterRelayResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RegisterRelay not implemented")
@@ -848,6 +914,24 @@ func _BFFEdge_ReportStatus_Handler(srv interface{}, ctx context.Context, dec fun
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(BFFEdgeServer).ReportStatus(ctx, req.(*ReportStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BFFEdge_GetTunnelOAuthSecret_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTunnelOAuthSecretRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BFFEdgeServer).GetTunnelOAuthSecret(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BFFEdge_GetTunnelOAuthSecret_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BFFEdgeServer).GetTunnelOAuthSecret(ctx, req.(*GetTunnelOAuthSecretRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1137,6 +1221,24 @@ func _BFFEdge_ReportRelayUsage_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BFFEdge_ReportAccess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportAccessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BFFEdgeServer).ReportAccess(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BFFEdge_ReportAccess_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BFFEdgeServer).ReportAccess(ctx, req.(*ReportAccessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _BFFEdge_RegisterRelay_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RegisterRelayRequest)
 	if err := dec(in); err != nil {
@@ -1195,6 +1297,10 @@ var BFFEdge_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _BFFEdge_ReportStatus_Handler,
 		},
 		{
+			MethodName: "GetTunnelOAuthSecret",
+			Handler:    _BFFEdge_GetTunnelOAuthSecret_Handler,
+		},
+		{
 			MethodName: "ListTunnels",
 			Handler:    _BFFEdge_ListTunnels_Handler,
 		},
@@ -1245,6 +1351,10 @@ var BFFEdge_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReportRelayUsage",
 			Handler:    _BFFEdge_ReportRelayUsage_Handler,
+		},
+		{
+			MethodName: "ReportAccess",
+			Handler:    _BFFEdge_ReportAccess_Handler,
 		},
 		{
 			MethodName: "RegisterRelay",

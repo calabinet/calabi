@@ -69,6 +69,13 @@ func (MeshNode) Fields() []ent.Field {
 		field.String("device_fingerprint").
 			Default("").
 			Comment("daemon's self-reported per-install id; lets the console link this device to its client record. Display only — never authorize on it"),
+		field.String("os").
+			Default("").
+			Comment("platform the daemon's runtime reported at registration (windows/linux/darwin). A claim, display only. Empty for nodes enrolled before it was collected — render nothing, not \"unknown\""),
+		field.Bool("block_incoming").
+			Optional().
+			Nillable().
+			Comment("the machine's OWN 'refuse all inbound connections' switch, as it last reported. NULLABLE on purpose: null = this daemon is too old to say, which must not read as a positive 'accepts connections'. Reported state only — enforcement is entirely local to the node"),
 		field.Bool("tags_pinned").
 			Default(false).
 			Comment("an admin set the tags in the console; re-registration must not overwrite them from the auth key"),

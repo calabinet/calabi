@@ -200,20 +200,26 @@ type PortPool struct {
 	free     []uint32
 	next     uint32
 	reserved map[uint32]struct{}
-	// inUse counts ports currently handed out (Allocate'd, not yet
+	// allocated is the set currently handed out (Allocate'd, not yet
 	// Release'd). Feeds the port-pool utilization metric so ops can see an
 	// edge approaching exhaustion of its ~1000-port range before TCP/UDP
 	// creates start failing.
-	inUse int
+	//
+	// A set rather than a counter because Reserve takes a port OVER from it
+	// (the number was handed out, and now a tunnel row holds it) and a counter
+	// cannot tell whether that call should decrement — the old one double-
+	// counted such a port, reading up to 2x reality on the exhaustion metric.
+	allocated map[uint32]struct{}
 }
 
 // NewPortPool initializes a pool. min <= max.
 func NewPortPool(min, max uint32) *PortPool {
 	return &PortPool{
-		min:      min,
-		max:      max,
-		next:     min,
-		reserved: make(map[uint32]struct{}),
+		min:       min,
+		max:       max,
+		next:      min,
+		reserved:  make(map[uint32]struct{}),
+		allocated: make(map[uint32]struct{}),
 	}
 }
 
@@ -231,7 +237,7 @@ func (p *PortPool) Allocate() (uint32, bool) {
 		port := p.free[n-1]
 		p.free = p.free[:n-1]
 		if _, taken := p.reserved[port]; !taken {
-			p.inUse++
+			p.allocated[port] = struct{}{}
 			return port, true
 		}
 	}
@@ -241,7 +247,7 @@ func (p *PortPool) Allocate() (uint32, bool) {
 		port := p.next
 		p.next++
 		if _, taken := p.reserved[port]; !taken {
-			p.inUse++
+			p.allocated[port] = struct{}{}
 			return port, true
 		}
 	}
@@ -259,17 +265,21 @@ func (p *PortPool) Release(port uint32) {
 	if _, taken := p.reserved[port]; taken {
 		return
 	}
-	if p.inUse > 0 {
-		p.inUse--
-	}
+	delete(p.allocated, port)
 	p.free = append(p.free, port)
 }
 
-// Reserve marks `port` as unavailable for auto-allocation. Used at boot
-// to seed the pool from tunnel-svc's view of which ports already have
-// live rows owned by this edge — protects member A's tunnel from
-// getting overwritten by a member B claim that happens to land on the
-// same number. Safe to call before or after Allocate(); idempotent.
+// Reserve marks `port` as unavailable for auto-allocation. Used at boot to
+// seed the pool from tunnel-svc's view of which ports already have live rows
+// owned by this edge, and at every successful claim/persist thereafter —
+// protects member A's tunnel from getting overwritten by a member B claim that
+// happens to land on the same number. Safe to call before or after Allocate();
+// idempotent.
+//
+// Reserved beats allocated: a port handed out by Allocate and then Reserve'd
+// leaves the allocated set, because from then on it is the tunnel ROW that
+// holds it, and the row outlives the proxy. Release is a no-op on it; only
+// Unreserve (the row was deleted) puts it back.
 //
 // Out-of-range ports are silently ignored so the caller doesn't have to
 // pre-filter when seeding from DB (different edges may run different
@@ -281,6 +291,37 @@ func (p *PortPool) Reserve(port uint32) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.reserved[port] = struct{}{}
+	delete(p.allocated, port)
+}
+
+// Unreserve puts port back into circulation. The only legitimate caller is the
+// tunnel DELETE path: the row that held the number is gone, so the number is
+// free again.
+//
+// Nothing else may call this. "The proxy closed" is NOT "the row is gone" —
+// a closed proxy leaves its tunnel row live and still bound to this port, and
+// treating those two as the same thing is exactly the bug Reserve exists to
+// stop. Without this call the pool would still be correct, just lossy: a port
+// would stay burned until the next restart re-seeded the pool from the DB.
+func (p *PortPool) Unreserve(port uint32) {
+	if port < p.min || port > p.max {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if _, taken := p.reserved[port]; !taken {
+		return
+	}
+	delete(p.reserved, port)
+	// A port can sit in `free` AND in `reserved` (released first, reserved
+	// after — Allocate skips it). Re-queueing it would put the same number in
+	// the free list twice, and Allocate would hand it to two tunnels.
+	for _, f := range p.free {
+		if f == port {
+			return
+		}
+	}
+	p.free = append(p.free, port)
 }
 
 // InUse reports how many ports are currently occupied: dynamically
@@ -290,7 +331,7 @@ func (p *PortPool) Reserve(port uint32) {
 func (p *PortPool) InUse() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.inUse + len(p.reserved)
+	return len(p.allocated) + len(p.reserved)
 }
 
 // Capacity is the total number of ports in the [min, max] range.

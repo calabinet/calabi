@@ -9,6 +9,18 @@ import (
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent"
 )
 
+// The CoordSettingFunc type is an adapter to allow the use of ordinary
+// function as CoordSetting mutator.
+type CoordSettingFunc func(context.Context, *ent.CoordSettingMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CoordSettingFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CoordSettingMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CoordSettingMutation", m)
+}
+
 // The MeshACLFunc type is an adapter to allow the use of ordinary
 // function as MeshACL mutator.
 type MeshACLFunc func(context.Context, *ent.MeshACLMutation) (ent.Value, error)
@@ -31,6 +43,18 @@ func (f MeshACLRevisionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MeshACLRevisionMutation", m)
+}
+
+// The MeshConnRecordFunc type is an adapter to allow the use of ordinary
+// function as MeshConnRecord mutator.
+type MeshConnRecordFunc func(context.Context, *ent.MeshConnRecordMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f MeshConnRecordFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MeshConnRecordMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MeshConnRecordMutation", m)
 }
 
 // The MeshNodeFunc type is an adapter to allow the use of ordinary

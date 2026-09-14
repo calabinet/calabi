@@ -31,7 +31,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
 	"github.com/calabi/calabi/apps/client/internal/probe"
 )
 
@@ -46,6 +45,17 @@ type upstreamHealthReporter struct {
 	// last reported healthy state + when, keyed by tunnel_id.
 	lastHealthy map[int64]bool
 	lastSentAt  map[int64]time.Time
+
+	// postFailing tracks which tunnels' reports are currently not landing, so a
+	// failure is logged at WARN once per outage instead of either spamming
+	// every 30s or — as before — being invisible at DEBUG. A report that cannot
+	// be delivered means the console is showing a state we know to be wrong;
+	// that has to be findable in the log afterwards rather than inferred.
+	postFailing map[int64]bool
+	// noTokenLogged keeps the "nothing to report with" warning to one line per
+	// process. It is a real condition (no credential at all) but it repeats
+	// every tick forever.
+	noTokenLogged bool
 }
 
 const (
@@ -69,6 +79,7 @@ func runUpstreamHealthReporter(ctx context.Context, logger *slog.Logger, mon *pr
 		httpc:       &http.Client{Timeout: 6 * time.Second},
 		lastHealthy: make(map[int64]bool),
 		lastSentAt:  make(map[int64]time.Time),
+		postFailing: make(map[int64]bool),
 	}
 	t := time.NewTicker(upstreamReportInterval)
 	defer t.Stop()
@@ -89,8 +100,17 @@ func (r *upstreamHealthReporter) tick(ctx context.Context) {
 	}
 	token := resolveReportToken()
 	if token == "" {
-		return // not logged in / no api-key yet — nothing to report with
+		// Not logged in / no api-key yet. Legitimate at boot, permanent if the
+		// daemon is running without a credential this resolver can see — and
+		// the whole feature is off either way, so say it once.
+		if !r.noTokenLogged {
+			r.noTokenLogged = true
+			r.logger.Warn("no credential to report upstream health with; the console " +
+				"will show these tunnels as online even when the local upstream is down")
+		}
+		return
 	}
+	r.noTokenLogged = false
 	seen := make(map[int64]struct{}, len(results))
 	for _, res := range results {
 		tid, ok := r.reg.TunnelIDByProxyID(res.ProxyID)
@@ -118,6 +138,7 @@ func (r *upstreamHealthReporter) tick(ctx context.Context) {
 		if _, ok := seen[tid]; !ok {
 			delete(r.lastHealthy, tid)
 			delete(r.lastSentAt, tid)
+			delete(r.postFailing, tid)
 		}
 	}
 }
@@ -133,27 +154,54 @@ func (r *upstreamHealthReporter) post(ctx context.Context, token string, tunnelI
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := r.httpc.Do(req)
 	if err != nil {
-		r.logger.Debug("upstream health post failed", "tunnel_id", tunnelID, "err", err)
+		r.notePostFailed(tunnelID, "err", err)
 		return false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
-		r.logger.Debug("upstream health post non-2xx", "tunnel_id", tunnelID, "code", resp.StatusCode)
+		r.notePostFailed(tunnelID, "code", resp.StatusCode)
 		return false
+	}
+	if r.postFailing[tunnelID] {
+		delete(r.postFailing, tunnelID)
+		r.logger.Info("upstream health reporting recovered", "tunnel_id", tunnelID)
 	}
 	return true
 }
 
-// resolveReportToken mirrors clientreg.tokenFor: prefer the rotating login
-// access token, fall back to the long-lived API key (agent mode). Re-read each
-// tick so a post-boot login starts reporting without a restart.
+// notePostFailed logs the first failure of an outage at WARN and the repeats at
+// DEBUG. A report that does not land leaves the console asserting something we
+// know to be false, so the first one is worth a line; the next hundred are the
+// same line.
+func (r *upstreamHealthReporter) notePostFailed(tunnelID int64, k string, v any) {
+	if r.postFailing[tunnelID] {
+		r.logger.Debug("upstream health post still failing", "tunnel_id", tunnelID, k, v)
+		return
+	}
+	r.postFailing[tunnelID] = true
+	r.logger.Warn("upstream health post failed; the console will keep showing this "+
+		"tunnel's last known state", "tunnel_id", tunnelID, k, v)
+}
+
+// resolveReportToken returns the bearer to report with — the SAME credential
+// the session authenticates with, via the same resolver. Re-read each tick so a
+// post-boot login starts reporting without a restart.
+//
+// It used to have its own lookup that read the creds FILE and nothing else,
+// "mirroring clientreg.tokenFor". That mirrored the wrong function: an installed
+// agent's key lives in $CALABI_API_KEY and is never written to the file (nothing
+// in the client assigns creds.Config.APIKey except the three logout paths that
+// clear it), so on every agent-mode daemon this returned "" and tick() bailed
+// before reading a single probe result — no upstream-health report ever, for any
+// tunnel, healthy or not. clientreg gets away with the file-only lookup because
+// its one caller is the post-login hook, where the file always has a token.
+//
+// credDefault is excluded deliberately: resolveCredential's last resort is the
+// demo constant, and posting that would 401 every 30 seconds forever.
 func resolveReportToken() string {
-	cfg, err := creds.Load()
-	if err != nil || cfg == nil {
-		return ""
+	tok, kind := resolveCredential()
+	if kind == credAPIKey || kind == credLogin {
+		return tok
 	}
-	if cfg.AccessToken != "" {
-		return cfg.AccessToken
-	}
-	return cfg.APIKey
+	return ""
 }

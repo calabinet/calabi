@@ -128,6 +128,8 @@ func (s *Server) UpdateNodeDeclarations(ctx context.Context, req *meshpb.UpdateN
 		Meshnet:           self.Meshnet,
 		NodeKey:           self.NodeKey,
 		DeviceFingerprint: req.GetDeviceFingerprint(),
+		OS:                req.GetOs(),
+		BlockIncoming:     req.BlockIncoming,
 	}
 	for _, d := range req.GetDeclaredServices() {
 		in.DeclaredServices = append(in.DeclaredServices, core.Service{
@@ -189,6 +191,8 @@ func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeReque
 		Tags:              ident.Tags,
 		OwnerUserID:       ident.UserID,
 		DeviceFingerprint: req.GetDeviceFingerprint(),
+		OS:                req.GetOs(),
+		BlockIncoming:     req.BlockIncoming,
 	}
 	// Declarations are claims: core records them as pending and an admin
 	// confirms them. Nothing is validated here beyond shape — core drops the
@@ -342,6 +346,45 @@ func (s *Server) ReportServiceHealth(ctx context.Context, req *meshpb.ReportServ
 	}
 	s.coord.ServiceHealth.Report(self.ID, out, time.Now())
 	return &meshpb.ReportServiceHealthResponse{}, nil
+}
+
+// ReportConnections stores who this node exchanged traffic with, by the hour.
+//
+// Authorized by the session, like every other post-registration call, and the
+// node it reports FOR is the session's own node — never the node_key in the
+// request. A node may only ever add rows about itself; without that, one member
+// could write an access trail implicating a colleague's machine, which is a
+// worse failure than having no trail at all.
+//
+// A coordinator that keeps no trail (ConnRecords nil) accepts the call and
+// stores nothing, so the same daemon works against both.
+func (s *Server) ReportConnections(ctx context.Context, req *meshpb.ReportConnectionsRequest) (*meshpb.ReportConnectionsResponse, error) {
+	self, err := s.authorizeNode(ctx, req.GetSessionToken(), 0)
+	if err != nil {
+		return nil, err
+	}
+	samples := make([]core.ConnSample, 0, len(req.GetSamples()))
+	for _, x := range req.GetSamples() {
+		key, kerr := meshproto.ParseNodeKey(x.GetPeerNodeKey())
+		if kerr != nil {
+			// An unparseable key is dropped, not an error: one bad entry must not
+			// cost the rest of the report, and there is nothing to retry.
+			continue
+		}
+		samples = append(samples, core.ConnSample{
+			PeerNodeKey: key,
+			WindowStart: time.Unix(x.GetWindowStart(), 0).UTC(),
+			WindowEnd:   time.Unix(x.GetWindowEnd(), 0).UTC(),
+			BytesTx:     x.GetBytesTx(),
+			BytesRx:     x.GetBytesRx(),
+			Path:        x.GetPath(),
+		})
+	}
+	stored, err := s.coord.RecordConnections(ctx, self.ID, samples)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "record connections: %v", err)
+	}
+	return &meshpb.ReportConnectionsResponse{Stored: int32(stored)}, nil
 }
 
 // ReportEndpoints records a node's discovered candidate endpoints and notifies

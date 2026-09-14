@@ -12,8 +12,10 @@ package policy
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -29,12 +31,29 @@ type advanced struct {
 	// the upstream from connection floods). nil = unlimited. For HTTP
 	// keep-alive this is a connection-rate, not a per-request rate.
 	rateLimiter *rate.Limiter
+	// perIP, when non-nil, additionally caps each VISITOR ADDRESS. Opt-in, and
+	// separate from rateLimiter, which stays the aggregate ceiling: with only
+	// the shared bucket, a tunnel rate limit is also the lever an abuser pulls
+	// — whoever arrives fastest drains it and every other visitor gets 429.
+	perIP *perIPLimiter
 	// reqHeaders, when non-nil, rewrites each HTTP/HTTPS request's headers
 	// before forwarding upstream (set/replace + remove). nil = no rewrite.
 	reqHeaders *headerRewrite
 	// oauthCfg, when non-nil, gates HTTP/HTTPS visitors behind an identity
 	// provider login (Google / GitHub). nil = no OAuth authentication.
 	oauthCfg *oauth.Config
+	// oauthRef is the ORG LOGIN POLICY this tunnel points at, when it points
+	// at one. Its client secret is deliberately not in config_json — it lives
+	// once, in the control plane — so a policy carrying a ref is INCOMPLETE
+	// until ResolveOAuthSecret supplies it. See NeedsOAuthSecret.
+	oauthRef string
+	// oauthPending holds the non-secret half while the secret is outstanding,
+	// so resolving is one call rather than a re-parse.
+	oauthPending *pendingOAuth
+	// oauthSecret is what was resolved, kept so it can be carried across a
+	// hot-swap: a config-svc delta rebuilds the policy from a blob that has no
+	// secret in it.
+	oauthSecret string
 }
 
 // rawAdvanced mirrors the config_json blocks parsed here. It overlaps
@@ -44,12 +63,21 @@ type rawAdvanced struct {
 	Security struct {
 		RateLimit struct {
 			PerMinute int64 `json:"per_minute"`
+			// PerIPPerMinute caps a single visitor address. Deliberately a new
+			// key rather than a reinterpretation of PerMinute: reading a
+			// shipped number as per-IP would multiply every configured limit by
+			// the number of visitors, and the first sign of it would be the
+			// upstream falling over.
+			PerIPPerMinute int64 `json:"per_ip_per_minute"`
 		} `json:"rate_limit"`
 		RequestHeaders struct {
 			Set    map[string]string `json:"set"`
 			Remove []string          `json:"remove"`
 		} `json:"request_headers"`
 		OAuth struct {
+			// FromPolicy names an ORG login policy. When set, the secret is
+			// NOT here — tunnel-svc expands everything but the credential.
+			FromPolicy   string   `json:"from_policy"`
 			Provider     string   `json:"provider"`
 			ClientID     string   `json:"client_id"`
 			ClientSecret string   `json:"client_secret"`
@@ -69,10 +97,26 @@ func (p *Policy) parseAdvanced(configJSON string) bool {
 		return false
 	}
 	p.adv.rateLimiter = buildRateLimiter(raw.Security.RateLimit.PerMinute)
+	p.adv.perIP = buildPerIPLimiter(raw.Security.RateLimit.PerIPPerMinute)
 	p.adv.reqHeaders = parseRequestHeaders(raw.Security.RequestHeaders.Set, raw.Security.RequestHeaders.Remove)
-	p.adv.oauthCfg = parseOAuth(raw.Security.OAuth.Provider, raw.Security.OAuth.ClientID,
-		raw.Security.OAuth.ClientSecret, raw.Security.OAuth.AllowEmails, raw.Security.OAuth.AllowDomains)
-	return p.adv.rateLimiter != nil || p.adv.reqHeaders != nil || p.adv.oauthCfg != nil
+	p.adv.oauthRef = strings.TrimSpace(raw.Security.OAuth.FromPolicy)
+	if p.adv.oauthRef != "" && strings.TrimSpace(raw.Security.OAuth.ClientSecret) == "" {
+		// Referencing a policy and carrying no secret: park the non-secret half
+		// and wait. Building an oauth.Config here would fail (it requires a
+		// credential) and the tunnel would serve with no login — which is how a
+		// console edit to an unrelated field used to switch SSO off.
+		p.adv.oauthPending = &pendingOAuth{
+			provider: raw.Security.OAuth.Provider,
+			clientID: raw.Security.OAuth.ClientID,
+			emails:   raw.Security.OAuth.AllowEmails,
+			domains:  raw.Security.OAuth.AllowDomains,
+		}
+	} else {
+		p.adv.oauthCfg = parseOAuth(raw.Security.OAuth.Provider, raw.Security.OAuth.ClientID,
+			raw.Security.OAuth.ClientSecret, raw.Security.OAuth.AllowEmails, raw.Security.OAuth.AllowDomains)
+	}
+	return p.adv.rateLimiter != nil || p.adv.perIP != nil ||
+		p.adv.reqHeaders != nil || p.adv.oauthCfg != nil || p.adv.oauthPending != nil
 }
 
 // ---- Rate limit ----------------------------------------------------------
@@ -85,21 +129,131 @@ func buildRateLimiter(perMin int64) *rate.Limiter {
 	if perMin <= 0 {
 		return nil
 	}
+	lim, burst := rateAndBurst(perMin)
+	return rate.NewLimiter(lim, burst)
+}
+
+// rateAndBurst turns a per-minute cap into token-bucket terms: events/sec =
+// perMin/60, burst = perMin/6 (about 10s of budget) with a floor so a browser
+// opening a clump of parallel connections is not nuisance-rejected.
+func rateAndBurst(perMin int64) (rate.Limit, int) {
 	burst := int(perMin / 6)
 	if burst < 10 {
 		burst = 10
 	}
-	return rate.NewLimiter(rate.Limit(float64(perMin)/60.0), burst)
+	return rate.Limit(float64(perMin) / 60.0), burst
 }
 
-// HasRateLimit reports whether the policy caps the tunnel's connection rate.
-func (p *Policy) HasRateLimit() bool { return p != nil && p.adv.rateLimiter != nil }
+// HasRateLimit reports whether the policy caps this tunnel connection rate AT
+// ALL — aggregate or per-visitor.
+//
+// Both, because every listener guards the call as
+// `if pol.HasRateLimit() && !pol.AllowRate(ip)`: a tunnel that configured only
+// a per-IP cap would otherwise never reach AllowRate, and the limit it asked
+// for would silently not exist.
+func (p *Policy) HasRateLimit() bool {
+	return p != nil && (p.adv.rateLimiter != nil || p.adv.perIP != nil)
+}
 
-// AllowRate consumes one token from the per-tunnel rate bucket, returning
-// false when the bucket is drained (caller sheds: 429 / close / drop). No
-// limiter = always allowed.
-func (p *Policy) AllowRate() bool {
-	if p == nil || p.adv.rateLimiter == nil {
+// maxPerIPBuckets caps how many visitor addresses ONE TUNNEL tracks.
+//
+// The map is keyed by attacker-controlled input, so the map is the
+// vulnerability: uncapped, a flood of rotated or spoofed sources turns a
+// protective feature into a memory-exhaustion vector. Two generations are kept
+// (see perIPLimiter), so the real ceiling is twice this.
+const maxPerIPBuckets = 4096
+
+// perIPLimiter is a bounded set of token buckets keyed by visitor address.
+//
+// Eviction is a two-generation clock rather than a true LRU: when `cur` fills
+// it becomes `prev` and a fresh map takes over, and a lookup that hits `prev`
+// promotes the bucket. Idle addresses age out within two rotations, with no
+// per-entry bookkeeping on the accept path. A real LRU would cost a list
+// update per visitor connection to make eviction marginally fairer — and the
+// thing being evicted is a rate-limit bucket, where losing one means a visitor
+// gets a fresh allowance.
+//
+// Note what eviction means against an attacker rotating source addresses: each
+// new address starts with a full burst. That is inherent to per-IP limiting,
+// and it is exactly why the tunnel-wide bucket stays — it is the backstop a
+// rotating flood still has to get past.
+//
+// One mutex per tunnel, held for a map lookup on the accept path. Next to what
+// an accept already costs (syscalls, TLS, an upstream dial) that is noise, and
+// a lock-free scheme would still have to solve rotation.
+type perIPLimiter struct {
+	lim   rate.Limit
+	burst int
+
+	mu   sync.Mutex
+	cur  map[string]*rate.Limiter
+	prev map[string]*rate.Limiter
+}
+
+func buildPerIPLimiter(perMin int64) *perIPLimiter {
+	if perMin <= 0 {
+		return nil
+	}
+	lim, burst := rateAndBurst(perMin)
+	return &perIPLimiter{lim: lim, burst: burst, cur: make(map[string]*rate.Limiter)}
+}
+
+// allow consumes one token from this address bucket.
+//
+// An address we could not read shares the empty-string bucket with every other
+// unattributable visitor. That is worse for those visitors than having their
+// own — which is the right way round: an unreadable address must not become a
+// way to skip the limit.
+func (l *perIPLimiter) allow(ip string) bool {
+	l.mu.Lock()
+	b, ok := l.cur[ip]
+	if !ok {
+		if b, ok = l.prev[ip]; ok {
+			l.cur[ip] = b // promote: in use again
+		} else {
+			if len(l.cur) >= maxPerIPBuckets {
+				l.prev, l.cur = l.cur, make(map[string]*rate.Limiter)
+			}
+			b = rate.NewLimiter(l.lim, l.burst)
+			l.cur[ip] = b
+		}
+	}
+	l.mu.Unlock()
+	return b.Allow()
+}
+
+func (l *perIPLimiter) count() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.cur) + len(l.prev)
+}
+
+// HasPerIPRateLimit reports whether the policy caps any single visitor.
+func (p *Policy) HasPerIPRateLimit() bool { return p != nil && p.adv.perIP != nil }
+
+// perIPBucketCount is how many addresses are currently tracked. Test-facing.
+func (p *Policy) perIPBucketCount() int {
+	if p == nil || p.adv.perIP == nil {
+		return 0
+	}
+	return p.adv.perIP.count()
+}
+
+// AllowRate consumes one token for this visitor, returning false when either
+// bucket is drained (caller sheds: 429 / close / drop). No limiter = allowed.
+//
+// PER-IP IS CHECKED FIRST, and a rejection there returns without touching the
+// tunnel-wide bucket. Charging the aggregate for a connection that was already
+// refused would let an abuser drain it through the very gate that stopped them,
+// which is the bug this pair exists to fix.
+func (p *Policy) AllowRate(visitorIP string) bool {
+	if p == nil {
+		return true
+	}
+	if p.adv.perIP != nil && !p.adv.perIP.allow(visitorIP) {
+		return false
+	}
+	if p.adv.rateLimiter == nil {
 		return true
 	}
 	return p.adv.rateLimiter.Allow()
@@ -262,6 +416,67 @@ func parseOAuth(provider, clientID, clientSecret string, allowEmails, allowDomai
 		return nil
 	}
 	return c
+}
+
+// pendingOAuth is the non-secret half of a login that is waiting for its
+// credential.
+type pendingOAuth struct {
+	provider string
+	clientID string
+	emails   []string
+	domains  []string
+}
+
+// OAuthPolicyRef is the org login policy this tunnel references, or "".
+func (p *Policy) OAuthPolicyRef() string {
+	if p == nil {
+		return ""
+	}
+	return p.adv.oauthRef
+}
+
+// NeedsOAuthSecret reports that this policy names a login it cannot yet perform.
+//
+// The caller MUST act on it. A policy in this state has no OAuth gate at all,
+// so treating it as "no login configured" serves the tunnel to everybody — the
+// failure is open, silent, and looks exactly like a tunnel that was never meant
+// to have a login.
+func (p *Policy) NeedsOAuthSecret() bool {
+	return p != nil && p.adv.oauthPending != nil
+}
+
+// OAuthSecret returns the resolved credential, for carrying across a hot-swap.
+func (p *Policy) OAuthSecret() string {
+	if p == nil {
+		return ""
+	}
+	return p.adv.oauthSecret
+}
+
+// ResolveOAuthSecret completes a policy that referenced an org login.
+//
+// An empty secret is an ERROR rather than a no-op: a caller whose control-plane
+// fetch came back with nothing must not conclude it is finished and install a
+// policy with no gate.
+func (p *Policy) ResolveOAuthSecret(secret string) error {
+	if p == nil {
+		return errors.New("policy: nil")
+	}
+	if p.adv.oauthPending == nil {
+		return nil // nothing was waiting
+	}
+	if strings.TrimSpace(secret) == "" {
+		return errors.New("policy: empty oauth client secret")
+	}
+	pend := p.adv.oauthPending
+	cfg, err := oauth.New(pend.provider, pend.clientID, secret, pend.emails, pend.domains)
+	if err != nil {
+		return err
+	}
+	p.adv.oauthCfg = cfg
+	p.adv.oauthSecret = secret
+	p.adv.oauthPending = nil
+	return nil
 }
 
 // HasOAuth reports whether the policy gates visitors behind an OAuth login.

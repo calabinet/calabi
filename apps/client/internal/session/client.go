@@ -352,6 +352,11 @@ type Assigned struct {
 	ProxyID    string
 	Domain     string
 	RemotePort uint32
+	// ClientPolicy is the edge's answer about the security policy we offered:
+	// "applied", "relayed", or "" when we offered none — and also "" from an
+	// edge too old to answer, so callers must treat it as unknown rather than
+	// as agreement. See proto.NewProxyResponse.ClientPolicy.
+	ClientPolicy proto.ClientPolicyResult
 }
 
 func (c *Client) RegisterTunnel(ctx context.Context, t Tunnel) (Assigned, error) {
@@ -390,9 +395,10 @@ func (c *Client) RegisterTunnel(ctx context.Context, t Tunnel) (Assigned, error)
 				return Assigned{}, resp.Error
 			}
 			return Assigned{
-				ProxyID:    resp.ProxyID,
-				Domain:     resp.Domain,
-				RemotePort: resp.RemotePort,
+				ProxyID:      resp.ProxyID,
+				Domain:       resp.Domain,
+				RemotePort:   resp.RemotePort,
+				ClientPolicy: resp.ClientPolicy,
 			}, nil
 		case proto.FrameConfigPush, proto.FramePing, proto.FramePong:
 			// Benign interleaved control frames — ignore and keep waiting.
@@ -458,9 +464,10 @@ func (c *Client) RegisterTunnelLive(ctx context.Context, t Tunnel, claimTunnelID
 			return Assigned{}, resp.Error
 		}
 		return Assigned{
-			ProxyID:    resp.ProxyID,
-			Domain:     resp.Domain,
-			RemotePort: resp.RemotePort,
+			ProxyID:      resp.ProxyID,
+			Domain:       resp.Domain,
+			RemotePort:   resp.RemotePort,
+			ClientPolicy: resp.ClientPolicy,
 		}, nil
 	}
 }

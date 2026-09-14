@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/netip"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/identity"
@@ -24,7 +27,7 @@ import (
 // (mesh_nodes table vs Device-table extension, an open design point) land in
 // MESH.8 behind the SAME core interfaces.
 func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
-	nodes, acl, aclRevs, services, settings, relays, err := platformStores(logger)
+	nodes, acl, aclRevs, services, settings, relays, connRecs, err := platformStores(logger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -107,7 +110,12 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 		ACLRevisions: aclRevs,
 		Services:     services,
 		Settings:     settings,
-		IPAM:         ipam,
+		ConnRecords:  connRecs,
+		// Same store; nil on the in-memory path, where every operator setting
+		// falls back to its default.
+		PlatformSettings:               platformSettings(connRecs),
+		ConnRecordRetentionDefaultDays: connRecordRetentionDefault(logger),
+		IPAM:                           ipam,
 		// Platform regions PLUS this org's own relays (R2). Platform entries are
 		// never dropped: DefaultDERPHome names one, and a self-hosted region must
 		// never be a new node's default home. Platform regions are edge-derived
@@ -147,21 +155,104 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 // seat billing, and the console ACL editor meaningful across restarts
 // (MESH.8c/8e). A configured-but-broken DSN aborts startup rather than silently
 // losing persistence.
-func platformStores(logger *slog.Logger) (core.NodeStore, core.ACLStore, core.ACLRevisionStore, core.ServiceStore, core.SettingsStore, core.RelayStore, error) {
+func platformStores(logger *slog.Logger) (core.NodeStore, core.ACLStore, core.ACLRevisionStore, core.ServiceStore, core.SettingsStore, core.RelayStore, core.ConnRecordStore, error) {
 	dsn := svcboot.DBDsn(envPrefix+"_DB_DSN", legacyEnvPrefix+"_DB_DSN")
 	if dsn == "" {
 		logger.Warn("no CALABI_COORD_DB_DSN / CALABI_DB_DSN; using in-memory node + ACL stores (state lost on restart)")
-		return core.NewMemNodeStore(), core.NewMemACLStore(), core.NewMemACLRevisionStore(), core.NewMemServiceStore(), core.NewMemSettingsStore(), core.NewMemRelayStore(), nil
+		// No connection-record store on this path, deliberately. An audit trail
+		// that disappears on restart is worse than none: it reads as "nothing
+		// happened" for the window it lost.
+		return core.NewMemNodeStore(), core.NewMemACLStore(), core.NewMemACLRevisionStore(), core.NewMemServiceStore(), core.NewMemSettingsStore(), core.NewMemRelayStore(), nil, nil
 	}
 	st, err := platformstore.Open(dsn)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, fmt.Errorf("open mesh store: %w", err)
+		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("open mesh store: %w", err)
 	}
 	if err := st.Migrate(context.Background()); err != nil {
-		return nil, nil, nil, nil, nil, nil, fmt.Errorf("migrate mesh store: %w", err)
+		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("migrate mesh store: %w", err)
 	}
 	logger.Info("mesh store: ent/DB (durable node registry + per-org ACL + ACL history + services + self-hosted relays)")
-	return st, st, st, st, st, st, nil
+	// The data-plane audit trail is on by default and switchable off, because it
+	// is the kind of record an operator may be required NOT to keep. Off means
+	// reports are accepted and dropped, so no daemon changes behaviour either way.
+	var conn core.ConnRecordStore = st
+	if strings.EqualFold(strings.TrimSpace(env("CONN_RECORDS")), "off") {
+		logger.Info("mesh: connection records disabled by CALABI_COORD_CONN_RECORDS=off; reports will be accepted and discarded")
+		conn = nil
+	}
+	return st, st, st, st, st, st, conn, nil
+}
+
+// platformSettings exposes the ent store as the operator-settings store when
+// there is one. A type assertion rather than a second return value from
+// platformStores: it is the same object, and threading it separately would give
+// two names for one thing that could then be wired inconsistently.
+func platformSettings(c core.ConnRecordStore) core.PlatformSettingStore {
+	ps, _ := c.(core.PlatformSettingStore)
+	return ps
+}
+
+// connRecordRetentionDefault is the retention used until an operator sets one in
+// the admin console. The env var is the DEFAULT, not the value: a stored setting
+// wins, so changing the console does not require a redeploy and an operator who
+// set the env before the console existed is not surprised by it being ignored.
+//
+// Retention is not optional — a trail nobody trims becomes a liability of its
+// own — so an unset or unparseable value falls back to 90 days rather than to
+// "forever". The failure mode of a retention setting has to be keeping LESS than
+// intended, never more.
+func connRecordRetentionDefault(logger *slog.Logger) int {
+	const def = 90
+	raw := strings.TrimSpace(env("CONN_RECORD_RETENTION_DAYS"))
+	if raw == "" {
+		return def
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 {
+		logger.Warn("mesh: CALABI_COORD_CONN_RECORD_RETENTION_DAYS is not a positive number of days; using the default",
+			"value", raw, "default_days", def)
+		return def
+	}
+	clamped, changed := core.ClampConnRecordRetentionDays(n)
+	if changed {
+		logger.Warn("mesh: CALABI_COORD_CONN_RECORD_RETENTION_DAYS is outside the allowed range; clamped",
+			"value", n, "used", clamped, "max", core.MaxConnRecordRetentionDays)
+	}
+	return clamped
+}
+
+// runConnRecordPurge trims the trail once at startup and daily after. Daily
+// rather than hourly because the rows are hourly buckets: a sweep that runs more
+// often than the data changes is load without an effect.
+func runConnRecordPurge(ctx context.Context, logger *slog.Logger, coord *core.Coordinator) {
+	if coord.ConnRecords == nil {
+		return
+	}
+	purge := func() {
+		// Re-read the setting on EVERY sweep rather than caching it at startup:
+		// an operator who shortens retention in the console expects the next
+		// sweep to honour it, not the next restart.
+		days := coord.ConnRecordRetentionDays(ctx)
+		n, err := coord.ConnRecords.PurgeConnRecordsBefore(ctx, time.Now().AddDate(0, 0, -days))
+		if err != nil {
+			logger.Warn("mesh: purging old connection records failed", "err", err)
+			return
+		}
+		if n > 0 {
+			logger.Info("mesh: purged connection records past retention", "rows", n, "keep_days", days)
+		}
+	}
+	purge()
+	t := time.NewTicker(24 * time.Hour)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			purge()
+		}
+	}
 }
 
 // nodeQuota picks the platform node cap: the per-plan quota-svc cap when

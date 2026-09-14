@@ -48,7 +48,7 @@ func (*MeshSetting) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the MeshSetting fields.
-func (_m *MeshSetting) assignValues(columns []string, values []any) error {
+func (ms *MeshSetting) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -59,33 +59,33 @@ func (_m *MeshSetting) assignValues(columns []string, values []any) error {
 			if !ok {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
-			_m.ID = int(value.Int64)
+			ms.ID = int(value.Int64)
 		case meshsetting.FieldMeshnetID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field meshnet_id", values[i])
 			} else if value.Valid {
-				_m.MeshnetID = value.Int64
+				ms.MeshnetID = value.Int64
 			}
 		case meshsetting.FieldAliasAddrBudget:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field alias_addr_budget", values[i])
 			} else if value.Valid {
-				_m.AliasAddrBudget = int(value.Int64)
+				ms.AliasAddrBudget = int(value.Int64)
 			}
 		case meshsetting.FieldRequireDeviceApproval:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field require_device_approval", values[i])
 			} else if value.Valid {
-				_m.RequireDeviceApproval = value.Bool
+				ms.RequireDeviceApproval = value.Bool
 			}
 		case meshsetting.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				_m.UpdatedAt = value.Time
+				ms.UpdatedAt = value.Time
 			}
 		default:
-			_m.selectValues.Set(columns[i], values[i])
+			ms.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -93,44 +93,44 @@ func (_m *MeshSetting) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the MeshSetting.
 // This includes values selected through modifiers, order, etc.
-func (_m *MeshSetting) Value(name string) (ent.Value, error) {
-	return _m.selectValues.Get(name)
+func (ms *MeshSetting) Value(name string) (ent.Value, error) {
+	return ms.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this MeshSetting.
 // Note that you need to call MeshSetting.Unwrap() before calling this method if this MeshSetting
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (_m *MeshSetting) Update() *MeshSettingUpdateOne {
-	return NewMeshSettingClient(_m.config).UpdateOne(_m)
+func (ms *MeshSetting) Update() *MeshSettingUpdateOne {
+	return NewMeshSettingClient(ms.config).UpdateOne(ms)
 }
 
 // Unwrap unwraps the MeshSetting entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (_m *MeshSetting) Unwrap() *MeshSetting {
-	_tx, ok := _m.config.driver.(*txDriver)
+func (ms *MeshSetting) Unwrap() *MeshSetting {
+	_tx, ok := ms.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: MeshSetting is not a transactional entity")
 	}
-	_m.config.driver = _tx.drv
-	return _m
+	ms.config.driver = _tx.drv
+	return ms
 }
 
 // String implements the fmt.Stringer.
-func (_m *MeshSetting) String() string {
+func (ms *MeshSetting) String() string {
 	var builder strings.Builder
 	builder.WriteString("MeshSetting(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", ms.ID))
 	builder.WriteString("meshnet_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.MeshnetID))
+	builder.WriteString(fmt.Sprintf("%v", ms.MeshnetID))
 	builder.WriteString(", ")
 	builder.WriteString("alias_addr_budget=")
-	builder.WriteString(fmt.Sprintf("%v", _m.AliasAddrBudget))
+	builder.WriteString(fmt.Sprintf("%v", ms.AliasAddrBudget))
 	builder.WriteString(", ")
 	builder.WriteString("require_device_approval=")
-	builder.WriteString(fmt.Sprintf("%v", _m.RequireDeviceApproval))
+	builder.WriteString(fmt.Sprintf("%v", ms.RequireDeviceApproval))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(ms.UpdatedAt.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }

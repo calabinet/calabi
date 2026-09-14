@@ -13,11 +13,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/calabi/calabi/apps/calabi-edge/internal/accesslog"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/mesh"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/policy"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/ratelimit"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/router"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
+	"github.com/calabi/calabi/apps/calabi-edge/internal/visitorerr"
 	proto "github.com/calabi/calabi/pkg/protocol"
 )
 
@@ -155,13 +157,13 @@ func (h *HTTP) handle(visitor net.Conn) {
 			mesh.KindHTTP, host, path, visitor, br, head) {
 			return
 		}
-		writeStatus(visitor, 502, fmt.Sprintf("no tunnel for host %q", host))
+		writeVisitorError(visitor, head, 502, visitorerr.ErrNoTunnel)
 		h.observeRequest("no_tunnel")
 		return
 	}
 	sess, ok := target.Session.(*session.Session)
 	if !ok {
-		writeStatus(visitor, 500, "internal: routing target type mismatch")
+		writeVisitorError(visitor, head, 500, visitorerr.ErrInternal)
 		h.observeRequest("internal_error")
 		return
 	}
@@ -177,8 +179,9 @@ func (h *HTTP) handle(visitor net.Conn) {
 	}
 	if pol != nil {
 		if pol.HasIPRules() && !pol.AllowIPString(extractIP(visitor.RemoteAddr())) {
-			writeStatus(visitor, 403, "forbidden: source IP not allowed")
+			writeVisitorError(visitor, head, 403, visitorerr.ErrIPBlocked)
 			h.observeRequest("ip_denied")
+			noteAccessAddr(sess, target.ProxyID, visitor.RemoteAddr(), accesslog.DeniedIP)
 			return
 		}
 		// Basic auth: challenge if the request lacks valid credentials.
@@ -186,14 +189,16 @@ func (h *HTTP) handle(visitor net.Conn) {
 		// re-sends the header on every request, so the protected experience
 		// holds across the keep-alive connection.
 		if pol.HasBasicAuth() && !pol.CheckBasicAuth(headerValue(head, "Authorization")) {
-			write401(visitor, basicAuthRealm)
+			write401(visitor, head, basicAuthRealm)
 			h.observeRequest("auth_required")
+			noteAccessAddr(sess, target.ProxyID, visitor.RemoteAddr(), accesslog.DeniedAuth)
 			return
 		}
 		// Per-tunnel connection-rate cap.
-		if pol.HasRateLimit() && !pol.AllowRate() {
-			writeStatus(visitor, 429, "rate limit exceeded")
+		if pol.HasRateLimit() && !pol.AllowRate(extractIP(visitor.RemoteAddr())) {
+			writeVisitorError(visitor, head, 429, visitorerr.ErrRateLimited)
 			h.observeRequest("rate_limited")
+			noteAccessAddr(sess, target.ProxyID, visitor.RemoteAddr(), accesslog.DeniedRate)
 			return
 		}
 		// OAuth authentication: bounce unauthenticated visitors to the IdP, handle
@@ -203,6 +208,7 @@ func (h *HTTP) handle(visitor net.Conn) {
 		if pol.HasOAuth() {
 			if pol.GateOAuth(visitor, path, host, false, headerValue(head, "Cookie"), time.Now()) {
 				h.observeRequest("oauth_redirect")
+				noteAccessAddr(sess, target.ProxyID, visitor.RemoteAddr(), accesslog.DeniedAuth)
 				return
 			}
 		}
@@ -212,13 +218,13 @@ func (h *HTTP) handle(visitor net.Conn) {
 	// floods before allocating), then the concurrent-connection cap.
 	// Unguarded sessions (dev / no quota-svc) pass straight through.
 	if err := sess.AllowHTTPConn(); err != nil {
-		writeStatus(visitor, 429, "rate limit exceeded")
+		writeVisitorError(visitor, head, 429, visitorerr.ErrUnavailable)
 		h.observeRequest("rate_limited")
 		return
 	}
 	release, err := sess.AcquireConn()
 	if err != nil {
-		writeStatus(visitor, 503, "connection limit reached")
+		writeVisitorError(visitor, head, 503, visitorerr.ErrConnLimit)
 		h.observeRequest("conn_capped")
 		return
 	}
@@ -228,7 +234,7 @@ func (h *HTTP) handle(visitor net.Conn) {
 	// head). Subsequent requests on this keepalive connection are counted by
 	// the request-boundary parser wrapping the visitor→stream copy below.
 	if err := sess.AllowHTTPReq(); err != nil {
-		writeStatus(visitor, 429, "daily request limit exceeded")
+		writeVisitorError(visitor, head, 429, visitorerr.ErrDailyCap)
 		h.observeRequest("daily_req_capped")
 		return
 	}
@@ -246,11 +252,12 @@ func (h *HTTP) handle(visitor net.Conn) {
 	if err != nil {
 		h.logger.Info("open upstream",
 			"err", err, "host", host, "session_id", target.SessionID)
-		writeStatus(visitor, 502, "upstream unavailable: "+err.Error())
+		writeVisitorError(visitor, head, 502, upstreamErrCode(err))
 		h.observeRequest("open_upstream_failed")
 		return
 	}
 	defer stream.Close()
+	noteAccessAddr(sess, target.ProxyID, visitor.RemoteAddr(), accesslog.Allowed)
 
 	// Replay the bytes we consumed during sniffing. Every request head gets the
 	// reverse-proxy forwarding headers (real visitor IP, scheme, host) stamped
@@ -463,17 +470,21 @@ func headerValue(head []byte, name string) string {
 // write401 sends an HTTP Basic-auth challenge so the browser prompts for
 // credentials (Connection: close so the next attempt is a fresh request the
 // edge re-checks).
-func write401(w io.Writer, realm string) {
-	body := "401 Unauthorized\n"
-	msg := fmt.Sprintf(
-		"HTTP/1.1 401 Unauthorized\r\n"+
-			"WWW-Authenticate: Basic realm=%q\r\n"+
-			"Content-Type: text/plain; charset=utf-8\r\n"+
-			"Content-Length: %d\r\n"+
-			"Connection: close\r\n\r\n%s",
-		realm, len(body), body,
-	)
-	_, _ = io.WriteString(w, msg)
+//
+// The WWW-Authenticate header is the load-bearing part and is why this is not
+// just another writeVisitorError call: without it the browser never prompts.
+// But the BODY is what a visitor sees the moment they press Cancel — and that
+// used to be the bare line "401 Unauthorized", the one refusal in the whole
+// edge with no branding and no code. It gets the same page as everything else
+// now; the header rides along.
+func write401(w io.Writer, head []byte, realm string) {
+	visitorerr.Write(w, visitorerr.Options{
+		HTML:         wantsHTML(head),
+		Status:       401,
+		StatusText:   statusText(401),
+		Code:         visitorerr.ErrAuthRequired,
+		ExtraHeaders: fmt.Sprintf("WWW-Authenticate: Basic realm=%q\r\n", realm),
+	})
 }
 
 func statusText(code int) string {

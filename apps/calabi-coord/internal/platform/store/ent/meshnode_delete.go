@@ -20,56 +20,56 @@ type MeshNodeDelete struct {
 }
 
 // Where appends a list predicates to the MeshNodeDelete builder.
-func (_d *MeshNodeDelete) Where(ps ...predicate.MeshNode) *MeshNodeDelete {
-	_d.mutation.Where(ps...)
-	return _d
+func (mnd *MeshNodeDelete) Where(ps ...predicate.MeshNode) *MeshNodeDelete {
+	mnd.mutation.Where(ps...)
+	return mnd
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (_d *MeshNodeDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
+func (mnd *MeshNodeDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, mnd.sqlExec, mnd.mutation, mnd.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_d *MeshNodeDelete) ExecX(ctx context.Context) int {
-	n, err := _d.Exec(ctx)
+func (mnd *MeshNodeDelete) ExecX(ctx context.Context) int {
+	n, err := mnd.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (_d *MeshNodeDelete) sqlExec(ctx context.Context) (int, error) {
+func (mnd *MeshNodeDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(meshnode.Table, sqlgraph.NewFieldSpec(meshnode.FieldID, field.TypeInt))
-	if ps := _d.mutation.predicates; len(ps) > 0 {
+	if ps := mnd.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, mnd.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	_d.mutation.done = true
+	mnd.mutation.done = true
 	return affected, err
 }
 
 // MeshNodeDeleteOne is the builder for deleting a single MeshNode entity.
 type MeshNodeDeleteOne struct {
-	_d *MeshNodeDelete
+	mnd *MeshNodeDelete
 }
 
 // Where appends a list predicates to the MeshNodeDelete builder.
-func (_d *MeshNodeDeleteOne) Where(ps ...predicate.MeshNode) *MeshNodeDeleteOne {
-	_d._d.mutation.Where(ps...)
-	return _d
+func (mndo *MeshNodeDeleteOne) Where(ps ...predicate.MeshNode) *MeshNodeDeleteOne {
+	mndo.mnd.mutation.Where(ps...)
+	return mndo
 }
 
 // Exec executes the deletion query.
-func (_d *MeshNodeDeleteOne) Exec(ctx context.Context) error {
-	n, err := _d._d.Exec(ctx)
+func (mndo *MeshNodeDeleteOne) Exec(ctx context.Context) error {
+	n, err := mndo.mnd.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (_d *MeshNodeDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_d *MeshNodeDeleteOne) ExecX(ctx context.Context) {
-	if err := _d.Exec(ctx); err != nil {
+func (mndo *MeshNodeDeleteOne) ExecX(ctx context.Context) {
+	if err := mndo.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

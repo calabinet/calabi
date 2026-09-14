@@ -82,7 +82,7 @@ func CompilePacketFilter(self *Node, peers []*Node, p *ACLPolicy) []FilterRule {
 			if len(ports) == 0 {
 				continue
 			}
-			srcs := sourceCIDRs(r.Src, peers, p.Groups)
+			srcs := sourceCIDRs(r.Src, peers, p.Groups, nil)
 			if len(srcs) == 0 {
 				continue // a rule whose sources match nobody grants nothing
 			}
@@ -96,7 +96,13 @@ func CompilePacketFilter(self *Node, peers []*Node, p *ACLPolicy) []FilterRule {
 // to self, or nil when it contributes nothing (self isn't a destination, no
 // source matches, or the ports resolve to nothing on this machine).
 func compileRule(r ACLRule, self *Node, peers []*Node, groups map[string][]string) *FilterRule {
-	if !matchAny(r.Dst, self, groups) {
+	// With a RELATIONAL destination (autogroup:self) the two sides of a rule can
+	// no longer be decided independently: whether self is a destination at all
+	// depends on which peer is asking. So the early "is self in Dst" exit is only
+	// valid for the ordinary case, and the source set has to be filtered per
+	// peer rather than in one pass.
+	relational := dstIsRelational(r.Dst)
+	if !relational && !matchAny(r.Dst, self, groups) {
 		return nil
 	}
 	ports := resolvePorts(r.Ports, self)
@@ -105,7 +111,11 @@ func compileRule(r ACLRule, self *Node, peers []*Node, groups map[string][]strin
 		// Correct: a machine not offering the service opens nothing for it.
 		return nil
 	}
-	srcs := sourceCIDRs(r.Src, peers, groups)
+	var admits func(*Node) bool
+	if relational {
+		admits = func(peer *Node) bool { return matchDst(r.Dst, peer, self, groups) }
+	}
+	srcs := sourceCIDRs(r.Src, peers, groups, admits)
 	if len(srcs) == 0 {
 		return nil
 	}
@@ -261,10 +271,23 @@ func trailingPort(sel string) (uint16, bool) {
 // from: each matching peer's overlay /32 plus the subnet routes it advertises.
 // A "*" selector short-circuits to everything — the common "any node" rule
 // shouldn't compile into a list that grows with the meshnet.
-func sourceCIDRs(sels []string, peers []*Node, groups map[string][]string) []string {
-	for _, s := range sels {
-		if strings.TrimSpace(s) == "*" {
-			return []string{"0.0.0.0/0", "::/0"}
+//
+// admits is an extra per-peer condition, non-nil only when the rule's
+// destination is relational (autogroup:self): it answers "does this rule grant
+// THIS peer access to the receiver we are compiling for". Its presence also
+// disables the "*" short-circuit, because with a relational destination "any
+// source" no longer means "any address".
+func sourceCIDRs(sels []string, peers []*Node, groups map[string][]string, admits func(*Node) bool) []string {
+	// "any source" collapses to a wildcard CIDR — but only when every peer that
+	// matches really is admitted. With a relational destination it is not: the
+	// rule grants nothing to peers with a different owner, and emitting
+	// 0.0.0.0/0 would hand the whole meshnet the access one person was meant to
+	// get. admits != nil is exactly that case.
+	if admits == nil {
+		for _, s := range sels {
+			if strings.TrimSpace(s) == "*" {
+				return []string{"0.0.0.0/0", "::/0"}
+			}
 		}
 	}
 	seen := map[string]bool{}
@@ -277,6 +300,9 @@ func sourceCIDRs(sels []string, peers []*Node, groups map[string][]string) []str
 	}
 	for _, peer := range peers {
 		if peer == nil || peer.Disabled || !matchAny(sels, peer, groups) {
+			continue
+		}
+		if admits != nil && !admits(peer) {
 			continue
 		}
 		if peer.Overlay.IsValid() {

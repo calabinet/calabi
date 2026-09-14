@@ -14,8 +14,10 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
+	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/coordsetting"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshacl"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshaclrevision"
+	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshconnrecord"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshnode"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshrelay"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshservice"
@@ -27,10 +29,14 @@ type Client struct {
 	config
 	// Schema is the client for creating, migrating and dropping schema.
 	Schema *migrate.Schema
+	// CoordSetting is the client for interacting with the CoordSetting builders.
+	CoordSetting *CoordSettingClient
 	// MeshACL is the client for interacting with the MeshACL builders.
 	MeshACL *MeshACLClient
 	// MeshACLRevision is the client for interacting with the MeshACLRevision builders.
 	MeshACLRevision *MeshACLRevisionClient
+	// MeshConnRecord is the client for interacting with the MeshConnRecord builders.
+	MeshConnRecord *MeshConnRecordClient
 	// MeshNode is the client for interacting with the MeshNode builders.
 	MeshNode *MeshNodeClient
 	// MeshRelay is the client for interacting with the MeshRelay builders.
@@ -50,8 +56,10 @@ func NewClient(opts ...Option) *Client {
 
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
+	c.CoordSetting = NewCoordSettingClient(c.config)
 	c.MeshACL = NewMeshACLClient(c.config)
 	c.MeshACLRevision = NewMeshACLRevisionClient(c.config)
+	c.MeshConnRecord = NewMeshConnRecordClient(c.config)
 	c.MeshNode = NewMeshNodeClient(c.config)
 	c.MeshRelay = NewMeshRelayClient(c.config)
 	c.MeshService = NewMeshServiceClient(c.config)
@@ -148,8 +156,10 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	return &Tx{
 		ctx:             ctx,
 		config:          cfg,
+		CoordSetting:    NewCoordSettingClient(cfg),
 		MeshACL:         NewMeshACLClient(cfg),
 		MeshACLRevision: NewMeshACLRevisionClient(cfg),
+		MeshConnRecord:  NewMeshConnRecordClient(cfg),
 		MeshNode:        NewMeshNodeClient(cfg),
 		MeshRelay:       NewMeshRelayClient(cfg),
 		MeshService:     NewMeshServiceClient(cfg),
@@ -173,8 +183,10 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	return &Tx{
 		ctx:             ctx,
 		config:          cfg,
+		CoordSetting:    NewCoordSettingClient(cfg),
 		MeshACL:         NewMeshACLClient(cfg),
 		MeshACLRevision: NewMeshACLRevisionClient(cfg),
+		MeshConnRecord:  NewMeshConnRecordClient(cfg),
 		MeshNode:        NewMeshNodeClient(cfg),
 		MeshRelay:       NewMeshRelayClient(cfg),
 		MeshService:     NewMeshServiceClient(cfg),
@@ -185,7 +197,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 // Debug returns a new debug-client. It's used to get verbose logging on specific operations.
 //
 //	client.Debug().
-//		MeshACL.
+//		CoordSetting.
 //		Query().
 //		Count(ctx)
 func (c *Client) Debug() *Client {
@@ -208,8 +220,8 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.MeshACL, c.MeshACLRevision, c.MeshNode, c.MeshRelay, c.MeshService,
-		c.MeshSetting,
+		c.CoordSetting, c.MeshACL, c.MeshACLRevision, c.MeshConnRecord, c.MeshNode,
+		c.MeshRelay, c.MeshService, c.MeshSetting,
 	} {
 		n.Use(hooks...)
 	}
@@ -219,8 +231,8 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.MeshACL, c.MeshACLRevision, c.MeshNode, c.MeshRelay, c.MeshService,
-		c.MeshSetting,
+		c.CoordSetting, c.MeshACL, c.MeshACLRevision, c.MeshConnRecord, c.MeshNode,
+		c.MeshRelay, c.MeshService, c.MeshSetting,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -229,10 +241,14 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 // Mutate implements the ent.Mutator interface.
 func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
+	case *CoordSettingMutation:
+		return c.CoordSetting.mutate(ctx, m)
 	case *MeshACLMutation:
 		return c.MeshACL.mutate(ctx, m)
 	case *MeshACLRevisionMutation:
 		return c.MeshACLRevision.mutate(ctx, m)
+	case *MeshConnRecordMutation:
+		return c.MeshConnRecord.mutate(ctx, m)
 	case *MeshNodeMutation:
 		return c.MeshNode.mutate(ctx, m)
 	case *MeshRelayMutation:
@@ -243,6 +259,139 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.MeshSetting.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
+	}
+}
+
+// CoordSettingClient is a client for the CoordSetting schema.
+type CoordSettingClient struct {
+	config
+}
+
+// NewCoordSettingClient returns a client for the CoordSetting from the given config.
+func NewCoordSettingClient(c config) *CoordSettingClient {
+	return &CoordSettingClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `coordsetting.Hooks(f(g(h())))`.
+func (c *CoordSettingClient) Use(hooks ...Hook) {
+	c.hooks.CoordSetting = append(c.hooks.CoordSetting, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `coordsetting.Intercept(f(g(h())))`.
+func (c *CoordSettingClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CoordSetting = append(c.inters.CoordSetting, interceptors...)
+}
+
+// Create returns a builder for creating a CoordSetting entity.
+func (c *CoordSettingClient) Create() *CoordSettingCreate {
+	mutation := newCoordSettingMutation(c.config, OpCreate)
+	return &CoordSettingCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CoordSetting entities.
+func (c *CoordSettingClient) CreateBulk(builders ...*CoordSettingCreate) *CoordSettingCreateBulk {
+	return &CoordSettingCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CoordSettingClient) MapCreateBulk(slice any, setFunc func(*CoordSettingCreate, int)) *CoordSettingCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CoordSettingCreateBulk{err: fmt.Errorf("calling to CoordSettingClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CoordSettingCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CoordSettingCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CoordSetting.
+func (c *CoordSettingClient) Update() *CoordSettingUpdate {
+	mutation := newCoordSettingMutation(c.config, OpUpdate)
+	return &CoordSettingUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CoordSettingClient) UpdateOne(cs *CoordSetting) *CoordSettingUpdateOne {
+	mutation := newCoordSettingMutation(c.config, OpUpdateOne, withCoordSetting(cs))
+	return &CoordSettingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CoordSettingClient) UpdateOneID(id int) *CoordSettingUpdateOne {
+	mutation := newCoordSettingMutation(c.config, OpUpdateOne, withCoordSettingID(id))
+	return &CoordSettingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CoordSetting.
+func (c *CoordSettingClient) Delete() *CoordSettingDelete {
+	mutation := newCoordSettingMutation(c.config, OpDelete)
+	return &CoordSettingDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CoordSettingClient) DeleteOne(cs *CoordSetting) *CoordSettingDeleteOne {
+	return c.DeleteOneID(cs.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CoordSettingClient) DeleteOneID(id int) *CoordSettingDeleteOne {
+	builder := c.Delete().Where(coordsetting.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CoordSettingDeleteOne{builder}
+}
+
+// Query returns a query builder for CoordSetting.
+func (c *CoordSettingClient) Query() *CoordSettingQuery {
+	return &CoordSettingQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCoordSetting},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CoordSetting entity by its id.
+func (c *CoordSettingClient) Get(ctx context.Context, id int) (*CoordSetting, error) {
+	return c.Query().Where(coordsetting.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CoordSettingClient) GetX(ctx context.Context, id int) *CoordSetting {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CoordSettingClient) Hooks() []Hook {
+	return c.hooks.CoordSetting
+}
+
+// Interceptors returns the client interceptors.
+func (c *CoordSettingClient) Interceptors() []Interceptor {
+	return c.inters.CoordSetting
+}
+
+func (c *CoordSettingClient) mutate(ctx context.Context, m *CoordSettingMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CoordSettingCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CoordSettingUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CoordSettingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CoordSettingDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CoordSetting mutation op: %q", m.Op())
 	}
 }
 
@@ -301,8 +450,8 @@ func (c *MeshACLClient) Update() *MeshACLUpdate {
 }
 
 // UpdateOne returns an update builder for the given entity.
-func (c *MeshACLClient) UpdateOne(_m *MeshACL) *MeshACLUpdateOne {
-	mutation := newMeshACLMutation(c.config, OpUpdateOne, withMeshACL(_m))
+func (c *MeshACLClient) UpdateOne(ma *MeshACL) *MeshACLUpdateOne {
+	mutation := newMeshACLMutation(c.config, OpUpdateOne, withMeshACL(ma))
 	return &MeshACLUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
@@ -319,8 +468,8 @@ func (c *MeshACLClient) Delete() *MeshACLDelete {
 }
 
 // DeleteOne returns a builder for deleting the given entity.
-func (c *MeshACLClient) DeleteOne(_m *MeshACL) *MeshACLDeleteOne {
-	return c.DeleteOneID(_m.ID)
+func (c *MeshACLClient) DeleteOne(ma *MeshACL) *MeshACLDeleteOne {
+	return c.DeleteOneID(ma.ID)
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
@@ -434,8 +583,8 @@ func (c *MeshACLRevisionClient) Update() *MeshACLRevisionUpdate {
 }
 
 // UpdateOne returns an update builder for the given entity.
-func (c *MeshACLRevisionClient) UpdateOne(_m *MeshACLRevision) *MeshACLRevisionUpdateOne {
-	mutation := newMeshACLRevisionMutation(c.config, OpUpdateOne, withMeshACLRevision(_m))
+func (c *MeshACLRevisionClient) UpdateOne(mar *MeshACLRevision) *MeshACLRevisionUpdateOne {
+	mutation := newMeshACLRevisionMutation(c.config, OpUpdateOne, withMeshACLRevision(mar))
 	return &MeshACLRevisionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
@@ -452,8 +601,8 @@ func (c *MeshACLRevisionClient) Delete() *MeshACLRevisionDelete {
 }
 
 // DeleteOne returns a builder for deleting the given entity.
-func (c *MeshACLRevisionClient) DeleteOne(_m *MeshACLRevision) *MeshACLRevisionDeleteOne {
-	return c.DeleteOneID(_m.ID)
+func (c *MeshACLRevisionClient) DeleteOne(mar *MeshACLRevision) *MeshACLRevisionDeleteOne {
+	return c.DeleteOneID(mar.ID)
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
@@ -512,6 +661,139 @@ func (c *MeshACLRevisionClient) mutate(ctx context.Context, m *MeshACLRevisionMu
 	}
 }
 
+// MeshConnRecordClient is a client for the MeshConnRecord schema.
+type MeshConnRecordClient struct {
+	config
+}
+
+// NewMeshConnRecordClient returns a client for the MeshConnRecord from the given config.
+func NewMeshConnRecordClient(c config) *MeshConnRecordClient {
+	return &MeshConnRecordClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `meshconnrecord.Hooks(f(g(h())))`.
+func (c *MeshConnRecordClient) Use(hooks ...Hook) {
+	c.hooks.MeshConnRecord = append(c.hooks.MeshConnRecord, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `meshconnrecord.Intercept(f(g(h())))`.
+func (c *MeshConnRecordClient) Intercept(interceptors ...Interceptor) {
+	c.inters.MeshConnRecord = append(c.inters.MeshConnRecord, interceptors...)
+}
+
+// Create returns a builder for creating a MeshConnRecord entity.
+func (c *MeshConnRecordClient) Create() *MeshConnRecordCreate {
+	mutation := newMeshConnRecordMutation(c.config, OpCreate)
+	return &MeshConnRecordCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of MeshConnRecord entities.
+func (c *MeshConnRecordClient) CreateBulk(builders ...*MeshConnRecordCreate) *MeshConnRecordCreateBulk {
+	return &MeshConnRecordCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MeshConnRecordClient) MapCreateBulk(slice any, setFunc func(*MeshConnRecordCreate, int)) *MeshConnRecordCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MeshConnRecordCreateBulk{err: fmt.Errorf("calling to MeshConnRecordClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MeshConnRecordCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MeshConnRecordCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for MeshConnRecord.
+func (c *MeshConnRecordClient) Update() *MeshConnRecordUpdate {
+	mutation := newMeshConnRecordMutation(c.config, OpUpdate)
+	return &MeshConnRecordUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MeshConnRecordClient) UpdateOne(mcr *MeshConnRecord) *MeshConnRecordUpdateOne {
+	mutation := newMeshConnRecordMutation(c.config, OpUpdateOne, withMeshConnRecord(mcr))
+	return &MeshConnRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MeshConnRecordClient) UpdateOneID(id int) *MeshConnRecordUpdateOne {
+	mutation := newMeshConnRecordMutation(c.config, OpUpdateOne, withMeshConnRecordID(id))
+	return &MeshConnRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for MeshConnRecord.
+func (c *MeshConnRecordClient) Delete() *MeshConnRecordDelete {
+	mutation := newMeshConnRecordMutation(c.config, OpDelete)
+	return &MeshConnRecordDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MeshConnRecordClient) DeleteOne(mcr *MeshConnRecord) *MeshConnRecordDeleteOne {
+	return c.DeleteOneID(mcr.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MeshConnRecordClient) DeleteOneID(id int) *MeshConnRecordDeleteOne {
+	builder := c.Delete().Where(meshconnrecord.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MeshConnRecordDeleteOne{builder}
+}
+
+// Query returns a query builder for MeshConnRecord.
+func (c *MeshConnRecordClient) Query() *MeshConnRecordQuery {
+	return &MeshConnRecordQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMeshConnRecord},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a MeshConnRecord entity by its id.
+func (c *MeshConnRecordClient) Get(ctx context.Context, id int) (*MeshConnRecord, error) {
+	return c.Query().Where(meshconnrecord.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MeshConnRecordClient) GetX(ctx context.Context, id int) *MeshConnRecord {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *MeshConnRecordClient) Hooks() []Hook {
+	return c.hooks.MeshConnRecord
+}
+
+// Interceptors returns the client interceptors.
+func (c *MeshConnRecordClient) Interceptors() []Interceptor {
+	return c.inters.MeshConnRecord
+}
+
+func (c *MeshConnRecordClient) mutate(ctx context.Context, m *MeshConnRecordMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MeshConnRecordCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MeshConnRecordUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MeshConnRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MeshConnRecordDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown MeshConnRecord mutation op: %q", m.Op())
+	}
+}
+
 // MeshNodeClient is a client for the MeshNode schema.
 type MeshNodeClient struct {
 	config
@@ -567,8 +849,8 @@ func (c *MeshNodeClient) Update() *MeshNodeUpdate {
 }
 
 // UpdateOne returns an update builder for the given entity.
-func (c *MeshNodeClient) UpdateOne(_m *MeshNode) *MeshNodeUpdateOne {
-	mutation := newMeshNodeMutation(c.config, OpUpdateOne, withMeshNode(_m))
+func (c *MeshNodeClient) UpdateOne(mn *MeshNode) *MeshNodeUpdateOne {
+	mutation := newMeshNodeMutation(c.config, OpUpdateOne, withMeshNode(mn))
 	return &MeshNodeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
@@ -585,8 +867,8 @@ func (c *MeshNodeClient) Delete() *MeshNodeDelete {
 }
 
 // DeleteOne returns a builder for deleting the given entity.
-func (c *MeshNodeClient) DeleteOne(_m *MeshNode) *MeshNodeDeleteOne {
-	return c.DeleteOneID(_m.ID)
+func (c *MeshNodeClient) DeleteOne(mn *MeshNode) *MeshNodeDeleteOne {
+	return c.DeleteOneID(mn.ID)
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
@@ -700,8 +982,8 @@ func (c *MeshRelayClient) Update() *MeshRelayUpdate {
 }
 
 // UpdateOne returns an update builder for the given entity.
-func (c *MeshRelayClient) UpdateOne(_m *MeshRelay) *MeshRelayUpdateOne {
-	mutation := newMeshRelayMutation(c.config, OpUpdateOne, withMeshRelay(_m))
+func (c *MeshRelayClient) UpdateOne(mr *MeshRelay) *MeshRelayUpdateOne {
+	mutation := newMeshRelayMutation(c.config, OpUpdateOne, withMeshRelay(mr))
 	return &MeshRelayUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
@@ -718,8 +1000,8 @@ func (c *MeshRelayClient) Delete() *MeshRelayDelete {
 }
 
 // DeleteOne returns a builder for deleting the given entity.
-func (c *MeshRelayClient) DeleteOne(_m *MeshRelay) *MeshRelayDeleteOne {
-	return c.DeleteOneID(_m.ID)
+func (c *MeshRelayClient) DeleteOne(mr *MeshRelay) *MeshRelayDeleteOne {
+	return c.DeleteOneID(mr.ID)
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
@@ -833,8 +1115,8 @@ func (c *MeshServiceClient) Update() *MeshServiceUpdate {
 }
 
 // UpdateOne returns an update builder for the given entity.
-func (c *MeshServiceClient) UpdateOne(_m *MeshService) *MeshServiceUpdateOne {
-	mutation := newMeshServiceMutation(c.config, OpUpdateOne, withMeshService(_m))
+func (c *MeshServiceClient) UpdateOne(ms *MeshService) *MeshServiceUpdateOne {
+	mutation := newMeshServiceMutation(c.config, OpUpdateOne, withMeshService(ms))
 	return &MeshServiceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
@@ -851,8 +1133,8 @@ func (c *MeshServiceClient) Delete() *MeshServiceDelete {
 }
 
 // DeleteOne returns a builder for deleting the given entity.
-func (c *MeshServiceClient) DeleteOne(_m *MeshService) *MeshServiceDeleteOne {
-	return c.DeleteOneID(_m.ID)
+func (c *MeshServiceClient) DeleteOne(ms *MeshService) *MeshServiceDeleteOne {
+	return c.DeleteOneID(ms.ID)
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
@@ -966,8 +1248,8 @@ func (c *MeshSettingClient) Update() *MeshSettingUpdate {
 }
 
 // UpdateOne returns an update builder for the given entity.
-func (c *MeshSettingClient) UpdateOne(_m *MeshSetting) *MeshSettingUpdateOne {
-	mutation := newMeshSettingMutation(c.config, OpUpdateOne, withMeshSetting(_m))
+func (c *MeshSettingClient) UpdateOne(ms *MeshSetting) *MeshSettingUpdateOne {
+	mutation := newMeshSettingMutation(c.config, OpUpdateOne, withMeshSetting(ms))
 	return &MeshSettingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
@@ -984,8 +1266,8 @@ func (c *MeshSettingClient) Delete() *MeshSettingDelete {
 }
 
 // DeleteOne returns a builder for deleting the given entity.
-func (c *MeshSettingClient) DeleteOne(_m *MeshSetting) *MeshSettingDeleteOne {
-	return c.DeleteOneID(_m.ID)
+func (c *MeshSettingClient) DeleteOne(ms *MeshSetting) *MeshSettingDeleteOne {
+	return c.DeleteOneID(ms.ID)
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
@@ -1047,11 +1329,11 @@ func (c *MeshSettingClient) mutate(ctx context.Context, m *MeshSettingMutation) 
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		MeshACL, MeshACLRevision, MeshNode, MeshRelay, MeshService,
-		MeshSetting []ent.Hook
+		CoordSetting, MeshACL, MeshACLRevision, MeshConnRecord, MeshNode, MeshRelay,
+		MeshService, MeshSetting []ent.Hook
 	}
 	inters struct {
-		MeshACL, MeshACLRevision, MeshNode, MeshRelay, MeshService,
-		MeshSetting []ent.Interceptor
+		CoordSetting, MeshACL, MeshACLRevision, MeshConnRecord, MeshNode, MeshRelay,
+		MeshService, MeshSetting []ent.Interceptor
 	}
 )

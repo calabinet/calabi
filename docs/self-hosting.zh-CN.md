@@ -42,9 +42,9 @@ Calabi 的**数据面是开源的**——三个二进制，它们之间提供两
 - [组网](#组网)——三个部件分别是什么
 - [中继](#中继)
 - [协调器](#协调器)
-- [节点入网](#节点入网)
+- [设备入网](#设备入网)
 - [ACL](#acl)
-- [子网路由与出口节点](#子网路由与出口节点)
+- [子网路由与出口设备](#子网路由与出口设备)
 - [非 Linux 上还没自动化的部分](#非-linux-上还没自动化的部分)
 
 **然后**
@@ -318,11 +318,11 @@ calabi daemon install --config tunnels.yaml   # 然后：calabi daemon start|sto
 
 | | | |
 |---|---|---|
-| `calabi-coord` | 协调器 | 节点注册、地址分配、ACL、中继目录 |
-| `calabi-edge` 配 `role: relay` | 中继 | 按节点公钥转发**已经加密好的**报文，并响应 STUN 让节点找到自己的公网端点 |
-| `calabi mesh up` | 节点 | 本地生成 WireGuard 密钥、入网、拉起 tun 设备 |
+| `calabi-coord` | 协调器 | 设备注册、地址分配、ACL、中继目录 |
+| `calabi-edge` 配 `role: relay` | 中继 | 按设备公钥转发**已经加密好的**报文，并响应 STUN 让设备找到自己的公网端点 |
+| `calabi mesh up` | 设备 | 本地生成 WireGuard 密钥、入网、拉起 tun 设备 |
 
-协调器拿不到私钥，也看不到明文。中继同样：它按节点公钥路由密文，代码里根本没有
+协调器拿不到私钥，也看不到明文。中继同样：它按设备公钥路由密文，代码里根本没有
 能解密的路径——这个隔离是**结构性**的（`pkg/relay` 不携带任何 edge / 控制面代码，
 由依赖关系测试钉死），不是一个配置开关。
 
@@ -334,7 +334,7 @@ calabi daemon install --config tunnels.yaml   # 然后：calabi daemon start|sto
 CALABI_EDGE_ROLE=relay CALABI_EDGE_RELAY_LABEL=home ./calabi-edge
 ```
 
-它监听 **3340/tcp**（中继本身）和 **3478/udp**（STUN）。两个都得让你的节点能连到。
+它监听 **3340/tcp**（中继本身）和 **3478/udp**（STUN）。两个都得让你的设备能连到。
 用 YAML 的话：
 
 ```yaml
@@ -342,13 +342,13 @@ role: relay          # 或 "both"：一个进程同时跑隧道边缘和中继
 relay:
   derp_port: 3340
   stun_port: 3478    # 0 = 关掉 STUN 响应
-  label: home        # 给这个 region 命名；节点归属到 "self-home"
+  label: home        # 给这个 region 命名；设备归属到 "self-home"
 ```
 
-> 没设 `label` 的中继能起来，但会告警：它没法注册进中继目录，所以永远不会有节点
+> 没设 `label` 的中继能起来，但会告警：它没法注册进中继目录，所以永远不会有设备
 > 归属到它。
 
-想跑几台就跑几台、放在不同地方；节点会用 STUN 测到各个中继的延迟，自己挑。
+想跑几台就跑几台、放在不同地方；设备会用 STUN 测到各个中继的延迟，自己挑。
 
 ### 协调器
 
@@ -361,24 +361,24 @@ CALABI_COORD_DERP_STUN_PORT=3478 \
 
 | 变量 | 作用 |
 |---|---|
-| `CALABI_COORD_GRPC_ADDR` | 节点连过来的地址。默认 `:7012` |
+| `CALABI_COORD_GRPC_ADDR` | 设备连过来的地址。默认 `:7012` |
 | `CALABI_COORD_ADMIN_ADDR` | 健康检查 + 指标。默认 `:9122`；别放到公网 |
 | `CALABI_COORD_AUTHKEYS_FILE` | **认证密钥。** JSON：`{"key": {"meshnet": 1, "tags": ["tag:laptop"]}}` |
 | `CALABI_COORD_DERP_ADDR` | 只有一台中继时的简单写法：`host:port` |
 | `CALABI_COORD_DERP_STUN_PORT` | 那台中继的 STUN 端口。不写的话这个 region 没法被测量，就永远没人归属到它 |
 | `CALABI_COORD_DERP_MAP_FILE` | 多台中继：一个 JSON 目录（见 `apps/calabi-coord/examples/derp-map.example.json`） |
-| `CALABI_COORD_POLICY_FILE` | ACL 文件。不设 = 同一张网里的节点互相全通 |
-| `CALABI_COORD_NODE_QUOTA` | 每张网的节点数上限。不设 = 无限 |
+| `CALABI_COORD_POLICY_FILE` | ACL 文件。不设 = 同一张网里的设备互相全通 |
+| `CALABI_COORD_NODE_QUOTA` | 每张网的设备数上限。不设 = 无限 |
 | `CALABI_COORD_DB_DSN` | 状态存哪。`sqlite:./coord.db` 存成一个文件，或者给一个 `postgres://…` URL。**不设 = 存内存里**，见下 |
 | `CALABI_COORD_TLS_CERT_FILE` / `_KEY_FILE` | gRPC 走 TLS。要么都设，要么都不设 |
-| `CALABI_COORD_MESH_ADMIN_ADDR` / `_TOKEN` | 管理 HTTP API。**没有 token 的管理接口会在启动时被拒绝**——它会把每一张网的节点和 ACL 全暴露出去 |
+| `CALABI_COORD_MESH_ADMIN_ADDR` / `_TOKEN` | 管理 HTTP API。**没有 token 的管理接口会在启动时被拒绝**——它会把每一张网的设备和 ACL 全暴露出去 |
 
 一个 `meshnet` 就是一张互相隔离的网。两把密钥映射到不同的 meshnet 编号，就是同一个
 协调器上两张互相看不见的网。
 
-> **给它一个数据库。** 不设 `CALABI_COORD_DB_DSN` 的话，节点注册表、ACL 文档、
+> **给它一个数据库。** 不设 `CALABI_COORD_DB_DSN` 的话，设备注册表、ACL 文档、
 > 声明的服务、自建中继目录全在**内存**里——启动时它会自己说一声——意思是重启一次注册表
-> 就空了：每个节点重新入网，拿到的是**另一个** `100.64.x.x` 地址。
+> 就空了：每台设备重新入网，拿到的是**另一个** `100.64.x.x` 地址。
 > `CALABI_COORD_DB_DSN=sqlite:./coord.db` 就够，不需要 Postgres。DSN 设了但连不上
 > 会直接启动失败，而不是回落到内存。
 
@@ -386,7 +386,7 @@ CALABI_COORD_DERP_STUN_PORT=3478 \
 > ——最重要的是那把内建的默认认证密钥，它会把**任何**调用者放进 meshnet 1。
 > 凡是公网能碰到的部署都该设上。
 
-### 节点入网
+### 设备入网
 
 ```bash
 sudo ./calabi mesh up \
@@ -396,7 +396,7 @@ sudo ./calabi mesh up \
 ```
 
 需要 tun 设备和管理员权限。Windows 上 `wintun.dll` 已经内嵌在二进制里，不用装任何
-东西。节点的 WireGuard 密钥在本地生成并缓存（用 `--key-file` 指定位置）；重复运行
+东西。设备的 WireGuard 密钥在本地生成并缓存（用 `--key-file` 指定位置）；重复运行
 保持同一个身份，因此也保持同一个 `100.64.x.x` 地址。
 
 `calabi mesh status` 和 `calabi mesh down` 是通过 `:7400` 和正在跑的守护进程说话的。
@@ -415,31 +415,31 @@ mesh:
 > 读的。把文件权限收紧（它是一份凭据），或者干脆前台跑 `calabi mesh up`、密钥写在
 > 命令行上。
 
-> **节点到协调器这段的 TLS。** 节点默认用 TLS 连协调器，并用编译进客户端的 CA
+> **设备到协调器这段的 TLS。** 设备默认用 TLS 连协调器，并用编译进客户端的 CA
 > 校验它，所以自建的协调器需要二选一：给它签一张你自己 CA 的证书
-> （`CALABI_COORD_TLS_CERT_FILE`/`_KEY_FILE`），节点侧用
-> `CALABI_EDGE_CA_FILE=/path/to/your-ca.pem` 指过去；或者在节点上设
+> （`CALABI_COORD_TLS_CERT_FILE`/`_KEY_FILE`），设备侧用
+> `CALABI_EDGE_CA_FILE=/path/to/your-ca.pem` 指过去；或者在设备上设
 > `CALABI_INSECURE=1` 走明文。**认证密钥是从这条连接上发过去的**，所以明文只适合
 > 可信网络。如果两个证书变量只设了一个，协调器会拒绝启动，而不是悄悄地提供明文服务。
 
 ### ACL
 
-不设 `CALABI_COORD_POLICY_FILE` 时，同一张网里的节点互相全通。设了之后，一个由
+不设 `CALABI_COORD_POLICY_FILE` 时，同一张网里的设备互相全通。设了之后，一个由
 分组和规则组成的 JSON 文件决定谁能访问谁的哪些端口。改文件会热加载——而且文件
 写坏时它**失败关闭**（全部拒绝）并大声报错，绝不退回「全放行」。把文件改好，
 不用重启就能恢复。
 
-### 子网路由与出口节点
+### 子网路由与出口设备
 
 ```bash
 calabi mesh up ... --advertise-routes 192.168.1.0/24   # 把一个局域网共享给整张网
-calabi mesh up ... --advertise-exit-node               # 声明自己可以当出口节点
+calabi mesh up ... --advertise-exit-node               # 声明自己可以当出口设备
 calabi mesh up ... --exit-node home-server             # 把「我」的默认路由从某个对端走出去
 ```
 
 **通告**在所有平台都能用。真正做转发的那一半——打开 IP 转发和 NAT 让包能穿过去
-——**只在 Linux 上是自动配好的**；其他平台上节点照样通告，但操作系统那边要你自己配。
-作为出口节点*客户端*接管默认路由，在 Linux、Windows、macOS 上都可以。
+——**只在 Linux 上是自动配好的**；其他平台上设备照样通告，但操作系统那边要你自己配。
+*使用*出口设备（把默认路由交给它）在 Linux、Windows、macOS 上都可以。
 
 ---
 

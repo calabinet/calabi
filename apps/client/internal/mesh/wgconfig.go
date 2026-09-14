@@ -62,6 +62,12 @@ type WGConfig struct {
 	// compile filters, so nothing is filtered.
 	Filter        []FilterRule
 	FilterEnabled bool
+	// BlockIncoming is this MACHINE'S OWN refusal of all inbound connections —
+	// a local choice, never from the coordinator, like ExitNode above. It rides
+	// in the config rather than being set once on the datapath because a session
+	// restart builds a fresh datapath, and a switch that quietly forgot itself on
+	// reconnect would be worse than no switch. See PacketFilter.shields.
+	BlockIncoming bool
 	// SelfRelay is the address of this node's own home relay (RelayByRegion of the
 	// node's home region) — where peers relay to reach it, so it must be the link
 	// this node listens on. Empty leaves the bootstrap relay in place.

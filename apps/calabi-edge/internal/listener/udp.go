@@ -33,6 +33,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/calabi/calabi/apps/calabi-edge/internal/accesslog"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/ratelimit"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
 	proto "github.com/calabi/calabi/pkg/protocol"
@@ -198,19 +199,24 @@ func (u *udpProxy) handleDatagram(src net.Addr, pkt []byte) {
 		// flow. Checked once per new flow — the source is fixed for its life.
 		if p := u.sess.Proxy(u.proxyID); p != nil {
 			if pol := p.LoadPolicy(); pol != nil {
+				// Split once: both gates below key on the source address.
+				srcHost, _ := splitUDPAddr(src)
 				if pol.HasIPRules() {
-					host, _ := splitUDPAddr(src)
+					host := srcHost
 					if !pol.AllowIPString(host) {
 						if u.obs != nil {
 							u.obs.OnVisitorRequest("udp", "ip_denied")
 						}
+						noteAccess(u.sess, u.proxyID, host, accesslog.DeniedIP)
 						return
 					}
 				}
-				if pol.HasRateLimit() && !pol.AllowRate() {
+				if pol.HasRateLimit() && !pol.AllowRate(srcHost) {
 					if u.obs != nil {
 						u.obs.OnVisitorRequest("udp", "rate_limited")
 					}
+					host, _ := splitUDPAddr(src)
+					noteAccess(u.sess, u.proxyID, host, accesslog.DeniedRate)
 					return
 				}
 			}
@@ -268,6 +274,13 @@ func (u *udpProxy) handleDatagram(src net.Addr, pkt []byte) {
 			return
 		}
 		flow = newFlow
+		// UDP has no connections, so a conntrack FLOW is the unit: the first
+		// datagram from a (src ip, src port) opens one and it lives until it
+		// idles out. That is the same "one visitor arriving once" event the
+		// other four listeners record, and counting datagrams instead would
+		// bury the log under a single chatty client.
+		host, _ := splitUDPAddr(src)
+		noteAccess(u.sess, u.proxyID, host, accesslog.Allowed)
 		if u.obs != nil {
 			u.obs.OnVisitorRequest("udp", "ok")
 		}

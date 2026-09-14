@@ -101,6 +101,8 @@ func runUDP(args []string) int {
 		fmt.Fprintln(os.Stderr, "calabi: register tunnel:", err)
 		return 1
 	}
+	// What the EDGE did with the policy we sent — not what we assumed it would.
+	sec.NoteEdgePolicy(assigned.ClientPolicy)
 
 	edgeHostForState := edgeAddr
 	if i := lastIndexByte(edgeHostForState, ':'); i > 0 {

@@ -28,40 +28,40 @@ type MeshServiceQuery struct {
 }
 
 // Where adds a new predicate for the MeshServiceQuery builder.
-func (_q *MeshServiceQuery) Where(ps ...predicate.MeshService) *MeshServiceQuery {
-	_q.predicates = append(_q.predicates, ps...)
-	return _q
+func (msq *MeshServiceQuery) Where(ps ...predicate.MeshService) *MeshServiceQuery {
+	msq.predicates = append(msq.predicates, ps...)
+	return msq
 }
 
 // Limit the number of records to be returned by this query.
-func (_q *MeshServiceQuery) Limit(limit int) *MeshServiceQuery {
-	_q.ctx.Limit = &limit
-	return _q
+func (msq *MeshServiceQuery) Limit(limit int) *MeshServiceQuery {
+	msq.ctx.Limit = &limit
+	return msq
 }
 
 // Offset to start from.
-func (_q *MeshServiceQuery) Offset(offset int) *MeshServiceQuery {
-	_q.ctx.Offset = &offset
-	return _q
+func (msq *MeshServiceQuery) Offset(offset int) *MeshServiceQuery {
+	msq.ctx.Offset = &offset
+	return msq
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (_q *MeshServiceQuery) Unique(unique bool) *MeshServiceQuery {
-	_q.ctx.Unique = &unique
-	return _q
+func (msq *MeshServiceQuery) Unique(unique bool) *MeshServiceQuery {
+	msq.ctx.Unique = &unique
+	return msq
 }
 
 // Order specifies how the records should be ordered.
-func (_q *MeshServiceQuery) Order(o ...meshservice.OrderOption) *MeshServiceQuery {
-	_q.order = append(_q.order, o...)
-	return _q
+func (msq *MeshServiceQuery) Order(o ...meshservice.OrderOption) *MeshServiceQuery {
+	msq.order = append(msq.order, o...)
+	return msq
 }
 
 // First returns the first MeshService entity from the query.
 // Returns a *NotFoundError when no MeshService was found.
-func (_q *MeshServiceQuery) First(ctx context.Context) (*MeshService, error) {
-	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
+func (msq *MeshServiceQuery) First(ctx context.Context) (*MeshService, error) {
+	nodes, err := msq.Limit(1).All(setContextOp(ctx, msq.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +72,8 @@ func (_q *MeshServiceQuery) First(ctx context.Context) (*MeshService, error) {
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (_q *MeshServiceQuery) FirstX(ctx context.Context) *MeshService {
-	node, err := _q.First(ctx)
+func (msq *MeshServiceQuery) FirstX(ctx context.Context) *MeshService {
+	node, err := msq.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -82,9 +82,9 @@ func (_q *MeshServiceQuery) FirstX(ctx context.Context) *MeshService {
 
 // FirstID returns the first MeshService ID from the query.
 // Returns a *NotFoundError when no MeshService ID was found.
-func (_q *MeshServiceQuery) FirstID(ctx context.Context) (id int, err error) {
+func (msq *MeshServiceQuery) FirstID(ctx context.Context) (id int, err error) {
 	var ids []int
-	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = msq.Limit(1).IDs(setContextOp(ctx, msq.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -95,8 +95,8 @@ func (_q *MeshServiceQuery) FirstID(ctx context.Context) (id int, err error) {
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *MeshServiceQuery) FirstIDX(ctx context.Context) int {
-	id, err := _q.FirstID(ctx)
+func (msq *MeshServiceQuery) FirstIDX(ctx context.Context) int {
+	id, err := msq.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -106,8 +106,8 @@ func (_q *MeshServiceQuery) FirstIDX(ctx context.Context) int {
 // Only returns a single MeshService entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one MeshService entity is found.
 // Returns a *NotFoundError when no MeshService entities are found.
-func (_q *MeshServiceQuery) Only(ctx context.Context) (*MeshService, error) {
-	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
+func (msq *MeshServiceQuery) Only(ctx context.Context) (*MeshService, error) {
+	nodes, err := msq.Limit(2).All(setContextOp(ctx, msq.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -122,8 +122,8 @@ func (_q *MeshServiceQuery) Only(ctx context.Context) (*MeshService, error) {
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (_q *MeshServiceQuery) OnlyX(ctx context.Context) *MeshService {
-	node, err := _q.Only(ctx)
+func (msq *MeshServiceQuery) OnlyX(ctx context.Context) *MeshService {
+	node, err := msq.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -133,9 +133,9 @@ func (_q *MeshServiceQuery) OnlyX(ctx context.Context) *MeshService {
 // OnlyID is like Only, but returns the only MeshService ID in the query.
 // Returns a *NotSingularError when more than one MeshService ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *MeshServiceQuery) OnlyID(ctx context.Context) (id int, err error) {
+func (msq *MeshServiceQuery) OnlyID(ctx context.Context) (id int, err error) {
 	var ids []int
-	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = msq.Limit(2).IDs(setContextOp(ctx, msq.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -150,8 +150,8 @@ func (_q *MeshServiceQuery) OnlyID(ctx context.Context) (id int, err error) {
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *MeshServiceQuery) OnlyIDX(ctx context.Context) int {
-	id, err := _q.OnlyID(ctx)
+func (msq *MeshServiceQuery) OnlyIDX(ctx context.Context) int {
+	id, err := msq.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -159,18 +159,18 @@ func (_q *MeshServiceQuery) OnlyIDX(ctx context.Context) int {
 }
 
 // All executes the query and returns a list of MeshServices.
-func (_q *MeshServiceQuery) All(ctx context.Context) ([]*MeshService, error) {
-	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
-	if err := _q.prepareQuery(ctx); err != nil {
+func (msq *MeshServiceQuery) All(ctx context.Context) ([]*MeshService, error) {
+	ctx = setContextOp(ctx, msq.ctx, ent.OpQueryAll)
+	if err := msq.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*MeshService, *MeshServiceQuery]()
-	return withInterceptors[[]*MeshService](ctx, _q, qr, _q.inters)
+	return withInterceptors[[]*MeshService](ctx, msq, qr, msq.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (_q *MeshServiceQuery) AllX(ctx context.Context) []*MeshService {
-	nodes, err := _q.All(ctx)
+func (msq *MeshServiceQuery) AllX(ctx context.Context) []*MeshService {
+	nodes, err := msq.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -178,20 +178,20 @@ func (_q *MeshServiceQuery) AllX(ctx context.Context) []*MeshService {
 }
 
 // IDs executes the query and returns a list of MeshService IDs.
-func (_q *MeshServiceQuery) IDs(ctx context.Context) (ids []int, err error) {
-	if _q.ctx.Unique == nil && _q.path != nil {
-		_q.Unique(true)
+func (msq *MeshServiceQuery) IDs(ctx context.Context) (ids []int, err error) {
+	if msq.ctx.Unique == nil && msq.path != nil {
+		msq.Unique(true)
 	}
-	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
-	if err = _q.Select(meshservice.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, msq.ctx, ent.OpQueryIDs)
+	if err = msq.Select(meshservice.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *MeshServiceQuery) IDsX(ctx context.Context) []int {
-	ids, err := _q.IDs(ctx)
+func (msq *MeshServiceQuery) IDsX(ctx context.Context) []int {
+	ids, err := msq.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -199,17 +199,17 @@ func (_q *MeshServiceQuery) IDsX(ctx context.Context) []int {
 }
 
 // Count returns the count of the given query.
-func (_q *MeshServiceQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
-	if err := _q.prepareQuery(ctx); err != nil {
+func (msq *MeshServiceQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, msq.ctx, ent.OpQueryCount)
+	if err := msq.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*MeshServiceQuery](), _q.inters)
+	return withInterceptors[int](ctx, msq, querierCount[*MeshServiceQuery](), msq.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (_q *MeshServiceQuery) CountX(ctx context.Context) int {
-	count, err := _q.Count(ctx)
+func (msq *MeshServiceQuery) CountX(ctx context.Context) int {
+	count, err := msq.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -217,9 +217,9 @@ func (_q *MeshServiceQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (_q *MeshServiceQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
-	switch _, err := _q.FirstID(ctx); {
+func (msq *MeshServiceQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, msq.ctx, ent.OpQueryExist)
+	switch _, err := msq.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -230,8 +230,8 @@ func (_q *MeshServiceQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (_q *MeshServiceQuery) ExistX(ctx context.Context) bool {
-	exist, err := _q.Exist(ctx)
+func (msq *MeshServiceQuery) ExistX(ctx context.Context) bool {
+	exist, err := msq.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -240,19 +240,19 @@ func (_q *MeshServiceQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the MeshServiceQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (_q *MeshServiceQuery) Clone() *MeshServiceQuery {
-	if _q == nil {
+func (msq *MeshServiceQuery) Clone() *MeshServiceQuery {
+	if msq == nil {
 		return nil
 	}
 	return &MeshServiceQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]meshservice.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.MeshService{}, _q.predicates...),
+		config:     msq.config,
+		ctx:        msq.ctx.Clone(),
+		order:      append([]meshservice.OrderOption{}, msq.order...),
+		inters:     append([]Interceptor{}, msq.inters...),
+		predicates: append([]predicate.MeshService{}, msq.predicates...),
 		// clone intermediate query.
-		sql:  _q.sql.Clone(),
-		path: _q.path,
+		sql:  msq.sql.Clone(),
+		path: msq.path,
 	}
 }
 
@@ -270,10 +270,10 @@ func (_q *MeshServiceQuery) Clone() *MeshServiceQuery {
 //		GroupBy(meshservice.FieldMeshnetID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (_q *MeshServiceQuery) GroupBy(field string, fields ...string) *MeshServiceGroupBy {
-	_q.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &MeshServiceGroupBy{build: _q}
-	grbuild.flds = &_q.ctx.Fields
+func (msq *MeshServiceQuery) GroupBy(field string, fields ...string) *MeshServiceGroupBy {
+	msq.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &MeshServiceGroupBy{build: msq}
+	grbuild.flds = &msq.ctx.Fields
 	grbuild.label = meshservice.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -291,62 +291,62 @@ func (_q *MeshServiceQuery) GroupBy(field string, fields ...string) *MeshService
 //	client.MeshService.Query().
 //		Select(meshservice.FieldMeshnetID).
 //		Scan(ctx, &v)
-func (_q *MeshServiceQuery) Select(fields ...string) *MeshServiceSelect {
-	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
-	sbuild := &MeshServiceSelect{MeshServiceQuery: _q}
+func (msq *MeshServiceQuery) Select(fields ...string) *MeshServiceSelect {
+	msq.ctx.Fields = append(msq.ctx.Fields, fields...)
+	sbuild := &MeshServiceSelect{MeshServiceQuery: msq}
 	sbuild.label = meshservice.Label
-	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &msq.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a MeshServiceSelect configured with the given aggregations.
-func (_q *MeshServiceQuery) Aggregate(fns ...AggregateFunc) *MeshServiceSelect {
-	return _q.Select().Aggregate(fns...)
+func (msq *MeshServiceQuery) Aggregate(fns ...AggregateFunc) *MeshServiceSelect {
+	return msq.Select().Aggregate(fns...)
 }
 
-func (_q *MeshServiceQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range _q.inters {
+func (msq *MeshServiceQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range msq.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, _q); err != nil {
+			if err := trv.Traverse(ctx, msq); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range _q.ctx.Fields {
+	for _, f := range msq.ctx.Fields {
 		if !meshservice.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if _q.path != nil {
-		prev, err := _q.path(ctx)
+	if msq.path != nil {
+		prev, err := msq.path(ctx)
 		if err != nil {
 			return err
 		}
-		_q.sql = prev
+		msq.sql = prev
 	}
 	return nil
 }
 
-func (_q *MeshServiceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*MeshService, error) {
+func (msq *MeshServiceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*MeshService, error) {
 	var (
 		nodes = []*MeshService{}
-		_spec = _q.querySpec()
+		_spec = msq.querySpec()
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*MeshService).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &MeshService{config: _q.config}
+		node := &MeshService{config: msq.config}
 		nodes = append(nodes, node)
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, msq.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
@@ -355,24 +355,24 @@ func (_q *MeshServiceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 	return nodes, nil
 }
 
-func (_q *MeshServiceQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := _q.querySpec()
-	_spec.Node.Columns = _q.ctx.Fields
-	if len(_q.ctx.Fields) > 0 {
-		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
+func (msq *MeshServiceQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := msq.querySpec()
+	_spec.Node.Columns = msq.ctx.Fields
+	if len(msq.ctx.Fields) > 0 {
+		_spec.Unique = msq.ctx.Unique != nil && *msq.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
+	return sqlgraph.CountNodes(ctx, msq.driver, _spec)
 }
 
-func (_q *MeshServiceQuery) querySpec() *sqlgraph.QuerySpec {
+func (msq *MeshServiceQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(meshservice.Table, meshservice.Columns, sqlgraph.NewFieldSpec(meshservice.FieldID, field.TypeInt))
-	_spec.From = _q.sql
-	if unique := _q.ctx.Unique; unique != nil {
+	_spec.From = msq.sql
+	if unique := msq.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if _q.path != nil {
+	} else if msq.path != nil {
 		_spec.Unique = true
 	}
-	if fields := _q.ctx.Fields; len(fields) > 0 {
+	if fields := msq.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, meshservice.FieldID)
 		for i := range fields {
@@ -381,20 +381,20 @@ func (_q *MeshServiceQuery) querySpec() *sqlgraph.QuerySpec {
 			}
 		}
 	}
-	if ps := _q.predicates; len(ps) > 0 {
+	if ps := msq.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := _q.ctx.Limit; limit != nil {
+	if limit := msq.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := _q.ctx.Offset; offset != nil {
+	if offset := msq.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := _q.order; len(ps) > 0 {
+	if ps := msq.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -404,33 +404,33 @@ func (_q *MeshServiceQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (_q *MeshServiceQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(_q.driver.Dialect())
+func (msq *MeshServiceQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(msq.driver.Dialect())
 	t1 := builder.Table(meshservice.Table)
-	columns := _q.ctx.Fields
+	columns := msq.ctx.Fields
 	if len(columns) == 0 {
 		columns = meshservice.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if _q.sql != nil {
-		selector = _q.sql
+	if msq.sql != nil {
+		selector = msq.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if _q.ctx.Unique != nil && *_q.ctx.Unique {
+	if msq.ctx.Unique != nil && *msq.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range _q.predicates {
+	for _, p := range msq.predicates {
 		p(selector)
 	}
-	for _, p := range _q.order {
+	for _, p := range msq.order {
 		p(selector)
 	}
-	if offset := _q.ctx.Offset; offset != nil {
+	if offset := msq.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := _q.ctx.Limit; limit != nil {
+	if limit := msq.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -443,41 +443,41 @@ type MeshServiceGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (_g *MeshServiceGroupBy) Aggregate(fns ...AggregateFunc) *MeshServiceGroupBy {
-	_g.fns = append(_g.fns, fns...)
-	return _g
+func (msgb *MeshServiceGroupBy) Aggregate(fns ...AggregateFunc) *MeshServiceGroupBy {
+	msgb.fns = append(msgb.fns, fns...)
+	return msgb
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_g *MeshServiceGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
-	if err := _g.build.prepareQuery(ctx); err != nil {
+func (msgb *MeshServiceGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, msgb.build.ctx, ent.OpQueryGroupBy)
+	if err := msgb.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*MeshServiceQuery, *MeshServiceGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return scanWithInterceptors[*MeshServiceQuery, *MeshServiceGroupBy](ctx, msgb.build, msgb, msgb.build.inters, v)
 }
 
-func (_g *MeshServiceGroupBy) sqlScan(ctx context.Context, root *MeshServiceQuery, v any) error {
+func (msgb *MeshServiceGroupBy) sqlScan(ctx context.Context, root *MeshServiceQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(_g.fns))
-	for _, fn := range _g.fns {
+	aggregation := make([]string, 0, len(msgb.fns))
+	for _, fn := range msgb.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
-		for _, f := range *_g.flds {
+		columns := make([]string, 0, len(*msgb.flds)+len(msgb.fns))
+		for _, f := range *msgb.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*_g.flds...)...)
+	selector.GroupBy(selector.Columns(*msgb.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := msgb.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -491,27 +491,27 @@ type MeshServiceSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (_s *MeshServiceSelect) Aggregate(fns ...AggregateFunc) *MeshServiceSelect {
-	_s.fns = append(_s.fns, fns...)
-	return _s
+func (mss *MeshServiceSelect) Aggregate(fns ...AggregateFunc) *MeshServiceSelect {
+	mss.fns = append(mss.fns, fns...)
+	return mss
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_s *MeshServiceSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
-	if err := _s.prepareQuery(ctx); err != nil {
+func (mss *MeshServiceSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, mss.ctx, ent.OpQuerySelect)
+	if err := mss.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*MeshServiceQuery, *MeshServiceSelect](ctx, _s.MeshServiceQuery, _s, _s.inters, v)
+	return scanWithInterceptors[*MeshServiceQuery, *MeshServiceSelect](ctx, mss.MeshServiceQuery, mss, mss.inters, v)
 }
 
-func (_s *MeshServiceSelect) sqlScan(ctx context.Context, root *MeshServiceQuery, v any) error {
+func (mss *MeshServiceSelect) sqlScan(ctx context.Context, root *MeshServiceQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(_s.fns))
-	for _, fn := range _s.fns {
+	aggregation := make([]string, 0, len(mss.fns))
+	for _, fn := range mss.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*_s.selector.flds); {
+	switch n := len(*mss.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -519,7 +519,7 @@ func (_s *MeshServiceSelect) sqlScan(ctx context.Context, root *MeshServiceQuery
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
+	if err := mss.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

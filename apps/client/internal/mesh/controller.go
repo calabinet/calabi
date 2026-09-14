@@ -52,6 +52,12 @@ type Controller struct {
 	// IP) whose default route this node adopts (MESH.7b). Resolved against each
 	// netmap; the datapath installs the full-tunnel routes only for that peer.
 	ExitNode string
+	// BlockIncoming refuses every inbound CONNECTION to this machine, whatever
+	// the org's access rules say. Replies to conversations this machine started
+	// still come back. Local-only, like ExitNode: the person at the keyboard
+	// decides it, and it is re-applied on every netmap so a session restart
+	// cannot drop it.
+	BlockIncoming bool
 	// HomePreference biases home-relay selection toward the org's own self-hosted
 	// relays ("own") or the platform's ("platform"), mirroring the edge affinity
 	// so switching "use my node" moves BOTH the edge egress and the mesh relay
@@ -216,7 +222,12 @@ func (c *Controller) Run(ctx context.Context) error {
 			}
 			c.reportEndpoints(ctx, reg.NodeID, ms)       // initial (local only; no netmap yet)
 			go c.endpointReportLoop(ctx, reg.NodeID, ms) // periodic re-report on roam
-			go c.homeProbeLoop(ctx, reg.NodeID, ms)      // periodic re-measure of the closest relay
+			// Who this node actually exchanged traffic with (connreport.go). Bound
+			// to the same session context, so it stops when the session does and
+			// a fresh one starts with a fresh baseline rather than attributing a
+			// reconnect's counter reset to one window.
+			go c.connReportLoop(ctx)
+			go c.homeProbeLoop(ctx, reg.NodeID, ms) // periodic re-measure of the closest relay
 		}
 	}
 
@@ -253,6 +264,7 @@ func (c *Controller) Run(ctx context.Context) error {
 					"route", r.Prefix.String(), "peer", r.Peer.String(), "reason", r.Reason)
 			}
 		}
+		cfg.BlockIncoming = c.BlockIncoming
 		if c.ExitNode != "" {
 			if cfg.ExitNode = ResolveExitNode(nm, c.ExitNode); cfg.ExitNode.IsZero() {
 				c.Logger.Warn("mesh: exit node not found in netmap; routing directly until it appears", "exit_node", c.ExitNode)
@@ -324,6 +336,39 @@ func (c *Controller) setPeers(peers []Peer) {
 	c.peersMu.Lock()
 	c.curPeers = peers
 	c.peersMu.Unlock()
+}
+
+// PeerFacts is the netmap's description of a peer that a status surface needs:
+// what the machine is called, and what it offers.
+//
+// Deliberately not the netmap Peer itself — that also carries disco keys and
+// candidate endpoints, and a status page has no business with either.
+type PeerFacts struct {
+	Name     string
+	Services []PeerService
+	OS       string
+}
+
+// PeerFactsByKey maps each peer's node key (in the string form
+// PeerStatus.PublicKey uses) to its facts, so live WireGuard state read from the
+// datapath can be joined with the netmap that named it.
+//
+// A peer with neither a name nor a service is omitted: a caller falling back to
+// the key is right, one rendering a blank where a machine name goes is not.
+func (c *Controller) PeerFactsByKey() map[string]PeerFacts {
+	c.peersMu.Lock()
+	defer c.peersMu.Unlock()
+	if len(c.curPeers) == 0 {
+		return nil
+	}
+	out := make(map[string]PeerFacts, len(c.curPeers))
+	for _, p := range c.curPeers {
+		if p.Name == "" && len(p.Services) == 0 && p.OS == "" {
+			continue
+		}
+		out[p.NodeKey.String()] = PeerFacts{Name: p.Name, Services: p.Services, OS: p.OS}
+	}
+	return out
 }
 
 // peers returns the latest netmap's peer set for the prober's periodic re-probe.
@@ -614,6 +659,7 @@ func (c *Controller) UpdateDeclarations(ctx context.Context, services []Declared
 	c.paramsMu.Lock()
 	p := c.Params
 	c.paramsMu.Unlock()
+	p.BlockIncoming = c.BlockIncoming
 	p.Services = services
 	if fingerprint != "" {
 		p.DeviceFingerprint = fingerprint
@@ -641,5 +687,10 @@ func (c *Controller) UpdateDeclarations(ctx context.Context, services []Declared
 func (c *Controller) registerParams() RegisterParams {
 	c.paramsMu.Lock()
 	defer c.paramsMu.Unlock()
-	return c.Params
+	p := c.Params
+	// Stamped here rather than stored in Params, so the switch has ONE source of
+	// truth (the field the datapath enforces from) and the two can never report
+	// different things to the console and the packet filter.
+	p.BlockIncoming = c.BlockIncoming
+	return p
 }

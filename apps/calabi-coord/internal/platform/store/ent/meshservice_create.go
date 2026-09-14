@@ -21,127 +21,127 @@ type MeshServiceCreate struct {
 }
 
 // SetMeshnetID sets the "meshnet_id" field.
-func (_c *MeshServiceCreate) SetMeshnetID(v int64) *MeshServiceCreate {
-	_c.mutation.SetMeshnetID(v)
-	return _c
+func (msc *MeshServiceCreate) SetMeshnetID(i int64) *MeshServiceCreate {
+	msc.mutation.SetMeshnetID(i)
+	return msc
 }
 
 // SetNodeID sets the "node_id" field.
-func (_c *MeshServiceCreate) SetNodeID(v int64) *MeshServiceCreate {
-	_c.mutation.SetNodeID(v)
-	return _c
+func (msc *MeshServiceCreate) SetNodeID(i int64) *MeshServiceCreate {
+	msc.mutation.SetNodeID(i)
+	return msc
 }
 
 // SetName sets the "name" field.
-func (_c *MeshServiceCreate) SetName(v string) *MeshServiceCreate {
-	_c.mutation.SetName(v)
-	return _c
+func (msc *MeshServiceCreate) SetName(s string) *MeshServiceCreate {
+	msc.mutation.SetName(s)
+	return msc
 }
 
 // SetProto sets the "proto" field.
-func (_c *MeshServiceCreate) SetProto(v string) *MeshServiceCreate {
-	_c.mutation.SetProto(v)
-	return _c
+func (msc *MeshServiceCreate) SetProto(s string) *MeshServiceCreate {
+	msc.mutation.SetProto(s)
+	return msc
 }
 
 // SetNillableProto sets the "proto" field if the given value is not nil.
-func (_c *MeshServiceCreate) SetNillableProto(v *string) *MeshServiceCreate {
-	if v != nil {
-		_c.SetProto(*v)
+func (msc *MeshServiceCreate) SetNillableProto(s *string) *MeshServiceCreate {
+	if s != nil {
+		msc.SetProto(*s)
 	}
-	return _c
+	return msc
 }
 
 // SetPort sets the "port" field.
-func (_c *MeshServiceCreate) SetPort(v int) *MeshServiceCreate {
-	_c.mutation.SetPort(v)
-	return _c
+func (msc *MeshServiceCreate) SetPort(i int) *MeshServiceCreate {
+	msc.mutation.SetPort(i)
+	return msc
 }
 
 // SetTarget sets the "target" field.
-func (_c *MeshServiceCreate) SetTarget(v string) *MeshServiceCreate {
-	_c.mutation.SetTarget(v)
-	return _c
+func (msc *MeshServiceCreate) SetTarget(s string) *MeshServiceCreate {
+	msc.mutation.SetTarget(s)
+	return msc
 }
 
 // SetNillableTarget sets the "target" field if the given value is not nil.
-func (_c *MeshServiceCreate) SetNillableTarget(v *string) *MeshServiceCreate {
-	if v != nil {
-		_c.SetTarget(*v)
+func (msc *MeshServiceCreate) SetNillableTarget(s *string) *MeshServiceCreate {
+	if s != nil {
+		msc.SetTarget(*s)
 	}
-	return _c
+	return msc
 }
 
 // SetNote sets the "note" field.
-func (_c *MeshServiceCreate) SetNote(v string) *MeshServiceCreate {
-	_c.mutation.SetNote(v)
-	return _c
+func (msc *MeshServiceCreate) SetNote(s string) *MeshServiceCreate {
+	msc.mutation.SetNote(s)
+	return msc
 }
 
 // SetNillableNote sets the "note" field if the given value is not nil.
-func (_c *MeshServiceCreate) SetNillableNote(v *string) *MeshServiceCreate {
-	if v != nil {
-		_c.SetNote(*v)
+func (msc *MeshServiceCreate) SetNillableNote(s *string) *MeshServiceCreate {
+	if s != nil {
+		msc.SetNote(*s)
 	}
-	return _c
+	return msc
 }
 
 // SetSource sets the "source" field.
-func (_c *MeshServiceCreate) SetSource(v string) *MeshServiceCreate {
-	_c.mutation.SetSource(v)
-	return _c
+func (msc *MeshServiceCreate) SetSource(s string) *MeshServiceCreate {
+	msc.mutation.SetSource(s)
+	return msc
 }
 
 // SetNillableSource sets the "source" field if the given value is not nil.
-func (_c *MeshServiceCreate) SetNillableSource(v *string) *MeshServiceCreate {
-	if v != nil {
-		_c.SetSource(*v)
+func (msc *MeshServiceCreate) SetNillableSource(s *string) *MeshServiceCreate {
+	if s != nil {
+		msc.SetSource(*s)
 	}
-	return _c
+	return msc
 }
 
 // SetApproved sets the "approved" field.
-func (_c *MeshServiceCreate) SetApproved(v bool) *MeshServiceCreate {
-	_c.mutation.SetApproved(v)
-	return _c
+func (msc *MeshServiceCreate) SetApproved(b bool) *MeshServiceCreate {
+	msc.mutation.SetApproved(b)
+	return msc
 }
 
 // SetNillableApproved sets the "approved" field if the given value is not nil.
-func (_c *MeshServiceCreate) SetNillableApproved(v *bool) *MeshServiceCreate {
-	if v != nil {
-		_c.SetApproved(*v)
+func (msc *MeshServiceCreate) SetNillableApproved(b *bool) *MeshServiceCreate {
+	if b != nil {
+		msc.SetApproved(*b)
 	}
-	return _c
+	return msc
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (_c *MeshServiceCreate) SetCreatedAt(v time.Time) *MeshServiceCreate {
-	_c.mutation.SetCreatedAt(v)
-	return _c
+func (msc *MeshServiceCreate) SetCreatedAt(t time.Time) *MeshServiceCreate {
+	msc.mutation.SetCreatedAt(t)
+	return msc
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_c *MeshServiceCreate) SetNillableCreatedAt(v *time.Time) *MeshServiceCreate {
-	if v != nil {
-		_c.SetCreatedAt(*v)
+func (msc *MeshServiceCreate) SetNillableCreatedAt(t *time.Time) *MeshServiceCreate {
+	if t != nil {
+		msc.SetCreatedAt(*t)
 	}
-	return _c
+	return msc
 }
 
 // Mutation returns the MeshServiceMutation object of the builder.
-func (_c *MeshServiceCreate) Mutation() *MeshServiceMutation {
-	return _c.mutation
+func (msc *MeshServiceCreate) Mutation() *MeshServiceMutation {
+	return msc.mutation
 }
 
 // Save creates the MeshService in the database.
-func (_c *MeshServiceCreate) Save(ctx context.Context) (*MeshService, error) {
-	_c.defaults()
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+func (msc *MeshServiceCreate) Save(ctx context.Context) (*MeshService, error) {
+	msc.defaults()
+	return withHooks(ctx, msc.sqlSave, msc.mutation, msc.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (_c *MeshServiceCreate) SaveX(ctx context.Context) *MeshService {
-	v, err := _c.Save(ctx)
+func (msc *MeshServiceCreate) SaveX(ctx context.Context) *MeshService {
+	v, err := msc.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -149,87 +149,87 @@ func (_c *MeshServiceCreate) SaveX(ctx context.Context) *MeshService {
 }
 
 // Exec executes the query.
-func (_c *MeshServiceCreate) Exec(ctx context.Context) error {
-	_, err := _c.Save(ctx)
+func (msc *MeshServiceCreate) Exec(ctx context.Context) error {
+	_, err := msc.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_c *MeshServiceCreate) ExecX(ctx context.Context) {
-	if err := _c.Exec(ctx); err != nil {
+func (msc *MeshServiceCreate) ExecX(ctx context.Context) {
+	if err := msc.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (_c *MeshServiceCreate) defaults() {
-	if _, ok := _c.mutation.Proto(); !ok {
+func (msc *MeshServiceCreate) defaults() {
+	if _, ok := msc.mutation.Proto(); !ok {
 		v := meshservice.DefaultProto
-		_c.mutation.SetProto(v)
+		msc.mutation.SetProto(v)
 	}
-	if _, ok := _c.mutation.Target(); !ok {
+	if _, ok := msc.mutation.Target(); !ok {
 		v := meshservice.DefaultTarget
-		_c.mutation.SetTarget(v)
+		msc.mutation.SetTarget(v)
 	}
-	if _, ok := _c.mutation.Note(); !ok {
+	if _, ok := msc.mutation.Note(); !ok {
 		v := meshservice.DefaultNote
-		_c.mutation.SetNote(v)
+		msc.mutation.SetNote(v)
 	}
-	if _, ok := _c.mutation.Source(); !ok {
+	if _, ok := msc.mutation.Source(); !ok {
 		v := meshservice.DefaultSource
-		_c.mutation.SetSource(v)
+		msc.mutation.SetSource(v)
 	}
-	if _, ok := _c.mutation.Approved(); !ok {
+	if _, ok := msc.mutation.Approved(); !ok {
 		v := meshservice.DefaultApproved
-		_c.mutation.SetApproved(v)
+		msc.mutation.SetApproved(v)
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
+	if _, ok := msc.mutation.CreatedAt(); !ok {
 		v := meshservice.DefaultCreatedAt()
-		_c.mutation.SetCreatedAt(v)
+		msc.mutation.SetCreatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (_c *MeshServiceCreate) check() error {
-	if _, ok := _c.mutation.MeshnetID(); !ok {
+func (msc *MeshServiceCreate) check() error {
+	if _, ok := msc.mutation.MeshnetID(); !ok {
 		return &ValidationError{Name: "meshnet_id", err: errors.New(`ent: missing required field "MeshService.meshnet_id"`)}
 	}
-	if _, ok := _c.mutation.NodeID(); !ok {
+	if _, ok := msc.mutation.NodeID(); !ok {
 		return &ValidationError{Name: "node_id", err: errors.New(`ent: missing required field "MeshService.node_id"`)}
 	}
-	if _, ok := _c.mutation.Name(); !ok {
+	if _, ok := msc.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "MeshService.name"`)}
 	}
-	if _, ok := _c.mutation.Proto(); !ok {
+	if _, ok := msc.mutation.Proto(); !ok {
 		return &ValidationError{Name: "proto", err: errors.New(`ent: missing required field "MeshService.proto"`)}
 	}
-	if _, ok := _c.mutation.Port(); !ok {
+	if _, ok := msc.mutation.Port(); !ok {
 		return &ValidationError{Name: "port", err: errors.New(`ent: missing required field "MeshService.port"`)}
 	}
-	if _, ok := _c.mutation.Target(); !ok {
+	if _, ok := msc.mutation.Target(); !ok {
 		return &ValidationError{Name: "target", err: errors.New(`ent: missing required field "MeshService.target"`)}
 	}
-	if _, ok := _c.mutation.Note(); !ok {
+	if _, ok := msc.mutation.Note(); !ok {
 		return &ValidationError{Name: "note", err: errors.New(`ent: missing required field "MeshService.note"`)}
 	}
-	if _, ok := _c.mutation.Source(); !ok {
+	if _, ok := msc.mutation.Source(); !ok {
 		return &ValidationError{Name: "source", err: errors.New(`ent: missing required field "MeshService.source"`)}
 	}
-	if _, ok := _c.mutation.Approved(); !ok {
+	if _, ok := msc.mutation.Approved(); !ok {
 		return &ValidationError{Name: "approved", err: errors.New(`ent: missing required field "MeshService.approved"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
+	if _, ok := msc.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "MeshService.created_at"`)}
 	}
 	return nil
 }
 
-func (_c *MeshServiceCreate) sqlSave(ctx context.Context) (*MeshService, error) {
-	if err := _c.check(); err != nil {
+func (msc *MeshServiceCreate) sqlSave(ctx context.Context) (*MeshService, error) {
+	if err := msc.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := _c.createSpec()
-	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
+	_node, _spec := msc.createSpec()
+	if err := sqlgraph.CreateNode(ctx, msc.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -237,53 +237,53 @@ func (_c *MeshServiceCreate) sqlSave(ctx context.Context) (*MeshService, error) 
 	}
 	id := _spec.ID.Value.(int64)
 	_node.ID = int(id)
-	_c.mutation.id = &_node.ID
-	_c.mutation.done = true
+	msc.mutation.id = &_node.ID
+	msc.mutation.done = true
 	return _node, nil
 }
 
-func (_c *MeshServiceCreate) createSpec() (*MeshService, *sqlgraph.CreateSpec) {
+func (msc *MeshServiceCreate) createSpec() (*MeshService, *sqlgraph.CreateSpec) {
 	var (
-		_node = &MeshService{config: _c.config}
+		_node = &MeshService{config: msc.config}
 		_spec = sqlgraph.NewCreateSpec(meshservice.Table, sqlgraph.NewFieldSpec(meshservice.FieldID, field.TypeInt))
 	)
-	if value, ok := _c.mutation.MeshnetID(); ok {
+	if value, ok := msc.mutation.MeshnetID(); ok {
 		_spec.SetField(meshservice.FieldMeshnetID, field.TypeInt64, value)
 		_node.MeshnetID = value
 	}
-	if value, ok := _c.mutation.NodeID(); ok {
+	if value, ok := msc.mutation.NodeID(); ok {
 		_spec.SetField(meshservice.FieldNodeID, field.TypeInt64, value)
 		_node.NodeID = value
 	}
-	if value, ok := _c.mutation.Name(); ok {
+	if value, ok := msc.mutation.Name(); ok {
 		_spec.SetField(meshservice.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
-	if value, ok := _c.mutation.Proto(); ok {
+	if value, ok := msc.mutation.Proto(); ok {
 		_spec.SetField(meshservice.FieldProto, field.TypeString, value)
 		_node.Proto = value
 	}
-	if value, ok := _c.mutation.Port(); ok {
+	if value, ok := msc.mutation.Port(); ok {
 		_spec.SetField(meshservice.FieldPort, field.TypeInt, value)
 		_node.Port = value
 	}
-	if value, ok := _c.mutation.Target(); ok {
+	if value, ok := msc.mutation.Target(); ok {
 		_spec.SetField(meshservice.FieldTarget, field.TypeString, value)
 		_node.Target = value
 	}
-	if value, ok := _c.mutation.Note(); ok {
+	if value, ok := msc.mutation.Note(); ok {
 		_spec.SetField(meshservice.FieldNote, field.TypeString, value)
 		_node.Note = value
 	}
-	if value, ok := _c.mutation.Source(); ok {
+	if value, ok := msc.mutation.Source(); ok {
 		_spec.SetField(meshservice.FieldSource, field.TypeString, value)
 		_node.Source = value
 	}
-	if value, ok := _c.mutation.Approved(); ok {
+	if value, ok := msc.mutation.Approved(); ok {
 		_spec.SetField(meshservice.FieldApproved, field.TypeBool, value)
 		_node.Approved = value
 	}
-	if value, ok := _c.mutation.CreatedAt(); ok {
+	if value, ok := msc.mutation.CreatedAt(); ok {
 		_spec.SetField(meshservice.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
@@ -298,16 +298,16 @@ type MeshServiceCreateBulk struct {
 }
 
 // Save creates the MeshService entities in the database.
-func (_c *MeshServiceCreateBulk) Save(ctx context.Context) ([]*MeshService, error) {
-	if _c.err != nil {
-		return nil, _c.err
+func (mscb *MeshServiceCreateBulk) Save(ctx context.Context) ([]*MeshService, error) {
+	if mscb.err != nil {
+		return nil, mscb.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
-	nodes := make([]*MeshService, len(_c.builders))
-	mutators := make([]Mutator, len(_c.builders))
-	for i := range _c.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(mscb.builders))
+	nodes := make([]*MeshService, len(mscb.builders))
+	mutators := make([]Mutator, len(mscb.builders))
+	for i := range mscb.builders {
 		func(i int, root context.Context) {
-			builder := _c.builders[i]
+			builder := mscb.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*MeshServiceMutation)
@@ -321,11 +321,11 @@ func (_c *MeshServiceCreateBulk) Save(ctx context.Context) ([]*MeshService, erro
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, mscb.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, mscb.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -349,7 +349,7 @@ func (_c *MeshServiceCreateBulk) Save(ctx context.Context) ([]*MeshService, erro
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, mscb.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -357,8 +357,8 @@ func (_c *MeshServiceCreateBulk) Save(ctx context.Context) ([]*MeshService, erro
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_c *MeshServiceCreateBulk) SaveX(ctx context.Context) []*MeshService {
-	v, err := _c.Save(ctx)
+func (mscb *MeshServiceCreateBulk) SaveX(ctx context.Context) []*MeshService {
+	v, err := mscb.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -366,14 +366,14 @@ func (_c *MeshServiceCreateBulk) SaveX(ctx context.Context) []*MeshService {
 }
 
 // Exec executes the query.
-func (_c *MeshServiceCreateBulk) Exec(ctx context.Context) error {
-	_, err := _c.Save(ctx)
+func (mscb *MeshServiceCreateBulk) Exec(ctx context.Context) error {
+	_, err := mscb.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_c *MeshServiceCreateBulk) ExecX(ctx context.Context) {
-	if err := _c.Exec(ctx); err != nil {
+func (mscb *MeshServiceCreateBulk) ExecX(ctx context.Context) {
+	if err := mscb.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -47,9 +47,9 @@ below.
 - [The mesh](#the-mesh) — what the three pieces are
 - [The relay](#the-relay)
 - [The coordinator](#the-coordinator)
-- [Joining a node](#joining-a-node)
+- [Joining a device](#joining-a-device)
 - [ACLs](#acls)
-- [Subnet routers and exit nodes](#subnet-routers-and-exit-nodes)
+- [Subnet routers and exit devices](#subnet-routers-and-exit-devices)
 - [What isn't automated off Linux yet](#what-isnt-automated-off-linux-yet)
 
 **Then**
@@ -342,12 +342,12 @@ Three pieces:
 
 | | | |
 |---|---|---|
-| `calabi-coord` | the coordinator | node registry, address allocation, ACLs, the relay directory |
-| `calabi-edge` with `role: relay` | the relay | forwards **already-encrypted** packets between node keys, and answers STUN so nodes can find their own public endpoint |
-| `calabi mesh up` | a node | generates its own WireGuard key, enrolls, brings up a tun device |
+| `calabi-coord` | the coordinator | device registry, address allocation, ACLs, the relay directory |
+| `calabi-edge` with `role: relay` | the relay | forwards **already-encrypted** packets between device keys, and answers STUN so devices can find their own public endpoint |
+| `calabi mesh up` | a device | generates its own WireGuard key, enrolls, brings up a tun device |
 
 The coordinator never sees a private key and never sees plaintext. Neither does
-the relay: it routes ciphertext by node key and has no code path that could
+the relay: it routes ciphertext by device key and has no code path that could
 decrypt it — that isolation is structural (`pkg/relay` carries no edge or
 control-plane code, enforced by a dependency test), not a config option.
 
@@ -360,20 +360,20 @@ CALABI_EDGE_ROLE=relay CALABI_EDGE_RELAY_LABEL=home ./calabi-edge
 ```
 
 That listens on **3340/tcp** (the relay itself) and **3478/udp** (STUN). Both
-must be reachable from your nodes. In YAML instead:
+must be reachable from your devices. In YAML instead:
 
 ```yaml
 role: relay          # or "both" to run a tunnel edge and a relay in one process
 relay:
   derp_port: 3340
   stun_port: 3478    # 0 disables the STUN responder
-  label: home        # names the region; nodes home on "self-home"
+  label: home        # names the region; devices home on "self-home"
 ```
 
 > A relay with no `label` starts and warns: it cannot be registered in the relay
-> directory, so no node will ever home on it.
+> directory, so no device will ever home on it.
 
-Run several in different places if you want; nodes measure latency to each over
+Run several in different places if you want; devices measure latency to each over
 STUN and pick their own.
 
 ### The coordinator
@@ -387,25 +387,25 @@ CALABI_COORD_DERP_STUN_PORT=3478 \
 
 | variable | what it does |
 |---|---|
-| `CALABI_COORD_GRPC_ADDR` | where nodes connect. Default `:7012` |
+| `CALABI_COORD_GRPC_ADDR` | where devices connect. Default `:7012` |
 | `CALABI_COORD_ADMIN_ADDR` | health + metrics. Default `:9122`; keep it private |
 | `CALABI_COORD_AUTHKEYS_FILE` | **the auth keys.** JSON: `{"key": {"meshnet": 1, "tags": ["tag:laptop"]}}` |
 | `CALABI_COORD_DERP_ADDR` | one relay, the simple case: `host:port` |
 | `CALABI_COORD_DERP_STUN_PORT` | that relay's STUN port. Without it the region cannot be measured, so nobody homes there |
 | `CALABI_COORD_DERP_MAP_FILE` | several relays instead: a JSON directory (see `apps/calabi-coord/examples/derp-map.example.json`) |
-| `CALABI_COORD_POLICY_FILE` | the ACL file. Unset = every node in a meshnet reaches every other |
-| `CALABI_COORD_NODE_QUOTA` | cap on nodes per meshnet. Unset = unlimited |
+| `CALABI_COORD_POLICY_FILE` | the ACL file. Unset = every device in a meshnet reaches every other |
+| `CALABI_COORD_NODE_QUOTA` | cap on devices per meshnet. Unset = unlimited |
 | `CALABI_COORD_DB_DSN` | where state lives. `sqlite:./coord.db` for a file, or a `postgres://…` URL. **Unset = in memory** — see below |
 | `CALABI_COORD_TLS_CERT_FILE` / `_KEY_FILE` | serve gRPC over TLS. Both or neither |
-| `CALABI_COORD_MESH_ADMIN_ADDR` / `_TOKEN` | the admin HTTP API. **A tokenless admin surface is refused at startup** — it would expose every meshnet's nodes and ACLs |
+| `CALABI_COORD_MESH_ADMIN_ADDR` / `_TOKEN` | the admin HTTP API. **A tokenless admin surface is refused at startup** — it would expose every meshnet's devices and ACLs |
 
 A `meshnet` is one isolated network. Two keys mapping to different meshnet
 numbers produce two networks on one coordinator that cannot see each other.
 
 > **Give it a database.** With no `CALABI_COORD_DB_DSN` the coordinator keeps
-> the node registry, the ACL document, declared services and the self-hosted
+> the device registry, the ACL document, declared services and the self-hosted
 > relay directory **in memory** — it says so at startup, and it means a restart
-> empties the registry: every node re-enrolls and gets a *different*
+> empties the registry: every device re-enrolls and gets a *different*
 > `100.64.x.x` address. `CALABI_COORD_DB_DSN=sqlite:./coord.db` is enough; there
 > is no Postgres requirement. A DSN that is set but unusable aborts startup
 > rather than falling back to memory.
@@ -415,7 +415,7 @@ numbers produce two networks on one coordinator that cannot see each other.
 > admits *any* caller into meshnet 1. Do that on anything reachable from the
 > internet.
 
-### Joining a node
+### Joining a device
 
 ```bash
 sudo ./calabi mesh up \
@@ -425,7 +425,7 @@ sudo ./calabi mesh up \
 ```
 
 Needs a tun device and privileges. On Windows `wintun.dll` is embedded in the
-binary, so there is nothing to install. The node's WireGuard key is generated
+binary, so there is nothing to install. The device's WireGuard key is generated
 locally and cached (`--key-file` to place it); re-running keeps the same
 identity and therefore the same `100.64.x.x` address.
 
@@ -446,35 +446,36 @@ mesh:
 > read literally. Keep the file mode tight (it is a credential), or run
 > `calabi mesh up` in the foreground with the key on the command line.
 
-> **TLS between node and coordinator.** The node dials the coordinator over TLS
+> **TLS between device and coordinator.** The device dials the coordinator over TLS
 > and verifies it against the CA compiled into the client, so a self-hosted
 > coordinator needs one of two things: give it a certificate from your own CA
-> (`CALABI_COORD_TLS_CERT_FILE`/`_KEY_FILE`) and point nodes at that CA with
+> (`CALABI_COORD_TLS_CERT_FILE`/`_KEY_FILE`) and point devices at that CA with
 > `CALABI_EDGE_CA_FILE=/path/to/your-ca.pem`, or set `CALABI_INSECURE=1` on the
-> nodes for plaintext. **The auth key crosses this connection**, so plaintext is
+> devices for plaintext. **The auth key crosses this connection**, so plaintext is
 > for a trusted network only. Started with only one of the two cert variables,
 > the coordinator refuses to boot rather than quietly serve plaintext.
 
 ### ACLs
 
-Without `CALABI_COORD_POLICY_FILE`, every node in a meshnet reaches every other.
+Without `CALABI_COORD_POLICY_FILE`, every device in a meshnet reaches every other.
 With it, a JSON file of groups and rules decides who reaches whom, on which
 ports. It hot-reloads on change — and if the file is broken **it fails closed**
 (deny everything) and says so loudly, rather than falling back to allow-all.
 Fix the file and it recovers without a restart.
 
-### Subnet routers and exit nodes
+### Subnet routers and exit devices
 
 ```bash
 calabi mesh up ... --advertise-routes 192.168.1.0/24   # share a LAN with the mesh
-calabi mesh up ... --advertise-exit-node               # offer to be an exit node
+calabi mesh up ... --advertise-exit-node               # offer to be an exit device
 calabi mesh up ... --exit-node home-server             # send MY default route out via a peer
 ```
 
 Advertising works on every platform. The forwarding half — turning on IP
 forwarding and NAT so packets actually cross — **is automated on Linux only**;
-elsewhere the node advertises and you configure the OS yourself. Taking the
-default route as an exit-node *client* works on Linux, Windows and macOS.
+elsewhere the device advertises and you configure the OS yourself. *Using* an
+exit device — sending your default route through it — works on Linux, Windows
+and macOS.
 
 ---
 

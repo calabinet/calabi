@@ -154,9 +154,9 @@ export default function Services() {
     save.mutate(items.filter((s) => s.name !== target.name));
   };
 
-  // Publish a service to the public: hand off to the new-tunnel wizard (on the
-  // Tunnels page) pre-filled with the service's forwarding address, so there is
-  // one create-tunnel form in the app. The address is the service's target, or
+  // Publish a service to the public: hand off to the create-tunnel page
+  // pre-filled with the service's forwarding address, so there is one
+  // create-tunnel form in the app. The address is the service's target, or
   // 127.0.0.1:<port> when it declared none — the same value a tunnel's
   // local_addr carries.
   const onPublish = (s: MeshServiceDecl) => {
@@ -166,7 +166,7 @@ export default function Services() {
       publish_addr: addr,
       publish_proto: s.proto,
     });
-    navigate("/tunnels?" + q.toString());
+    navigate("/tunnels/new?" + q.toString());
   };
 
   return (

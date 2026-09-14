@@ -47,7 +47,7 @@ const desktopUAMarker = "CalabiDesktop"
 // Pending=true marks an entry that arrived via Phase C's server→client
 // CONFIG_PUSH(upsert_proxies) but hasn't been activated yet (no live
 // NEW_PROXY round-trip on the client side). The status UI displays
-// these with an "等待客户端启动" tag — the user still needs to run
+// these with an "待接入" tag — the user still needs to run
 // `calabi http <port>` etc. for the matching local upstream before
 // traffic can flow. Once the user does that, the proxy lifecycle
 // flips Pending to false via the normal AddTunnel path.

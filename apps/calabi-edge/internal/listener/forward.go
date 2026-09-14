@@ -38,9 +38,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/calabi/calabi/apps/calabi-edge/internal/accesslog"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/mesh"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/router"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
+	"github.com/calabi/calabi/apps/calabi-edge/internal/visitorerr"
 	proto "github.com/calabi/calabi/pkg/protocol"
 )
 
@@ -149,7 +151,7 @@ func (f *Forward) handle(peer net.Conn) {
 		f.logger.Info("forward miss: not owned here",
 			"kind", hdr.Kind, "host", hdr.Host, "origin_edge", hdr.OriginEdge)
 		if hdr.Kind != mesh.KindSNI {
-			writeStatus(peer, 502, fmt.Sprintf("no tunnel for host %q", hdr.Host))
+			writeVisitorError(peer, head, 502, visitorerr.ErrNoTunnel)
 		}
 		f.observeRequest(hdr.Kind, "no_tunnel")
 		return
@@ -157,7 +159,7 @@ func (f *Forward) handle(peer net.Conn) {
 	sess, ok := target.Session.(*session.Session)
 	if !ok {
 		if hdr.Kind != mesh.KindSNI {
-			writeStatus(peer, 500, "internal: routing target type mismatch")
+			writeVisitorError(peer, head, 500, visitorerr.ErrInternal)
 		}
 		f.observeRequest(hdr.Kind, "internal_error")
 		return
@@ -184,20 +186,23 @@ func (f *Forward) handle(peer net.Conn) {
 		if pol := p.LoadPolicy(); pol != nil {
 			if pol.HasIPRules() && !pol.AllowIPString(hdr.VisitorIP) {
 				if hdr.Kind != mesh.KindSNI {
-					writeStatus(peer, 403, "forbidden: source IP not allowed")
+					writeVisitorError(peer, head, 403, visitorerr.ErrIPBlocked)
 				}
 				f.observeRequest(hdr.Kind, "ip_denied")
+				noteAccess(sess, target.ProxyID, hdr.VisitorIP, accesslog.DeniedIP)
 				return
 			}
 			if hdr.Kind != mesh.KindSNI {
 				if pol.HasBasicAuth() && !pol.CheckBasicAuth(headerValue(head, "Authorization")) {
-					write401(peer, basicAuthRealm)
+					write401(peer, head, basicAuthRealm)
 					f.observeRequest(hdr.Kind, "auth_required")
+					noteAccess(sess, target.ProxyID, hdr.VisitorIP, accesslog.DeniedAuth)
 					return
 				}
-				if pol.HasRateLimit() && !pol.AllowRate() {
-					writeStatus(peer, 429, "rate limit exceeded")
+				if pol.HasRateLimit() && !pol.AllowRate(hdr.VisitorIP) {
+					writeVisitorError(peer, head, 429, visitorerr.ErrRateLimited)
 					f.observeRequest(hdr.Kind, "rate_limited")
+					noteAccess(sess, target.ProxyID, hdr.VisitorIP, accesslog.DeniedRate)
 					return
 				}
 				if pol.HasOAuth() {
@@ -206,6 +211,7 @@ func (f *Forward) handle(peer net.Conn) {
 					if pol.GateOAuth(peer, hdr.Path, hdr.Host, hdr.Kind == mesh.KindHTTPS,
 						headerValue(head, "Cookie"), time.Now()) {
 						f.observeRequest(hdr.Kind, "oauth_redirect")
+						noteAccess(sess, target.ProxyID, hdr.VisitorIP, accesslog.DeniedAuth)
 						return
 					}
 				}
@@ -227,12 +233,19 @@ func (f *Forward) handle(peer net.Conn) {
 		f.logger.Info("forward open upstream",
 			"err", err, "kind", hdr.Kind, "host", hdr.Host, "session_id", target.SessionID)
 		if hdr.Kind != mesh.KindSNI {
-			writeStatus(peer, 502, "upstream unavailable: "+err.Error())
+			writeVisitorError(peer, head, 502, upstreamErrCode(err))
 		}
 		f.observeRequest(hdr.Kind, "open_upstream_failed")
 		return
 	}
 	defer stream.Close()
+	// The access log's relayed half. A visitor who lands on a same-region PEER
+	// edge reaches the owning tunnel through here and nowhere else, so
+	// without this line those connections are simply absent from the owner's
+	// log — and an audit trail with a hole in it that nothing announces is the
+	// failure the whole feature exists to avoid. The address recorded is the
+	// ORIGINAL visitor's, carried in the relay header, never the peer edge's.
+	noteAccess(sess, target.ProxyID, hdr.VisitorIP, accesslog.Allowed)
 
 	// Replay the sniffed head the relay edge captured (HTTP request head /
 	// TLS ClientHello) so the client's local server sees the original bytes.

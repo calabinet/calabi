@@ -81,6 +81,30 @@ service Coordinator {
   // only the CURRENT value and does not persist it — a history of which port
   // answered when is exactly the kind of record §八 says not to accumulate.
   rpc ReportServiceHealth(ReportServiceHealthRequest) returns (ReportServiceHealthResponse);
+
+  // ReportConnections uploads WHO this node exchanged traffic with in a window:
+  // the peer, when, how many bytes each way, and whether the path was direct or
+  // relayed. It is the data-plane half of an audit trail — the control-plane
+  // half (who changed a rule, who approved a device) already lives in
+  // audit-svc's hash chain.
+  //
+  // This REVISES the "current value, never a time series" rule in
+  // docs/runbook/mesh-console-ux-plan.md §八-3, and the revision is deliberately
+  // narrow. What that rule was protecting is spelled out there: a sequence of a
+  // laptop's ENDPOINT ADDRESSES is a location trail, because a public IP reverse
+  // -resolves to a place and an ISP. So endpoints are still current-value only,
+  // and this message carries none — no endpoint, no public IP, no port. A peer
+  // pair plus a byte count is an access trail, which is the thing an enterprise
+  // buyer is asking for when they ask for audit.
+  //
+  // Still metadata, never content: the coordinator's promise that it cannot see
+  // what flows between nodes is unchanged, and nothing here comes close to it.
+  //
+  // SELF-REPORTED, like every other declaration. A compromised endpoint can
+  // under-report its own connections, so this is observational evidence and not
+  // proof — the same status as endpoint telemetry everywhere else. Say so in the
+  // console rather than letting a reader assume it is tamper-proof.
+  rpc ReportConnections(ReportConnectionsRequest) returns (ReportConnectionsResponse);
 }
 
 message RegisterNodeRequest {
@@ -131,6 +155,29 @@ message RegisterNodeRequest {
   // (meshproto.SealRegisterProof). Refused without both.
   string challenge_id = 11;
   bytes register_proof = 12;
+  // os is the machine's platform as the daemon's own runtime reports it
+  // ("windows", "linux", "darwin"). A CLAIM, like name — display only, never
+  // consulted for authorization, so a node lying about it costs itself an
+  // accurate icon and nothing else.
+  //
+  // Sent because "which of these is the Windows box" is one of the two
+  // questions a peer list has to answer (the other, whose machine it is, the
+  // coordinator resolves from the auth key). Nobody else can answer it: the
+  // coordinator never sees the host, and no other message carries it.
+  string os = 13;
+  // block_incoming is the machine's OWN refusal of all inbound connections
+  // ("shields up"). Enforcement is entirely LOCAL — the node's packet filter
+  // drops the traffic itself, so this is not how the setting takes effect and
+  // clearing it here would not open the machine up. It is reported for ONE
+  // reason: without it, a machine that answers nobody is indistinguishable in
+  // the console from a healthy one, and the only person who can see the switch
+  // is the one who flipped it.
+  //
+  // OPTIONAL on purpose. A plain proto3 bool cannot tell "this daemon says no"
+  // from "this daemon is too old to say anything", and reading the second as
+  // false would make every un-upgraded machine claim, positively, that it
+  // accepts connections. Absent means unknown; the console shows nothing.
+  optional bool block_incoming = 14;
 }
 
 // DeclaredService is one entry of RegisterNodeRequest.declared_services.
@@ -210,9 +257,55 @@ message UpdateNodeDeclarationsRequest {
   // call. auth_key and node_key above no longer do - an org key plus a node
   // key (public within an org) let any member edit a colleague's device.
   string session_token = 5;
+  // Same "" means no change rule as device_fingerprint. Carried here so an
+  // upgraded daemon fills the column on its next declaration push rather than
+  // only after a full re-enrollment (which tears down WireGuard).
+  string os = 6;
+  // Same "unknown vs false" reasoning as RegisterNodeRequest.block_incoming, and
+  // carried here for the same reason os is: flipping the switch must reach the
+  // console on the next declaration push, not only after a re-enrollment (which
+  // tears down WireGuard).
+  optional bool block_incoming = 7;
 }
 message UpdateNodeDeclarationsResponse {
   int64 node_id = 1;
+}
+
+// ConnSample is one peer, over one window, as the REPORTING node saw it.
+//
+// Deltas, not totals: WireGuard's counters are cumulative and reset whenever the
+// peer is reconfigured, so a total would double-count across a restart and go
+// backwards across a reset. The node does that arithmetic because it is the only
+// party that sees both readings.
+message ConnSample {
+  // The peer's node key. The coordinator resolves it to a node id within the
+  // reporting node's own meshnet, so a key from another org resolves to nothing
+  // and the sample is dropped.
+  string peer_node_key = 1;
+  // Window as unix seconds, half-open [start, end).
+  int64 window_start = 2;
+  int64 window_end = 3;
+  // Bytes FROM this node TO the peer, and back, within the window.
+  int64 bytes_tx = 4;
+  int64 bytes_rx = 5;
+  // "direct" or "relay" — how the traffic actually travelled. Not the endpoint
+  // address: see the note on ReportConnections.
+  string path = 6;
+}
+
+message ReportConnectionsRequest {
+  // Authenticated by the session from RegisterNode, like the other post-
+  // registration calls.
+  string session_token = 1;
+  string node_key = 2;
+  repeated ConnSample samples = 3;
+}
+
+message ReportConnectionsResponse {
+  // How many samples were stored. Fewer than sent means some peers did not
+  // resolve inside this meshnet — the node can log that without retrying, since
+  // a retry would resolve to nothing again.
+  int32 stored = 1;
 }
 
 message ReportServiceHealthRequest {
@@ -367,6 +460,31 @@ message Peer {
   // MagicDNS label — the node's name, resolved to its overlay IP by the
   // client-side resolver (MESH.6).
   string name = 8;
+  // Services this peer offers, so a client can say what a machine is FOR rather
+  // than only what it is called. Only CONFIRMED ones travel: the coordinator
+  // assembles peers through nodesWithServices, which drops unapproved rows
+  // before the ACL — and before this — so a claim nobody authorised is never
+  // advertised to anybody.
+  //
+  // A separate message from DeclaredService, deliberately. That one also carries
+  // `target` (what the node ITSELF dials — often a loopback or LAN address) and
+  // `note` (an admin's free text), and neither is a peer's business: the target
+  // is internal topology a peer cannot use and should not learn. Leaving those
+  // fields out of the type makes that structural instead of a comment someone
+  // later "completes".
+  repeated PeerService services = 9;
+  // The peer's platform, as it reported at registration ("windows", "linux",
+  // "darwin"). Empty from a node that enrolled before this was collected —
+  // render nothing then, not "unknown", which reads as a finding.
+  string os = 10;
+}
+
+// PeerService is what one peer publishes about a service it offers: the three
+// things a caller needs to reach it, and nothing else. See Peer.services.
+message PeerService {
+  string name = 1;   // the ACL "svc:" selector, and what a human recognises
+  string proto = 2;  // "tcp" or "udp"
+  uint32 port = 3;   // what peers dial on this node's overlay address
 }
 
 message DERPMap {

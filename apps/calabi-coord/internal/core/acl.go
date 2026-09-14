@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -19,8 +20,29 @@ import (
 //   - "*"            any node in the meshnet
 //   - "<node-name>"  a node by its registered name
 //   - "tag:<name>"   any node carrying that tag
+//   - "user:<id>"    every device that person enrolled (Node.OwnerUserID)
 //   - "group:<name>" any member of that group (src/dst only; members are
-//     node-names or tags, not nested groups)
+//     node-names, tags or users, never nested groups)
+//
+// Plus two autogroups, which stand for a set the document cannot enumerate
+// because it changes as people and machines come and go:
+//   - "autogroup:member"  any device with a personal owner at all (owner > 0) —
+//     somebody's machine, as opposed to a tagged or pre-attribution one
+//   - "autogroup:self"    DST ONLY: the devices of whoever the SOURCE belongs
+//     to. The one selector that is not a property of a node but of the PAIR, so
+//     it is answered by matchDst and never by matchSelector.
+//
+// Why a person dimension at all: without it the model can only say "these
+// machines may reach those machines", so "everyone reaches only their own
+// devices" has to be written out per person and rewritten on every hire and
+// every new laptop. One rule — src autogroup:member, dst autogroup:self — says
+// it once and then follows the org by itself. Tailscale's is the same shape for
+// the same reason.
+//
+// Deliberately NOT here: autogroup:admin / :owner and the rest of that family.
+// They select by ROLE, and roles live in tenant-svc — the coordinator would have
+// to ask another service what a rule means, on a path that has to keep working
+// when that service is down. Tags are how this model names privilege.
 //
 // Ports live in the rule's own Ports field, not glued onto a dst selector.
 // ACLRule for why, and parsePortSpec for the spellings.
@@ -102,7 +124,7 @@ func (m MemPolicy) canReach(src, dst *Node) bool {
 		if !strings.EqualFold(r.Action, "accept") {
 			continue
 		}
-		if matchAny(r.Src, src, m.Policy.Groups) && matchAny(r.Dst, dst, m.Policy.Groups) {
+		if matchAny(r.Src, src, m.Policy.Groups) && matchDst(r.Dst, src, dst, m.Policy.Groups) {
 			return true
 		}
 	}
@@ -119,9 +141,69 @@ func matchAny(sels []string, n *Node, groups map[string][]string) bool {
 	return false
 }
 
+// Selector spellings that are not plain node names. Kept as constants because
+// three files have to agree on them exactly.
+const (
+	autogroupSelf   = "autogroup:self"
+	autogroupMember = "autogroup:member"
+	userPrefix      = "user:"
+)
+
+// matchDst reports whether dst is a destination of this rule for traffic coming
+// FROM src. Every selector except autogroup:self depends on dst alone — this
+// wrapper exists for the one that does not, and it is the only entry point the
+// engine may use for a rule's Dst.
+//
+// src may be nil where no particular source is in question. autogroup:self then
+// matches nothing, which is the fail-closed reading of "I cannot tell".
+func matchDst(sels []string, src, dst *Node, groups map[string][]string) bool {
+	for _, sel := range sels {
+		if isSelfAutogroup(sel) {
+			if sameOwner(src, dst) {
+				return true
+			}
+			continue
+		}
+		if matchSelector(sel, dst, groups) {
+			return true
+		}
+	}
+	return false
+}
+
+// isSelfAutogroup reports whether a selector is the relational autogroup:self.
+func isSelfAutogroup(sel string) bool {
+	return strings.EqualFold(strings.TrimSpace(sel), autogroupSelf)
+}
+
+// dstIsRelational reports whether a rule's destination set depends on which
+// source is being considered — whether the two sides can still be decided
+// independently. Callers that take a shortcut over "any source" have to ask.
+func dstIsRelational(sels []string) bool {
+	for _, sel := range sels {
+		if isSelfAutogroup(sel) {
+			return true
+		}
+	}
+	return false
+}
+
+// sameOwner reports whether both nodes belong to the SAME person. Owner 0 means
+// nobody — a tagged or pre-attribution machine — and two nobodies are not each
+// other's own devices, so it never matches. Getting that wrong would drop every
+// unattributed machine in the org into one shared "self" pool.
+func sameOwner(src, dst *Node) bool {
+	return src != nil && dst != nil && src.OwnerUserID > 0 && src.OwnerUserID == dst.OwnerUserID
+}
+
 // matchSelector matches one selector against a node. A dst selector may carry a
 // ":port" suffix, which the netmap layer ignores (ports are enforced by the
 // node-side filter in MESH.5b) — the host part is what is matched here.
+//
+// autogroup:self is absent on purpose: it is a property of a (src, dst) pair,
+// not of a node, so only matchDst can answer it. Falling through to the default
+// branch here makes it match nothing — the safe half of a mistake, a rule that
+// grants less than intended rather than more.
 func matchSelector(sel string, n *Node, groups map[string][]string) bool {
 	sel = stripSelectorPort(strings.TrimSpace(sel))
 	switch {
@@ -129,13 +211,22 @@ func matchSelector(sel string, n *Node, groups map[string][]string) bool {
 		return true
 	case strings.HasPrefix(sel, "group:"):
 		for _, member := range groups[sel] {
-			if member == n.Name || hasTag(n, member) {
+			// Members are themselves selectors (node-name / tag: / user:), just
+			// never another group — validation refuses nesting, so this cannot
+			// recurse. Matching them through matchSelector is what lets a group
+			// named after a team actually hold the team.
+			if matchSelector(member, n, groups) {
 				return true
 			}
 		}
 		return false
 	case strings.HasPrefix(sel, "tag:"):
 		return hasTag(n, sel)
+	case strings.EqualFold(sel, autogroupMember):
+		return n.OwnerUserID > 0
+	case strings.HasPrefix(sel, userPrefix):
+		return n.OwnerUserID > 0 &&
+			strconv.FormatInt(n.OwnerUserID, 10) == strings.TrimPrefix(sel, userPrefix)
 	case strings.HasPrefix(sel, "svc:"):
 		return hasService(n, strings.TrimPrefix(sel, "svc:"))
 	default:
@@ -150,6 +241,17 @@ func matchSelector(sel string, n *Node, groups map[string][]string) bool {
 // granted access granted nothing. Deciding on the SUFFIX rather than the prefix
 // handles every form: "db:5432", "tag:server:22", "svc:web:443".
 func stripSelectorPort(sel string) string {
+	// "user:42" is all digits after the colon and would be shredded into "user"
+	// by the rule below — a selector that then matches nothing, silently, which
+	// is the exact failure this function was rewritten to stop.
+	//
+	// The exception is not a return of the old prefix confusion: a port suffix
+	// only ever appears in LEGACY documents (the write path has refused it since
+	// ports moved to their own field), and "user:" did not exist back then. The
+	// two forms cannot co-occur in any document that was ever stored.
+	if strings.HasPrefix(sel, userPrefix) {
+		return sel
+	}
 	i := strings.LastIndexByte(sel, ':')
 	if i <= 0 || i == len(sel)-1 {
 		return sel

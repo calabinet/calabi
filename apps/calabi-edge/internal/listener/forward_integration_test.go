@@ -11,6 +11,8 @@ import (
 
 	"github.com/calabi/calabi/apps/calabi-edge/internal/mesh"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/router"
+
+	"github.com/calabi/calabi/apps/calabi-edge/internal/visitorerr"
 )
 
 // TestMeshRoundTripMiss wires the relay side (relayToPeer) to a REAL owner-
@@ -75,8 +77,11 @@ func TestMeshRoundTripMiss(t *testing.T) {
 	_ = vc.SetReadDeadline(time.Now().Add(3 * time.Second))
 	buf, _ := io.ReadAll(vc)
 	got := string(buf)
-	if !strings.Contains(got, "502") || !strings.Contains(got, "no tunnel for host") {
-		t.Fatalf("visitor should receive a 502 from the owner via the relay, got:\n%q", got)
+	// Assert on the CODE, not the prose. The body used to be
+	// `no tunnel for host "..."`; it is now a branded page whose wording is
+	// free to change, while the code is contractual (see errorpage.go).
+	if !strings.Contains(got, "502") || !strings.Contains(got, visitorerr.ErrNoTunnel) {
+		t.Fatalf("visitor should receive a 502 (%s) from the owner via the relay, got:\n%q", visitorerr.ErrNoTunnel, got)
 	}
 }
 

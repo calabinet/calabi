@@ -42,7 +42,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/calabi/calabi/apps/client/internal/creds"
@@ -154,13 +153,6 @@ type Server struct {
 	cfg        Config
 	httpClient *http.Client
 
-	// refreshMu serializes concurrent refresh attempts so we don't fire
-	// 10 refresh-token grants when the page loads 10 widgets at once.
-	refreshMu sync.Mutex
-	// lastRefreshAt rate-limits refresh attempts (defense in depth
-	// against a stuck refresh loop). 30s cooldown.
-	lastRefreshAt time.Time
-
 	// cache memoizes GET responses for the high-poll endpoints.
 	// cache.go for the TTL table and invalidation rules.
 	cache *responseCache
@@ -264,6 +256,34 @@ func (s *Server) Register(mux *http.ServeMux) {
 	// dropdown (only verified ones are usable), tagged with cert status.
 	mux.HandleFunc("GET /v1/domains", s.proxyGET("/v1/domains"))
 
+	// The org's tunnel-security baseline and its named IP policies. Read by the
+	// create flow's 访问策略 step, which has to know whether this org refuses a
+	// tunnel with no protection BEFORE the user fills in a form — the rule is
+	// enforced in tunnel-svc, at the one choke point the console, the CLI and
+	// the edge share, so without these two reads the desktop client learns
+	// about a refusal only from the 412 that ends a create.
+	//
+	// Reads only, and open like the other GETs: bff-console needs nothing but
+	// org membership for either (requireOrgID, no management check), which is
+	// right — every member creates tunnels and so every member has to be able
+	// to see the rule they are being held to. The two PUT/DELETE siblings are
+	// deliberately NOT proxied: changing what the whole org may create is not a
+	// thing to do from one machine's local console.
+	mux.HandleFunc("GET /v1/org/security", s.proxyGET("/v1/org/security"))
+	mux.HandleFunc("GET /v1/org/ip-policies", s.proxyGET("/v1/org/ip-policies"))
+	// The org's named LOGIN policies, for the per-tunnel security drawer. The
+	// response never contains a client secret — bff-console strips it and
+	// leaves a presence flag — so this is as safe to proxy as the IP policies.
+	mux.HandleFunc("GET /v1/org/oauth-policies", s.proxyGET("/v1/org/oauth-policies"))
+	// The caller's own member quota + what they already hold, read by the create
+	// flow so it can grey the button instead of refusing a filled-in form.
+	//
+	// bff-console returns a plain member ONLY their own row, so this is not a
+	// manager-only surface. proxyGETPath cannot build it — the org id sits in
+	// the MIDDLE of the path — so this is the same shape as the per-tunnel
+	// security forward below.
+	mux.HandleFunc("GET /v1/orgs/{id}/member-quotas", s.handleMemberQuotas)
+
 	// Plans + subscription mirroring so the UI knows the quota.
 	mux.HandleFunc("GET /v1/plans", s.proxyGET("/v1/plans"))
 	mux.HandleFunc("GET /v1/subscriptions/me", s.proxyGET("/v1/subscriptions/me"))
@@ -334,6 +354,18 @@ func (s *Server) Register(mux *http.ServeMux) {
 	// offers is data-plane config, like edge-region/advertise. It is only a
 	// CLAIM either way: an admin confirms it in the web console before any
 	// ACL rule matches, so a local operator cannot grant themselves access.
+	// The ORG's mesh devices, straight from bff-console — the one place that can
+	// say whose machine each one is (it resolves owner_user_id to an email; coord
+	// only ever knew the numeric id). The console page joins it onto the peers
+	// this node actually has, by overlay address.
+	//
+	// A proxy rather than new plumbing through coord and the netmap: the owner
+	// column then needs no field on the wire Peer, no identity-hooks change, and
+	// no deploy ordering — and bff-console applies its own RBAC to the forwarded
+	// call, so this shows exactly what the same person sees in the web console.
+	// It 401s for an api-key agent and is absent on the local daemon; the page
+	// treats a failure as "no owner labels" and renders the peers regardless.
+	mux.HandleFunc("GET /v1/mesh/nodes", s.proxyGET("/v1/mesh/nodes"))
 	mux.HandleFunc("GET /v1/mesh/services", s.handleMeshServicesGet)
 	mux.HandleFunc("POST /v1/mesh/services", s.requireLocalToken(s.handleMeshServicesSet))
 }
@@ -1098,6 +1130,18 @@ func (s *Server) handleTunnelTakeover(w http.ResponseWriter, r *http.Request) {
 	s.proxy(w, r, "PUT", "/v1/tunnels/"+id, body)
 }
 
+// handleMemberQuotas forwards GET /v1/orgs/{id}/member-quotas. A dedicated
+// handler because the org id is an INFIX, not a suffix, which is the one shape
+// proxyGETPath cannot express.
+func (s *Server) handleMemberQuotas(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "missing id")
+		return
+	}
+	s.proxy(w, r, "GET", "/v1/orgs/"+id+"/member-quotas", nil)
+}
+
 // handleTunnelSecurity forwards a per-tunnel IP-policy edit to bff-console
 // POST /v1/tunnels/{id}/security. A dedicated handler (vs proxyBodyPath)
 // because the upstream path has a /security suffix after the id.
@@ -1153,22 +1197,25 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request, method, path stri
 	}
 
 	// First attempt with whatever token we have on disk.
-	resp, err := s.doUpstream(r.Context(), method, upstream, body)
+	resp, err := s.doUpstreamAs(r.Context(), method, upstream, body, bearer)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "upstream error: "+err.Error())
 		return
 	}
-	// Retry once on 401 — but only if the refresh actually changes the
-	// token (otherwise we'd loop). doRefresh returns true iff it wrote
-	// a new access_token.
+	// Retry once on 401 with a newer credential, if there is one. When the
+	// access token expires, every request the SPA has in flight (it polls a
+	// handful of endpoints) is refused together; refreshAfter hands each of
+	// them the token the one exchange produced. It used to refresh for the
+	// first and answer the rest "login required" — and when /v1/me was among
+	// the rest, the console dropped to its login screen with a live session.
 	if resp.StatusCode == http.StatusUnauthorized {
 		resp.Body.Close()
-		if s.doRefresh(r.Context()) {
+		if fresh := s.refreshAfter(r.Context(), bearer); fresh != "" {
 			// Token rotated — anything we cached against the old token
 			// is now wrong-user data. Drop it.
 			s.cache.invalidateAll()
-			bearer = resolveBearer(s.cfg.AgentMode)
-			resp, err = s.doUpstream(r.Context(), method, upstream, body)
+			bearer = fresh
+			resp, err = s.doUpstreamAs(r.Context(), method, upstream, body, bearer)
 			if err != nil {
 				writeError(w, http.StatusBadGateway, "upstream retry error: "+err.Error())
 				return
@@ -1255,6 +1302,12 @@ func (s *Server) buildURL(path, rawQuery string) (string, error) {
 }
 
 func (s *Server) doUpstream(ctx context.Context, method, u string, body []byte) (*http.Response, error) {
+	return s.doUpstreamAs(ctx, method, u, body, resolveBearer(s.cfg.AgentMode))
+}
+
+// doUpstreamAs is doUpstream with the credential chosen by the caller, so a
+// 401 can be matched to the exact token that was refused.
+func (s *Server) doUpstreamAs(ctx context.Context, method, u string, body []byte, tok string) (*http.Response, error) {
 	var rdr io.Reader
 	if body != nil {
 		rdr = bytes.NewReader(body)
@@ -1263,7 +1316,7 @@ func (s *Server) doUpstream(ctx context.Context, method, u string, body []byte) 
 	if err != nil {
 		return nil, err
 	}
-	if tok := resolveBearer(s.cfg.AgentMode); tok != "" {
+	if tok != "" {
 		req.Header.Set("Authorization", "Bearer "+tok)
 	}
 	if body != nil {
@@ -1274,57 +1327,49 @@ func (s *Server) doUpstream(ctx context.Context, method, u string, body []byte) 
 	return s.httpClient.Do(req)
 }
 
-// doRefresh attempts a single refresh-token exchange. Returns true if
-// the on-disk access_token changed; false otherwise (invalid refresh,
-// network blip, recent cooldown).
-func (s *Server) doRefresh(ctx context.Context) bool {
-	s.refreshMu.Lock()
-	defer s.refreshMu.Unlock()
-	if time.Since(s.lastRefreshAt) < 30*time.Second {
-		return false // cool down — avoid hammering identity-svc
+// refreshAfter returns a credential to retry with after refused was answered
+// 401, or "" to surface the 401 (the SPA then shows its login screen).
+//
+// The exchange is creds.RefreshSession, shared with the daemon's edge/mesh
+// recovery: one lock for the whole process, since a refresh token is good for
+// one exchange, and a request whose token was replaced while it waited gets
+// the replacement rather than a second exchange.
+func (s *Server) refreshAfter(ctx context.Context, refused string) string {
+	// Agent mode speaks with an API key, which never refreshes. Retrying with a
+	// login token that happens to sit in creds would switch identities.
+	if s.cfg.AgentMode {
+		return ""
 	}
-	s.lastRefreshAt = time.Now()
-
-	cfg, err := creds.Load()
-	if err != nil || cfg == nil || cfg.RefreshToken == "" {
-		return false
-	}
-	prev := cfg.AccessToken
-	body, _ := json.Marshal(map[string]string{"refresh_token": cfg.RefreshToken})
 	u, err := s.buildURL("/v1/auth/refresh", "")
 	if err != nil {
-		return false
+		return ""
 	}
-	req, _ := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		s.logger.Warn("refresh failed", "err", err)
-		return false
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		s.logger.Warn("refresh non-OK", "status", resp.StatusCode)
-		return false
-	}
-	var out struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return false
-	}
-	if out.AccessToken == "" || out.AccessToken == prev {
-		return false
-	}
-	cfg.AccessToken = out.AccessToken
-	if out.RefreshToken != "" {
-		cfg.RefreshToken = out.RefreshToken
-	}
-	if err := creds.Save(cfg); err != nil {
-		s.logger.Warn("save refreshed creds", "err", err)
-	}
-	return true
+	return creds.RefreshSession(ctx, refused, func(ctx context.Context, spent string) (string, string, error) {
+		body, _ := json.Marshal(map[string]string{"refresh_token": spent})
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
+		if err != nil {
+			return "", "", err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := s.httpClient.Do(req)
+		if err != nil {
+			s.logger.Warn("refresh failed", "err", err)
+			return "", "", err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			s.logger.Warn("refresh non-OK", "status", resp.StatusCode)
+			return "", "", fmt.Errorf("refresh: HTTP %d", resp.StatusCode)
+		}
+		var out struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			return "", "", err
+		}
+		return out.AccessToken, out.RefreshToken, nil
+	})
 }
 
 func (s *Server) copyResponse(w http.ResponseWriter, resp *http.Response) {

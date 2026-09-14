@@ -28,40 +28,40 @@ type MeshACLRevisionQuery struct {
 }
 
 // Where adds a new predicate for the MeshACLRevisionQuery builder.
-func (_q *MeshACLRevisionQuery) Where(ps ...predicate.MeshACLRevision) *MeshACLRevisionQuery {
-	_q.predicates = append(_q.predicates, ps...)
-	return _q
+func (marq *MeshACLRevisionQuery) Where(ps ...predicate.MeshACLRevision) *MeshACLRevisionQuery {
+	marq.predicates = append(marq.predicates, ps...)
+	return marq
 }
 
 // Limit the number of records to be returned by this query.
-func (_q *MeshACLRevisionQuery) Limit(limit int) *MeshACLRevisionQuery {
-	_q.ctx.Limit = &limit
-	return _q
+func (marq *MeshACLRevisionQuery) Limit(limit int) *MeshACLRevisionQuery {
+	marq.ctx.Limit = &limit
+	return marq
 }
 
 // Offset to start from.
-func (_q *MeshACLRevisionQuery) Offset(offset int) *MeshACLRevisionQuery {
-	_q.ctx.Offset = &offset
-	return _q
+func (marq *MeshACLRevisionQuery) Offset(offset int) *MeshACLRevisionQuery {
+	marq.ctx.Offset = &offset
+	return marq
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (_q *MeshACLRevisionQuery) Unique(unique bool) *MeshACLRevisionQuery {
-	_q.ctx.Unique = &unique
-	return _q
+func (marq *MeshACLRevisionQuery) Unique(unique bool) *MeshACLRevisionQuery {
+	marq.ctx.Unique = &unique
+	return marq
 }
 
 // Order specifies how the records should be ordered.
-func (_q *MeshACLRevisionQuery) Order(o ...meshaclrevision.OrderOption) *MeshACLRevisionQuery {
-	_q.order = append(_q.order, o...)
-	return _q
+func (marq *MeshACLRevisionQuery) Order(o ...meshaclrevision.OrderOption) *MeshACLRevisionQuery {
+	marq.order = append(marq.order, o...)
+	return marq
 }
 
 // First returns the first MeshACLRevision entity from the query.
 // Returns a *NotFoundError when no MeshACLRevision was found.
-func (_q *MeshACLRevisionQuery) First(ctx context.Context) (*MeshACLRevision, error) {
-	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
+func (marq *MeshACLRevisionQuery) First(ctx context.Context) (*MeshACLRevision, error) {
+	nodes, err := marq.Limit(1).All(setContextOp(ctx, marq.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +72,8 @@ func (_q *MeshACLRevisionQuery) First(ctx context.Context) (*MeshACLRevision, er
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (_q *MeshACLRevisionQuery) FirstX(ctx context.Context) *MeshACLRevision {
-	node, err := _q.First(ctx)
+func (marq *MeshACLRevisionQuery) FirstX(ctx context.Context) *MeshACLRevision {
+	node, err := marq.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -82,9 +82,9 @@ func (_q *MeshACLRevisionQuery) FirstX(ctx context.Context) *MeshACLRevision {
 
 // FirstID returns the first MeshACLRevision ID from the query.
 // Returns a *NotFoundError when no MeshACLRevision ID was found.
-func (_q *MeshACLRevisionQuery) FirstID(ctx context.Context) (id int, err error) {
+func (marq *MeshACLRevisionQuery) FirstID(ctx context.Context) (id int, err error) {
 	var ids []int
-	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = marq.Limit(1).IDs(setContextOp(ctx, marq.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -95,8 +95,8 @@ func (_q *MeshACLRevisionQuery) FirstID(ctx context.Context) (id int, err error)
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *MeshACLRevisionQuery) FirstIDX(ctx context.Context) int {
-	id, err := _q.FirstID(ctx)
+func (marq *MeshACLRevisionQuery) FirstIDX(ctx context.Context) int {
+	id, err := marq.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -106,8 +106,8 @@ func (_q *MeshACLRevisionQuery) FirstIDX(ctx context.Context) int {
 // Only returns a single MeshACLRevision entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one MeshACLRevision entity is found.
 // Returns a *NotFoundError when no MeshACLRevision entities are found.
-func (_q *MeshACLRevisionQuery) Only(ctx context.Context) (*MeshACLRevision, error) {
-	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
+func (marq *MeshACLRevisionQuery) Only(ctx context.Context) (*MeshACLRevision, error) {
+	nodes, err := marq.Limit(2).All(setContextOp(ctx, marq.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -122,8 +122,8 @@ func (_q *MeshACLRevisionQuery) Only(ctx context.Context) (*MeshACLRevision, err
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (_q *MeshACLRevisionQuery) OnlyX(ctx context.Context) *MeshACLRevision {
-	node, err := _q.Only(ctx)
+func (marq *MeshACLRevisionQuery) OnlyX(ctx context.Context) *MeshACLRevision {
+	node, err := marq.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -133,9 +133,9 @@ func (_q *MeshACLRevisionQuery) OnlyX(ctx context.Context) *MeshACLRevision {
 // OnlyID is like Only, but returns the only MeshACLRevision ID in the query.
 // Returns a *NotSingularError when more than one MeshACLRevision ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *MeshACLRevisionQuery) OnlyID(ctx context.Context) (id int, err error) {
+func (marq *MeshACLRevisionQuery) OnlyID(ctx context.Context) (id int, err error) {
 	var ids []int
-	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = marq.Limit(2).IDs(setContextOp(ctx, marq.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -150,8 +150,8 @@ func (_q *MeshACLRevisionQuery) OnlyID(ctx context.Context) (id int, err error) 
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *MeshACLRevisionQuery) OnlyIDX(ctx context.Context) int {
-	id, err := _q.OnlyID(ctx)
+func (marq *MeshACLRevisionQuery) OnlyIDX(ctx context.Context) int {
+	id, err := marq.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -159,18 +159,18 @@ func (_q *MeshACLRevisionQuery) OnlyIDX(ctx context.Context) int {
 }
 
 // All executes the query and returns a list of MeshACLRevisions.
-func (_q *MeshACLRevisionQuery) All(ctx context.Context) ([]*MeshACLRevision, error) {
-	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
-	if err := _q.prepareQuery(ctx); err != nil {
+func (marq *MeshACLRevisionQuery) All(ctx context.Context) ([]*MeshACLRevision, error) {
+	ctx = setContextOp(ctx, marq.ctx, ent.OpQueryAll)
+	if err := marq.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*MeshACLRevision, *MeshACLRevisionQuery]()
-	return withInterceptors[[]*MeshACLRevision](ctx, _q, qr, _q.inters)
+	return withInterceptors[[]*MeshACLRevision](ctx, marq, qr, marq.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (_q *MeshACLRevisionQuery) AllX(ctx context.Context) []*MeshACLRevision {
-	nodes, err := _q.All(ctx)
+func (marq *MeshACLRevisionQuery) AllX(ctx context.Context) []*MeshACLRevision {
+	nodes, err := marq.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -178,20 +178,20 @@ func (_q *MeshACLRevisionQuery) AllX(ctx context.Context) []*MeshACLRevision {
 }
 
 // IDs executes the query and returns a list of MeshACLRevision IDs.
-func (_q *MeshACLRevisionQuery) IDs(ctx context.Context) (ids []int, err error) {
-	if _q.ctx.Unique == nil && _q.path != nil {
-		_q.Unique(true)
+func (marq *MeshACLRevisionQuery) IDs(ctx context.Context) (ids []int, err error) {
+	if marq.ctx.Unique == nil && marq.path != nil {
+		marq.Unique(true)
 	}
-	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
-	if err = _q.Select(meshaclrevision.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, marq.ctx, ent.OpQueryIDs)
+	if err = marq.Select(meshaclrevision.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *MeshACLRevisionQuery) IDsX(ctx context.Context) []int {
-	ids, err := _q.IDs(ctx)
+func (marq *MeshACLRevisionQuery) IDsX(ctx context.Context) []int {
+	ids, err := marq.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -199,17 +199,17 @@ func (_q *MeshACLRevisionQuery) IDsX(ctx context.Context) []int {
 }
 
 // Count returns the count of the given query.
-func (_q *MeshACLRevisionQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
-	if err := _q.prepareQuery(ctx); err != nil {
+func (marq *MeshACLRevisionQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, marq.ctx, ent.OpQueryCount)
+	if err := marq.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*MeshACLRevisionQuery](), _q.inters)
+	return withInterceptors[int](ctx, marq, querierCount[*MeshACLRevisionQuery](), marq.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (_q *MeshACLRevisionQuery) CountX(ctx context.Context) int {
-	count, err := _q.Count(ctx)
+func (marq *MeshACLRevisionQuery) CountX(ctx context.Context) int {
+	count, err := marq.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -217,9 +217,9 @@ func (_q *MeshACLRevisionQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (_q *MeshACLRevisionQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
-	switch _, err := _q.FirstID(ctx); {
+func (marq *MeshACLRevisionQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, marq.ctx, ent.OpQueryExist)
+	switch _, err := marq.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -230,8 +230,8 @@ func (_q *MeshACLRevisionQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (_q *MeshACLRevisionQuery) ExistX(ctx context.Context) bool {
-	exist, err := _q.Exist(ctx)
+func (marq *MeshACLRevisionQuery) ExistX(ctx context.Context) bool {
+	exist, err := marq.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -240,19 +240,19 @@ func (_q *MeshACLRevisionQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the MeshACLRevisionQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (_q *MeshACLRevisionQuery) Clone() *MeshACLRevisionQuery {
-	if _q == nil {
+func (marq *MeshACLRevisionQuery) Clone() *MeshACLRevisionQuery {
+	if marq == nil {
 		return nil
 	}
 	return &MeshACLRevisionQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]meshaclrevision.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.MeshACLRevision{}, _q.predicates...),
+		config:     marq.config,
+		ctx:        marq.ctx.Clone(),
+		order:      append([]meshaclrevision.OrderOption{}, marq.order...),
+		inters:     append([]Interceptor{}, marq.inters...),
+		predicates: append([]predicate.MeshACLRevision{}, marq.predicates...),
 		// clone intermediate query.
-		sql:  _q.sql.Clone(),
-		path: _q.path,
+		sql:  marq.sql.Clone(),
+		path: marq.path,
 	}
 }
 
@@ -270,10 +270,10 @@ func (_q *MeshACLRevisionQuery) Clone() *MeshACLRevisionQuery {
 //		GroupBy(meshaclrevision.FieldMeshnetID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (_q *MeshACLRevisionQuery) GroupBy(field string, fields ...string) *MeshACLRevisionGroupBy {
-	_q.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &MeshACLRevisionGroupBy{build: _q}
-	grbuild.flds = &_q.ctx.Fields
+func (marq *MeshACLRevisionQuery) GroupBy(field string, fields ...string) *MeshACLRevisionGroupBy {
+	marq.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &MeshACLRevisionGroupBy{build: marq}
+	grbuild.flds = &marq.ctx.Fields
 	grbuild.label = meshaclrevision.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -291,62 +291,62 @@ func (_q *MeshACLRevisionQuery) GroupBy(field string, fields ...string) *MeshACL
 //	client.MeshACLRevision.Query().
 //		Select(meshaclrevision.FieldMeshnetID).
 //		Scan(ctx, &v)
-func (_q *MeshACLRevisionQuery) Select(fields ...string) *MeshACLRevisionSelect {
-	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
-	sbuild := &MeshACLRevisionSelect{MeshACLRevisionQuery: _q}
+func (marq *MeshACLRevisionQuery) Select(fields ...string) *MeshACLRevisionSelect {
+	marq.ctx.Fields = append(marq.ctx.Fields, fields...)
+	sbuild := &MeshACLRevisionSelect{MeshACLRevisionQuery: marq}
 	sbuild.label = meshaclrevision.Label
-	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &marq.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a MeshACLRevisionSelect configured with the given aggregations.
-func (_q *MeshACLRevisionQuery) Aggregate(fns ...AggregateFunc) *MeshACLRevisionSelect {
-	return _q.Select().Aggregate(fns...)
+func (marq *MeshACLRevisionQuery) Aggregate(fns ...AggregateFunc) *MeshACLRevisionSelect {
+	return marq.Select().Aggregate(fns...)
 }
 
-func (_q *MeshACLRevisionQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range _q.inters {
+func (marq *MeshACLRevisionQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range marq.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, _q); err != nil {
+			if err := trv.Traverse(ctx, marq); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range _q.ctx.Fields {
+	for _, f := range marq.ctx.Fields {
 		if !meshaclrevision.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if _q.path != nil {
-		prev, err := _q.path(ctx)
+	if marq.path != nil {
+		prev, err := marq.path(ctx)
 		if err != nil {
 			return err
 		}
-		_q.sql = prev
+		marq.sql = prev
 	}
 	return nil
 }
 
-func (_q *MeshACLRevisionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*MeshACLRevision, error) {
+func (marq *MeshACLRevisionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*MeshACLRevision, error) {
 	var (
 		nodes = []*MeshACLRevision{}
-		_spec = _q.querySpec()
+		_spec = marq.querySpec()
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*MeshACLRevision).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &MeshACLRevision{config: _q.config}
+		node := &MeshACLRevision{config: marq.config}
 		nodes = append(nodes, node)
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, marq.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
@@ -355,24 +355,24 @@ func (_q *MeshACLRevisionQuery) sqlAll(ctx context.Context, hooks ...queryHook) 
 	return nodes, nil
 }
 
-func (_q *MeshACLRevisionQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := _q.querySpec()
-	_spec.Node.Columns = _q.ctx.Fields
-	if len(_q.ctx.Fields) > 0 {
-		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
+func (marq *MeshACLRevisionQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := marq.querySpec()
+	_spec.Node.Columns = marq.ctx.Fields
+	if len(marq.ctx.Fields) > 0 {
+		_spec.Unique = marq.ctx.Unique != nil && *marq.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
+	return sqlgraph.CountNodes(ctx, marq.driver, _spec)
 }
 
-func (_q *MeshACLRevisionQuery) querySpec() *sqlgraph.QuerySpec {
+func (marq *MeshACLRevisionQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(meshaclrevision.Table, meshaclrevision.Columns, sqlgraph.NewFieldSpec(meshaclrevision.FieldID, field.TypeInt))
-	_spec.From = _q.sql
-	if unique := _q.ctx.Unique; unique != nil {
+	_spec.From = marq.sql
+	if unique := marq.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if _q.path != nil {
+	} else if marq.path != nil {
 		_spec.Unique = true
 	}
-	if fields := _q.ctx.Fields; len(fields) > 0 {
+	if fields := marq.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, meshaclrevision.FieldID)
 		for i := range fields {
@@ -381,20 +381,20 @@ func (_q *MeshACLRevisionQuery) querySpec() *sqlgraph.QuerySpec {
 			}
 		}
 	}
-	if ps := _q.predicates; len(ps) > 0 {
+	if ps := marq.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := _q.ctx.Limit; limit != nil {
+	if limit := marq.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := _q.ctx.Offset; offset != nil {
+	if offset := marq.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := _q.order; len(ps) > 0 {
+	if ps := marq.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -404,33 +404,33 @@ func (_q *MeshACLRevisionQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (_q *MeshACLRevisionQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(_q.driver.Dialect())
+func (marq *MeshACLRevisionQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(marq.driver.Dialect())
 	t1 := builder.Table(meshaclrevision.Table)
-	columns := _q.ctx.Fields
+	columns := marq.ctx.Fields
 	if len(columns) == 0 {
 		columns = meshaclrevision.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if _q.sql != nil {
-		selector = _q.sql
+	if marq.sql != nil {
+		selector = marq.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if _q.ctx.Unique != nil && *_q.ctx.Unique {
+	if marq.ctx.Unique != nil && *marq.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range _q.predicates {
+	for _, p := range marq.predicates {
 		p(selector)
 	}
-	for _, p := range _q.order {
+	for _, p := range marq.order {
 		p(selector)
 	}
-	if offset := _q.ctx.Offset; offset != nil {
+	if offset := marq.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := _q.ctx.Limit; limit != nil {
+	if limit := marq.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -443,41 +443,41 @@ type MeshACLRevisionGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (_g *MeshACLRevisionGroupBy) Aggregate(fns ...AggregateFunc) *MeshACLRevisionGroupBy {
-	_g.fns = append(_g.fns, fns...)
-	return _g
+func (margb *MeshACLRevisionGroupBy) Aggregate(fns ...AggregateFunc) *MeshACLRevisionGroupBy {
+	margb.fns = append(margb.fns, fns...)
+	return margb
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_g *MeshACLRevisionGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
-	if err := _g.build.prepareQuery(ctx); err != nil {
+func (margb *MeshACLRevisionGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, margb.build.ctx, ent.OpQueryGroupBy)
+	if err := margb.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*MeshACLRevisionQuery, *MeshACLRevisionGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return scanWithInterceptors[*MeshACLRevisionQuery, *MeshACLRevisionGroupBy](ctx, margb.build, margb, margb.build.inters, v)
 }
 
-func (_g *MeshACLRevisionGroupBy) sqlScan(ctx context.Context, root *MeshACLRevisionQuery, v any) error {
+func (margb *MeshACLRevisionGroupBy) sqlScan(ctx context.Context, root *MeshACLRevisionQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(_g.fns))
-	for _, fn := range _g.fns {
+	aggregation := make([]string, 0, len(margb.fns))
+	for _, fn := range margb.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
-		for _, f := range *_g.flds {
+		columns := make([]string, 0, len(*margb.flds)+len(margb.fns))
+		for _, f := range *margb.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*_g.flds...)...)
+	selector.GroupBy(selector.Columns(*margb.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := margb.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -491,27 +491,27 @@ type MeshACLRevisionSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (_s *MeshACLRevisionSelect) Aggregate(fns ...AggregateFunc) *MeshACLRevisionSelect {
-	_s.fns = append(_s.fns, fns...)
-	return _s
+func (mars *MeshACLRevisionSelect) Aggregate(fns ...AggregateFunc) *MeshACLRevisionSelect {
+	mars.fns = append(mars.fns, fns...)
+	return mars
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_s *MeshACLRevisionSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
-	if err := _s.prepareQuery(ctx); err != nil {
+func (mars *MeshACLRevisionSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, mars.ctx, ent.OpQuerySelect)
+	if err := mars.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*MeshACLRevisionQuery, *MeshACLRevisionSelect](ctx, _s.MeshACLRevisionQuery, _s, _s.inters, v)
+	return scanWithInterceptors[*MeshACLRevisionQuery, *MeshACLRevisionSelect](ctx, mars.MeshACLRevisionQuery, mars, mars.inters, v)
 }
 
-func (_s *MeshACLRevisionSelect) sqlScan(ctx context.Context, root *MeshACLRevisionQuery, v any) error {
+func (mars *MeshACLRevisionSelect) sqlScan(ctx context.Context, root *MeshACLRevisionQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(_s.fns))
-	for _, fn := range _s.fns {
+	aggregation := make([]string, 0, len(mars.fns))
+	for _, fn := range mars.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*_s.selector.flds); {
+	switch n := len(*mars.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -519,7 +519,7 @@ func (_s *MeshACLRevisionSelect) sqlScan(ctx context.Context, root *MeshACLRevis
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
+	if err := mars.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

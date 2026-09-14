@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/calabi/calabi/apps/calabi-edge/internal/visitorerr"
 )
 
 // Result tells the listener what to do after Handle.
@@ -62,28 +64,28 @@ func (c *Config) handleCallback(w io.Writer, query, redirectURI string, now time
 	code := q.Get("code")
 	state := q.Get("state")
 	if code == "" || state == "" {
-		writeError(w, http.StatusBadRequest, "oauth: missing code or state")
+		writeError(w, http.StatusBadRequest, visitorerr.ErrSignInFailed)
 		return
 	}
 	origPath, ok := c.verifyState(state, now)
 	if !ok {
-		writeError(w, http.StatusBadRequest, "oauth: invalid or expired state")
+		writeError(w, http.StatusBadRequest, visitorerr.ErrSignInFailed)
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	token, err := c.exchangeCode(ctx, sharedClient, code, redirectURI)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "oauth: sign-in failed (token exchange)")
+		writeError(w, http.StatusBadGateway, visitorerr.ErrSignInFailed)
 		return
 	}
 	email, err := providers[c.provider].fetchEmail(ctx, sharedClient, token)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "oauth: sign-in failed (user info)")
+		writeError(w, http.StatusBadGateway, visitorerr.ErrSignInFailed)
 		return
 	}
 	if !c.emailAllowed(email) {
-		writeError(w, http.StatusForbidden, "oauth: this account is not permitted")
+		writeError(w, http.StatusForbidden, visitorerr.ErrSignInDenied)
 		return
 	}
 	cookie := cookieName + "=" + c.issueSessionCookie(email, now) +
@@ -117,10 +119,22 @@ func writeRedirect(w io.Writer, location, setCookie string) {
 	_, _ = io.WriteString(w, b.String())
 }
 
-func writeError(w io.Writer, code int, msg string) {
-	_, _ = io.WriteString(w, fmt.Sprintf(
-		"HTTP/1.1 %d %s\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s",
-		code, httpReason(code), len(msg), msg))
+// writeError renders the same branded page every other refusal in the edge
+// uses. It used to write a bare line of text naming the internal failure
+// ("oauth: sign-in failed (token exchange)") — no code to quote at support, no
+// page, and a phrase that means nothing to whoever is reading it. That it was
+// different was structural, not deliberate: listener -> policy -> oauth, so
+// this package could not reach the page until the page moved to visitorerr.
+//
+// HTML unconditionally: every one of these is reached by a BROWSER following
+// the identity provider's redirect. There is no curl in this flow to spare.
+func writeError(w io.Writer, code int, errCode string) {
+	visitorerr.Write(w, visitorerr.Options{
+		HTML:       true,
+		Status:     code,
+		StatusText: httpReason(code),
+		Code:       errCode,
+	})
 }
 
 func httpReason(code int) string {

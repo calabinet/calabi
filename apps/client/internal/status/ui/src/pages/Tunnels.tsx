@@ -39,12 +39,14 @@ import type { ColumnsType } from "antd/es/table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type {
   AccountMe,
   EdgeList,
   EdgeListItem,
+  IPPolicy,
+  OAuthPolicy,
   ProbeHealth,
   RemoteTunnel,
   Snapshot,
@@ -52,10 +54,17 @@ import type {
   TunnelList,
 } from "../api/types";
 import InspectorDrawer from "../components/InspectorDrawer";
-import TunnelWizard from "../components/TunnelWizard";
 import { notify } from "../hooks/use-notifications";
 import { useServiceMode } from "../hooks/use-service-mode";
+import { useMemberQuota } from "../lib/memberQuota";
 import { effectiveState, type EffectiveState } from "../lib/tunnelState";
+import {
+  CopyableAddr,
+  edgeHttpURL,
+  localAddrURL,
+  portTunnelHost,
+  truncateDomain,
+} from "../lib/addr";
 import { useTranslation } from "react-i18next";
 
 const { Title, Text } = Typography;
@@ -70,80 +79,6 @@ function fmtBytes(n: number): string {
     i++;
   }
   return `${v.toFixed(i === 0 ? 0 : 2)} ${u[i]}`;
-}
-
-const ipv4Re = /^\d{1,3}(\.\d{1,3}){3}$/;
-
-// truncateDomain hides the registered/apex domain (the last two labels,
-// e.g. "xuxulaka.com") behind "…" so the 公网 column stays narrow:
-//   "u000001.edge-hz.xuxulaka.com" → "u000001.edge-hz…"
-// The full value is still copyable + shown in the tooltip. Domains with
-// ≤ 2 labels and raw IPs are returned unchanged (nothing meaningful to
-// hide).
-function truncateDomain(domain: string): string {
-  if (ipv4Re.test(domain)) return domain;
-  const parts = domain.split(".");
-  if (parts.length <= 2) return domain;
-  return parts.slice(0, parts.length - 2).join(".") + ".…";
-}
-
-// edgeHttpURL builds a directly-usable URL for an HTTP tunnel from the edge's
-// advertised listener ports (AUTH_RESP) — prefers HTTPS, omits standard ports
-// (80/443). Returns null when no port is advertised (a platform edge fronted by
-// a load balancer on 80/443), so the caller falls back to the bare domain.
-function edgeHttpURL(
-  domain: string,
-  snap?: { http_port?: number; https_port?: number },
-): { full: string; display: string } | null {
-  const httpsP = snap?.https_port ?? 0;
-  const httpP = snap?.http_port ?? 0;
-  let scheme: string;
-  let port: number;
-  if (httpsP) {
-    scheme = "https";
-    port = httpsP;
-  } else if (httpP) {
-    scheme = "http";
-    port = httpP;
-  } else {
-    return null;
-  }
-  const std = (scheme === "https" && port === 443) || (scheme === "http" && port === 80);
-  const suffix = std ? "" : `:${port}`;
-  return {
-    full: `${scheme}://${domain}${suffix}`,
-    display: `${scheme}://${truncateDomain(domain)}${suffix}`,
-  };
-}
-
-// localAddrURL prefixes the local upstream address with the scheme implied by
-// the tunnel TYPE — an http/https tunnel speaks that protocol to the local
-// service, so the Local line mirrors the Public line's `http(s)://`. Unlike the
-// public URL (which depends on the edge's advertised ports) this is derived
-// purely from the type, so it applies on both editions. tcp/udp/sni carry no
-// URL scheme → the bare host:port is returned unchanged.
-function localAddrURL(type: string, localAddr: string): string {
-  if (!localAddr) return localAddr;
-  if (type === "http") return `http://${localAddr}`;
-  if (type === "https") return `https://${localAddr}`;
-  return localAddr;
-}
-
-// CopyableAddr renders the truncated `display` as monospace text with a
-// tooltip carrying the full value, plus an antd copy icon that copies
-// the FULL value (not the truncated display). Used by the 公网 column.
-function CopyableAddr({ full, display }: { full: string; display: string }) {
-  const { t } = useTranslation();
-  return (
-    <Space size={2}>
-      <Tooltip title={full}>
-        <code style={{ fontSize: 12 }}>{display}</code>
-      </Tooltip>
-      <Text
-        copyable={{ text: full, tooltips: [t("common.copy"), t("common.copied")] }}
-      />
-    </Space>
-  );
 }
 
 // STATE_BADGE maps the UNIFIED effective-state vocabulary → an antd Badge dot
@@ -207,32 +142,14 @@ export default function Tunnels() {
   // is the "agent without write" case that wants the explanatory banner.
   const { agentMode, canManage } = useServiceMode();
   const readOnlyAgent = agentMode && !canManage;
-  const [wizardOpen, setWizardOpen] = useState(false);
   const [drawerProxy, setDrawerProxy] = useState<{ id: string; name?: string } | null>(null);
   const [secRow, setSecRow] = useState<RemoteTunnel | null>(null);
   const [editRow, setEditRow] = useState<RemoteTunnel | null>(null);
   const [takeoverRow, setTakeoverRow] = useState<RemoteTunnel | null>(null);
-  const [searchParams, setSearchParams] = useSearchParams();
-  const prefillPort = searchParams.get("prefill_port");
-  // Arriving from the Services page's "发布到公网": the query carries the service
-  // name, the local address to forward to, and its proto so the wizard opens
-  // pre-filled and records config_json.origin on create.
-  const publishService = searchParams.get("publish_service") || undefined;
-  const publishAddr = searchParams.get("publish_addr") || undefined;
-  const publishProto = searchParams.get("publish_proto") || undefined;
-  const publish =
-    publishService && publishAddr
-      ? { serviceName: publishService, localAddr: publishAddr, proto: publishProto || "tcp" }
-      : undefined;
-
-  // If we arrived via /tunnels?prefill_port=N (from the port-scanner
-  // page) or ?publish_service=... (from Services), auto-open the wizard with
-  // the values baked in. Clean the query so a refresh doesn't re-trigger.
-  useEffect(() => {
-    if (prefillPort || publishService) {
-      setWizardOpen(true);
-    }
-  }, [prefillPort, publishService]);
+  // The create flow lives at /tunnels/new — a page with steps, not a dialog
+  // this list opens. The prefill/publish deep links from 工具 and 服务 point
+  // straight at it, so nothing about them is this page's business any more.
+  const navigate = useNavigate();
 
   const { data: list, isLoading } = useQuery<TunnelList>({
     queryKey: ["tunnels"],
@@ -298,6 +215,16 @@ export default function Tunnels() {
   // than no wizard, hence the disable + visible banner.
   const capped =
     typeof planMax === "number" && planMax > 0 && tunnelCount >= planMax;
+  // Whose allowance this console spends — the logged-in user, or in agent mode
+  // the person who minted the key (their quota is what an agent's tunnels are
+  // counted against).
+  const quotaUserId = me?.user?.id || me?.acting_user?.id || 0;
+  // The caller's OWN allowance, which the plan cap above says nothing about: in
+  // a team org the plan cap is shared, so a member can be out of quota while
+  // the org still has room. Without this the button stayed enabled and the
+  // refusal arrived at the end of the form.
+  const mq = useMemberQuota(me?.org?.id ?? 0, quotaUserId, canManage, tunnelCount);
+  const memberCapped = mq.atCap("max_tunnels");
   const { data: snap } = useQuery<Snapshot>({
     queryKey: ["snapshot"],
     queryFn: api.snapshot,
@@ -522,6 +449,14 @@ export default function Tunnels() {
           });
         } else if (st === "pending") {
           tip = t("tunnels.pendingTip");
+        } else if (st === "error") {
+          // status_reason is a code, not a sentence — the server keeps the
+          // column locale-neutral and the UI does the wording. An unknown code
+          // is shown as-is rather than dropped.
+          const reason = (row.status_reason || "").trim();
+          const port = /^port_in_use:(\d+)$/.exec(reason);
+          if (port) tip = t("tunnels.errorPortInUseTip", { port: port[1] });
+          else if (reason) tip = t("tunnels.errorReasonTip", { reason });
         }
         return (
           <StatusDot status={STATE_BADGE[st]} label={t(`tunnels.state.${st}`)} tip={tip} />
@@ -548,16 +483,9 @@ export default function Tunnels() {
       title: t("tunnels.colAddress"),
       width: 280,
       render: (_v, r) => {
-        // 公网 line — TCP/UDP host render priority (hostname-first; IP fallback):
-        //   1. snap.server_addr — the FQDN the daemon dialed (edge public host,
-        //      e.g. edge01-va.calabi.net) — preferred so the public addr is a
-        //      stable hostname, not a bare IP that changes when the edge moves.
-        //   2. snap.server_ip   — resolved edge IP (fallback when no hostname)
-        //   3. snap.base_domain — edge's HTTPListener.BaseDomain (last resort)
-        //   4. `:port` bare      — really last resort
-        // (Was IP-first pre-2026-06; flipped per operator request — a prod edge
-        //  advertises an FQDN public.addr, and a hostname survives IP changes.)
-        // remote_port==0 + tcp/udp = created but never Claimed → 等待分配.
+        // 公网 line. The host of a tcp/udp endpoint is picked by portTunnelHost
+        // (see lib/addr.tsx); remote_port==0 on a tcp/udp row means created but
+        // never claimed → 等待分配.
         const pub = (() => {
           if (r.domain) {
             // The edge terminates TLS for http/https tunnels, so default the
@@ -580,10 +508,7 @@ export default function Tunnels() {
             return <CopyableAddr full={r.domain} display={truncateDomain(r.domain)} />;
           }
           if (r.remote_port && r.remote_port > 0) {
-            const host =
-              (snap?.server_addr ?? "").split(":")[0] ||
-              snap?.server_ip ||
-              snap?.base_domain;
+            const host = portTunnelHost(snap);
             const full = host ? `${host}:${r.remote_port}` : `:${r.remote_port}`;
             const display = host
               ? `${truncateDomain(host)}:${r.remote_port}`
@@ -763,14 +688,19 @@ export default function Tunnels() {
                       count: tunnelCount,
                       max: planMax,
                     })
-                  : ""
+                  : memberCapped
+                    ? t("tunnels.memberCappedTooltip", {
+                        count: mq.usedOf("max_tunnels"),
+                        max: mq.limitOf("max_tunnels"),
+                      })
+                    : ""
             }
           >
             <Button
               type="primary"
               icon={<PlusOutlined />}
-              onClick={() => setWizardOpen(true)}
-              disabled={capped || !canManage}
+              onClick={() => navigate("/tunnels/new")}
+              disabled={capped || memberCapped || !canManage}
             >
               {t("tunnels.newTunnel")}
             </Button>
@@ -853,24 +783,6 @@ export default function Tunnels() {
         columns={columns}
         pagination={{ pageSize: 20, showSizeChanger: false }}
         locale={{ emptyText: t("tunnels.emptyText") }}
-      />
-
-      <TunnelWizard
-        open={wizardOpen}
-        onClose={() => {
-          setWizardOpen(false);
-          // Drop the prefill / publish query so a re-open isn't pre-filled again.
-          if (prefillPort || publishService) {
-            const next = new URLSearchParams(searchParams);
-            next.delete("prefill_port");
-            next.delete("publish_service");
-            next.delete("publish_addr");
-            next.delete("publish_proto");
-            setSearchParams(next, { replace: true });
-          }
-        }}
-        prefillPort={prefillPort ? Number(prefillPort) : undefined}
-        publish={publish}
       />
 
       <InspectorDrawer
@@ -1140,17 +1052,28 @@ function TakeoverModal({
 function splitLines(s: string): string[] {
   return s.split("\n").map((x) => x.trim()).filter(Boolean);
 }
-function parseSecurityIP(cfg?: string): { allow: string[]; deny: string[] } {
-  if (!cfg) return { allow: [], deny: [] };
+// from_policy names an org IP policy this tunnel's addresses came from. The
+// addresses are ALWAYS present alongside it — tunnel-svc expands the name on
+// every write, because the edge resolves nothing at request time. So the name
+// is a provenance stamp for the UI, never something the data plane needs.
+//
+// Reading it matters even though the addresses would render without it: drop
+// the stamp on save and the tunnel keeps the addresses it happens to hold but
+// stops FOLLOWING the policy, so the next edit to that policy reaches every
+// other tunnel and not this one. Nothing surfaces the difference.
+function parseSecurityIP(cfg?: string): { allow: string[]; deny: string[]; from_policy: string } {
+  const empty = { allow: [], deny: [], from_policy: "" };
+  if (!cfg) return empty;
   try {
     const o = JSON.parse(cfg);
     const ip = o?.security?.ip ?? {};
     return {
       allow: Array.isArray(ip.allow) ? ip.allow : [],
       deny: Array.isArray(ip.deny) ? ip.deny : [],
+      from_policy: typeof ip.from_policy === "string" ? ip.from_policy : "",
     };
   } catch {
-    return { allow: [], deny: [] };
+    return empty;
   }
 }
 type BasicUser = { user: string; password: string; hash: string };
@@ -1168,19 +1091,59 @@ function parseSecurityBasicAuth(cfg?: string): { user: string; hash: string }[] 
   }
 }
 
-function parseSecurityRateLimit(cfg?: string): number {
-  if (!cfg) return 0;
+type RateCfg = {
+  /** Aggregate cap for the whole tunnel. 0 = none. */
+  per_minute: number;
+  /** Cap for any ONE visitor address. 0 = none. */
+  per_ip_per_minute: number;
+};
+// Both numbers, not just per_minute. This editor rewrites the whole rate_limit
+// block, so reading only the aggregate meant saving anything at all deleted a
+// per-visitor cap the web console had set — the limit vanished and the page
+// still looked correct.
+function parseSecurityRateLimit(cfg?: string): RateCfg {
+  const empty: RateCfg = { per_minute: 0, per_ip_per_minute: 0 };
+  if (!cfg) return empty;
   try {
-    const v = JSON.parse(cfg)?.security?.rate_limit?.per_minute;
-    return typeof v === "number" && v > 0 ? v : 0;
+    const rl = JSON.parse(cfg)?.security?.rate_limit ?? {};
+    const num = (v: unknown) => (typeof v === "number" && v > 0 ? v : 0);
+    return { per_minute: num(rl.per_minute), per_ip_per_minute: num(rl.per_ip_per_minute) };
   } catch {
-    return 0;
+    return empty;
   }
 }
 
-type OAuthCfg = { provider: string; client_id: string; client_secret: string; allow_emails: string[]; allow_domains: string[] };
+// client_secret is WRITE-ONLY. The server strips it on the way out (an OAuth
+// client secret is the org's IdP credential, and config_json goes out on the
+// tunnel list that every member of a team org can read) and tells us only
+// whether one exists, via client_secret_set. Leaving the field blank on save
+// means "unchanged" — the server supplies the stored value.
+//
+// The old code read `client_secret` back out of config_json and used it as the
+// fallback when nothing was typed. That field has not been sent for a while, so
+// the fallback was always "" — harmless only because the SERVER carries the
+// stored secret forward. What it did cost was the placeholder: with no
+// client_secret_set the box could never say "已配置", so the one thing the
+// field needed to tell you was the one thing it could not.
+type OAuthCfg = {
+  provider: string;
+  client_id: string;
+  client_secret: string;
+  client_secret_set: boolean;
+  from_policy: string;
+  allow_emails: string[];
+  allow_domains: string[];
+};
 function parseSecurityOAuth(cfg?: string): OAuthCfg {
-  const empty: OAuthCfg = { provider: "", client_id: "", client_secret: "", allow_emails: [], allow_domains: [] };
+  const empty: OAuthCfg = {
+    provider: "",
+    client_id: "",
+    client_secret: "",
+    client_secret_set: false,
+    from_policy: "",
+    allow_emails: [],
+    allow_domains: [],
+  };
   if (!cfg) return empty;
   try {
     const o = JSON.parse(cfg)?.security?.oauth;
@@ -1188,7 +1151,9 @@ function parseSecurityOAuth(cfg?: string): OAuthCfg {
     return {
       provider: typeof o.provider === "string" ? o.provider : "",
       client_id: typeof o.client_id === "string" ? o.client_id : "",
-      client_secret: typeof o.client_secret === "string" ? o.client_secret : "",
+      client_secret: "", // never sent by the server any more
+      client_secret_set: o.client_secret_set === true,
+      from_policy: typeof o.from_policy === "string" ? o.from_policy : "",
       allow_emails: Array.isArray(o.allow_emails) ? o.allow_emails.filter((x: any) => typeof x === "string") : [],
       allow_domains: Array.isArray(o.allow_domains) ? o.allow_domains.filter((x: any) => typeof x === "string") : [],
     };
@@ -1221,10 +1186,14 @@ function buildSecurityConfig(
   allow: string[],
   deny: string[],
   basicUsers: BasicUser[],
-  ratePerMinute: number,
+  rate: RateCfg,
   reqHeaderSet: HeaderKV[],
   reqHeaderRemove: string[],
   oauth: OAuthCfg,
+  // Name of an org IP policy to point this tunnel at, or "" for hand-written
+  // addresses. When set, the SERVER fills in allow/deny from the policy — we
+  // deliberately send only the name so the two can never disagree.
+  fromPolicy = "",
 ): string {
   let o: Record<string, any> = {};
   if (cfg) {
@@ -1235,7 +1204,13 @@ function buildSecurityConfig(
     }
   }
   const sec: Record<string, any> = o.security || {};
-  if (allow.length === 0 && deny.length === 0) {
+
+  if (fromPolicy) {
+    // Name only. tunnel-svc expands it and stamps it back; sending our stale
+    // copy of the addresses too would let a just-edited policy be silently
+    // reverted by whoever saves this drawer next.
+    sec.ip = { from_policy: fromPolicy };
+  } else if (allow.length === 0 && deny.length === 0) {
     delete sec.ip;
   } else {
     sec.ip = {};
@@ -1252,8 +1227,10 @@ function buildSecurityConfig(
   } else {
     sec.basic_auth = { users };
   }
-  if (ratePerMinute > 0) {
-    sec.rate_limit = { per_minute: ratePerMinute };
+  if (rate.per_minute > 0 || rate.per_ip_per_minute > 0) {
+    sec.rate_limit = {};
+    if (rate.per_minute > 0) sec.rate_limit.per_minute = rate.per_minute;
+    if (rate.per_ip_per_minute > 0) sec.rate_limit.per_ip_per_minute = rate.per_ip_per_minute;
   } else {
     delete sec.rate_limit;
   }
@@ -1270,12 +1247,22 @@ function buildSecurityConfig(
     if (Object.keys(setObj).length) sec.request_headers.set = setObj;
     if (removeList.length) sec.request_headers.remove = removeList;
   }
-  if (oauth.provider) {
+  if (oauth.from_policy) {
+    // Referencing an org login policy sends ONLY the name. The server expands
+    // provider / client_id / allow lists from the policy and hands the secret
+    // to the edge directly — sending our own copy of any of it would make this
+    // page a second source of truth for a credential.
+    sec.oauth = { from_policy: oauth.from_policy };
+  } else if (oauth.provider) {
     const oa: Record<string, any> = {
       provider: oauth.provider,
       client_id: oauth.client_id.trim(),
-      client_secret: oauth.client_secret,
     };
+    // Omitted entirely when nothing was typed: the server reads an absent
+    // secret as "unchanged" and supplies the stored one. Sending "" would be
+    // the same thing, but saying nothing is the honest wire for "I do not know
+    // this value" — which is now true of this console.
+    if (oauth.client_secret) oa.client_secret = oauth.client_secret;
     const emails = oauth.allow_emails.map((s) => s.trim()).filter(Boolean);
     const domains = oauth.allow_domains.map((s) => s.trim()).filter(Boolean);
     if (emails.length) oa.allow_emails = emails;
@@ -1322,25 +1309,58 @@ function SecurityDrawer({
   const initOA = useMemo(() => parseSecurityOAuth(tunnel?.config_json), [tunnel?.config_json, tunnel?.id]);
   const [allow, setAllow] = useState("");
   const [deny, setDeny] = useState("");
+  // "" = hand-written addresses; a name = follow that org policy. Held apart
+  // from allow/deny so switching back to custom keeps the addresses visible
+  // instead of emptying the boxes.
+  const [fromPolicy, setFromPolicy] = useState("");
   const [users, setUsers] = useState<BasicUser[]>([]);
   const [rate, setRate] = useState<number | null>(null);
+  const [ratePerIP, setRatePerIP] = useState<number | null>(null);
   const [hdrSet, setHdrSet] = useState<HeaderKV[]>([]);
   const [hdrRemove, setHdrRemove] = useState("");
   const [oaProvider, setOaProvider] = useState("");
   const [oaClientId, setOaClientId] = useState("");
   const [oaSecret, setOaSecret] = useState("");
+  // "" = configure this tunnel's own login; a name = use the org policy.
+  const [oaFromPolicy, setOaFromPolicy] = useState("");
   const [oaEmails, setOaEmails] = useState("");
   const [oaDomains, setOaDomains] = useState("");
+
+  // The org's named policies, offered as the source for this tunnel's rules.
+  // Best-effort on purpose and only fetched while the drawer is open: a
+  // standalone daemon answers 501 (no org holds policies) and a control-plane
+  // blip must not stop somebody editing the addresses by hand. An empty list
+  // simply hides the selector, which is the pre-existing screen.
+  const { data: ipPolicies } = useQuery<IPPolicy[]>({
+    queryKey: ["org-ip-policies"],
+    queryFn: () => api.orgIPPolicies().then((r) => r.items || []).catch(() => []),
+    enabled: !!tunnel && ipPolicyEnabled,
+    retry: false,
+    staleTime: 60_000,
+  });
+  const { data: loginPolicies } = useQuery<OAuthPolicy[]>({
+    queryKey: ["org-oauth-policies"],
+    queryFn: () => api.orgOAuthPolicies().then((r) => r.items || []).catch(() => []),
+    enabled: !!tunnel && oauthEnabled,
+    retry: false,
+    staleTime: 60_000,
+  });
+  const policies = ipPolicies ?? [];
+  const logins = loginPolicies ?? [];
+
   useEffect(() => {
     setAllow(initIP.allow.join("\n"));
     setDeny(initIP.deny.join("\n"));
+    setFromPolicy(initIP.from_policy);
     setUsers(initBA.map((u) => ({ ...u, password: "" })));
-    setRate(initRate || null);
+    setRate(initRate.per_minute || null);
+    setRatePerIP(initRate.per_ip_per_minute || null);
     setHdrSet(initRH.set);
     setHdrRemove(initRH.remove.join("\n"));
     setOaProvider(initOA.provider);
     setOaClientId(initOA.client_id);
     setOaSecret("");
+    setOaFromPolicy(initOA.from_policy);
     setOaEmails(initOA.allow_emails.join("\n"));
     setOaDomains(initOA.allow_domains.join("\n"));
   }, [initIP, initBA, initRate, initRH, initOA]);
@@ -1357,16 +1377,21 @@ function SecurityDrawer({
         splitLines(allow),
         splitLines(deny),
         users,
-        rate || 0,
+        { per_minute: rate || 0, per_ip_per_minute: ratePerIP || 0 },
         hdrSet,
         splitLines(hdrRemove),
         {
           provider: oaProvider,
           client_id: oaClientId,
-          client_secret: oaSecret.trim() || initOA.client_secret,
+          // Only what was TYPED. Empty = keep whatever is stored; there is
+          // nothing to fall back to here because the server never sent one.
+          client_secret: oaSecret.trim(),
+          client_secret_set: initOA.client_secret_set,
+          from_policy: oaFromPolicy,
           allow_emails: splitLines(oaEmails),
           allow_domains: splitLines(oaDomains),
         },
+        fromPolicy,
       );
       return api.setTunnelSecurity(tunnel!.id, cfg);
     },
@@ -1406,7 +1431,13 @@ function SecurityDrawer({
             <Button
               type="primary"
               loading={save.isPending}
-              disabled={!ipPolicyEnabled && !basicAuthEnabled}
+              disabled={
+                !ipPolicyEnabled &&
+                !basicAuthEnabled &&
+                !rateLimitEnabled &&
+                !headerRewriteEnabled &&
+                !oauthEnabled
+              }
               onClick={() => save.mutate()}
             >
               {t("tunnels.security.save")}
@@ -1434,13 +1465,52 @@ function SecurityDrawer({
             {t("tunnels.ipPolicy.hint")}
           </Typography.Paragraph>
           <Space direction="vertical" style={{ width: "100%" }} size="small">
+            {policies.length > 0 && (
+              <div>
+                <div style={{ fontSize: 12, color: "#8c8c8c", marginBottom: 4 }}>
+                  {t("tunnels.ipPolicy.source")}
+                </div>
+                <Select
+                  style={{ width: "100%" }}
+                  value={fromPolicy}
+                  onChange={setFromPolicy}
+                  options={[
+                    { value: "", label: t("tunnels.ipPolicy.sourceCustom") },
+                    ...policies.map((p) => ({
+                      value: p.name,
+                      label: `${p.name} · ${(p.allow?.length || 0) + (p.deny?.length || 0)}`,
+                    })),
+                  ]}
+                />
+                {fromPolicy && (
+                  <div style={{ fontSize: 12, color: "#8c8c8c", marginTop: 4 }}>
+                    {t("tunnels.ipPolicy.sourceFollowHint", { name: fromPolicy })}
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Following a policy: its addresses show read-only. Editing them
+                here would be edited-then-overwritten the next time anybody
+                saves the policy — the confusion the stamp exists to prevent. */}
             <div>
               <div style={{ fontSize: 12, color: "#8c8c8c", marginBottom: 4 }}>{t("tunnels.ipPolicy.allow")}</div>
-              <Input.TextArea value={allow} onChange={(e) => setAllow(e.target.value)} rows={3} placeholder={"203.0.113.0/24\n198.51.100.7"} />
+              <Input.TextArea
+                value={fromPolicy ? (policies.find((p) => p.name === fromPolicy)?.allow || []).join("\n") : allow}
+                onChange={(e) => setAllow(e.target.value)}
+                rows={3}
+                readOnly={!!fromPolicy}
+                placeholder={"203.0.113.0/24\n198.51.100.7"}
+              />
             </div>
             <div>
               <div style={{ fontSize: 12, color: "#8c8c8c", marginBottom: 4 }}>{t("tunnels.ipPolicy.deny")}</div>
-              <Input.TextArea value={deny} onChange={(e) => setDeny(e.target.value)} rows={2} placeholder={"192.0.2.0/24"} />
+              <Input.TextArea
+                value={fromPolicy ? (policies.find((p) => p.name === fromPolicy)?.deny || []).join("\n") : deny}
+                onChange={(e) => setDeny(e.target.value)}
+                rows={2}
+                readOnly={!!fromPolicy}
+                placeholder={"192.0.2.0/24"}
+              />
             </div>
           </Space>
         </>
@@ -1487,15 +1557,36 @@ function SecurityDrawer({
           <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
             {t("tunnels.rateLimit.hint")}
           </Typography.Paragraph>
-          <Space>
-            <InputNumber
-              min={0}
-              style={{ width: 150 }}
-              value={rate}
-              onChange={(v) => setRate(typeof v === "number" ? v : null)}
-              placeholder={t("tunnels.rateLimit.placeholder")}
-            />
-            <span style={{ fontSize: 12, color: "#8c8c8c" }}>{t("tunnels.rateLimit.unit")}</span>
+          <Space direction="vertical" style={{ width: "100%" }} size="small">
+            <Space>
+              <InputNumber
+                min={0}
+                style={{ width: 160 }}
+                value={rate}
+                onChange={(v) => setRate(typeof v === "number" ? v : null)}
+                placeholder={t("tunnels.rateLimit.placeholder")}
+              />
+              <span style={{ fontSize: 12, color: "#8c8c8c" }}>{t("tunnels.rateLimit.unitTotal")}</span>
+            </Space>
+            {/* The per-visitor cap. Without it the aggregate limit is also the
+                lever an abuser pulls: one address drains the shared bucket and
+                every other visitor is turned away. Second, not instead — the
+                aggregate stays the ceiling. */}
+            <Space>
+              <InputNumber
+                min={0}
+                style={{ width: 160 }}
+                value={ratePerIP}
+                onChange={(v) => setRatePerIP(typeof v === "number" ? v : null)}
+                placeholder={t("tunnels.rateLimit.placeholder")}
+              />
+              <span style={{ fontSize: 12, color: "#8c8c8c" }}>{t("tunnels.rateLimit.unitPerIP")}</span>
+            </Space>
+            {rate !== null && rate > 0 && !ratePerIP && (
+              <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+                {t("tunnels.rateLimit.perIPSuggest")}
+              </div>
+            )}
           </Space>
         </>
       )}
@@ -1572,9 +1663,29 @@ function SecurityDrawer({
                   </Typography.Text>
                 }
               />
+              {/* An org login policy keeps the credential in one place; the
+                  per-tunnel fields below are the older way and stay for tunnels
+                  that already use them. */}
+              {logins.length > 0 && (
+                <Select
+                  style={{ width: "100%" }}
+                  value={oaFromPolicy}
+                  onChange={setOaFromPolicy}
+                  options={[
+                    { value: "", label: t("tunnels.oauth.ownConfig") },
+                    ...logins.map((p) => ({ value: p.name, label: `${p.name} · ${p.provider}` })),
+                  ]}
+                />
+              )}
+              {oaFromPolicy ? (
+                <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+                  {t("tunnels.oauth.fromPolicyHint", { name: oaFromPolicy })}
+                </div>
+              ) : (
+                <>
               <Input placeholder="Client ID" value={oaClientId} onChange={(e) => setOaClientId(e.target.value)} />
               <Input.Password
-                placeholder={initOA.client_secret ? t("tunnels.oauth.secretKeep") : "Client Secret"}
+                placeholder={initOA.client_secret_set ? t("tunnels.oauth.secretKeep") : "Client Secret"}
                 value={oaSecret}
                 onChange={(e) => setOaSecret(e.target.value)}
               />
@@ -1582,6 +1693,8 @@ function SecurityDrawer({
               <Input.TextArea value={oaEmails} onChange={(e) => setOaEmails(e.target.value)} rows={2} placeholder={"alice@acme.com"} />
               <div style={{ fontSize: 12, color: "#8c8c8c" }}>{t("tunnels.oauth.allowDomains")}</div>
               <Input.TextArea value={oaDomains} onChange={(e) => setOaDomains(e.target.value)} rows={2} placeholder={"acme.com"} />
+                </>
+              )}
             </>
           )}
         </Space>

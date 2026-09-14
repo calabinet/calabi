@@ -45,7 +45,7 @@ func clampProbeArgs(size int, rateMbps float64, seconds int) (int, float64, int)
 // status APIs. Shared by both daemon kinds so the two cannot drift.
 func probeRelayLeg(ctx context.Context, dp *mesh.WGDatapath, relay string, size int, rateMbps float64, seconds int, oneWay bool) (localweb.MeshRelayProbe, error) {
 	if dp == nil {
-		return localweb.MeshRelayProbe{}, fmt.Errorf("mesh is not running on this node")
+		return localweb.MeshRelayProbe{}, fmt.Errorf("mesh is not running on this device")
 	}
 	size, rateMbps, seconds = clampProbeArgs(size, rateMbps, seconds)
 	res, addr, err := dp.ProbeRelay(ctx, relay, derp.ProbeOpts{
@@ -90,7 +90,7 @@ func (c *platformMeshController) ProbeRelayLeg(ctx context.Context, relay string
 	lease := c.lease
 	c.mu.Unlock()
 	if lease == nil {
-		return statusapi.MeshRelayProbe{}, fmt.Errorf("mesh is not running on this node")
+		return statusapi.MeshRelayProbe{}, fmt.Errorf("mesh is not running on this device")
 	}
 	got, err := lease.probeRelayLeg(ctx, relay, size, rateMbps, seconds, oneWay)
 	return statusapi.MeshRelayProbe(got), err

@@ -150,6 +150,19 @@ func meshHomePreference() string {
 // creds. A nil accept means "never decided" and is passed through untouched —
 // resolveAcceptRoutes owns the upgrade seed, and deciding it in two places is how
 // the two would eventually disagree.
+// meshBlockIncoming reads this machine's own "refuse all inbound connections"
+// switch from creds. Absent = off: a machine joins a mesh in order to be
+// reachable, so the default has to be the reachable one. Unreadable creds also
+// read as off — the alternative is a machine that silently answers nobody
+// because its config file could not be parsed.
+func meshBlockIncoming() bool {
+	c, err := creds.Load()
+	if err != nil || c == nil || c.MeshBlockIncoming == nil {
+		return false
+	}
+	return *c.MeshBlockIncoming
+}
+
 func meshRoutePolicySettings() (*bool, []string) {
 	c, err := creds.Load()
 	if err != nil || c == nil {
@@ -399,12 +412,13 @@ func (c *platformMeshController) reconcile(ctx context.Context, enr meshEnrollme
 		PinnedHomeRegion:  pin,
 		AcceptRoutes:      accept,
 		RouteExcludes:     excludes,
+		BlockIncoming:     meshBlockIncoming(),
 		MagicDNS:          magicDNSEnabled(),
 	}
 	if fpArrived {
-		c.logger.Info("mesh: could not report the fingerprint in place; re-enrolling so the console can link this node to its client record")
+		c.logger.Info("mesh: could not report the fingerprint in place; re-enrolling so the console can link this device to its client record")
 	}
-	c.logger.Info("mesh: enrolling node onto meshnet",
+	c.logger.Info("mesh: enrolling this device onto meshnet",
 		"coord", enr.CoordAddr, "relay", enr.RelayAddr, "name", name, "org_id", enr.OrgID,
 		"advertise_routes", c.adv.Routes, "advertise_exit_node", c.adv.ExitNode, "exit_node", c.adv.ExitPeer)
 	c.lease = c.start(ctx, cfg, c.authKey)
@@ -724,8 +738,15 @@ func (l *runnerLease) status() statusapi.MeshStatus {
 func toStatusapiMesh(m localweb.MeshStatus) statusapi.MeshStatus {
 	peers := make([]statusapi.MeshPeer, 0, len(m.Peers))
 	for _, p := range m.Peers {
+		svcs := make([]statusapi.MeshPeerService, 0, len(p.Services))
+		for _, sv := range p.Services {
+			svcs = append(svcs, statusapi.MeshPeerService{Name: sv.Name, Proto: sv.Proto, Port: sv.Port})
+		}
 		peers = append(peers, statusapi.MeshPeer{
 			PublicKey:        p.PublicKey,
+			Name:             p.Name,
+			Services:         svcs,
+			OS:               p.OS,
 			AllowedIPs:       p.AllowedIPs,
 			LastHandshakeSec: p.LastHandshakeSec,
 			RxBytes:          p.RxBytes,

@@ -118,6 +118,10 @@ message CheckAdmitRequest {
   // Typically 1 for "create one more".
   int64  delta   = 3;
   int64  current = 4;
+  // Member-level admission; 0 skips the member layer.
+  int64  user_id = 5;
+  // Count of `kind` attributed to user_id. Ignored when user_id == 0.
+  int64  member_current = 6;
 }
 
 // [mirrors calabi.v1.control_plane.CheckAdmitResponse]
@@ -127,6 +131,8 @@ message CheckAdmitResponse {
   int64  limit   = 3;
   // Populated when allowed=false.
   string reason  = 4;
+  // Which layer produced limit: "org" | "member" | "".
+  string limit_scope = 5;
 }
 
 // ===================== metering-svc =====================

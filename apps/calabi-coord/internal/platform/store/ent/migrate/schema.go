@@ -9,6 +9,19 @@ import (
 )
 
 var (
+	// CoordSettingsColumns holds the columns for the "coord_settings" table.
+	CoordSettingsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "key", Type: field.TypeString, Unique: true},
+		{Name: "value", Type: field.TypeString, Default: ""},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// CoordSettingsTable holds the schema information for the "coord_settings" table.
+	CoordSettingsTable = &schema.Table{
+		Name:       "coord_settings",
+		Columns:    CoordSettingsColumns,
+		PrimaryKey: []*schema.Column{CoordSettingsColumns[0]},
+	}
 	// MeshAclsColumns holds the columns for the "mesh_acls" table.
 	MeshAclsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -43,6 +56,36 @@ var (
 			},
 		},
 	}
+	// MeshConnRecordsColumns holds the columns for the "mesh_conn_records" table.
+	MeshConnRecordsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "meshnet_id", Type: field.TypeInt64},
+		{Name: "src_node_id", Type: field.TypeInt64},
+		{Name: "dst_node_id", Type: field.TypeInt64},
+		{Name: "hour", Type: field.TypeTime},
+		{Name: "bytes_tx", Type: field.TypeInt64, Default: 0},
+		{Name: "bytes_rx", Type: field.TypeInt64, Default: 0},
+		{Name: "path", Type: field.TypeString, Default: ""},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// MeshConnRecordsTable holds the schema information for the "mesh_conn_records" table.
+	MeshConnRecordsTable = &schema.Table{
+		Name:       "mesh_conn_records",
+		Columns:    MeshConnRecordsColumns,
+		PrimaryKey: []*schema.Column{MeshConnRecordsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "meshconnrecord_meshnet_id_src_node_id_dst_node_id_hour",
+				Unique:  true,
+				Columns: []*schema.Column{MeshConnRecordsColumns[1], MeshConnRecordsColumns[2], MeshConnRecordsColumns[3], MeshConnRecordsColumns[4]},
+			},
+			{
+				Name:    "meshconnrecord_meshnet_id_hour",
+				Unique:  false,
+				Columns: []*schema.Column{MeshConnRecordsColumns[1], MeshConnRecordsColumns[4]},
+			},
+		},
+	}
 	// MeshNodesColumns holds the columns for the "mesh_nodes" table.
 	MeshNodesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -62,6 +105,8 @@ var (
 		{Name: "routes_reviewed", Type: field.TypeBool, Default: false},
 		{Name: "owner_user_id", Type: field.TypeInt64, Default: 0},
 		{Name: "device_fingerprint", Type: field.TypeString, Default: ""},
+		{Name: "os", Type: field.TypeString, Default: ""},
+		{Name: "block_incoming", Type: field.TypeBool, Nullable: true},
 		{Name: "tags_pinned", Type: field.TypeBool, Default: false},
 		{Name: "tags_json", Type: field.TypeString, Default: "[]"},
 		{Name: "approved", Type: field.TypeBool, Default: true},
@@ -164,8 +209,10 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		CoordSettingsTable,
 		MeshAclsTable,
 		MeshACLRevisionsTable,
+		MeshConnRecordsTable,
 		MeshNodesTable,
 		MeshRelaysTable,
 		MeshServicesTable,
@@ -174,11 +221,17 @@ var (
 )
 
 func init() {
+	CoordSettingsTable.Annotation = &entsql.Annotation{
+		Table: "coord_settings",
+	}
 	MeshAclsTable.Annotation = &entsql.Annotation{
 		Table: "mesh_acls",
 	}
 	MeshACLRevisionsTable.Annotation = &entsql.Annotation{
 		Table: "mesh_acl_revisions",
+	}
+	MeshConnRecordsTable.Annotation = &entsql.Annotation{
+		Table: "mesh_conn_records",
 	}
 	MeshRelaysTable.Annotation = &entsql.Annotation{
 		Table: "mesh_relays",

@@ -17,10 +17,21 @@ import (
 	meshpb "github.com/calabi/calabi/pkg/mesh-proto/meshpb"
 )
 
+// PeerService is one service a peer offers: what to call it, and what to dial.
+// Only confirmed services reach a client — the coordinator drops unapproved
+// declarations before the netmap, the same place the ACL drops them.
+type PeerService struct {
+	Name  string
+	Proto string
+	Port  int
+}
+
 // Peer is one node the local node may reach, as resolved from a NetMap.
 type Peer struct {
 	NodeID     int64
 	Name       string // MagicDNS label
+	Services   []PeerService
+	OS         string // "windows" / "linux" / "darwin"; "" from an older node
 	NodeKey    meshproto.NodeKey
 	DiscoKey   meshproto.DiscoKey
 	Overlay    netip.Addr
@@ -217,7 +228,15 @@ func peerFromProto(pp *meshpb.Peer) (Peer, error) {
 	if err != nil {
 		return Peer{}, fmt.Errorf("node_key: %w", err)
 	}
-	p := Peer{NodeID: pp.GetNodeId(), Name: pp.GetName(), NodeKey: nk, DERPHome: pp.GetDerpHome()}
+	p := Peer{NodeID: pp.GetNodeId(), Name: pp.GetName(), NodeKey: nk, DERPHome: pp.GetDerpHome(), OS: pp.GetOs()}
+	for _, sv := range pp.GetServices() {
+		if sv.GetName() == "" {
+			continue // a nameless service selects nothing; don't render a blank row
+		}
+		p.Services = append(p.Services, PeerService{
+			Name: sv.GetName(), Proto: sv.GetProto(), Port: int(sv.GetPort()),
+		})
+	}
 
 	// disco_key is optional (empty until MESH.4).
 	if dk := pp.GetDiscoKey(); dk != "" {

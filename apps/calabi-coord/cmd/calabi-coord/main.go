@@ -116,7 +116,7 @@ func main() {
 		// Node-admin HTTP surface (MESH.8b): list / disable / enable nodes. Served
 		// only when CALABI_COORD_MESH_ADMIN_ADDR is set, on a PRIVATE address (the
 		// bff-admin gateway is its authenticated front door).
-		Extra: withEdgeDERPWatcher(notif, meshAdminServer(meshAdmin, coord, notif, logger)),
+		Extra: withConnRecordPurge(coord, logger, withEdgeDERPWatcher(notif, meshAdminServer(meshAdmin, coord, notif, logger))),
 	}); err != nil {
 		os.Exit(1)
 	}
@@ -135,6 +135,19 @@ func withEdgeDERPWatcher(notif *core.Notifier, next func(context.Context) error)
 	return func(ctx context.Context) error {
 		if edgeDERPWatcher != nil {
 			go edgeDERPWatcher(ctx, notif)
+		}
+		return next(ctx)
+	}
+}
+
+// withConnRecordPurge starts the retention sweep for the data-plane audit trail,
+// bound to the same shutdown context. Wired here rather than where the store is
+// built so it inherits the service lifecycle, and so a deployment that keeps no
+// trail (ConnRecords nil) starts nothing at all.
+func withConnRecordPurge(coord *core.Coordinator, logger *slog.Logger, next func(context.Context) error) func(context.Context) error {
+	return func(ctx context.Context) error {
+		if coord.ConnRecords != nil {
+			go runConnRecordPurge(ctx, logger, coord)
 		}
 		return next(ctx)
 	}
