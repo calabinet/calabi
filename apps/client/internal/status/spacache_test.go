@@ -25,6 +25,11 @@ func TestHandleIndex_ShellIsNotCacheable(t *testing.T) {
 	// NewServer calls logger.With, so a nil *slog.Logger panics — discard instead.
 	lg := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewServer(lg, New("test", "127.0.0.1:0"), "127.0.0.1:0")
+	// The SPA is only served when a writable API is attached — that is what
+	// makes this process a daemon rather than a one-off `calabi http`, whose
+	// page cannot work and is rendered inline instead. Attach a no-op so this
+	// test still exercises the shell it is about.
+	s.AttachAPI(func(*http.ServeMux) {})
 	rr := httptest.NewRecorder()
 	s.handleIndex(rr, httptest.NewRequest("GET", "/", nil))
 

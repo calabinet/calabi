@@ -8,6 +8,11 @@ import (
 	"syscall"
 )
 
+// applySupported says whether this GOOS has an OS-installer path at all.
+// It is what turns "cannot update here" from an error into a reported state
+// (Status.Reason == ReasonUnsupportedOS) the console can explain.
+const applySupported = true
+
 // applyInstaller runs the macOS installer for the downloaded.pkg. The daemon is
 // root (LaunchDaemon), so `installer` can write /Applications + /Library and the
 // pkg's postinstall re-bootstraps the LaunchDaemon — which restarts US. We start

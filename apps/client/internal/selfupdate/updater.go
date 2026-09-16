@@ -19,11 +19,27 @@ type Updater struct {
 	CurrentVersion string
 	PubKey         ed25519.PublicKey
 	DownloadDir    string
+	// Privileged reports whether this process may actually install: it is a
+	// privileged OS service, already elevated, that a service manager can restart
+	// afterwards. A user-mode daemon can CHECK — and should, so the console can
+	// say "there is a newer version" — but must never run an installer it cannot
+	// complete. Wired from privilegedForUpdates (cmd/calabi/selfupdate_wire.go).
+	Privileged bool
 	// Apply runs the verified installer. Default (nil) = applyInstaller: the OS
 	// installer, spawned DETACHED so it survives the service restart it triggers.
 	// Overridable in tests.
 	Apply func(ctx context.Context, installerPath string) error
 	Logf  func(format string, args ...any)
+	// FetchTimeout bounds the manifest+signature fetch. Zero = the default below.
+	// Only tests set it; there is no knob for it in the daemon.
+	FetchTimeout time.Duration
+}
+
+func (u *Updater) fetchTimeout() time.Duration {
+	if u.FetchTimeout > 0 {
+		return u.FetchTimeout
+	}
+	return manifestFetchTimeout
 }
 
 func (u *Updater) logf(format string, args ...any) {
@@ -33,76 +49,39 @@ func (u *Updater) logf(format string, args ...any) {
 }
 
 // CheckAndApply runs one cycle. Returns (true, nil) after it launches an update
-// (the service is about to be replaced/restarted), (false, nil) when already
-// current, or (false, err) on any failure. A failed check NEVER touches the
-// running install — verification gates the apply.
+// (the service is about to be replaced/restarted), (false, nil) when there is
+// nothing to do HERE — already current, or a newer version this machine cannot
+// install itself — or (false, err) on any failure. A failed check NEVER touches
+// the running install: verification gates the apply.
+//
+// "Newer but not installable here" is deliberately not an error. It is the
+// steady state of every Linux/agent daemon (latest.json is desktop-only), and
+// reporting it as a failure every 6 hours is how that population's log filled
+// with noise while nobody learned they were out of date.
 func (u *Updater) CheckAndApply(ctx context.Context) (bool, error) {
-	m, raw, err := FetchManifest(ctx, u.ManifestURL)
+	st, art, err := u.check(ctx)
 	if err != nil {
 		return false, err
 	}
-	// NOTHING from the manifest is trusted before its own signature checks out
-	// (audit finding UPD-1). Fail closed: a root service that cannot establish
-	// where an instruction came from must not follow it.
-	sig, err := FetchManifestSignature(ctx, u.ManifestURL)
-	if err != nil {
-		return false, err
-	}
-	if err := VerifyManifestSignature(raw, sig, u.PubKey); err != nil {
-		return false, err
-	}
-	// The version reached the filesystem path verbatim before this check.
-	if err := ValidateVersion(m.Version); err != nil {
-		return false, err
-	}
-	if err := os.MkdirAll(u.DownloadDir, 0o700); err != nil {
-		return false, err
-	}
-	// Anti-rollback. A valid signature proves we published this manifest, not
-	// that we published it LAST: replaying a genuine older one is the same
-	// downgrade by another route, and the attacker needs no key for it.
-	floor := readVersionFloor(u.DownloadDir)
-	if floor != "" && IsNewer(m.Version, floor) && !m.Rollback {
-		return false, fmt.Errorf("selfupdate: manifest offers %s but %s was already seen — refusing "+
-			"(a deliberate rollback must carry \"rollback\": true inside the signed manifest)", m.Version, floor)
-	}
-	if !m.Rollback {
-		writeVersionFloor(u.DownloadDir, m.Version)
-	}
-	if !IsNewer(u.CurrentVersion, m.Version) && !m.Rollback {
-		u.logf("selfupdate: up to date (current %s, manifest %s)", u.CurrentVersion, m.Version)
+	if !st.Available {
+		u.logf("selfupdate: up to date (current %s, manifest %s)", u.CurrentVersion, st.Latest)
 		return false, nil
 	}
-	if m.Rollback && u.CurrentVersion == m.Version {
-		u.logf("selfupdate: already on the rollback target %s", m.Version)
+	if !st.CanApply {
+		u.logf("selfupdate: %s is available but this install cannot apply it (%s)", st.Latest, st.Reason)
 		return false, nil
-	}
-	art, ok := m.ArtifactForThisPlatform()
-	if !ok {
-		return false, fmt.Errorf("selfupdate: manifest %s has no artifact for %s", m.Version, PlatformKey())
-	}
-	// A root service auto-applying an UNSIGNED download would be a gift to an
-	// attacker who can spoof the manifest host — refuse rather than trust TLS alone.
-	if art.SHA256 == "" || art.Signature == "" {
-		return false, fmt.Errorf("selfupdate: artifact for %s is missing sha256/signature — refusing", PlatformKey())
-	}
-
-	// The installer must come from the same host as the manifest, over the same
-	// or a stronger scheme: a spoofed manifest should not be able to redirect a
-	// root service's download to an arbitrary origin.
-	if err := sameOriginArtifact(u.ManifestURL, art.URL); err != nil {
-		return false, err
 	}
 
 	// A FIXED filename. The version is attacker-controlled input and has no
 	// business in a path built by a service running as root/LocalSystem; it is
-	// validated above as well, but the path simply doesn't depend on it now.
+	// validated during the check as well, but the path simply doesn't depend on
+	// it now.
 	dest := filepath.Join(u.DownloadDir, "calabi-update"+installerExt())
 	u.logf("selfupdate: downloading %s", art.URL)
 	if err := Download(ctx, art.URL, dest); err != nil {
 		return false, err
 	}
-	// Two independent gates before a root service runs a downloaded file.
+	// Two independent gates before a privileged service runs a downloaded file.
 	if err := VerifySHA256(dest, art.SHA256); err != nil {
 		os.Remove(dest)
 		return false, err
@@ -111,7 +90,7 @@ func (u *Updater) CheckAndApply(ctx context.Context) (bool, error) {
 		os.Remove(dest)
 		return false, err
 	}
-	u.logf("selfupdate: verified update %s (sha256+sig) — applying", m.Version)
+	u.logf("selfupdate: verified update %s (sha256+sig) — applying", st.Latest)
 
 	apply := u.Apply
 	if apply == nil {
@@ -168,9 +147,17 @@ func sameOriginArtifact(manifestURL, artifactURL string) error {
 	return nil
 }
 
+// installerExt names the downloaded artifact. It is cosmetic for macOS and
+// Windows (the file is handed to an installer either way) but NOT for Linux:
+// there the applier opens it as a gzip tarball, and calling it.pkg would make
+// every log line about it a small lie.
 func installerExt() string {
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		return ".exe"
+	case "linux":
+		return ".tar.gz"
+	default:
+		return ".pkg"
 	}
-	return ".pkg"
 }

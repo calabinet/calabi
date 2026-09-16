@@ -200,6 +200,42 @@ func (c *Client) Persist(ctx context.Context, in PersistInput) (PersistResult, e
 	if status.Code(err) == codes.AlreadyExists {
 		resolved, rerr := c.resolveCurrent(ctx, in)
 		if rerr == nil {
+			// The row exists — but is it OURS?
+			//
+			// resolveCurrent looks a tunnel up by DOMAIN (or edge+port), which is
+			// a GLOBAL key: nothing about that lookup is scoped to the caller's
+			// org. Adopting whatever comes back is how a subdomain-sequence
+			// collision becomes one org serving traffic on ANOTHER org's tunnel
+			// row — this edge stamps ReportStatus(enabled) on it, the route for
+			// that domain points here, and the user who just registered sees
+			// their tunnel in nobody's console.
+			//
+			// Observed 2026-09-15: an edge whose state.dir was /tmp lost its
+			// subdomain counter on redeploy, restarted at u000001, and collided
+			// with a live row belonging to a different org.
+			//
+			// Idempotency was the point of this branch and it still holds: a
+			// reconnect re-creating the SAME org's domain resolves to the same
+			// row. A DIFFERENT org is not idempotency, it is a mix-up, and the
+			// only safe answer is to refuse — handleNewProxy then rolls the
+			// local proxy back and the client is told, instead of serving
+			// traffic on somebody else's identity.
+			//
+			// Only when both ids are known: a 0 on either side is an
+			// static-token session with no org, and refusing on "unknown" would
+			// break a path that was never part of this bug.
+			if in.OrgID != 0 && resolved.GetOrgId() != 0 && resolved.GetOrgId() != in.OrgID {
+				c.logger.Error("domain collision ACROSS ORGS — refusing to adopt the existing tunnel row; "+
+					"the edge's subdomain sequence has drifted (is state.dir persistent?)",
+					"domain", in.Domain, "remote_port", in.RemotePort,
+					"requesting_org", in.OrgID, "existing_row_org", resolved.GetOrgId(),
+					"existing_tunnel_id", resolved.GetMeta().GetId(),
+					"edge_node_id", c.edgeNodeID)
+				return PersistResult{}, fmt.Errorf(
+					"%q is already taken by another organization (tunnel #%d) — this edge's "+
+						"subdomain sequence has drifted: %w",
+					in.Domain, resolved.GetMeta().GetId(), err)
+			}
 			return PersistResult{TunnelID: resolved.GetMeta().GetId(), ConfigJSON: resolved.GetConfigJson()}, nil
 		}
 		c.logger.Warn("persist already_exists but resolve failed",

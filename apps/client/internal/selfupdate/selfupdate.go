@@ -73,6 +73,31 @@ type Manifest struct {
 	// attacker replaying an old release cannot add it, and cannot strip it from
 	// one that has it, without breaking the signature.
 	Rollback bool `json:"rollback,omitempty"`
+	// Critical marks a security release: it installs under ModeSecurity as well
+	// as ModeAuto, and it ignores the maintenance window and the busy check.
+	//
+	// A window exists to keep a ROUTINE restart out of the working day. Making a
+	// remotely-exploitable fix wait until 3am would be using it for something it
+	// was not for. It does NOT override ModeNotify — someone who said "never
+	// without me" gets a louder notice, not a surprise restart; the floor that
+	// overrides even that is min_supported (U3).
+	//
+	// Like Rollback, it is safe precisely because it lives INSIDE the signed
+	// manifest: it can bypass the user's setting, so it must not be possible to
+	// add or strip it without the key.
+	Critical bool `json:"critical,omitempty"`
+	// MinSupported is the oldest version still supported. A client BELOW it
+	// installs regardless of the machine's mode — including "tell me only".
+	//
+	// This is the floor, and it is the only thing that overrides an explicit
+	// "never without me". Reach for it when leaving people where they are is
+	// worse than restarting them without warning: a remotely exploitable hole, a
+	// protocol change that has made the old client useless anyway. `critical` is
+	// for everything else.
+	//
+	// Signed like the rest of the manifest — it can override the user's setting,
+	// so it must not be possible to add or strip without the key.
+	MinSupported string `json:"min_supported,omitempty"`
 }
 
 // PlatformArtifact is one platform's installer: where to get it and how to

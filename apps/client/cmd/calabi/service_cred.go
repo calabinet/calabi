@@ -35,6 +35,35 @@ func serviceInstallEnv(installArgs []string) (map[string]string, error) {
 	if extractFlagValue(installArgs, "config") != "" {
 		return nil, nil // local supervisor daemon — creds come from tunnels.yaml
 	}
+	// THE CLIENT MODE DOES NOT RIDE ALONG ON ITS OWN.
+	//
+	// `calabi mode standalone` writes creds.Config.Mode into the INTERACTIVE
+	// data dir. A service reads its OWN (next to the exe, or ProgramData for
+	// --system), where that value does not exist — so resolveClientMode falls
+	// back to the default, "platform", and the service quietly becomes the
+	// thing the user opted out of: it dials bff-console, registers the device,
+	// joins the mesh, and as a --system service polls the update manifest. The
+	// install prints nothing about any of that.
+	//
+	// Note what is already carried below — EdgeRegion, PreferPlatformEdge. The
+	// one preference that decides whether this machine talks to the platform at
+	// all was the one nobody carried.
+	//
+	// Baking CALABI_MODE=standalone instead would just move the failure: with
+	// no --config there is nothing for a local supervisor to run, so the
+	// service would crash-loop on "missing --config". So refuse, and name both
+	// ways out. (An explicit CALABI_MODE=platform in the install shell is the
+	// third: clientIsStandalone reads the env first.)
+	if clientIsStandalone() {
+		return nil, errors.New(
+			"this client is in standalone mode, but `daemon install` without --config registers a PLATFORM\n" +
+				"service — and the mode does not follow the install (a service reads its own data directory,\n" +
+				"resolves to \"platform\", and starts talking to the control plane).\n" +
+				"Install the local supervisor instead:\n" +
+				"  calabi daemon install --config tunnels.yaml\n" +
+				"or, if you did mean the platform service:\n" +
+				"  calabi mode platform     (then re-run the install)")
+	}
 	// Region / edge-affinity ride along in every mode so the service picks the
 	// same edge as the user's interactive runs (e.g. a BYOI org's own edge).
 	env := map[string]string{}

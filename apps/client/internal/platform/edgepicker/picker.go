@@ -290,11 +290,18 @@ func Pick(ctx context.Context, logger *slog.Logger, in Input) Result {
 	// are what make the default unusable. A build with no bff-console URL is a
 	// dev/self-hosted one where localhost is exactly right.
 	if in.BFFConsoleURL != "" && isLoopbackAddr(in.DefaultAddr) {
+		// Two shapes of "nothing usable", and they read very differently to
+		// whoever is looking at the log. A platform release bakes NO default at
+		// all (EDGE_DEFAULT empty), so saying "the dev default ()" there names
+		// a thing that does not exist and invites a hunt for it.
+		why := "the only fallback is the dev default (" + in.DefaultAddr + "), which is not a real edge"
+		if strings.TrimSpace(in.DefaultAddr) == "" {
+			why = "this build bakes no fallback edge address"
+		}
 		return Result{
 			NoUsableEdge: true,
-			Reason: "edge discovery failed and the only fallback is the dev default (" +
-				in.DefaultAddr + "); not dialling it — set CALABI_SERVER to pin an edge, " +
-				"or fix reachability to " + in.BFFConsoleURL,
+			Reason: "edge discovery failed and " + why +
+				"; set CALABI_SERVER to pin an edge, or fix reachability to " + in.BFFConsoleURL,
 		}
 	}
 	return Result{

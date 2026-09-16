@@ -903,7 +903,14 @@ func (s *Server) Run(ctx context.Context) error {
 	//
 	// The /ui/ mount is kept for back-compat (older callers may still
 	// link to /ui/index.html).
-	if spaFS, err := UIFileSystem(); err == nil {
+	//
+	// ONLY when the writable API is attached. Without it the SPA loads and then
+	// 404s on its first /v1/ call, showing "连接本地守护进程… (HTTP 404) — 请检查
+	// daemon 是否运行", which is wrong twice: the page came up fine, and the
+	// process serving it is not a daemon at all but a one-off `calabi http`.
+	// Reported 2026-09-15. Those commands get renderIndex instead, which needs
+	// nothing but the snapshot they already have.
+	if spaFS, err := UIFileSystem(); err == nil && s.apiRegister != nil {
 		mux.Handle("/ui/", http.StripPrefix("/ui/", http.FileServer(http.FS(spaFS))))
 		// Vite emits content-hashed filenames under /assets/, so the bytes behind
 		// a given URL can never change — cache them hard. A new release ships new
@@ -1158,9 +1165,11 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	// prefer the embedded SPA when available. Falls back to
-	// the inline render in case the embed FS is empty (dev binary).
-	if spaFS, err := UIFileSystem(); err == nil {
+	// prefer the embedded SPA when available. Falls back to the inline
+	// render when the embed FS is empty (dev binary) — or when there is no
+	// writable API behind it, which is the one-off `calabi http` case: the SPA
+	// cannot work without /v1/ and says so in a way that blames the daemon.
+	if spaFS, err := UIFileSystem(); err == nil && s.apiRegister != nil {
 		if f, err := spaFS.Open("index.html"); err == nil {
 			defer f.Close()
 			if buf, err := io.ReadAll(f); err == nil && len(buf) > 0 {
@@ -1180,13 +1189,13 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	snap := s.state.SnapshotNow()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	renderIndex(w, snap)
+	renderIndex(w, snap, s.apiRegister != nil)
 }
 
 // renderIndex writes a minimal HTML status page. We deliberately keep this
 // in plain Go (no templates) so the binary stays small and the page is
 // trivially printable from `curl /`.
-func renderIndex(w http.ResponseWriter, snap Snapshot) {
+func renderIndex(w http.ResponseWriter, snap Snapshot, hasAPI bool) {
 	state := "DISCONNECTED"
 	color := "#c0392b"
 	if snap.Connected {
@@ -1233,6 +1242,15 @@ func renderIndex(w http.ResponseWriter, snap Snapshot) {
 		fmt.Fprintln(w, `</tbody></table>`)
 	}
 
+	if !hasAPI {
+		// Say whose page this is. A one-off `calabi http` serves the same port
+		// the daemon usually owns, so somebody arriving here out of habit needs
+		// to know why it looks nothing like the dashboard they expected.
+		fmt.Fprintln(w, `<p style="color:#888;font-size:0.85rem">`+
+			`This is the status page of a one-off <code>calabi http/tcp/udp/sni</code> `+
+			`command — it shows that command's own tunnels and nothing else. `+
+			`The full dashboard is served by <code>calabi daemon</code>.</p>`)
+	}
 	fmt.Fprintln(w, `<footer>
 endpoints:
  <a href="/tunnels">/tunnels</a> ·

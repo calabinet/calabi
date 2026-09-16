@@ -38,6 +38,14 @@ import (
 // Returns true if anything answered with a 2xx — we deliberately
 // don't decode the body because an older daemon (plain-text
 // healthz) is still a daemon.
+//
+// IT ANSWERS "IS THIS PORT TAKEN", NOT "IS MY DAEMON UP". One machine may run
+// several clients, each with its own data dir and its own console port (the
+// status server rolls to the next free one), so a 2xx here can easily come from
+// another account's daemon. Correct for the remaining caller — freeing :7400 for
+// the OS service is a question about the port. For "is the daemon I would have
+// started already running", use cruntime.DaemonRunning(), which is scoped per
+// data dir the way client instances are.
 func daemonAlreadyRunning(addr string) bool {
 	if addr == "" {
 		addr = defaultStatusAddr

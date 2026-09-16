@@ -22,7 +22,7 @@ func TestFromNetMap(t *testing.T) {
 			{NodeId: 2, NodeKey: keyB64(2), OverlayAddr: "100.64.0.2", AllowedIps: []string{"100.64.0.2/32"}, DerpHome: "lax", Endpoints: []string{"203.0.113.5:41641"}},
 			{NodeId: 3, NodeKey: "not-base64!!"}, // malformed → skipped
 		},
-		DerpMap: &meshpb.DERPMap{Regions: []*meshpb.DERPRegion{{Code: "lax", Nodes: []*meshpb.DERPNode{{HostName: "derp-lax.calabi.net", DerpPort: 443, StunPort: 3478}}}}},
+		DerpMap: &meshpb.DERPMap{Regions: []*meshpb.DERPRegion{{Code: "lax", Nodes: []*meshpb.DERPNode{{HostName: "derp-lax.example.net", DerpPort: 443, StunPort: 3478}}}}},
 	}
 
 	nm, err := FromNetMap(pb)

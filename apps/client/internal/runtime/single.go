@@ -148,3 +148,39 @@ func firstLine(b []byte) string {
 	}
 	return string(b)
 }
+
+// DaemonRunning reports whether a daemon is already running FOR THIS DATA DIR.
+//
+// It is deliberately not "is anything listening on :7400". One machine can run
+// several clients — that is a supported setup (separate CALABI_CONFIG / data
+// dir, and the status console rolls to the next free port on a conflict) — so
+// the port tells you only that SOMEBODY is there, and acting on it means a
+// second client's `calabi login` decides your daemon is up when the daemon it
+// found belongs to another account entirely.
+//
+// The lock is the honest signal because it is scoped exactly the way client
+// instances are: one flock per data dir, the same dir that holds this instance's
+// creds. Taking it momentarily and giving it straight back is safe — nothing
+// else can slip in during the caller's own next statement, and a real daemon
+// start takes it for its whole lifetime.
+//
+// A missing lock file means no daemon has ever run here: answer false WITHOUT
+// creating one, so merely asking the question does not litter a fresh data dir.
+// An unreadable/unlockable file also answers false — the caller then tries to
+// start a daemon, and AcquireDaemonLock refuses loudly if one really was there.
+func DaemonRunning() bool {
+	p := pidPath()
+	if _, err := os.Stat(p); err != nil {
+		return false
+	}
+	fl := flock.New(p)
+	got, err := fl.TryLock()
+	if err != nil {
+		return false
+	}
+	if !got {
+		return true
+	}
+	_ = fl.Unlock()
+	return false
+}

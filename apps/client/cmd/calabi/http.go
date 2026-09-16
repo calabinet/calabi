@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabi/calabi/apps/client/internal/platform/clientreg"
 	"github.com/calabi/calabi/apps/client/internal/session"
 	"github.com/calabi/calabi/apps/client/internal/status"
 	"github.com/calabi/calabi/apps/client/internal/transport"
@@ -87,6 +88,70 @@ func resolveDeviceID() int64 {
 	return c.DeviceID
 }
 
+// ensureDeviceRegistered registers this machine as a client if it never has
+// been, so the tunnel about to be created is attributable to a device.
+//
+// Why it is here and not only in the daemon: registration used to happen ONLY
+// on the daemon path (clientreg.Ensure from runDaemon / `calabi clients
+// register`), while the one-shot commands merely READ creds.DeviceID. On a
+// machine where no daemon of this config has ever run, that id is 0 — so the
+// tunnel is stored with client_id = 0, the console's client list has no row for
+// the machine, and the state derivation skips every client-side signal it has
+// (see web/console/src/lib/tunnelState.ts), which is how a tunnel whose local
+// upstream is unreachable still read "正常".
+//
+// Deliberately narrow:
+//   - Only when the id is MISSING. Re-registering on every `calabi http` would
+//     put an HTTP round-trip in front of a command whose whole appeal is that it
+//     starts immediately.
+//   - Standalone mode has no control plane to register with.
+//   - Best-effort: a failure is logged and the tunnel proceeds exactly as it did
+//     before this existed. Being unlisted is worth a line in the log; it is not
+//     worth refusing to open a tunnel over.
+//
+// The credential decides the shape, mirroring runDaemon: an API key registers
+// the org-owned agent (EnsureAgent), a login registers the user's own device.
+func ensureDeviceRegistered(logger *slog.Logger) {
+	cfg, err := creds.Load()
+	if err != nil {
+		return
+	}
+	tok, kind := resolveCredential()
+	if !shouldRegisterDevice(clientIsStandalone(), cfg, kind) {
+		return
+	}
+	if kind == credAPIKey {
+		err = clientreg.EnsureAgent(cfg, bffURL(), version, tok)
+	} else {
+		err = clientreg.Ensure(cfg, bffURL(), version)
+	}
+	if err != nil {
+		logger.Warn("could not register this device; the tunnel will not be linked to a client",
+			"err", err)
+		return
+	}
+	logger.Info("registered this device", "client_id", cfg.DeviceID)
+}
+
+// shouldRegisterDevice is the decision half of ensureDeviceRegistered, split out
+// because each "no" is a rule worth pinning rather than a detail: the whole
+// point is that this costs a round-trip exactly once per machine, never on the
+// paths where it would be wrong or useless.
+func shouldRegisterDevice(standalone bool, cfg *creds.Config, kind credentialKind) bool {
+	if standalone {
+		return false // no control plane to register with
+	}
+	if cfg == nil {
+		return false
+	}
+	if cfg.DeviceID != 0 {
+		return false // already registered; re-asking would just add latency
+	}
+	// The demo token is not a credential: /v1/clients/register would 401 and
+	// requireEdgeAddr is about to tell the user to sign in anyway.
+	return kind != credDefault
+}
+
 // resolveFingerprint loads the persisted per-install fingerprint; "" = none.
 //
 // Unlike EnsureFingerprint this never CREATES one: a client that has no
@@ -148,9 +213,13 @@ func runHTTP(args []string) int {
 	}
 
 	logger := setupLogger()
-	// These one-shot commands do not discover an edge; a release build stamps
-	// no compile-time default, so say what to set rather than dialling nothing.
-	edgeAddr := requireEdgeAddr("http")
+	// Make this machine attributable before the tunnel exists: without a
+	// device id the row is stored with client_id = 0 and the console can show
+	// neither which machine it runs on nor whether that machine is up.
+	ensureDeviceRegistered(logger)
+	// CALABI_SERVER (or a baked default, if this build has one), else ask the
+	// control plane which edge to dial — the same picker the daemon uses.
+	edgeAddr := requireEdgeAddr(logger, "http")
 	if edgeAddr == "" {
 		return 2
 	}

@@ -12,6 +12,13 @@
 // Hole-punched DIRECT traffic is in neither and never can be: it touches no
 // component that could meter it. The legend says so rather than leaving a gap
 // between this chart and the machine's own counters.
+//
+// The buckets are an ORG aggregate and every member of the org may read them
+// (bff-console usage.go). They briefly did not: a plain member's /usage/daily
+// was 403'd for a fortnight in September 2026 while /usage/current handed the
+// same caller a narrowed figure — the card said 本月 4.44 MB (this machine's
+// local mesh meter) with 近 7 天合计 10.44 GB drawn underneath it. Both sides of
+// that are now the org's, so the card and this chart answer the same question.
 import { Card, Typography } from "antd";
 import {
   Bar,

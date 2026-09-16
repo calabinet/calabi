@@ -27,7 +27,7 @@ func (m *memConnRecords) AddConnSamples(_ context.Context, recs []ConnRecord) er
 	return nil
 }
 
-func (m *memConnRecords) ListConnRecords(_ context.Context, t MeshnetID, _, _ time.Time, _ int) ([]ConnRecord, error) {
+func (m *memConnRecords) ListConnRecords(_ context.Context, t MeshnetID, _ ConnRecordQuery) ([]ConnRecord, error) {
 	var out []ConnRecord
 	for _, r := range m.rows {
 		if r.MeshnetID == t {

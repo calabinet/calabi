@@ -79,6 +79,11 @@ type Config struct {
 	// mesh subsystem → the endpoints 404 (the SPA renders "unavailable on this
 	// daemon"), which is the pre-MESH platform-daemon behaviour.
 	Mesh MeshStatusSource
+	// Update is the self-update agent backing GET /v1/update + the manual
+	// check/apply buttons. Nil = the endpoints 404 and the console shows no
+	// version card — a dev build, updates disabled, or any client older than
+	// this.
+	Update UpdateSource
 	// LocalAddrFor returns the local_addr for a given proxy_id (used
 	// by the replay endpoint to know where to POST). Nil disables replay.
 	LocalAddrFor func(proxyID string) string
@@ -198,6 +203,10 @@ func (s *Server) Register(mux *http.ServeMux) {
 	// local-token; logout composes with requireLocalToken as before.)
 	mux.HandleFunc("POST /v1/auth/login", s.agentBlock(s.handleAuthLogin))
 	mux.HandleFunc("POST /v1/auth/logout", s.agentBlock(s.requireLocalToken(s.handleAuthLogout)))
+	// Adopt credentials another process just wrote — `calabi login` in a
+	// terminal. Guarded like logout: a write that rebinds this daemon's
+	// identity, and meaningless for a pinned-key agent.
+	mux.HandleFunc("POST /v1/auth/rebind", s.agentBlock(s.requireLocalToken(s.handleAuthRebind)))
 
 	// Account / org context for the UI's header.
 	mux.HandleFunc("GET /v1/me", s.proxyGET("/v1/account/me"))
@@ -301,6 +310,15 @@ func (s *Server) Register(mux *http.ServeMux) {
 	// dials; open like the other probes because probe.CheckOnce refuses any
 	// target a tunnel would refuse to forward to.
 	mux.HandleFunc("POST /v1/probe/check", s.handleProbeCheck)
+	// Self-update. The GET is open like every other read (loopback = the trust
+	// boundary); check/apply are writes and carry the local token. Note apply is
+	// NOT agentBlock'd: updating the machine is a machine operation, not an
+	// identity one, and an unattended agent install is exactly the population
+	// that most needs a way to be updated on purpose.
+	mux.HandleFunc("GET /v1/update", s.handleUpdateGet)
+	mux.HandleFunc("POST /v1/update/check", s.requireLocalToken(s.handleUpdateCheck))
+	mux.HandleFunc("POST /v1/update/apply", s.requireLocalToken(s.handleUpdateApply))
+	mux.HandleFunc("PUT /v1/update/policy", s.requireLocalToken(s.handleUpdatePolicy))
 	mux.HandleFunc("GET /v1/inspect/connections", s.handleInspectConnections)
 	mux.HandleFunc("GET /v1/inspect/captures", s.handleInspectCaptures)
 	mux.HandleFunc("POST /v1/inspect/replay", s.requireLocalToken(s.handleInspectReplay))
@@ -767,6 +785,36 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		s.cfg.OnLogout()
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
+}
+
+// handleAuthRebind adopts credentials that ANOTHER process just wrote to the
+// creds file — i.e. `calabi login` in a terminal.
+//
+// The CLI cannot simply call POST /v1/auth/login instead. That endpoint performs
+// the sign-in itself AND pins the token to the user's personal org
+// (prefer_personal_org, see handleAuthLogin) because a login typed into the
+// desktop window should open in 个人空间. `calabi login` deliberately does not
+// do that, and quietly changing which org a scripted login lands in would be a
+// worse bug than the one this fixes. So the CLI signs in the way it always has,
+// and then tells the daemon the file underneath it changed.
+//
+// Without this the daemon keeps serving the PREVIOUS account until its edge
+// session happens to drop — the login half of the gap logout had: the control
+// loop blocks on a socket read no context cancels, so nothing notices a creds
+// file that changed on disk.
+//
+// Same work as the tail of handleAuthLogin, and for the same reasons: drop the
+// cached responses (they are stamped against the old bearer) and fire the hook
+// that re-registers the device, resets the tunnel view, re-dials the edge and
+// re-enrolls the meshnet. Async like the login path — device registration is a
+// ~5s cold call and the caller only needs to know the daemon accepted the job.
+func (s *Server) handleAuthRebind(w http.ResponseWriter, _ *http.Request) {
+	s.cache.invalidateAll()
+	s.logger.Info("rebinding to credentials written by another process (calabi login)")
+	if s.cfg.OnLoginSucceeded != nil {
+		go s.cfg.OnLoginSucceeded()
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "rebinding"})
 }
 
 // handleOrgSwitch proxies POST /v1/orgs/switch to bff-console, persists the

@@ -19,6 +19,11 @@ const (
 	createBreakawayFromJob = 0x01000000
 )
 
+// applySupported says whether this GOOS has an OS-installer path at all.
+// It is what turns "cannot update here" from an error into a reported state
+// (Status.Reason == ReasonUnsupportedOS) the console can explain.
+const applySupported = true
+
 // applyInstaller runs the NSIS installer silently. The service is LocalSystem
 // (already elevated), so /S installs with no prompt; the installer stops +
 // reinstalls the service, restarting US. Detached + not waited so it outlives us.

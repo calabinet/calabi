@@ -803,7 +803,21 @@ func (c *Client) handleConfigPush(ctx context.Context, payload []byte) {
 
 	for _, up := range push.UpsertProxies {
 		up := up // capture for goroutine
-		if tracker != nil {
+		// A PENDING row is a promise: "the console has this tunnel and I am
+		// about to claim it". Only the daemon makes that promise — autoClaim is
+		// set by `calabi daemon` and by nothing else.
+		//
+		// A foreground `calabi http` gets the same push (the edge catches every
+		// new session up on the org's tunnels) and will never claim any of them,
+		// so recording them as its own rows is describing work it does not do.
+		// Worse, one of them is usually the tunnel this very command just
+		// created: it comes back keyed "pending:<tunnel_id>" while the command's
+		// own row is keyed by proxy_id, and nothing ever removes the pending
+		// twin (RemovePendingByTunnelID fires on a successful CLAIM, which never
+		// happens here). The status page then lists one tunnel twice — reported
+		// 2026-09-15, two rows for testcli02 differing only in whether the
+		// public address carried its scheme.
+		if tracker != nil && c.autoClaim {
 			tracker.UpsertPending(up.TunnelID, up.Name, string(up.Type), up.LocalAddr, up.Domain, up.RemotePort)
 		}
 		// Repeated upsert for an unchanged tunnel → Debug, not INFO. The edge

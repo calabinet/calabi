@@ -156,6 +156,14 @@ export interface RemoteTunnel {
   // unreachable — the shared effectiveState() maps that to "mismatch". 0 = no
   // signal. Mirrors bff-console marshalTunnel's client_edge_node_id.
   client_edge_node_id?: number;
+  // Upstream (local_addr) health as last reported by the OWNING daemon, and the
+  // probe error when it failed. bff-console omits both when nothing has ever
+  // reported, and the daemon proxies /v1/tunnels row-for-row — so absent here
+  // means "nobody checked", NOT "healthy". effectiveState() maps that to
+  // "unverified"; leaving the fields undeclared is what let this console call
+  // an unchecked upstream "online" while the web console said otherwise.
+  upstream_state?: "healthy" | "unhealthy" | string;
+  upstream_error?: string;
   // True when an ADMIN disabled this tunnel (vs the user's own disable). The
   // user can't lift it; effectiveState() surfaces it as "admin_disabled".
   disabled_by_admin?: boolean;
@@ -686,4 +694,59 @@ export interface MeshAdvertise {
   // Optional because an older daemon does not report it — undefined must not be
   // rendered as "unsupported".
   alias_supported?: boolean;
+}
+
+// UpdateInfo — GET /v1/update (the daemon's selfupdate agent).
+//
+// `available` and `can_apply` are SEPARATE on purpose. A Linux or agent install
+// can be out of date (available) while having nothing it can install itself
+// (can_apply=false, reason="no-artifact") — that is the "有新版本，请手动更新"
+// state, not an error. See docs/runbook/client-update-policy.md §4.1.
+export interface UpdateInfo {
+  current: string;
+  latest?: string;
+  available: boolean;
+  has_artifact: boolean;
+  can_apply: boolean;
+  rollback?: boolean;
+  // Why can_apply is false: no-artifact | artifact-unsigned | artifact-foreign |
+  // unsupported-platform | not-privileged.
+  reason?: string;
+  checked_at: string;
+  // Security release: installs under "security only" and skips the window.
+  critical?: boolean;
+  // Below the manifest's min_supported: installs whatever the setting says.
+  // The one case where "tell me only" is not honoured.
+  mandatory?: boolean;
+  // The machine's update setting.
+  policy: UpdatePolicy;
+  // Would a ROUTINE update install itself here (mode auto AND can_apply).
+  // Critical releases also install under "security"; read policy.mode for the
+  // whole answer.
+  auto: boolean;
+  // Why an installable update is NOT being installed right now:
+  // notify-only | security-only | outside-window | busy. Empty = nothing
+  // waiting. Different from `reason`, which is why it CANNOT be installed here.
+  hold?: string;
+  // When the max-defer backstop expires for a held version.
+  hold_until?: string;
+  // The MACHINE's timezone abbreviation. The window is on this clock, not the
+  // browser's — the restart happens on the machine.
+  timezone?: string;
+  // idle | checking | updating | failed
+  state: string;
+  error?: string;
+}
+
+// UpdatePolicy — the machine's update setting. PUT /v1/update/policy merges,
+// so a partial body only changes the fields it names.
+export interface UpdatePolicy {
+  // auto | security | notify
+  mode: string;
+  // Hours on the MACHINE's clock, half-open [start, end). Equal = no window.
+  window_start_hour: number;
+  window_end_hour: number;
+  // How long the window and the busy check may hold a routine update back.
+  // 0 = they may not hold it at all.
+  max_defer_days: number;
 }

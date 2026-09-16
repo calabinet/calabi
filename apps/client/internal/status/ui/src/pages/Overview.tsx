@@ -28,7 +28,9 @@ import type {
 } from "../api/types";
 import TrafficChart from "../components/TrafficChart";
 import { freshRate, useCounterRate } from "../hooks/use-counter-rate";
+import { useMemberQuota } from "../lib/memberQuota";
 import DailyTrafficChart from "../components/DailyTrafficChart";
+import { UpdateTag } from "../components/UpdateNotice";
 import {
   notify,
   useTransitionNotify,
@@ -64,6 +66,23 @@ function fmtUptime(sec: number | undefined, justStarted: string): string {
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
 }
+
+// The pill under the tunnel count. A named constant rather than an inline
+// literal so a second pill, if one is ever added, shares it instead of being a
+// copy that quietly drifts.
+const pillStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "2px 10px",
+  background: "rgba(94,127,255,0.16)",
+  color: "#9bb4ff",
+  borderRadius: 10,
+  fontSize: 12,
+  fontWeight: 500,
+  lineHeight: "18px",
+};
+const pillDot: React.CSSProperties = { color: "#5e7fff", fontSize: 11 };
 
 export default function Overview() {
   const { t } = useTranslation();
@@ -159,12 +178,17 @@ export default function Overview() {
   // Two traffic categories per card (今日 / 本月): 隧道 (tunnel) + 中继 (relay).
   // 直连 (hole-punched direct) is intentionally NOT shown.
   //
-  // Both figures are ORG-LEVEL from the backend, so EVERY client of the org reads
-  // the SAME number — that's what finally makes an owner's login and an agent
-  // agree. (In a personal org the backend hands an API-key agent the org view too,
-  // so `scope` is "org" for both.) A genuinely own-scoped view — a team member's
-  // agent that can't see org-wide — has no split and falls back to THIS machine's
-  // local mesh meter for relay.
+  // Both figures are ORG-LEVEL from the backend and EVERY member of the org gets
+  // the same ones, so two clients of one account cannot disagree. That is a
+  // property of the server as of 2026-09-15 (bff-console usage.go): before it, a
+  // plain member — and any API key, since a key's token carries no org.role
+  // claim — was handed a narrowed figure with the relay fields empty, and the
+  // fallback below stood in for them silently. One owner's browser read 本月
+  // 10.47 GB while that same owner's agent read 4.44 MB.
+  //
+  // `scope` is the server saying which it gave us. It is now always "org"; the
+  // branches below stay because a client can meet an older bff-console, and
+  // because standalone answers with no usage endpoint at all.
   const ownScope = usage?.scope === "own";
   // selfTunnel: the self-hosted tunnel slice. Org scope carries the BYOI split; an
   // own-scoped view has none (self_hosted_bytes_total is always 0), but on a
@@ -293,6 +317,26 @@ export default function Overview() {
   // so an upgrade doesn't break the page mid-rollout.
   const activeTunnels = tunnelList?.team_total ?? tunnelList?.items?.length ?? 0;
   const myTunnels = tunnelList?.my_total ?? tunnelList?.items?.length ?? 0;
+  // The caller's OWN tunnel allowance. The plan cap beside the headline is the
+  // ORG's, shared by everyone in it — so a member with a member quota can be out
+  // of room while the card cheerfully reads "7 / 100". Until now the only place
+  // that number appeared was the tooltip on an already-disabled 新建隧道 button:
+  // you learned your allowance by hitting it.
+  //
+  // `used` comes from the server's own counting pass (by creator_user_id, across
+  // the org) — deliberately NOT myTunnels, which is "bound to this machine" and
+  // diverges the moment somebody runs a tunnel they did not create.
+  const quotaUserId = me?.user?.id || me?.acting_user?.id || 0;
+  const mq = useMemberQuota(me?.org?.id ?? 0, quotaUserId, true, activeTunnels);
+  const planMax = me?.plan?.max_tunnels ?? 0;
+  const myLimit = mq.limitOf("max_tunnels");
+  const myUsed = mq.usedOf("max_tunnels");
+  // The member cap BINDS only when it is tighter than the org's. `effective` is
+  // already min(member, org), so equality means the org cap is the one in play
+  // and the org figure is the more useful headline. A manager exempt from the
+  // org default keeps the org view too — that is what exempt means.
+  const memberCapBinds =
+    mq.loaded && !mq.exempt && myLimit >= 0 && (planMax <= 0 || myLimit < planMax);
   const uptimeSec = snap?.uptime_seconds ?? health?.uptime_seconds;
 
   const quotaPct = usage?.percent_of_limit ?? 0;
@@ -346,16 +390,18 @@ export default function Overview() {
         <Col xs={24} sm={12} md={6} style={{ display: "flex" }}>
           <Card size="small" style={{ width: "100%" }}>
             <Statistic
-              title={t("overview.activeTunnels")}
-              value={activeTunnels}
+              title={memberCapBinds ? t("overview.myTunnels") : t("overview.activeTunnels")}
+              value={memberCapBinds ? myUsed : activeTunnels}
               suffix={
-                me?.plan?.max_tunnels && me.plan.max_tunnels > 0
-                  ? `/ ${me.plan.max_tunnels}`
-                  : undefined
+                memberCapBinds
+                  ? `/ ${myLimit}`
+                  : planMax > 0
+                    ? `/ ${planMax}`
+                    : undefined
               }
             />
-            {/* M11.19.1 + M11.20.5: surface my-share when the Org has more
-                tunnels than just this machine's. In a personal Org or
+            {/* M11.19.1 + M11.20.5: surface my-share when the headline counts
+                more tunnels than just this machine's. In a personal Org or
                 a 1-member team the two numbers match and the hint is
                 pure noise → hide it.
                 Pulled the styling up a notch — earlier #8c8c8c/12px on a
@@ -363,24 +409,20 @@ export default function Overview() {
                 tell at a glance which slice of the 10/10 belonged to
                 this machine. Now it reads as a labeled pill so the
                 number sits beside its meaning instead of disappearing
-                into card padding. */}
-            {activeTunnels !== myTunnels && (
-              <div
-                style={{
-                  marginTop: 8,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "2px 10px",
-                  background: "rgba(94,127,255,0.16)",
-                  color: "#9bb4ff",
-                  borderRadius: 10,
-                  fontSize: 12,
-                  fontWeight: 500,
-                  lineHeight: "18px",
-                }}
-              >
-                <span style={{ color: "#5e7fff", fontSize: 11 }}>●</span>
+                into card padding.
+
+                Compared against WHATEVER THE HEADLINE COUNTS, not always the
+                org total: the pill answers "how much of the number above is
+                this machine", so under a member cap it has to measure against
+                the member's own count or it repeats it back as if it were a
+                second, different figure.
+
+                The org figure is deliberately NOT shown beside a member cap —
+                the web console doesn't show it either, and a member's allowance
+                is the whole answer to what they may do. */}
+            {(memberCapBinds ? myUsed : activeTunnels) !== myTunnels && (
+              <div style={{ marginTop: 8, ...pillStyle }}>
+                <span style={pillDot}>●</span>
                 {t("overview.onThisMachine", { count: myTunnels })}
               </div>
             )}
@@ -515,7 +557,13 @@ export default function Overview() {
             <Row gutter={[12, 10]}>
               <Col span={24}>
                 <Text type="secondary" style={{ fontSize: 12 }}>{t("overview.clientVersion")}</Text>
-                <div><code style={{ fontSize: 12 }}>{snap?.client_version || "—"}</code></div>
+                {/* A signal, not a control: this card is 320px and a button here
+                    could not explain itself on a machine that cannot self-install.
+                    The controls live in Settings. */}
+                <div>
+                  <code style={{ fontSize: 12 }}>{snap?.client_version || "—"}</code>
+                  <UpdateTag />
+                </div>
               </Col>
               {/* Session/caller sits under the version so the two NODE rows —
                   edge and relay — are adjacent below it (they're the pair the

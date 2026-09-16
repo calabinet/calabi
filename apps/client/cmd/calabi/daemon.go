@@ -420,7 +420,21 @@ func runDaemon(args []string) int {
 		}
 		return ""
 	}, meshRefreshForLogin, meshNodeNameFor(meshName), meshAdv, parseServiceSpecs(logger, *meshServices))
+	// Self-update (F4 + U1): checks on every daemon, applies only on the
+	// privileged system service.
+	// "Is anything moving through this client" — the signal the update policy
+	// uses to hold a routine restart back. Sampled below; never blocks.
+	traffic := newTrafficWatch()
+	updateAgent := newUpdateAgent(logger, version, func() bool { return traffic.busy(time.Now()) })
+	// Assigned through a nil check ON PURPOSE. A typed nil pointer stored in an
+	// interface field is NOT == nil, so `Update: updateAgent` would make the
+	// handlers believe an agent exists and then call through it.
+	var updateSrc statusapi.UpdateSource
+	if updateAgent != nil {
+		updateSrc = updateAgent
+	}
 	apiServer := statusapi.New(logger, statusapi.Config{
+		Update:        updateSrc,
 		BFFConsoleURL: bffConsoleURL,
 		ConsoleWebURL: consoleWebURL,
 		AgentMode:     agentMode,
@@ -591,10 +605,24 @@ func runDaemon(args []string) int {
 	// meshnet session. Bound to ctx, torn down on shutdown. No-op until the
 	// platform configures a coordinator (enrollment reports enabled:false).
 	go meshCtl.Run(ctx)
-	// Desktop self-update (F4): the machine-wide system service polls a signed
-	// manifest and applies a newer signed installer. No-op for a dev/user daemon
-	// or when disabled.
-	maybeStartSelfUpdate(ctx, logger, version)
+	// Self-update: poll the signed manifest. Every daemon records what it finds
+	// (the :7400 console renders it); only the machine-wide system service
+	// applies. Nil for a dev build or when updates are disabled.
+	if updateAgent != nil {
+		go updateAgent.Run(ctx, updateCheckInterval)
+		// Tunnels AND mesh: a machine relaying for a peer is in use just as much
+		// as one serving a tunnel, and restarting it cuts the same transfer.
+		go traffic.run(ctx, 30*time.Second, func() int64 {
+			var total int64
+			for _, t := range state.SnapshotNow().Tunnels {
+				total += t.BytesIn + t.BytesOut
+			}
+			for _, p := range meshCtl.MeshStatus().Peers {
+				total += p.RxBytes + p.TxBytes
+			}
+			return total
+		})
+	}
 	// Sample mesh peer byte counters into the daily meter (5s, mirrors the
 	// standalone tunnel meter). Empty when mesh is down — a no-op sample.
 	go meshMeter.run(ctx, func() []meshPeerBytes {

@@ -154,3 +154,19 @@ func TestFilterCalabiEnv_DropsDevAndInsecureOnSystem(t *testing.T) {
 		}
 	}
 }
+
+// The update manifest override has to survive `daemon install --system` into the
+// service's own environment. A systemd unit starts with almost nothing inherited,
+// so if this var did not ride the passthrough there would be no way to point an
+// installed service at a test manifest — and the whole acceptance procedure in rests on being able to.
+//
+// It is one entry on a deny-list away from breaking silently: clientIgnoredEnv
+// drops names, and a dropped name looks exactly like "the manifest is fine, the
+// update just never happens".
+func TestUpdateManifestOverrideReachesTheInstalledService(t *testing.T) {
+	t.Setenv("CALABI_UPDATE_MANIFEST", "http://127.0.0.1:8080/latest.json")
+	got := serviceConfig([]string{"--system"}, nil).EnvVars["CALABI_UPDATE_MANIFEST"]
+	if got != "http://127.0.0.1:8080/latest.json" {
+		t.Errorf("CALABI_UPDATE_MANIFEST = %q, want it passed through to the service", got)
+	}
+}

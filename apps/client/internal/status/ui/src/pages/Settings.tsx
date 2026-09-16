@@ -17,7 +17,6 @@ import {
   Card,
   Modal,
   Space,
-  Tag,
   Typography,
   Upload,
   message,
@@ -27,8 +26,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
-import type { AccountMe, Healthz } from "../api/types";
-import { planLabel, planTagColor } from "../utils/plan";
+import { UpdatePanel, useUpdateInfo } from "../components/UpdateNotice";
+import type { Healthz } from "../api/types";
 import { useTranslation } from "react-i18next";
 
 const { Title, Text, Paragraph } = Typography;
@@ -41,11 +40,10 @@ export default function Settings() {
   const qc = useQueryClient();
   const navigate = useNavigate();
 
-  const { data: me } = useQuery<AccountMe>({
-    queryKey: ["me"],
-    queryFn: api.me,
-    retry: false,
-  });
+  // Same shared query the panel itself reads, so the card and its contents can
+  // never disagree about whether there is anything to show.
+  const { data: updateInfo } = useUpdateInfo();
+  const hasUpdates = !!updateInfo;
   const { data: health } = useQuery<Healthz>({
     queryKey: ["healthz"],
     queryFn: api.healthz,
@@ -125,46 +123,6 @@ export default function Settings() {
         {t("nav.settings")}
       </Title>
 
-      <Card title={t("settings.accountCard")} size="small">
-        {me ? (
-          <Space direction="vertical" size={4}>
-            <div>
-              <Text type="secondary">{t("settings.loginAccount")}</Text>{" "}
-              <code>{me.user?.email}</code>
-            </div>
-            <div>
-              <Text type="secondary">{t("settings.orgId")}</Text>{" "}
-              <code>{me.org?.id}</code>{" "}
-              {me.org?.name && <span>({me.org.name})</span>}
-            </div>
-            <div>
-              <Text type="secondary">{t("settings.plan")}</Text>{" "}
-              <Tag color={planTagColor(me.plan?.code)}>{planLabel(me.plan?.code)}</Tag>
-              {me.plan?.read_only && <Tag color="red">{t("settings.readOnly")}</Tag>}
-            </div>
-            {/* 客户端并发在线限制(max_online_clients)已于 2026-06-21
-                整体下线,不再展示该行。只保留隧道上限。 */}
-            {me.plan?.max_tunnels !== undefined && me.plan.max_tunnels !== 0 && (
-              <div>
-                <Text type="secondary">{t("settings.tunnelCap")}</Text>{" "}
-                <code>
-                  {me.plan.max_tunnels < 0
-                    ? t("common.unlimited")
-                    : t("settings.tunnelUnit", { n: me.plan.max_tunnels })}
-                </code>
-              </div>
-            )}
-          </Space>
-        ) : (
-          <Alert
-            type="warning"
-            showIcon
-            message={t("settings.notLoggedIn")}
-            description={t("settings.notLoggedInDesc")}
-          />
-        )}
-      </Card>
-
       <Card title={t("settings.daemonCard")} size="small">
         <Space direction="vertical" size={4} style={{ width: "100%" }}>
           <div>
@@ -179,7 +137,6 @@ export default function Settings() {
             <Text type="secondary">{t("settings.lastStateChange")}</Text>{" "}
             <code>{health?.since || "—"}</code>
           </div>
-
           <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 4 }}>
             {t("settings.serviceHint")}
           </Paragraph>
@@ -205,6 +162,17 @@ export default function Settings() {
           </Text>
         </Space>
       </Card>
+
+      {/* Its own card: the update settings are a policy with four controls, and
+          buried under the daemon's version/uptime lines they read as more status.
+          Renders nothing at all when this daemon has no update agent (a dev
+          build, updates disabled, or a client older than /v1/update) — so the
+          card only appears where it means something. */}
+      {hasUpdates && (
+        <Card title={t("update.status")} size="small">
+          <UpdatePanel />
+        </Card>
+      )}
 
       <Card title={t("settings.configCard")} size="small">
         <Space direction="vertical" size={8} style={{ width: "100%" }}>

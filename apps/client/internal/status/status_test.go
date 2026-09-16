@@ -173,6 +173,11 @@ func TestServerEndpoints(t *testing.T) {
 	_ = ln.Close()
 
 	srv := NewServer(slog.Default(), s, addr)
+	// The SPA shell is served only when a writable API is attached: without one
+	// the process is a one-off `calabi http`, whose SPA would 404 on its first
+	// /v1/ call, so it gets the inline page instead. Attach a no-op so the SPA
+	// assertion below tests the daemon shape it means to.
+	srv.AttachAPI(func(*http.ServeMux) {})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

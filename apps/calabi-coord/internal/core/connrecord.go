@@ -55,6 +55,27 @@ type ConnRecord struct {
 	Path      string
 }
 
+// ConnRecordQuery narrows one listing of the trail. Zero values widen: an empty
+// From or To is unbounded on that side, Limit 0 lets the store pick.
+//
+// NodeIDs exists for the "only my own devices" view a plain member gets: a row
+// is kept when one of these nodes is at EITHER end. It has to be a filter here
+// rather than in the caller because the limit is applied by the query — filtering
+// afterwards would hand a member the newest N rows OF THE ORG and then show them
+// the few that were theirs, which reads as "nothing happened" exactly where the
+// trail is supposed to be evidence.
+//
+// EMPTY MEANS NO FILTER, like the other fields. A caller narrowing to one
+// person's devices must therefore refuse to call at all when that person owns
+// none, rather than pass an empty slice — see bff-console's
+// listMeshConnectionsHandler, which does both that and a second filter of its
+// own so an older coordinator that ignores this cannot widen the answer.
+type ConnRecordQuery struct {
+	From, To time.Time
+	NodeIDs  []int64
+	Limit    int
+}
+
 // ConnRecordStore persists connection records. Separate from NodeStore because a
 // deployment may reasonably run the mesh without keeping this history at all —
 // a nil store means the feature is off, not broken.
@@ -62,9 +83,8 @@ type ConnRecordStore interface {
 	// AddConnSamples folds samples into their hourly buckets, adding to whatever
 	// is already there.
 	AddConnSamples(ctx context.Context, recs []ConnRecord) error
-	// ListConnRecords returns rows for a meshnet within [from, to), newest hour
-	// first, at most limit rows.
-	ListConnRecords(ctx context.Context, t MeshnetID, from, to time.Time, limit int) ([]ConnRecord, error)
+	// ListConnRecords returns a meshnet's rows matching q, newest hour first.
+	ListConnRecords(ctx context.Context, t MeshnetID, q ConnRecordQuery) ([]ConnRecord, error)
 	// PurgeConnRecordsBefore deletes rows older than cutoff and returns how many
 	// went. Retention is not optional: an access trail nobody trims becomes a
 	// liability of its own.

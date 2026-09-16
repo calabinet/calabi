@@ -1,6 +1,11 @@
 // plan.ts — translates plan codes into the user-visible display name the
-// SPA shows wherever a plan badge appears (topbar, Settings, future
-// upgrade prompts).
+// SPA shows wherever a plan badge appears.
+//
+// One caller left, the sidebar footer. The Settings page used to print the
+// plan too and no longer does: the plan NAME is an account fact that belongs
+// in the web console — on a machine-local page it tells you nothing you can
+// act on. planTagColor went with it (2026-09-16); `git show` if the tier
+// colors are wanted again.
 //
 // Codes mirror apps/quota-svc/internal/store/store.go::seedPlans — keep
 // the i18n `plan.*` keys in lockstep when new plan rows are added there.
@@ -21,25 +26,4 @@ export function planLabel(code?: string): string {
   return i18n.t(`plan.${code}`, {
     defaultValue: code.charAt(0).toUpperCase() + code.slice(1),
   });
-}
-
-// planTagColor picks an antd Tag color that escalates with tier. Free
-// is neutral, basic/pro are progressively richer blues, business is
-// gold-ish, enterprise is purple (matches the catalog page on the marketing
-// site so users associate the colors with the same tier elsewhere).
-export function planTagColor(code?: string): string {
-  switch (code) {
-    case "free":
-      return "default";
-    case "basic":
-      return "blue";
-    case "pro":
-      return "geekblue";
-    case "business":
-      return "gold";
-    case "enterprise":
-      return "purple";
-    default:
-      return "blue";
-  }
 }

@@ -275,7 +275,13 @@ type connRecordView struct {
 }
 
 // listConnections returns a meshnet's connection records, newest hour first.
-// Query: ?from=<rfc3339>&to=<rfc3339>&limit=<n>. Both bounds optional.
+// Query: ?from=<rfc3339>&to=<rfc3339>&limit=<n>&nodes=<id,id,…>. All optional.
+//
+// `nodes` keeps only rows with one of those devices at either end — the gateway
+// uses it for the "my own devices" view a plain member gets, so that the limit
+// bounds THEIR rows rather than the org's. It is a narrowing convenience, never
+// the access decision: the caller here is already inside the org boundary (the
+// meshnet is in the path, set from the caller's org by the gateway).
 func (h *handler) listConnections(w http.ResponseWriter, r *http.Request) {
 	if h.coord.ConnRecords == nil {
 		http.Error(w, "connection records are not kept on this deployment", http.StatusNotImplemented)
@@ -310,7 +316,20 @@ func (h *handler) listConnections(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = n
 	}
-	rows, err := h.coord.ConnRecords.ListConnRecords(r.Context(), core.MeshnetID(id), from, to, limit)
+	var nodeIDs []int64
+	if raw := strings.TrimSpace(q.Get("nodes")); raw != "" {
+		for _, part := range strings.Split(raw, ",") {
+			n, perr := strconv.ParseInt(strings.TrimSpace(part), 10, 64)
+			if perr != nil || n <= 0 {
+				http.Error(w, "nodes must be a comma-separated list of node ids", http.StatusBadRequest)
+				return
+			}
+			nodeIDs = append(nodeIDs, n)
+		}
+	}
+	rows, err := h.coord.ConnRecords.ListConnRecords(r.Context(), core.MeshnetID(id), core.ConnRecordQuery{
+		From: from, To: to, NodeIDs: nodeIDs, Limit: limit,
+	})
 	if err != nil {
 		http.Error(w, "list connections: "+err.Error(), http.StatusInternalServerError)
 		return

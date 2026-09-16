@@ -91,6 +91,10 @@ const STATE_BADGE: Record<EffectiveState, BadgeProps["status"]> = {
   pending: "warning",
   mismatch: "warning",
   error: "error",
+  upstream_down: "error",
+  // Neutral on purpose: "we have not checked" is not a fault, and a warning
+  // colour here would hand every user a queue of tunnels that are probably fine.
+  unverified: "default",
   disabled: "default",
   admin_disabled: "error",
 };
@@ -365,11 +369,18 @@ export default function Tunnels() {
         // is offline right now, regardless of stale server presence (the
         // "掉线了还显示在线" report). Doesn't touch tunnels served by OTHER
         // clients — those stay on their server-derived state.
+        // unverified / upstream_down belong in this list too: both describe the
+        // upstream, and neither survives OUR session being down — if we aren't
+        // connected, "offline" is the truer answer than either of them.
         if (
           snap &&
           !snap.connected &&
           mine &&
-          (st === "active" || st === "pending" || st === "mismatch")
+          (st === "active" ||
+            st === "pending" ||
+            st === "mismatch" ||
+            st === "unverified" ||
+            st === "upstream_down")
         ) {
           return (
             <StatusDot
@@ -389,7 +400,14 @@ export default function Tunnels() {
           edgeDirLoaded &&
           !!row.edge_node_id &&
           (!rowEdge || rowEdge.healthy === false);
-        if (edgeDown && !row.live && (st === "active" || st === "mismatch")) {
+        if (
+          edgeDown &&
+          !row.live &&
+          (st === "active" ||
+            st === "mismatch" ||
+            st === "unverified" ||
+            st === "upstream_down")
+        ) {
           return (
             <StatusDot
               status={STATE_BADGE.offline}
@@ -449,6 +467,15 @@ export default function Tunnels() {
           });
         } else if (st === "pending") {
           tip = t("tunnels.pendingTip");
+        } else if (st === "unverified") {
+          // Reached only for rows another machine serves: ours go through (3),
+          // where the local probe is the freshest truth. Same wording as the
+          // web console so the two screens read identically.
+          tip = t("tunnels.unverifiedTip");
+        } else if (st === "upstream_down") {
+          tip = row.upstream_error
+            ? t("tunnels.upstreamDownReasonTip", { reason: row.upstream_error })
+            : t("tunnels.upstreamDownTip");
         } else if (st === "error") {
           // status_reason is a code, not a sentence — the server keeps the
           // column locale-neutral and the UI does the wording. An unknown code

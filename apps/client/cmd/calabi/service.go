@@ -25,6 +25,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -41,18 +42,44 @@ import (
 	"github.com/kardianos/service"
 )
 
-// serviceInstalled reports whether the OS service is registered (running OR
-// stopped). Any query error degrades to false, so callers fall back to the
-// transient-daemon path rather than wrongly suppressing it.
-func serviceInstalled() bool {
+// serviceStatus reports whether the OS service is registered, and if so what
+// state it is in. Any query error degrades to not-installed, so callers fall
+// back to the transient-daemon path rather than wrongly suppressing it.
+//
+// It returns the STATUS, where the earlier serviceInstalled() threw it away and
+// answered a plain bool. That loss is what made `calabi login` say "daemon runs
+// as an installed service — start it if it isn't already": a hedge, written
+// because the caller genuinely did not know, printed to somebody who had just
+// established that nothing was running. We asked the service manager; there is
+// no reason to pass the uncertainty on.
+//
+// NOTE the service name: resolveServiceName(nil) is the DEFAULT name (or
+// CALABI_SERVICE_NAME). A service installed under --service-name is invisible
+// here. That is a known, deliberate limit — see the note in runLogin.
+func serviceStatus() (service.Status, bool) {
 	svc, err := buildService(nil, nil)
 	if err != nil {
-		return false
+		return service.StatusUnknown, false
 	}
-	if _, err := svc.Status(); err != nil {
-		return false // ErrNotInstalled / ErrServiceNotFound (or unqueryable)
+	st, err := svc.Status()
+	if err != nil {
+		return service.StatusUnknown, false // ErrNotInstalled / ErrServiceNotFound
 	}
-	return true
+	return st, true
+}
+
+// serviceNote is what `calabi login` prints when a service is registered. Split
+// out so the wording of each state is pinned by a test rather than by whoever
+// reads the switch next.
+func serviceNote(st service.Status) string {
+	if st == service.StatusRunning {
+		return "  a calabi service is installed and running — that is this machine's daemon"
+	}
+	// Stopped, or registered-but-unqueryable. Either way nothing is serving,
+	// and the caller has already established that no daemon of this client is
+	// either — so say so, and name both ways out.
+	return "  a calabi service is installed but NOT running — start it with " +
+		"`calabi daemon start`,\n  or run `calabi daemon` in this shell for this login"
 }
 
 // killDaemonOnStatusPort terminates the calabi daemon LISTENING on the status
@@ -304,10 +331,20 @@ func runDaemonService(args []string) int {
 		switch st {
 		case service.StatusRunning:
 			fmt.Println("  running")
-			// Show the console address (any published value; a running service
-			// keeps it current). time.Time{} = accept stale too.
+			// Show the console address — but only after confirming something
+			// answers there. "a running service keeps it current" was the old
+			// comment here and it is not true: a bind slower than the two
+			// seconds startStatusPage waits never overwrote the file, so this
+			// printed the PREVIOUS run's port (see publishConsoleURLLate).
 			if url := awaitConsoleURL(time.Time{}, 0); url != "" {
-				fmt.Println("  console: " + url)
+				cctx, ccancel := context.WithTimeout(context.Background(), 2*time.Second)
+				ok := consoleAnswers(cctx, consoleAddrOf(url, ""))
+				ccancel()
+				if ok {
+					fmt.Println("  console: " + url)
+				} else {
+					fmt.Println("  console: not answering (last published: " + url + ")")
+				}
 			}
 		case service.StatusStopped:
 			fmt.Println("  stopped")
@@ -374,7 +411,14 @@ func installStatusURL(installArgs []string) string {
 // `timeout` for a FRESH value (mtime after `since`); on timeout returns a stale
 // value if one exists (better than nothing — usually the same port).
 func awaitConsoleURL(since time.Time, timeout time.Duration) string {
-	dir := exeDir()
+	return awaitConsoleURLIn(exeDir(), since, timeout)
+}
+
+// awaitConsoleURLIn is awaitConsoleURL against an explicit data dir. The
+// service publishes next to the exe; an interactive daemon publishes into the
+// per-user data dir (creds.DataDir), and `calabi login` needs THAT one — asking
+// the port instead would read back whichever client happens to hold :7400.
+func awaitConsoleURLIn(dir string, since time.Time, timeout time.Duration) string {
 	if dir == "" {
 		return ""
 	}

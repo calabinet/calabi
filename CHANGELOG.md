@@ -10,6 +10,124 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## 1.11.0 — 2026-09-16
+
+**A client that knows when it is out of date.** Until this release the only
+machines that ever learned a newer version existed were the ones somebody
+happened to open a console on; a server installed once and left alone could sit
+six versions behind with nothing anywhere saying so. Every daemon now checks,
+says so where you will see it, and — where it is allowed to — installs it on a
+schedule you choose. Client and edge move together, as always.
+
+**What is in this repository and what is not.** Calabi is also a hosted service,
+and one release covers both. **Updates**, **Tunnels** and **Local console** below
+are changes in the binaries attached to this release, built from this tree. The
+last section, **On calabi.net**, is the hosted control plane: its code is not in
+this repository, and a self-hosted deployment does not get it.
+
+**Two things behave differently for setups that already exist.**
+
+- **Every daemon now makes one request every six hours** to
+  `download.calabi.net`, to read a signed list of published versions. It
+  downloads and installs nothing. Setting `CALABI_UPDATE_MANIFEST` to an empty
+  value turns the check off entirely.
+- **A daemon running as a privileged system service can now replace itself.**
+  What it does unasked is a setting on that machine, which starts at *automatic*
+  on Windows and macOS and at *security updates only* on Linux — a Linux daemon
+  is usually a server, and a server should not restart itself for a routine
+  release. A daemon that is **not** a privileged service never installs
+  anything: it reports and waits for you.
+
+### Updates
+
+- **Added** — **Every daemon checks; only a privileged service installs.** These
+  are two different permissions and they are now two different answers. A daemon
+  that cannot install says which of the reasons applies — nothing was published
+  for this platform, this install is not a system service, the manifest is
+  malformed — instead of failing a check every six hours and telling nobody.
+- **Added** — **A per-machine setting**, in the local console under Settings:
+  *automatic*, *security updates only*, or *notify me*. Under *automatic* an
+  update waits for a maintenance window (03:00–05:00 by default, on the
+  machine's clock) and waits again while traffic is still moving through the
+  client — with a backstop, seven days by default, after which it stops waiting.
+  A laptop that is closed every night and a server that is busy every night both
+  still land the update.
+- **Added** — **Security releases skip the waiting rules** but do not override
+  *notify me*. A release below the publisher's minimum supported version
+  overrides even that, and the console says so plainly rather than letting the
+  restart be a surprise.
+- **Added** — **`calabi update` and `calabi update --check`**, for the machines
+  that never have a console open. They drive the running daemon rather than
+  doing the work themselves, so there is exactly one set of signature checks in
+  front of the installer.
+- **Added** — **Linux installs in place** — the new binary is unpacked, run once
+  to prove it works, swapped in, and the service is restarted. Windows and macOS
+  run their own installers, as before.
+- **Added** — **The version list is signed as a whole.** One signature covers the
+  version, every platform's installer URL, its SHA-256 and its own signature, so
+  a manifest cannot be edited to point a privileged service at a different file.
+  A daemon also refuses a manifest offering a version older than one it has
+  already seen, unless the publisher marked it a deliberate rollback — replaying
+  a genuinely signed older release is a downgrade that needs no key.
+- **Changed** — The local console's Settings page: updates are their own card,
+  and the account card is gone — the organization you are serving now appears in
+  the account menu, where the rest of your identity already was.
+
+### Tunnels
+
+- **Fixed** — **`calabi http 8080` works in an official build.** One-shot
+  commands never looked for an edge; they used a default address that release
+  builds deliberately leave empty, so the first command in the documentation
+  failed for everyone who had not also installed the service. They now find an
+  edge the same way the daemon does, and they honour `CALABI_EDGE_AFFINITY`, so
+  an organization with its own edges does not silently land on the platform.
+- **Fixed** — Restarting a self-hosted edge no longer takes the command line down
+  with it. The edge a client is anchored to is a preference, not a wall.
+- **Fixed** — A one-shot command no longer serves the full dashboard page, which
+  had no API behind it, and no longer counts tunnels pushed from the control
+  plane as its own — which is why its own tunnel appeared twice.
+- **Fixed** — A tunnel created from the command line now registers the device,
+  like every other way of creating one.
+- **Fixed** — A tunnel whose upstream has never been probed is no longer reported
+  as healthy.
+- **Fixed** — (edge) A subdomain sequence that rolled backwards could land on a
+  row belonging to another organization, and the edge claimed it.
+
+### Local console
+
+- **Fixed** — `login` and `logout` now tell the running daemon. Signing out used
+  to delete the credentials file while the daemon kept serving the old session.
+- **Fixed** — The address the console prints is where it is listening now, not a
+  pointer left behind by a previous start; and when it is not on `:7400` —
+  which is normal with a second client on the machine — the CLI says where it
+  is instead of looking broken.
+- **Fixed** — `--standalone` survives `daemon install`. The service came back
+  wired to the platform, quietly undoing the choice.
+- **Fixed** — The overview's tunnel card showed the organization's quota rather
+  than the one that applies to you, and the relay figure had quietly become a
+  local measurement while its label still said otherwise.
+
+### On calabi.net
+
+The hosted control plane. **None of this is in this repository**, and a
+self-hosted deployment does not get it.
+
+- **Fixed** — The same account saw traffic figures three orders of magnitude
+  apart depending on whether it was the web console or an agent asking. Traffic
+  is one figure for the whole organization, for every member — the narrower
+  answer does not exist, because relayed bytes are recorded between devices and
+  can never be attributed to a person. Per-member *quotas* are unaffected; those
+  are still per member.
+- **Fixed** — The monthly-traffic card said "0" for organizations serving from
+  their own edges.
+- **Changed** — A tunnel's **Settings** tab is administrators only. Mesh
+  connection records are now visible to auditors, and members can see the
+  records for their own devices.
+- **Changed** — Creating and editing a tunnel, and adding a self-hosted node,
+  are drawers rather than full pages.
+- **Added** — A tunnel records **which door it was created from** — command
+  line, local console, web console or API key — shown in the admin console.
+
 ## 1.10.0 — 2026-09-14
 
 The largest release since the mesh shipped, and most of it answers one question

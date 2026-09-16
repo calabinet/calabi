@@ -39,6 +39,8 @@ import type {
   Snapshot,
   TunnelList,
   UpdateTunnelBody,
+  UpdateInfo,
+  UpdatePolicy,
   UsageHistory,
   MeshUsage,
 } from "./types";
@@ -457,6 +459,37 @@ export const api = {
     jsonOrThrow<EdgeAffinity>(
       await writeRequest("POST", "/v1/edge-affinity", { affinity }),
     ),
+
+  // ---- self-update ---------------------------------------------------------
+
+  // updateInfo returns null when this daemon has no update agent: a dev build,
+  // updates disabled, or any client older than the endpoint (all 404). Callers
+  // render nothing rather than an error — "we don't know" is not a failure.
+  updateInfo: async (): Promise<UpdateInfo | null> => {
+    const r = await fetch("/v1/update");
+    if (r.status === 404) return null;
+    return jsonOrThrow<UpdateInfo>(r);
+  },
+
+  // updateCheck re-checks now. A failed check answers 502 WITH the snapshot, so
+  // the card can keep showing the last known version next to the error.
+  updateCheck: async (): Promise<UpdateInfo> => {
+    const r = await writeRequest("POST", "/v1/update/check");
+    if (r.status === 502) return (await r.json()) as UpdateInfo;
+    return jsonOrThrow<UpdateInfo>(r);
+  },
+
+  // setUpdatePolicy changes the machine's update setting. The body MERGES: send
+  // only what changed. Returns the fresh snapshot, already re-decided against
+  // the new policy.
+  setUpdatePolicy: async (body: Partial<UpdatePolicy>): Promise<UpdateInfo> =>
+    jsonOrThrow<UpdateInfo>(await writeRequest("PUT", "/v1/update/policy", body)),
+
+  // updateApply installs it. 409 = this machine cannot (see reason); the body is
+  // still the snapshot. The daemon restarts itself on success, so the request
+  // may simply never come back — the caller must not treat that as a failure.
+  updateApply: async (): Promise<UpdateInfo> =>
+    jsonOrThrow<UpdateInfo>(await writeRequest("POST", "/v1/update/apply")),
 
   // ---- remote access: the console's unlock secret --------------------------
 

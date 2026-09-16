@@ -784,6 +784,31 @@ export default function Layout() {
                         ),
                         disabled: true,
                       },
+                      // Which org this client is serving, by ID as well as name.
+                      // It used to live in a Settings card that also printed the
+                      // plan and the tunnel cap — facts you cannot act on from a
+                      // machine-local page. The ID is the exception: it is what
+                      // you quote in a support thread, and it appears nowhere
+                      // else in this console.
+                      //
+                      // read_only rides along because it is the one account fact
+                      // that changes what this client can DO right now. Hidden
+                      // unless it is true.
+                      {
+                        key: "org",
+                        label: (
+                          <span style={{ color: "#64748b", fontSize: 12 }}>
+                            {t("topbar.orgId")} {me.org?.id ?? "—"}
+                            {me.org?.name ? ` (${me.org.name})` : ""}
+                            {me.plan?.read_only && (
+                              <Tag color="red" style={{ marginInlineStart: 6 }}>
+                                {t("topbar.readOnly")}
+                              </Tag>
+                            )}
+                          </span>
+                        ),
+                        disabled: true,
+                      },
                       { type: "divider" },
                       {
                         key: "language",

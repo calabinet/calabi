@@ -203,6 +203,26 @@ Environment:
 | `CALABI_TOKEN` | a token from the edge's `accepted_tokens` |
 | `CALABI_INSECURE=1` | skip TLS verification (a self-signed edge) |
 | `CALABI_EDGE_CA_FILE` | verify the edge cert against this CA instead |
+| `CALABI_MODE=standalone` | keep this client off the control plane entirely (same as `calabi mode standalone`) |
+| `CALABI_UPDATE_MANIFEST` | update-manifest URL; **set it empty to disable the update check** — see below |
+
+**What the client can reach out to.** In standalone mode it dials your edge and
+nothing else. There is no telemetry and no analytics anywhere in this tree, and
+the whole client carries exactly one hard-coded non-local address: the signed
+update manifest at `download.calabi.net`. Only one path reaches it — a client
+installed as a **machine-wide service** (`daemon install --system`), which polls
+it every six hours — and the standalone daemon is routed away before that code
+runs. If you want it gone by construction rather than by routing, install with
+`CALABI_UPDATE_MANIFEST=` set to the empty string, or point it at your own
+mirror.
+
+> **The mode has to be where the daemon reads it.** `calabi mode standalone`
+> saves into *your* config directory; an installed service reads its own (next
+> to the binary, or the machine-wide one for `--system`). Install the local
+> supervisor with `--config` (see below) and it doesn't matter — that service
+> runs the local daemon regardless. `calabi daemon install` *without* a
+> `--config` refuses in standalone mode rather than register a service that
+> would come up talking to the control plane.
 
 ### Per-tunnel security policy
 
@@ -286,14 +306,20 @@ calabi daemon install --config tunnels.yaml   # then: calabi daemon start|stop|s
 
 ## The local web console (`:7400`)
 
-While a tunnel or the local daemon is running, open **http://127.0.0.1:7400** in
-your browser for a dashboard:
+While the local daemon is running, open **http://127.0.0.1:7400** in your
+browser for a dashboard:
 
 - live tunnel list with traffic counters,
 - a **request inspector** (per-connection log + HTTP request/response capture),
 - daemon logs,
-- and — with the local daemon — **create / delete tunnels and edit each
-  tunnel's security policy live**, written back to your `tunnels.yaml`.
+- and **create / delete tunnels and edit each tunnel's security policy live**,
+  written back to your `tunnels.yaml`.
+
+A one-off `calabi http 8080` binds the same port (or the next free one), but it
+serves a **plain status page**: the tunnel, its public address and its byte
+counters. The dashboard above belongs to the daemon — the inspector, the log
+viewer and the editing all run on the daemon's local API, which a one-shot
+command doesn't start.
 
 The console talks only to the local daemon (loopback); no account, no
 control-plane round-trips. Editing a tunnel's policy re-registers just that

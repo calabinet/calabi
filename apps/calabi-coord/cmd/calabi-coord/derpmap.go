@@ -151,13 +151,24 @@ func defaultHome(fileHome, envHome string, m core.DERPMap) string {
 	return ""
 }
 
-// placeholderDERPMap is the DEV-ONLY relay directory (fictional hosts) so a local
-// coord hands nodes a non-empty map. Production supplies CALABI_COORD_DERP_MAP_FILE.
+// placeholderDERPMap is the DEV-ONLY relay directory, so a local coord hands
+// nodes a non-empty map. Production supplies CALABI_COORD_DERP_MAP_FILE.
+//
+// The hostnames are under `.invalid`, which RFC 2606 reserves and guarantees
+// will never resolve. They used to be derp-<region>.calabi.net, described in
+// this comment as "fictional hosts" — but that is the PLATFORM's namespace, not
+// a fiction. Anyone self-hosting a coord who has not set
+// CALABI_COORD_DERP_MAP_FILE / CALABI_COORD_DERP_ADDR gets this map, and their
+// devices would then aim at whatever those names point to. Today that appears
+// to be nothing; the day someone points them at real relays, every such
+// deployment silently starts dialing the platform, and nothing in this file
+// would have said so. A name that can never resolve cannot acquire a meaning
+// later — the failure stays "no relay configured", which is the truth.
 func placeholderDERPMap() core.DERPMap {
 	return core.DERPMap{Regions: []core.DERPRegion{
-		{Code: "lax", Nodes: []core.DERPNode{{HostName: "derp-lax.calabi.net", DERPPort: 443, STUNPort: 3478}}},
-		{Code: "sgp", Nodes: []core.DERPNode{{HostName: "derp-sgp.calabi.net", DERPPort: 443, STUNPort: 3478}}},
-		{Code: "tyo", Nodes: []core.DERPNode{{HostName: "derp-tyo.calabi.net", DERPPort: 443, STUNPort: 3478}}},
-		{Code: "fra", Nodes: []core.DERPNode{{HostName: "derp-fra.calabi.net", DERPPort: 443, STUNPort: 3478}}},
+		{Code: "lax", Nodes: []core.DERPNode{{HostName: "derp-lax.invalid", DERPPort: 443, STUNPort: 3478}}},
+		{Code: "sgp", Nodes: []core.DERPNode{{HostName: "derp-sgp.invalid", DERPPort: 443, STUNPort: 3478}}},
+		{Code: "tyo", Nodes: []core.DERPNode{{HostName: "derp-tyo.invalid", DERPPort: 443, STUNPort: 3478}}},
+		{Code: "fra", Nodes: []core.DERPNode{{HostName: "derp-fra.invalid", DERPPort: 443, STUNPort: 3478}}},
 	}}
 }

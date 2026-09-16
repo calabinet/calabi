@@ -76,18 +76,27 @@ func (s *Store) addOneConnRecord(ctx context.Context, r core.ConnRecord) error {
 	return nil
 }
 
-// ListConnRecords returns a meshnet's rows in [from, to), newest hour first.
-func (s *Store) ListConnRecords(ctx context.Context, t core.MeshnetID, from, to time.Time, limit int) ([]core.ConnRecord, error) {
+// ListConnRecords returns a meshnet's rows matching f, newest hour first.
+func (s *Store) ListConnRecords(ctx context.Context, t core.MeshnetID, f core.ConnRecordQuery) ([]core.ConnRecord, error) {
+	limit := f.Limit
 	if limit <= 0 {
 		limit = 500
 	}
 	q := s.client.MeshConnRecord.Query().
 		Where(meshconnrecord.MeshnetID(int64(t)))
-	if !from.IsZero() {
-		q = q.Where(meshconnrecord.HourGTE(from.UTC()))
+	if !f.From.IsZero() {
+		q = q.Where(meshconnrecord.HourGTE(f.From.UTC()))
 	}
-	if !to.IsZero() {
-		q = q.Where(meshconnrecord.HourLT(to.UTC()))
+	if !f.To.IsZero() {
+		q = q.Where(meshconnrecord.HourLT(f.To.UTC()))
+	}
+	// Either end, because "who did this machine talk to" and "who talked to this
+	// machine" are the same question asked from the two sides of one row.
+	if len(f.NodeIDs) > 0 {
+		q = q.Where(meshconnrecord.Or(
+			meshconnrecord.SrcNodeIDIn(f.NodeIDs...),
+			meshconnrecord.DstNodeIDIn(f.NodeIDs...),
+		))
 	}
 	rows, err := q.
 		Order(ent.Desc(meshconnrecord.FieldHour), ent.Asc(meshconnrecord.FieldID)).

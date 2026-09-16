@@ -51,9 +51,13 @@ func runTCP(args []string) int {
 	}
 
 	logger := setupLogger()
-	// These one-shot commands do not discover an edge; a release build stamps
-	// no compile-time default, so say what to set rather than dialling nothing.
-	edgeAddr := requireEdgeAddr("tcp")
+	// Make this machine attributable before the tunnel exists: without a
+	// device id the row is stored with client_id = 0 and the console can show
+	// neither which machine it runs on nor whether that machine is up.
+	ensureDeviceRegistered(logger)
+	// CALABI_SERVER (or a baked default, if this build has one), else ask the
+	// control plane which edge to dial — the same picker the daemon uses.
+	edgeAddr := requireEdgeAddr(logger, "tcp")
 	if edgeAddr == "" {
 		return 2
 	}
