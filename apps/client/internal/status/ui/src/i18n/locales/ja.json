@@ -504,7 +504,8 @@
     "tagTipManual": "手動での更新が必要です。「設定」をご覧ください。",
     "upToDate": "最新です",
     "windowLabel": "メンテナンス時間帯にのみ更新する",
-    "windowTz": "マシンの時刻（{{tz}}）"
+    "windowTz": "マシンの時刻（{{tz}}）",
+    "reasonManagedElsewhere": "このクライアントは Calabi インストーラーで入れたものではないため（Homebrew、scoop、手動で展開したアーカイブなど）、自動では更新されません。インストールしたときと同じ方法で更新してください。"
   },
   "serviceMode": {
     "readonlyTag": "読み取り専用",

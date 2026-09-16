@@ -30,6 +30,12 @@ type Updater struct {
 	// Overridable in tests.
 	Apply func(ctx context.Context, installerPath string) error
 	Logf  func(format string, args ...any)
+	// Managed reports whether the running binary is the copy this platform's
+	// update artifact replaces (installed by the desktop installer /.pkg /
+	// tarball, not by scoop or Homebrew). nil = the real check, which is the
+	// fail-safe default: forgetting to wire it cannot switch the gate off.
+	// Tests set it.
+	Managed func() bool
 	// FetchTimeout bounds the manifest+signature fetch. Zero = the default below.
 	// Only tests set it; there is no knob for it in the daemon.
 	FetchTimeout time.Duration

@@ -209,10 +209,9 @@ Environment:
 **What the client can reach out to.** In standalone mode it dials your edge and
 nothing else. There is no telemetry and no analytics anywhere in this tree, and
 the whole client carries exactly one hard-coded non-local address: the signed
-update manifest at `download.calabi.net`. Only one path reaches it — a client
-installed as a **machine-wide service** (`daemon install --system`), which polls
-it every six hours — and the standalone daemon is routed away before that code
-runs. If you want it gone by construction rather than by routing, install with
+update manifest at `download.calabi.net`. Only one path reaches it — the
+platform daemon, which polls it every six hours — and the standalone daemon is
+routed away before that code runs. If you want it gone by construction rather than by routing, install with
 `CALABI_UPDATE_MANIFEST=` set to the empty string, or point it at your own
 mirror.
 

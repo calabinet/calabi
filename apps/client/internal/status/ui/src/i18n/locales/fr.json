@@ -504,7 +504,8 @@
     "tagTipManual": "Mise à jour manuelle nécessaire — voir les Paramètres.",
     "upToDate": "À jour",
     "windowLabel": "Mettre à jour uniquement pendant une fenêtre de maintenance",
-    "windowTz": "heure de la machine ({{tz}})"
+    "windowTz": "heure de la machine ({{tz}})",
+    "reasonManagedElsewhere": "Cette copie n'a pas été installée avec l'installateur Calabi (par exemple via Homebrew, scoop ou une archive extraite) : elle ne se met donc pas à jour seule. Mettez-la à jour de la même façon que vous l'avez installée."
   },
   "serviceMode": {
     "readonlyTag": "Lecture seule",

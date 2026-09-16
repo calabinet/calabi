@@ -70,6 +70,7 @@ func TestUpdater_AppliesNewer(t *testing.T) {
 		PubKey:         pub,
 		DownloadDir:    t.TempDir(),
 		Privileged:     true,
+		Managed:        managedForTest,
 		Apply:          func(_ context.Context, p string) error { appliedPath = p; return nil },
 	}
 	applied, err := u.CheckAndApply(context.Background())
@@ -95,6 +96,7 @@ func TestUpdater_UpToDate(t *testing.T) {
 		PubKey:         pub,
 		DownloadDir:    t.TempDir(),
 		Privileged:     true,
+		Managed:        managedForTest,
 		Apply:          func(_ context.Context, _ string) error { called = true; return nil },
 	}
 	applied, err := u.CheckAndApply(context.Background())
@@ -122,6 +124,7 @@ func TestUpdater_BadSHARefuses(t *testing.T) {
 		PubKey:         pub,
 		DownloadDir:    t.TempDir(),
 		Privileged:     true,
+		Managed:        managedForTest,
 		Apply:          func(_ context.Context, _ string) error { called = true; return nil },
 	}
 	applied, err := u.CheckAndApply(context.Background())
@@ -148,6 +151,7 @@ func TestUpdater_BadSignatureRefuses(t *testing.T) {
 		PubKey:         pub,
 		DownloadDir:    t.TempDir(),
 		Privileged:     true,
+		Managed:        managedForTest,
 		Apply:          func(_ context.Context, _ string) error { called = true; return nil },
 	}
 	applied, err := u.CheckAndApply(context.Background())
@@ -176,6 +180,7 @@ func TestUpdater_UnsignedManifestRefused(t *testing.T) {
 		PubKey:         pub,
 		DownloadDir:    t.TempDir(),
 		Privileged:     true,
+		Managed:        managedForTest,
 		Apply:          func(_ context.Context, _ string) error { called = true; return nil },
 	}
 	applied, err := u.CheckAndApply(context.Background())
@@ -203,6 +208,7 @@ func TestUpdater_ForeignManifestSignatureRefused(t *testing.T) {
 		PubKey:         pub,
 		DownloadDir:    t.TempDir(),
 		Privileged:     true,
+		Managed:        managedForTest,
 		Apply:          func(context.Context, string) error { t.Fatal("apply must not run"); return nil },
 	}
 	if _, err := u.CheckAndApply(context.Background()); err == nil {

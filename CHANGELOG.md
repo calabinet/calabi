@@ -10,6 +10,44 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## 1.11.1 — 2026-09-16
+
+A fix release for the automatic update 1.11.0 introduced. Client and edge move
+together, as always; the edge has no changes of its own.
+
+### Updates
+
+- **Fixed** — **On Windows, an automatic update reported success and replaced
+  nothing.** The installer overwrote the daemon's executable while the service
+  was still running it. Windows does not allow that, and a silent install does
+  not fail on it: it skips the file, exits successfully, and records the new
+  version in Apps & features. The desktop shell was updated, the daemon was not,
+  and the next restart tried again. The installer now stops the service and
+  waits until the file is actually released before copying — and if it cannot,
+  it restarts the service and refuses, rather than skipping the file. Verified
+  on a running service: the daemon is replaced and the service is back within
+  two seconds.
+- **Fixed** — **A client installed some other way was handed the desktop
+  installer.** A Windows client installed with scoop or from a zip and running
+  as a service received the desktop installer: the machine gained a desktop app
+  while its daemon stayed at the old version. A Homebrew install on macOS was
+  handed the .pkg the same way. Such an install now says that it updates the way
+  it was installed — `scoop update calabi`, `brew upgrade calabi`, or a new
+  archive — in the local console and in `calabi update`, and never runs the
+  installer. The Windows installer also refuses to take over a Calabi service it
+  did not create, which protects machines still running an older client.
+
+### On calabi.net
+
+The hosted control plane. **None of this is in this repository**, and a
+self-hosted deployment does not get it.
+
+- **Added** — The download page offers the macOS desktop package, and a GitHub
+  download link beside every file.
+- **Fixed** — Actions inside a drawer no longer open a second dialog on top of
+  it: creating a tunnel for a client that is offline, and reopening a support
+  ticket, now ask in place.
+
 ## 1.11.0 — 2026-09-16
 
 **A client that knows when it is out of date.** Until this release the only

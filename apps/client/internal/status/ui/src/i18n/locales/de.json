@@ -504,7 +504,8 @@
     "tagTipManual": "Manuelles Update nötig – siehe Einstellungen.",
     "upToDate": "Aktuell",
     "windowLabel": "Nur im Wartungsfenster aktualisieren",
-    "windowTz": "Rechnerzeit ({{tz}})"
+    "windowTz": "Rechnerzeit ({{tz}})",
+    "reasonManagedElsewhere": "Diese Kopie wurde nicht mit dem Calabi-Installer installiert (zum Beispiel über Homebrew, scoop oder ein entpacktes Archiv) und aktualisiert sich daher nicht selbst. Aktualisieren Sie sie auf dem Weg, auf dem Sie sie installiert haben."
   },
   "serviceMode": {
     "readonlyTag": "Schreibgeschützt",

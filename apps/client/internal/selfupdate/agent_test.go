@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
-	"encoding/json"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -80,6 +80,7 @@ func newAgent(t *testing.T, o agentOpts, apply func(context.Context, string) err
 		PubKey:         pub,
 		DownloadDir:    t.TempDir(),
 		Privileged:     !o.unprivileged,
+		Managed:        managedForTest,
 		Apply:          apply,
 		Logf:           func(f string, a ...any) { t.Logf(f, a...) },
 	}
@@ -340,6 +341,7 @@ func TestTickLogsThatItCannotApply(t *testing.T) {
 		PubKey:         pub,
 		DownloadDir:    t.TempDir(),
 		Privileged:     true,
+		Managed:        managedForTest,
 		Apply:          func(context.Context, string) error { t.Fatal("apply must not run"); return nil },
 		Logf:           func(f string, a ...any) { lines = append(lines, fmt.Sprintf(f, a...)) },
 	}

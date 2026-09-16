@@ -54,6 +54,11 @@ const (
 	ReasonForeignOrigin = "artifact-foreign"     // installer URL is not the manifest's own origin
 	ReasonUnsupportedOS = "unsupported-platform" // no OS-installer path on this GOOS
 	ReasonNotPrivileged = "not-privileged"       // not the machine-wide system service
+	// ReasonManagedElsewhere: this binary was not installed by the artifact the
+	// manifest carries for its platform (scoop, Homebrew, a hand-extracted
+	// archive), so running that artifact would install something ELSE rather
+	// than update this. See installerManagedFrom.
+	ReasonManagedElsewhere = "managed-elsewhere"
 )
 
 // Check runs the read-only half of a cycle: fetch the manifest, verify its
@@ -188,6 +193,13 @@ func (u *Updater) check(ctx context.Context) (Status, PlatformArtifact, error) {
 	switch {
 	case !u.applierAvailable():
 		st.Reason = ReasonUnsupportedOS
+	// BEFORE the privilege question, on purpose. For a scoop or Homebrew
+	// install the not-privileged advice ("reinstall it as a system service")
+	// leads nowhere: done, the install would still be one the desktop artifact
+	// cannot replace. The actionable answer is "update it the way you installed
+	// it", so that is the one to give.
+	case !u.installerManaged():
+		st.Reason = ReasonManagedElsewhere
 	case !u.Privileged:
 		st.Reason = ReasonNotPrivileged
 	default:

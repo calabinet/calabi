@@ -183,11 +183,19 @@ func printUpdateStatus(s *updateSnap, base string, checkOnly bool) {
 		// nothing was published for this platform; for a daemon that simply is not
 		// running as a service it is a chore that fixes nothing — reinstalling is
 		// the actual answer, and it is one command.
-		if s.Reason == "not-privileged" {
+		switch s.Reason {
+		case "managed-elsewhere":
+			// Running the platform installer here would install something
+			// ELSE (a desktop app beside a scoop install, a.pkg beside a
+			// Homebrew one) rather than update this binary.
+			fmt.Println("           it was not installed by the Calabi installer, so it does not")
+			fmt.Println("           update itself. Update it the way you installed it:")
+			fmt.Println("             brew upgrade calabi   |   scoop update calabi   |   a new archive")
+		case "not-privileged":
 			fmt.Println("           this daemon is not running as a privileged OS service, so it")
 			fmt.Println("           cannot replace itself. Reinstall it as one:")
 			fmt.Println("             calabi daemon install --system")
-		} else {
+		default:
 			fmt.Println("           download the new version and install it by hand")
 		}
 	case checkOnly:

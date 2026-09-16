@@ -504,7 +504,8 @@
     "tagTipManual": "수동 업데이트가 필요합니다. 설정을 확인하세요.",
     "upToDate": "최신 상태",
     "windowLabel": "유지보수 시간대에만 업데이트",
-    "windowTz": "컴퓨터 시간({{tz}})"
+    "windowTz": "컴퓨터 시간({{tz}})",
+    "reasonManagedElsewhere": "이 클라이언트는 Calabi 설치 프로그램으로 설치한 것이 아니므로(Homebrew, scoop, 직접 압축을 푼 경우 등) 스스로 업데이트하지 않습니다. 설치했던 방법으로 업데이트하세요."
   },
   "serviceMode": {
     "readonlyTag": "읽기 전용",

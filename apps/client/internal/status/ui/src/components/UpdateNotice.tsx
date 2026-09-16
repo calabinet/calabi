@@ -63,6 +63,11 @@ function reasonKey(reason?: string): string {
       return "update.reasonManualPlatform";
     case "not-privileged":
       return "update.reasonNotService";
+    // Installed by scoop / Homebrew / by hand: running the platform installer
+    // would install something ELSE, not update this. The daemon checks this
+    // before privilege, so this is the answer such a machine actually gets.
+    case "managed-elsewhere":
+      return "update.reasonManagedElsewhere";
     case "artifact-unsigned":
     case "artifact-foreign":
       return "update.reasonBadManifest";

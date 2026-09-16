@@ -504,7 +504,8 @@
     "tagTipManual": "Needs a manual update — see Settings.",
     "upToDate": "Up to date",
     "windowLabel": "Only update during a maintenance window",
-    "windowTz": "machine time ({{tz}})"
+    "windowTz": "machine time ({{tz}})",
+    "reasonManagedElsewhere": "This copy was not installed by the Calabi installer (for example Homebrew, scoop, or an extracted archive), so it does not update itself. Update it the way you installed it."
   },
   "serviceMode": {
     "readonlyTag": "Read-only",

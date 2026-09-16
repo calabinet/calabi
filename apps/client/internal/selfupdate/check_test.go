@@ -45,6 +45,7 @@ func TestCheckNoArtifactForThisPlatformIsAStateNotAnError(t *testing.T) {
 		PubKey:         pub,
 		DownloadDir:    t.TempDir(),
 		Privileged:     true,
+		Managed:        managedForTest,
 		Apply:          func(context.Context, string) error { t.Fatal("apply must not run"); return nil },
 	}
 	st, err := u.Check(context.Background())
@@ -80,6 +81,7 @@ func TestCheckUnsignedArtifactStaysAnError(t *testing.T) {
 		PubKey:         pub,
 		DownloadDir:    t.TempDir(),
 		Privileged:     true,
+		Managed:        managedForTest,
 		Apply:          func(context.Context, string) error { t.Fatal("apply must not run"); return nil },
 	}
 	st, err := u.Check(context.Background())
@@ -107,6 +109,7 @@ func TestUnprivilegedDaemonChecksButNeverApplies(t *testing.T) {
 		PubKey:         pub,
 		DownloadDir:    t.TempDir(),
 		Privileged:     false, // a per-user daemon: cannot install, still wants to know
+		Managed:        managedForTest,
 		Apply:          func(context.Context, string) error { t.Fatal("apply must not run"); return nil },
 	}
 	st, err := u.Check(context.Background())
@@ -140,6 +143,7 @@ func TestCheckWritesTheVersionFloor(t *testing.T) {
 		PubKey:         pub,
 		DownloadDir:    dir,
 		Privileged:     false,
+		Managed:        managedForTest,
 	}
 	if _, err := u.Check(context.Background()); err != nil {
 		t.Fatalf("Check: %v", err)
@@ -178,6 +182,7 @@ func TestCheckDoesNotDownload(t *testing.T) {
 		PubKey:         pub,
 		DownloadDir:    t.TempDir(),
 		Privileged:     true,
+		Managed:        managedForTest,
 		Apply:          func(context.Context, string) error { t.Fatal("apply must not run"); return nil },
 	}
 	st, err := u.Check(context.Background())

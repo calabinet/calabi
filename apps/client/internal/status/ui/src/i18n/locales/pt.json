@@ -504,7 +504,8 @@
     "tagTipManual": "Precisa de atualização manual — veja Configurações.",
     "upToDate": "Atualizado",
     "windowLabel": "Atualizar apenas numa janela de manutenção",
-    "windowTz": "hora da máquina ({{tz}})"
+    "windowTz": "hora da máquina ({{tz}})",
+    "reasonManagedElsewhere": "Esta cópia não foi instalada com o instalador do Calabi (por exemplo, via Homebrew, scoop ou um arquivo extraído), por isso não se atualiza sozinha. Atualize-a da mesma forma que a instalou."
   },
   "serviceMode": {
     "readonlyTag": "Somente leitura",

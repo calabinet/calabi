@@ -504,7 +504,8 @@
     "tagTipManual": "需要手動更新，詳見「設定」。",
     "upToDate": "已是最新",
     "windowLabel": "只在維護視窗內更新",
-    "windowTz": "機器本地時間（{{tz}}）"
+    "windowTz": "機器本地時間（{{tz}}）",
+    "reasonManagedElsewhere": "這份用戶端不是用 Calabi 安裝程式安裝的（例如 Homebrew、scoop 或手動解壓），不會自行更新。請用當初安裝它的方式更新。"
   },
   "serviceMode": {
     "readonlyTag": "唯讀",
