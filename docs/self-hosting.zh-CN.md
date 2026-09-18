@@ -46,7 +46,6 @@ Calabi 的**数据面是开源的**——三个二进制，它们之间提供两
 - [设备入网](#设备入网)
 - [ACL](#acl)
 - [子网路由与出口设备](#子网路由与出口设备)
-- [非 Linux 上还没自动化的部分](#非-linux-上还没自动化的部分)
 
 **然后**
 
@@ -91,11 +90,12 @@ Windows 二进制；要**交叉**编译到别的系统，设 `GOOS`/`GOARCH`（�
 不往外拨任何地址：内建默认值里根本没有控制面地址。
 
 ```bash
-./calabi-edge           # CTRL-C 停止
+CALABI_EDGE_MODE=standalone ./calabi-edge     # CTRL-C 停止
 ```
 
-> 试一下够用，但别就这么上：没有配置文件的边缘节点**不在** standalone 模式，
-> 会忽略客户端发上来的按隧道安全策略。见下面的 [`mode`](#边缘节点配置)。
+> 客户端能自己挑子域名、自己带安全策略，靠的就是 `CALABI_EDGE_MODE=standalone`。
+> 不设的话，边缘节点会拒绝第 3 步里的 `--domain`（`subdomain_requires_console`），
+> 也会忽略客户端发上来的按隧道安全策略。见下面的 [`mode`](#边缘节点配置)。
 
 **2. 起一个要暴露的本地服务**：
 
@@ -106,6 +106,7 @@ python3 -m http.server 9000
 **3. 起客户端**，指向你的边缘节点：
 
 ```bash
+export CALABI_MODE=standalone              # 只连你的边缘节点，不碰控制面
 export CALABI_SERVER=127.0.0.1:7443       # 你边缘节点的控制端点
 export CALABI_TOKEN=dev-token-please-change
 export CALABI_INSECURE=1                   # 开发用：跳过对自签边缘节点的 TLS 校验
@@ -162,15 +163,18 @@ accepted_tokens:
 - **`mode`**——**记得设成 `standalone`**。它不是默认值，而且区别不只是好看：只有
   standalone 的边缘节点才会认客户端在 `NEW_PROXY` 里带上来的按隧道安全策略。不设的
   话，你的 `--ip-allow` / `--basic-auth` 客户端照收，边缘节点这边**静默忽略**——因为
-  托管形态下策略来自控制面。`CALABI_EDGE_MODE=standalone` 可以不改 YAML 直接设。
+  托管形态下策略来自控制面；`base_domain` 下的 `--domain` 则直接被拒
+  （`subdomain_requires_console`）。`CALABI_EDGE_MODE=standalone` 可以不改 YAML 直接设。
 - **`node_label` / `base_domain`**——两个都是节点级字段，也都换过位置：原来叫
   `node_id`（和意思完全不同的 `edge_node_id` 只差一个字）和 `http.base_domain`
   （读它的远不止 HTTP 监听——子域名分配器、TCP 端点命名、自签泛域名、控制握手都读）。
   **旧写法仍然能加载**，现成的 `edge.yaml` 不用动；但两种写法都写、值又不一样的话，
   启动时会直接报错，而不是悄悄挑一个。
-- **`accepted_tokens`**——你的认证。可热加载：改文件即生效，不用重启（`base_domain`
-  同理）。其余字段都是要重启的；一次改动里只要碰到其中之一，整次热加载会被拒绝并打
-  日志——所以不会出现「改了一半」。
+- **`accepted_tokens`**——你的认证。配置文件里不写这个键，内建的演示 token
+  `dev-token-please-change` 就还在；写上你自己的 token 列表才会替换掉它。设了
+  `CALABI_ENV=production` 的边缘节点只要还认这个演示 token 就拒绝启动。可热加载：
+  改文件即生效，不用重启（`base_domain` 同理）。其余字段都是要重启的；一次改动里
+  只要碰到其中之一，整次热加载会被拒绝并打日志——所以不会出现「改了一半」。
 
 ---
 
@@ -191,7 +195,7 @@ calabi udp  53    --remote-port 5353
 | `CALABI_SERVER` | 边缘节点控制端点 `host:port`（默认 `localhost:7443`） |
 | `CALABI_TOKEN` | 边缘节点 `accepted_tokens` 里的某个 token |
 | `CALABI_INSECURE=1` | 跳过 TLS 校验（自签的边缘节点） |
-| `CALABI_EDGE_CA_FILE` | 改用这个 CA 去校验边缘节点证书 |
+| `CALABI_EDGE_CA_FILE` | 校验边缘节点证书时额外信任这个 CA——加在编译进二进制的 CA 之上，不是替换 |
 | `CALABI_MODE=standalone` | 让这个客户端完全不碰控制面（等同于 `calabi mode standalone`） |
 | `CALABI_UPDATE_MANIFEST` | 更新清单地址；**设成空值即关掉更新检查**——见下 |
 
@@ -280,7 +284,9 @@ calabi daemon install --config tunnels.yaml   # 然后：calabi daemon start|sto
 > **TLS / 自签的边缘节点。** 自建的边缘节点是自签证书。本地守护进程因此
 > **默认跳过对边缘节点的 TLS 校验**（会打一条警告日志），而不是硬要一个 CA——这样
 > 在可信网络里开箱即用。想真的校验，把 `ca_file:` 指到它的 CA PEM（或用
-> `CALABI_EDGE_CA_FILE`）。写 `insecure: true` 表示你明确要跳过（顺便消掉那条警告）。
+> `CALABI_EDGE_CA_FILE`），它和编译进二进制的 CA 一起被信任。这个文件不存在的话，
+> 守护进程打一条警告日志，然后不校验直接连。写 `insecure: true` 表示你明确要跳过
+> （顺便消掉那条警告）。
 
 ---
 
@@ -362,13 +368,34 @@ role: relay          # 或 "both"：一个进程同时跑隧道边缘和中继
 relay:
   derp_port: 3340
   stun_port: 3478    # 0 = 关掉 STUN 响应
-  label: home        # 给这个 region 命名；设备归属到 "self-home"
+  label: home        # 这台中继在自己日志里的名字
 ```
 
-> 没设 `label` 的中继能起来，但会告警：它没法注册进中继目录，所以永远不会有设备
-> 归属到它。
+设备看到的 region 名由协调器决定，不看 `label`：用 `CALABI_COORD_DERP_ADDR` 给的
+中继叫 `default`（或者 `CALABI_COORD_DERP_HOME_REGION` 写的名字），
+`CALABI_COORD_DERP_MAP_FILE` 里的就是你写的 code，通过协调器管理 API 以 `<name>`
+注册的中继叫 `self-<name>`。没设 `label` 的中继启动时打一条警告，照常转发。
 
 想跑几台就跑几台、放在不同地方；设备会用 STUN 测到各个中继的延迟，自己挑。
+
+**谁能用中继。** 默认情况下，中继为任何连上 3340 的客户端服务，客户端报什么设备
+公钥就算什么。要让它只服务你的协调器放进来的设备：
+
+1. 协调器启动时设 `CALABI_COORD_RELAY_GRANT_KEY_FILE=./relay-grant.key`。第一次启动
+   会创建这个文件，并在日志里打出公钥 `relay_coord_pubkey=…`，之后每次启动都会再打
+   一遍。设备随网络映射（netmap）拿到一份签过名的中继授权。
+2. 每台中继都配上这个公钥并打开校验：
+
+   ```yaml
+   relay:
+     require_auth: true
+     coord_pubkey: "<协调器日志里的 relay_coord_pubkey>"
+   ```
+
+   或者用 `CALABI_EDGE_RELAY_REQUIRE_AUTH=1` 和 `CALABI_EDGE_RELAY_COORD_PUBKEY=…`。
+   设了 `require_auth` 却没有 `coord_pubkey` 的中继会拒绝启动。
+
+密钥文件要留好。换一个文件就是换一把公钥，还配着旧公钥的中继会把设备全部拒之门外。
 
 ### 协调器
 
@@ -386,15 +413,22 @@ CALABI_COORD_DERP_STUN_PORT=3478 \
 | `CALABI_COORD_AUTHKEYS_FILE` | **认证密钥。** JSON：`{"key": {"meshnet": 1, "tags": ["tag:laptop"]}}` |
 | `CALABI_COORD_DERP_ADDR` | 只有一台中继时的简单写法：`host:port` |
 | `CALABI_COORD_DERP_STUN_PORT` | 那台中继的 STUN 端口。不写的话这个 region 没法被测量，就永远没人归属到它 |
+| `CALABI_COORD_DERP_HOME_REGION` | `CALABI_COORD_DERP_ADDR` 那个 region 的名字（默认 `default`）；用映射文件且文件里没写 `home_region` 时，是新设备的初始 region |
 | `CALABI_COORD_DERP_MAP_FILE` | 多台中继：一个 JSON 目录（见 `apps/calabi-coord/examples/derp-map.example.json`） |
-| `CALABI_COORD_POLICY_FILE` | ACL 文件。不设 = 同一张网里的设备互相全通 |
-| `CALABI_COORD_NODE_QUOTA` | 每张网的设备数上限。不设 = 无限 |
+| `CALABI_COORD_RELAY_GRANT_KEY_FILE` | 给中继授权签名的密钥，见[谁能用中继](#中继)。不设 = 不发授权 |
+| `CALABI_COORD_POLICY_FILE` | ACL 文件。不设 = 同一张网里的设备互相全通，见 [ACL](#acl) |
+| `CALABI_COORD_NODE_QUOTA` | 每张网的设备数上限。不设或 `0` = 无限 |
 | `CALABI_COORD_DB_DSN` | 状态存哪。`sqlite:./coord.db` 存成一个文件，或者给一个 `postgres://…` URL。**不设 = 存内存里**，见下 |
 | `CALABI_COORD_TLS_CERT_FILE` / `_KEY_FILE` | gRPC 走 TLS。要么都设，要么都不设 |
 | `CALABI_COORD_MESH_ADMIN_ADDR` / `_TOKEN` | 管理 HTTP API。**没有 token 的管理接口会在启动时被拒绝**——它会把每一张网的设备和 ACL 全暴露出去 |
 
 一个 `meshnet` 就是一张互相隔离的网。两把密钥映射到不同的 meshnet 编号，就是同一个
 协调器上两张互相看不见的网。
+
+认证密钥文件只在启动时读一次。加密钥、吊销密钥都要重启协调器；重启后每台设备都会
+重新注册，密钥已被删掉的设备就在那一刻被拒。密钥在文件里按设备发送的原样存放，一把
+密钥能放进任意多台设备，也不会过期。文件里的每一项都必须是「密钥 → 上面那样的对象」
+——没有注释写法，出现别的内容协调器就不启动。
 
 > **给它一个数据库。** 不设 `CALABI_COORD_DB_DSN` 的话，设备注册表、ACL 文档、
 > 声明的服务、自建中继目录全在**内存**里——启动时它会自己说一声——意思是重启一次注册表
@@ -404,6 +438,7 @@ CALABI_COORD_DERP_STUN_PORT=3478 \
 
 > 设 `CALABI_ENV=production`，协调器会在任何一个「失败放行」的兜底还生效时拒绝启动
 > ——最重要的是那把内建的默认认证密钥，它会把**任何**调用者放进 meshnet 1。
+> 这时还必须设 `CALABI_COORD_NODE_QUOTA`（不设上限就写 `0`）。
 > 凡是公网能碰到的部署都该设上。
 
 ### 设备入网
@@ -435,19 +470,26 @@ mesh:
 > 读的。把文件权限收紧（它是一份凭据），或者干脆前台跑 `calabi mesh up`、密钥写在
 > 命令行上。
 
-> **设备到协调器这段的 TLS。** 设备默认用 TLS 连协调器，并用编译进客户端的 CA
-> 校验它，所以自建的协调器需要二选一：给它签一张你自己 CA 的证书
-> （`CALABI_COORD_TLS_CERT_FILE`/`_KEY_FILE`），设备侧用
-> `CALABI_EDGE_CA_FILE=/path/to/your-ca.pem` 指过去；或者在设备上设
-> `CALABI_INSECURE=1` 走明文。**认证密钥是从这条连接上发过去的**，所以明文只适合
-> 可信网络。如果两个证书变量只设了一个，协调器会拒绝启动，而不是悄悄地提供明文服务。
+> **设备到协调器这段的 TLS。** 设备默认用 TLS 连协调器，只信任编译进客户端的 CA
+> 加上 `CALABI_EDGE_CA_FILE` 里的那个——从不用操作系统的信任库。所以自建的协调器
+> 需要二选一：给它一张证书（`CALABI_COORD_TLS_CERT_FILE`/`_KEY_FILE`），设备侧用
+> `CALABI_EDGE_CA_FILE=/path/to/ca.pem` 指向这张证书链到的 CA——你自己的 CA，或者
+> Let's Encrypt 证书对应的 ISRG 根证书；或者在设备上设 `CALABI_INSECURE=1` 走明文。
+> **认证密钥是从这条连接上发过去的**，所以明文只适合可信网络。
+> `calabi daemon install` 会把执行它的那个 shell 里的 `CALABI_*` 变量带进服务，但
+> `--system` 安装会去掉 `CALABI_INSECURE`：系统服务连协调器永远走 TLS。
+> 如果两个证书变量只设了一个，协调器会拒绝启动，而不是悄悄地提供明文服务。
 
 ### ACL
 
 不设 `CALABI_COORD_POLICY_FILE` 时，同一张网里的设备互相全通。设了之后，一个由
-分组和规则组成的 JSON 文件决定谁能访问谁的哪些端口。改文件会热加载——而且文件
-写坏时它**失败关闭**（全部拒绝）并大声报错，绝不退回「全放行」。把文件改好，
-不用重启就能恢复。
+分组和规则组成的 JSON 文件决定谁能访问谁的哪些端口。改文件会热加载。协调器启动时
+文件就是坏的，它会**失败关闭**（全部拒绝）并大声报错，绝不退回「全放行」；把文件
+改好，不用重启就能恢复。运行中改坏了，会打错误日志，继续用上一版策略。
+
+通过管理 API（`CALABI_COORD_MESH_ADMIN_ADDR` 上的 `PUT /admin/meshnets/<id>/acl`）
+给某张网存过一份 ACL 之后，这张网就改用它，不再看文件，也不再全通。管理 API 没有
+删除它的调用；不设 `CALABI_COORD_DB_DSN` 的话，它保留到协调器重启为止。
 
 ### 子网路由与出口设备
 
@@ -498,5 +540,5 @@ calabi mesh up ... --exit-node home-server             # 把「我」的默认�
 
 ## 许可证与贡献
 
-按 [LICENSE](LICENSE)（另见 `NOTICE`）开源。欢迎给边缘节点核心、客户端核心和本地
+按 [LICENSE](../LICENSE)（另见 `NOTICE`）开源。欢迎给边缘节点核心、客户端核心和本地
 控制台提 issue 和补丁。

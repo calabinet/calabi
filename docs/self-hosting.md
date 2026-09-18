@@ -51,7 +51,6 @@ below.
 - [Joining a device](#joining-a-device)
 - [ACLs](#acls)
 - [Subnet routers and exit devices](#subnet-routers-and-exit-devices)
-- [What isn't automated off Linux yet](#what-isnt-automated-off-linux-yet)
 
 **Then**
 
@@ -97,12 +96,13 @@ no config file it accepts the demo token `dev-token-please-change` and listens o
 nothing: the built-in defaults carry no control-plane addresses at all.
 
 ```bash
-./calabi-edge           # CTRL-C to stop
+CALABI_EDGE_MODE=standalone ./calabi-edge     # CTRL-C to stop
 ```
 
-> Enough to try, but not what you want for real: a config-less edge is **not**
-> in standalone mode, so it ignores the per-tunnel security policy your client
-> sends. See [`mode`](#the-edge-config) below.
+> `CALABI_EDGE_MODE=standalone` is what lets the client pick its own subdomain
+> and security policy. Without it the edge refuses the `--domain` in step 3
+> (`subdomain_requires_console`) and ignores the client's per-tunnel policy.
+> See [`mode`](#the-edge-config) below.
 
 **2. Run a local service** to expose:
 
@@ -113,6 +113,7 @@ python3 -m http.server 9000
 **3. Run the client** pointing at your edge:
 
 ```bash
+export CALABI_MODE=standalone              # talk to your edge only, no control plane
 export CALABI_SERVER=127.0.0.1:7443       # your edge's control endpoint
 export CALABI_TOKEN=dev-token-please-change
 export CALABI_INSECURE=1                   # dev: skip TLS verify of a self-signed edge
@@ -171,7 +172,9 @@ accepted_tokens:
   security policy the client sends in `NEW_PROXY`. Leave it out and your
   `--ip-allow` / `--basic-auth` are accepted by the client and then quietly
   ignored by the edge, because a managed edge takes policy from the control
-  plane instead. `CALABI_EDGE_MODE=standalone` sets it without editing YAML.
+  plane instead; a `--domain` under `base_domain` is refused outright
+  (`subdomain_requires_console`). `CALABI_EDGE_MODE=standalone` sets it
+  without editing YAML.
 - **`node_label` / `base_domain`** — both are node-scoped, and both used to be
   written somewhere else: `node_id` (one character from `edge_node_id`, which
   means something entirely different) and `http.base_domain` (read by far more
@@ -179,7 +182,10 @@ accepted_tokens:
   self-signed wildcard, the control handshake). **The old spellings still
   load**, so an existing `edge.yaml` keeps working; setting both spellings to
   *different* values is refused at startup rather than silently picking one.
-- **`accepted_tokens`** — your auth. Hot-reloadable: edit the file and the edge
+- **`accepted_tokens`** — your auth. A file that leaves this key out keeps the
+  built-in demo token `dev-token-please-change`; listing your own tokens
+  replaces it. With `CALABI_ENV=production` the edge refuses to start while it
+  would accept the demo token. Hot-reloadable: edit the file and the edge
   picks it up without a restart (`base_domain` too). Every other field is
   restart-only, and a reload that touches one is refused whole, with a log line
   — so a typo can't half-apply.
@@ -203,7 +209,7 @@ Environment:
 | `CALABI_SERVER` | edge control endpoint `host:port` (default `localhost:7443`) |
 | `CALABI_TOKEN` | a token from the edge's `accepted_tokens` |
 | `CALABI_INSECURE=1` | skip TLS verification (a self-signed edge) |
-| `CALABI_EDGE_CA_FILE` | verify the edge cert against this CA instead |
+| `CALABI_EDGE_CA_FILE` | also trust this CA when verifying the edge cert — it is added to the CA compiled into the binary, not a replacement |
 | `CALABI_MODE=standalone` | keep this client off the control plane entirely (same as `calabi mode standalone`) |
 | `CALABI_UPDATE_MANIFEST` | update-manifest URL; **set it empty to disable the update check** — see below |
 
@@ -302,7 +308,9 @@ calabi daemon install --config tunnels.yaml   # then: calabi daemon start|stop|s
 > **TLS / self-signed edge.** A self-hosted edge is self-signed. The local daemon
 > therefore **skips TLS verification of the edge by default** (logging a warning)
 > rather than demanding a CA — so it just works on a trusted network. To actually
-> verify the edge, set `ca_file:` to its CA PEM (or `CALABI_EDGE_CA_FILE`). Set
+> verify the edge, set `ca_file:` to its CA PEM (or `CALABI_EDGE_CA_FILE`); it
+> is trusted alongside the CA compiled into the binary. If that file does not
+> exist, the daemon logs a warning and connects without verifying. Set
 > `insecure: true` to skip verification explicitly (silences the warning).
 
 ---
@@ -396,14 +404,40 @@ role: relay          # or "both" to run a tunnel edge and a relay in one process
 relay:
   derp_port: 3340
   stun_port: 3478    # 0 disables the STUN responder
-  label: home        # names the region; devices home on "self-home"
+  label: home        # this relay's name in its own logs
 ```
 
-> A relay with no `label` starts and warns: it cannot be registered in the relay
-> directory, so no device will ever home on it.
+The region name devices see comes from the coordinator, not from `label`:
+`default` for a relay given with `CALABI_COORD_DERP_ADDR` (or whatever
+`CALABI_COORD_DERP_HOME_REGION` says), the codes you write in a
+`CALABI_COORD_DERP_MAP_FILE`, and `self-<name>` for a relay registered through
+the coordinator's admin API under `<name>`. A relay with no `label` logs a
+warning at startup and relays all the same.
 
 Run several in different places if you want; devices measure latency to each over
 STUN and pick their own.
+
+**Who may use a relay.** By default a relay serves any client that connects to
+3340, under whatever device key that client presents. To make it serve only
+devices your coordinator admitted:
+
+1. Start the coordinator with `CALABI_COORD_RELAY_GRANT_KEY_FILE=./relay-grant.key`.
+   On first start it creates that file and logs the public half as
+   `relay_coord_pubkey=…`, and logs it again on every later start. Devices then
+   receive a signed relay grant with their network map.
+2. Give every relay that public key and turn verification on:
+
+   ```yaml
+   relay:
+     require_auth: true
+     coord_pubkey: "<relay_coord_pubkey from the coordinator log>"
+   ```
+
+   or `CALABI_EDGE_RELAY_REQUIRE_AUTH=1` and `CALABI_EDGE_RELAY_COORD_PUBKEY=…`.
+   A relay with `require_auth` and no `coord_pubkey` refuses to start.
+
+Keep the key file. A new file means a new public key, and every relay still
+configured with the old one turns devices away.
 
 ### The coordinator
 
@@ -421,15 +455,24 @@ CALABI_COORD_DERP_STUN_PORT=3478 \
 | `CALABI_COORD_AUTHKEYS_FILE` | **the auth keys.** JSON: `{"key": {"meshnet": 1, "tags": ["tag:laptop"]}}` |
 | `CALABI_COORD_DERP_ADDR` | one relay, the simple case: `host:port` |
 | `CALABI_COORD_DERP_STUN_PORT` | that relay's STUN port. Without it the region cannot be measured, so nobody homes there |
+| `CALABI_COORD_DERP_HOME_REGION` | the region name for `CALABI_COORD_DERP_ADDR` (default `default`); with a map file that sets no `home_region`, the region new devices start on |
 | `CALABI_COORD_DERP_MAP_FILE` | several relays instead: a JSON directory (see `apps/calabi-coord/examples/derp-map.example.json`) |
-| `CALABI_COORD_POLICY_FILE` | the ACL file. Unset = every device in a meshnet reaches every other |
-| `CALABI_COORD_NODE_QUOTA` | cap on devices per meshnet. Unset = unlimited |
+| `CALABI_COORD_RELAY_GRANT_KEY_FILE` | the key that signs relay grants — see [who may use a relay](#the-relay). Unset = no grants |
+| `CALABI_COORD_POLICY_FILE` | the ACL file. Unset = every device in a meshnet reaches every other — see [ACLs](#acls) |
+| `CALABI_COORD_NODE_QUOTA` | cap on devices per meshnet. Unset or `0` = unlimited |
 | `CALABI_COORD_DB_DSN` | where state lives. `sqlite:./coord.db` for a file, or a `postgres://…` URL. **Unset = in memory** — see below |
 | `CALABI_COORD_TLS_CERT_FILE` / `_KEY_FILE` | serve gRPC over TLS. Both or neither |
 | `CALABI_COORD_MESH_ADMIN_ADDR` / `_TOKEN` | the admin HTTP API. **A tokenless admin surface is refused at startup** — it would expose every meshnet's devices and ACLs |
 
 A `meshnet` is one isolated network. Two keys mapping to different meshnet
 numbers produce two networks on one coordinator that cannot see each other.
+
+The auth-keys file is read once, at startup. Adding or revoking a key takes a
+coordinator restart; every device registers again after one, and a device whose
+key is gone is refused at that point. A key is stored in the file exactly as
+devices send it, admits any number of devices, and does not expire. Every entry
+in the file must map a key to an object like the one above — there is no
+comment syntax, and any other entry stops the coordinator from starting.
 
 > **Give it a database.** With no `CALABI_COORD_DB_DSN` the coordinator keeps
 > the device registry, the ACL document, declared services and the self-hosted
@@ -441,8 +484,9 @@ numbers produce two networks on one coordinator that cannot see each other.
 
 > Set `CALABI_ENV=production` and the coordinator refuses to start on any
 > fail-open fallback — most importantly the built-in default auth key, which
-> admits *any* caller into meshnet 1. Do that on anything reachable from the
-> internet.
+> admits *any* caller into meshnet 1. It also requires
+> `CALABI_COORD_NODE_QUOTA` to be set (`0` for no cap). Do that on anything
+> reachable from the internet.
 
 ### Joining a device
 
@@ -476,21 +520,33 @@ mesh:
 > `calabi mesh up` in the foreground with the key on the command line.
 
 > **TLS between device and coordinator.** The device dials the coordinator over TLS
-> and verifies it against the CA compiled into the client, so a self-hosted
-> coordinator needs one of two things: give it a certificate from your own CA
-> (`CALABI_COORD_TLS_CERT_FILE`/`_KEY_FILE`) and point devices at that CA with
-> `CALABI_EDGE_CA_FILE=/path/to/your-ca.pem`, or set `CALABI_INSECURE=1` on the
+> and trusts only the CA compiled into the client plus the one in
+> `CALABI_EDGE_CA_FILE` — never the operating system's trust store. So a
+> self-hosted coordinator needs one of two things: give it a certificate
+> (`CALABI_COORD_TLS_CERT_FILE`/`_KEY_FILE`) and point devices at the CA it
+> chains to with `CALABI_EDGE_CA_FILE=/path/to/ca.pem` — your own CA, or for a
+> Let's Encrypt certificate the ISRG root — or set `CALABI_INSECURE=1` on the
 > devices for plaintext. **The auth key crosses this connection**, so plaintext is
-> for a trusted network only. Started with only one of the two cert variables,
+> for a trusted network only. `calabi daemon install` copies the `CALABI_*`
+> variables of the shell it runs in into the service, except that a
+> `--system` install drops `CALABI_INSECURE`: a system service always dials the
+> coordinator over TLS. Started with only one of the two cert variables,
 > the coordinator refuses to boot rather than quietly serve plaintext.
 
 ### ACLs
 
 Without `CALABI_COORD_POLICY_FILE`, every device in a meshnet reaches every other.
 With it, a JSON file of groups and rules decides who reaches whom, on which
-ports. It hot-reloads on change — and if the file is broken **it fails closed**
-(deny everything) and says so loudly, rather than falling back to allow-all.
-Fix the file and it recovers without a restart.
+ports. It hot-reloads on change. If the file is broken when the coordinator
+starts, **it fails closed** (deny everything) and says so loudly, rather than
+falling back to allow-all; fix the file and it recovers without a restart. A
+broken edit while it runs is logged and the previous policy stays in force.
+
+An ACL saved for a meshnet through the admin API
+(`PUT /admin/meshnets/<id>/acl` on `CALABI_COORD_MESH_ADMIN_ADDR`) takes over
+from the file — or from allow-all — for that meshnet. The admin API has no call
+that removes it again; without `CALABI_COORD_DB_DSN` it lasts until the
+coordinator restarts.
 
 ### Subnet routers and exit devices
 
@@ -550,5 +606,5 @@ to run one.
 
 ## License & contributing
 
-Open source under the terms in [LICENSE](LICENSE) (see also `NOTICE`). Issues and
+Open source under the terms in [LICENSE](../LICENSE) (see also `NOTICE`). Issues and
 patches to the edge core, client core, and the local console are welcome.

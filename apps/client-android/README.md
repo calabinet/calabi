@@ -19,8 +19,9 @@ go install golang.org/x/mobile/cmd/gobind@latest
 ```
 
 1. Build the Go core into `app/libs/calabicore.aar`. It embeds the edge CA the
-   client trusts. Without `-EdgeCa` that is whatever the tree carries (a
-   placeholder in the public repository), and the app cannot reach calabi.net.
+   client trusts. Without `-EdgeCa` that is whatever the tree carries (the
+   development edge CA, `CN=calabi-dev-edge-ca`), and the app cannot reach
+   calabi.net.
    calabi.net's edge-CA root is a public certificate carried in every release's
    `build-manifest.json`:
 
