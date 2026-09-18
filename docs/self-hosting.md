@@ -11,9 +11,10 @@ different ways to reach a machine with no public address:
   **mesh** between your own machines. See [The mesh](#the-mesh).
 
 The **control plane** (accounts, orgs, billing, the managed global edge fleet)
-is a separate, closed, hosted product. This repository is the data plane on its
-own — it never phones home, needs no account, and runs entirely on
-infrastructure you own.
+is a separate, closed, hosted product. These three binaries are the data plane on
+their own — they never phone home, need no account, and run entirely on
+infrastructure you own. (The Android app in `apps/client-android` is a client for
+calabi.net and does not join a self-hosted coordinator yet.)
 
 If you just want tunnels and you're happy to run one edge yourself, the first
 two thirds of this document are all you need.

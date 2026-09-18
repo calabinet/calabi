@@ -7,7 +7,7 @@
 <p align="center">
   <img alt="Go" src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go&logoColor=white">
   <img alt="WireGuard" src="https://img.shields.io/badge/WireGuard-mesh-88171A?style=flat-square&logo=wireguard&logoColor=white">
-  <img alt="Platforms" src="https://img.shields.io/badge/Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-amd64%20%C2%B7%20arm64%20%C2%B7%20armv7-4c8bf5?style=flat-square">
+  <img alt="Platforms" src="https://img.shields.io/badge/Linux%20%C2%B7%20macOS%20%C2%B7%20Windows%20%C2%B7%20Android-amd64%20%C2%B7%20arm64%20%C2%B7%20armv7-4c8bf5?style=flat-square">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-3da639?style=flat-square"></a>
   <a href="https://github.com/calabinet/calabi/releases"><img alt="Release" src="https://img.shields.io/github/v/release/calabinet/calabi?style=flat-square&color=22d3ee&label=release"></a>
 </p>
@@ -70,6 +70,10 @@ The data plane: the `calabi` client, the `calabi-edge` data node, and the
 your own machines is here, and self-hosted it needs no account and calls no
 service of ours.
 
+It also holds the Android app. That one is a client for calabi.net: it signs in
+there and joins that organization's mesh, and it does not join a self-hosted
+coordinator yet.
+
 The hosted platform at [calabi.net](https://calabi.net) runs this same data
 plane and adds the control plane around it: accounts and organizations, a
 managed edge fleet across regions, team access control, usage and billing, and
@@ -77,16 +81,20 @@ a web console. That part is a separate product and is not in this repository.
 
 ---
 
-## The three binaries
+## Three binaries and an Android app
 
-| binary | what it is | where it runs |
+| component | what it is | where it runs |
 |---|---|---|
 | `calabi` | the client — opens tunnels, joins the mesh, serves the local web console | your laptop, a server, a Pi |
 | `calabi-edge` | the data plane. `role: edge` accepts public traffic for tunnels; `role: relay` is a mesh relay + STUN responder; `role: both` does both | a host with a public IP |
 | `calabi-coord` | the mesh coordinator — device registry, IP allocation, ACLs, the relay directory | one host, reachable by your devices |
+| Calabi for Android | the phone app — puts the phone in your calabi.net organization's mesh as a device, with exit devices and a Quick Settings tile; tunnels and usage read-only | an Android 8.0+ phone (arm64, armv7) |
 
-Pure Go, `CGO_ENABLED=0`, no runtime dependencies. Only tunnels? You need two of
-them, and never have to think about `calabi-coord`.
+The three binaries are pure Go, `CGO_ENABLED=0`, no runtime dependencies. Only
+tunnels? You need two of them, and never have to think about `calabi-coord`.
+
+The Android app (`apps/client-android`) is Kotlin around the same Go client
+code, bound in with gomobile (`apps/client/mobile`).
 
 ---
 
@@ -157,6 +165,13 @@ Or directly (on Windows, name the outputs `*.exe`):
 
 `make build` adds the `.exe` suffix automatically on Windows. To cross-compile:
 `GOOS=windows GOARCH=amd64 go build -o calabi-edge.exe ./cmd/calabi-edge`.
+
+### The Android app
+
+Needs JDK 17, the Android SDK (platform 35) with NDK r27, and gomobile. The Go
+core is built into an `.aar` by `scripts/mobile/build-core-android.ps1`
+(PowerShell, written for Windows), then the app by Gradle. Steps are in
+[apps/client-android/README.md](apps/client-android/README.md).
 
 ---
 
@@ -271,6 +286,15 @@ built here — the local console's compiled web bundle and the third-party
 `wintun.dll`. Those are byte-identical for anyone building a given commit, but
 this repository does not derive them from their own sources.
 
+The Android APK is not reproducible yet either. Its Go core records the
+directory it was built in, so the same commit built in another directory gives
+a different library. Each release's notes print the certificate the APK is
+signed with; check it before installing:
+
+```bash
+apksigner verify --print-certs calabi-android.apk
+```
+
 ---
 
 ## Common uses
@@ -283,11 +307,12 @@ this repository does not derive them from their own sources.
 - Join machines across several clouds into one flat private network without
   peering VPCs.
 - Route a laptop's traffic out through a machine at home via an exit device.
+- Reach your machines from an Android phone over a calabi.net mesh.
 
 ## Contributing
 
-Issues and patches to the edge, the client, the coordinator and the local
-console are welcome. We use a **DCO** (Developer Certificate of Origin), not a
+Issues and patches to the edge, the client, the coordinator, the local console
+and the Android app are welcome. We use a **DCO** (Developer Certificate of Origin), not a
 CLA — every commit just needs a sign-off:
 
 ```bash

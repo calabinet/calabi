@@ -7,7 +7,7 @@
 <p align="center">
   <img alt="Go" src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go&logoColor=white">
   <img alt="WireGuard" src="https://img.shields.io/badge/WireGuard-mesh-88171A?style=flat-square&logo=wireguard&logoColor=white">
-  <img alt="Platforms" src="https://img.shields.io/badge/Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-amd64%20%C2%B7%20arm64%20%C2%B7%20armv7-4c8bf5?style=flat-square">
+  <img alt="Platforms" src="https://img.shields.io/badge/Linux%20%C2%B7%20macOS%20%C2%B7%20Windows%20%C2%B7%20Android-amd64%20%C2%B7%20arm64%20%C2%B7%20armv7-4c8bf5?style=flat-square">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-3da639?style=flat-square"></a>
   <a href="https://github.com/calabinet/calabi/releases"><img alt="Release" src="https://img.shields.io/github/v/release/calabinet/calabi?style=flat-square&color=22d3ee&label=release"></a>
 </p>
@@ -72,22 +72,29 @@ Calabi 让一台没有公网地址的机器变得可以访问——NAT 后面的
 在自己的机器上跑隧道和组网所需要的东西，这里都有；自建时不需要账号，也不会连
 我们的任何服务。
 
+仓库里还有 Android App。它是 calabi.net 的客户端：登录 calabi.net、加入那个组织的
+组网，目前还不能加入自建的协调器。
+
 托管平台 [calabi.net](https://calabi.net) 跑的是同一份数据面，在它外面加上控制面：
 账号与组织、托管在多个地域的边缘节点、团队权限、用量与计费，以及网页控制台。
 那部分是另一个产品，不在这个仓库里。
 
 ---
 
-## 三个二进制
+## 三个程序和一个 Android App
 
-| 程序 | 是什么 | 跑在哪 |
+| 组件 | 是什么 | 跑在哪 |
 |---|---|---|
 | `calabi` | 客户端——开隧道、加入组网、提供本地 Web 控制台 | 你的笔记本、服务器、树莓派 |
 | `calabi-edge` | 数据面。`role: edge` 接公网流量做隧道；`role: relay` 是组网中继 + STUN 探测；`role: both` 两者都做 | 有公网 IP 的主机 |
 | `calabi-coord` | 组网协调器——设备注册、地址分配、ACL、中继目录 | 一台你的设备能连到的主机 |
+| Calabi for Android | 手机 App——把手机作为一台设备加入你在 calabi.net 上的组织组网，支持出口设备和快捷设置磁贴；隧道和用量只读 | Android 8.0 及以上的手机（arm64、armv7） |
 
-纯 Go、`CGO_ENABLED=0`、无运行时依赖。只想要隧道的话，用其中两个就够，
+三个程序都是纯 Go、`CGO_ENABLED=0`、无运行时依赖。只想要隧道的话，用其中两个就够，
 完全不用管 `calabi-coord`。
+
+Android App（`apps/client-android`）是 Kotlin 写的界面，里面是同一份 Go 客户端代码，
+用 gomobile 绑定进来（`apps/client/mobile`）。
 
 ---
 
@@ -151,6 +158,13 @@ make build          # → bin/calabi, bin/calabi-edge, bin/calabi-coord
 
 `make build` 在 Windows 上会自动加 `.exe`。交叉编译：
 `GOOS=windows GOARCH=amd64 go build -o calabi-edge.exe ./cmd/calabi-edge`。
+
+### Android App
+
+需要 JDK 17、Android SDK（platform 35）和 NDK r27，以及 gomobile。先用
+`scripts/mobile/build-core-android.ps1`（PowerShell 脚本，按 Windows 写的）把 Go 核心编成
+`.aar`，再用 Gradle 编 App。步骤见
+[apps/client-android/README.md](apps/client-android/README.md)。
 
 ---
 
@@ -259,6 +273,13 @@ tar+gzip 和 zip 都会记录修改时间，同样的字节隔一秒再打包，
 第三方的 `wintun.dll`。对同一个 commit 来说它们的字节是确定的，但本仓库没有从它们
 各自的源码推导出来。
 
+Android 的 APK 目前也不可复现：它的 Go 核心里记着编译时所在的目录，同一个 commit 换个
+目录编，得到的库就不一样。每个版本的发布说明里都印着 APK 的签名证书，安装前可以核对：
+
+```bash
+apksigner verify --print-certs calabi-android.apk
+```
+
 ---
 
 ## 常见用法
@@ -270,10 +291,11 @@ tar+gzip 和 zip 都会记录修改时间，同样的字节隔一秒再打包，
 - 通过 TCP 隧道或组网访问远端机器的 SSH、数据库端口。
 - 把分散在几个云上的机器连成一张扁平的私有网络，不用去打通 VPC 对等连接。
 - 用出口设备把笔记本的流量从家里那台机器走出去。
+- 用 Android 手机通过 calabi.net 的组网访问自己的机器。
 
 ## 参与贡献
 
-欢迎给边缘节点、客户端、协调器和本地控制台提 issue 和补丁。我们用 **DCO**
+欢迎给边缘节点、客户端、协调器、本地控制台和 Android App 提 issue 和补丁。我们用 **DCO**
 （开发者原创声明）而不是 CLA——每个 commit 加一行签名即可：
 
 ```bash
