@@ -330,10 +330,14 @@ func (p *discoProber) reapLearned(now time.Time) {
 	}
 }
 
-// run re-probes the current peer set on a fixed interval until ctx ends. peersFn
-// supplies the latest peers (from the newest netmap).
-func (p *discoProber) run(ctx context.Context, peersFn func() []Peer) {
-	t := time.NewTicker(probeInterval)
+// run re-probes the current peer set every `every` until ctx ends. peersFn
+// supplies the latest peers (from the newest netmap). every <= 0 = no periodic
+// probing: peers are then probed only when a netmap or a repair asks (Probe).
+func (p *discoProber) run(ctx context.Context, every time.Duration, peersFn func() []Peer) {
+	if every <= 0 {
+		return
+	}
+	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
 		select {

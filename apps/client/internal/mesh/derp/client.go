@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/calabi/calabi/apps/client/internal/hostnet"
 	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
 )
 
@@ -116,8 +117,9 @@ type Client struct {
 // dial against the entire un-upgraded fleet. The challenge — whenever it comes,
 // at connect time or hours later — is answered from the read loop.
 func Dial(ctx context.Context, addr string, self meshproto.NodeKey, auth Auth, onRecv RecvFunc, logger *slog.Logger) (*Client, error) {
-	var d net.Dialer
-	conn, err := d.DialContext(ctx, "tcp", addr)
+	// Through hostnet: the relay link carries the tunnel, so on a phone it must
+	// be kept out of the tunnel it carries.
+	conn, err := hostnet.Dialer().DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("derp: dial %s: %w", addr, err)
 	}

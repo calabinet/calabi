@@ -95,7 +95,10 @@ type WGDatapath struct {
 	// (MESH.5b). Installed on the tun; updated from every netmap.
 	filter *PacketFilter
 	uapi   net.Listener // WireGuard UAPI socket (for `wg show`); nil off Linux
-	logger *slog.Logger
+	// routing points the host's addresses and routes at the tun: this process's
+	// own OS calls on a desktop, the platform's VPN API on a phone.
+	routing Routing
+	logger  *slog.Logger
 
 	// curOverlay is the address last applied to the tun link, so SetConfig only
 	// (re)runs the OS address/route step when the node's overlay IP changes.
@@ -295,8 +298,6 @@ func (d *WGDatapath) detachDirect() {
 // is the relay endpoint (host:port) this node uses as its DERP home. mtu is the
 // tun MTU; 0 means DefaultMTU.
 func NewWGDatapath(priv PrivateKey, relayAddr string, mtu int, logger *slog.Logger) (*WGDatapath, error) {
-	self := priv.Public()
-
 	// On Windows, stage + pre-load the bundled wintun.dll so CreateTUN finds the
 	// driver without the user having to place the DLL by hand. Best-effort: no-op
 	// off Windows, and a failure falls back to a system-installed wintun.dll.
@@ -310,6 +311,26 @@ func NewWGDatapath(priv PrivateKey, relayAddr string, mtu int, logger *slog.Logg
 	if err != nil {
 		return nil, fmt.Errorf("mesh: create tun (needs privileges / wintun): %w", err)
 	}
+	return newWGDatapath(tunDev, nil, priv, relayAddr, logger)
+}
+
+// NewWGDatapathOnTUN brings the datapath up on a tun device the platform already
+// opened, with the platform also owning the routes: a phone app may neither
+// create a tun nor touch the routing table, and gets both from its VPN API. The datapath takes ownership
+// of tunDev: it is closed if bring-up fails, and by Close.
+func NewWGDatapathOnTUN(tunDev tun.Device, routing Routing, priv PrivateKey, relayAddr string, logger *slog.Logger) (*WGDatapath, error) {
+	if routing == nil {
+		_ = tunDev.Close()
+		return nil, errors.New("mesh: NewWGDatapathOnTUN needs the platform's Routing")
+	}
+	return newWGDatapath(tunDev, routing, priv, relayAddr, logger)
+}
+
+// newWGDatapath is the bring-up both constructors share. A nil routing means this
+// process edits the OS routing table itself (osRouting).
+func newWGDatapath(tunDev tun.Device, routing Routing, priv PrivateKey, relayAddr string, logger *slog.Logger) (*WGDatapath, error) {
+	self := priv.Public()
+
 	// The OS may adjust the requested name; the authoritative one drives the
 	// address/route step in SetConfig.
 	ifname, err := tunDev.Name()
@@ -356,8 +377,8 @@ func NewWGDatapath(priv PrivateKey, relayAddr string, mtu int, logger *slog.Logg
 	// standard `wg` tool can introspect this in-process device out-of-process —
 	// `mesh up` runs in the foreground, so operators query handshake/transfer
 	// state from another shell (`wg show <ifname>`). Best-effort: on failure (or
-	// off Linux, where openUAPI is a no-op) the datapath still works, only `wg`
-	// introspection is unavailable.
+	// off desktop Linux, where openUAPI is a no-op) the datapath still works, only
+	// `wg` introspection is unavailable.
 	var uapiLn net.Listener
 	if ln, err := openUAPI(ifname); err != nil {
 		logger.Warn("mesh: UAPI socket unavailable (`wg show` won't work)", "ifname", ifname, "err", err)
@@ -366,7 +387,11 @@ func NewWGDatapath(priv PrivateKey, relayAddr string, mtu int, logger *slog.Logg
 		go serveUAPI(ln, dev, logger)
 	}
 
-	return &WGDatapath{priv: priv, self: self, ifname: ifname, tun: tunDev, ftun: ftun, dev: dev, bind: bind, relays: relays, filter: filter, uapi: uapiLn, logger: logger}, nil
+	d := &WGDatapath{priv: priv, self: self, ifname: ifname, tun: tunDev, ftun: ftun, dev: dev, bind: bind, relays: relays, filter: filter, uapi: uapiLn, routing: routing, logger: logger}
+	if d.routing == nil {
+		d.routing = osRouting{d}
+	}
+	return d, nil
 }
 
 // wgLogLevel maps CALABI_MESH_WG_LOG to a wireguard-go device log level.
@@ -401,9 +426,10 @@ func serveUAPI(ln net.Listener, dev *device.Device, logger *slog.Logger) {
 // (replace_peers=true rewrites the full set each call; link config is guarded by
 // curOverlay).
 //
-// The link step is automated on Linux (iproute2); on other platforms
-// configureLink returns errLinkConfigManual and we warn once with the exact
-// address/route the operator must set by hand — see linkconfig_*.go.
+// The link step goes through d.routing: on a desktop this process's own OS calls
+// (Linux iproute2, Windows winipcfg, macOS ifconfig/route; elsewhere
+// errLinkConfigManual and we warn once with the exact address/route the operator
+// must set by hand — see linkconfig_*.go), on a phone the platform's VPN API.
 func (d *WGDatapath) SetConfig(cfg WGConfig) error {
 	// Give the bind its per-peer routing tables BEFORE the peers go live, so the
 	// first direct packet from a newly-added peer is already attributable and the
@@ -486,7 +512,7 @@ func (d *WGDatapath) SetConfig(cfg WGConfig) error {
 	// actually delivers overlay traffic into the tun. Without this the peers are
 	// configured but no packets ever reach WireGuard.
 	if cfg.OverlayAddr.IsValid() && cfg.OverlayAddr != d.overlay() {
-		switch err := configureLink(d.tunLUID(), d.ifname, cfg.OverlayAddr); {
+		switch err := d.routing.ConfigureLink(cfg.OverlayAddr); {
 		case err == nil:
 			d.logger.Info("mesh tun link configured", "ifname", d.ifname, "overlay", cfg.OverlayAddr, "route", meshOverlayCIDR)
 			d.setOverlay(cfg.OverlayAddr)
@@ -541,7 +567,7 @@ func (d *WGDatapath) SetConfig(cfg WGConfig) error {
 	// allowed-ips, so every moment the route still points at the tun is a moment
 	// that subnet is blackholed rather than falling back to the physical link.
 	if len(del) > 0 {
-		if err := delSubnetRoutes(d.tunLUID(), d.ifname, del); err != nil {
+		if err := d.routing.DelSubnetRoutes(del); err != nil {
 			delOK = false
 			d.logger.Warn("mesh: withdraw subnet routes failed; those subnets stay blackholed until a later netmap retries",
 				"routes", del, "err", err)
@@ -550,7 +576,7 @@ func (d *WGDatapath) SetConfig(cfg WGConfig) error {
 		}
 	}
 	if len(add) > 0 {
-		if err := addSubnetRoutes(d.tunLUID(), d.ifname, add); err != nil {
+		if err := d.routing.AddSubnetRoutes(add); err != nil {
 			addOK = false
 			d.logger.Warn("mesh: add subnet routes failed", "routes", add, "err", err)
 		} else {
@@ -621,7 +647,7 @@ func (d *WGDatapath) applyExitNode(sel meshproto.NodeKey) {
 	// one-hop-via-gateway private destinations. More-specific subnet-router routes
 	// still win over these /8–/16 carves, so mesh-reachable remote subnets keep
 	// working. Passed as lanKeep; the per-OS impl pins each to its physical nexthop.
-	cleanup, err := enableExitRoutes(d.tunLUID(), d.ifname, bypass, privateV4Blocks)
+	cleanup, err := d.routing.EnableExitRoutes(bypass, privateV4Blocks)
 	if err != nil {
 		d.logger.Warn("mesh: enable exit-node routes failed", "err", err)
 		d.curExit = meshproto.NodeKey{}
@@ -631,7 +657,13 @@ func (d *WGDatapath) applyExitNode(sel meshproto.NodeKey) {
 	// A full tunnel captures every destination not explicitly bypassed — including
 	// a peer's public IP. WireGuard's own transport must NOT be captured (it would
 	// loop back through the tun), and only the relay is on the bypass list, so
-	// direct paths stand down for as long as the exit node is engaged.
+	// direct paths stand down for as long as the exit node is engaged — unless
+	// the platform keeps this process's sockets out of the tunnel anyway (a phone).
+	if d.routing.OwnSocketsBypassTunnel() {
+		d.logger.Info("mesh exit node engaged (full tunnel; direct paths kept, own sockets bypass the tunnel)",
+			"exit_node", sel.String(), "lan_keep", privateV4Blocks)
+		return
+	}
 	d.bind.setDirectEnabled(false)
 	d.logger.Info("mesh exit node engaged (full tunnel; direct paths paused, relay only)",
 		"exit_node", sel.String(), "bypass", d.bypassHosts, "lan_keep", privateV4Blocks)

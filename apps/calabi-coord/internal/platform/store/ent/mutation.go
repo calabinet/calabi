@@ -5677,6 +5677,8 @@ type MeshSettingMutation struct {
 	alias_addr_budget       *int
 	addalias_addr_budget    *int
 	require_device_approval *bool
+	conn_records_disabled   *bool
+	auto_approve_routes     *bool
 	updated_at              *time.Time
 	clearedFields           map[string]struct{}
 	done                    bool
@@ -5930,6 +5932,78 @@ func (m *MeshSettingMutation) ResetRequireDeviceApproval() {
 	m.require_device_approval = nil
 }
 
+// SetConnRecordsDisabled sets the "conn_records_disabled" field.
+func (m *MeshSettingMutation) SetConnRecordsDisabled(b bool) {
+	m.conn_records_disabled = &b
+}
+
+// ConnRecordsDisabled returns the value of the "conn_records_disabled" field in the mutation.
+func (m *MeshSettingMutation) ConnRecordsDisabled() (r bool, exists bool) {
+	v := m.conn_records_disabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConnRecordsDisabled returns the old "conn_records_disabled" field's value of the MeshSetting entity.
+// If the MeshSetting object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshSettingMutation) OldConnRecordsDisabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConnRecordsDisabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConnRecordsDisabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConnRecordsDisabled: %w", err)
+	}
+	return oldValue.ConnRecordsDisabled, nil
+}
+
+// ResetConnRecordsDisabled resets all changes to the "conn_records_disabled" field.
+func (m *MeshSettingMutation) ResetConnRecordsDisabled() {
+	m.conn_records_disabled = nil
+}
+
+// SetAutoApproveRoutes sets the "auto_approve_routes" field.
+func (m *MeshSettingMutation) SetAutoApproveRoutes(b bool) {
+	m.auto_approve_routes = &b
+}
+
+// AutoApproveRoutes returns the value of the "auto_approve_routes" field in the mutation.
+func (m *MeshSettingMutation) AutoApproveRoutes() (r bool, exists bool) {
+	v := m.auto_approve_routes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAutoApproveRoutes returns the old "auto_approve_routes" field's value of the MeshSetting entity.
+// If the MeshSetting object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshSettingMutation) OldAutoApproveRoutes(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAutoApproveRoutes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAutoApproveRoutes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAutoApproveRoutes: %w", err)
+	}
+	return oldValue.AutoApproveRoutes, nil
+}
+
+// ResetAutoApproveRoutes resets all changes to the "auto_approve_routes" field.
+func (m *MeshSettingMutation) ResetAutoApproveRoutes() {
+	m.auto_approve_routes = nil
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (m *MeshSettingMutation) SetUpdatedAt(t time.Time) {
 	m.updated_at = &t
@@ -6000,7 +6074,7 @@ func (m *MeshSettingMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *MeshSettingMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 6)
 	if m.meshnet_id != nil {
 		fields = append(fields, meshsetting.FieldMeshnetID)
 	}
@@ -6009,6 +6083,12 @@ func (m *MeshSettingMutation) Fields() []string {
 	}
 	if m.require_device_approval != nil {
 		fields = append(fields, meshsetting.FieldRequireDeviceApproval)
+	}
+	if m.conn_records_disabled != nil {
+		fields = append(fields, meshsetting.FieldConnRecordsDisabled)
+	}
+	if m.auto_approve_routes != nil {
+		fields = append(fields, meshsetting.FieldAutoApproveRoutes)
 	}
 	if m.updated_at != nil {
 		fields = append(fields, meshsetting.FieldUpdatedAt)
@@ -6027,6 +6107,10 @@ func (m *MeshSettingMutation) Field(name string) (ent.Value, bool) {
 		return m.AliasAddrBudget()
 	case meshsetting.FieldRequireDeviceApproval:
 		return m.RequireDeviceApproval()
+	case meshsetting.FieldConnRecordsDisabled:
+		return m.ConnRecordsDisabled()
+	case meshsetting.FieldAutoApproveRoutes:
+		return m.AutoApproveRoutes()
 	case meshsetting.FieldUpdatedAt:
 		return m.UpdatedAt()
 	}
@@ -6044,6 +6128,10 @@ func (m *MeshSettingMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldAliasAddrBudget(ctx)
 	case meshsetting.FieldRequireDeviceApproval:
 		return m.OldRequireDeviceApproval(ctx)
+	case meshsetting.FieldConnRecordsDisabled:
+		return m.OldConnRecordsDisabled(ctx)
+	case meshsetting.FieldAutoApproveRoutes:
+		return m.OldAutoApproveRoutes(ctx)
 	case meshsetting.FieldUpdatedAt:
 		return m.OldUpdatedAt(ctx)
 	}
@@ -6075,6 +6163,20 @@ func (m *MeshSettingMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRequireDeviceApproval(v)
+		return nil
+	case meshsetting.FieldConnRecordsDisabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConnRecordsDisabled(v)
+		return nil
+	case meshsetting.FieldAutoApproveRoutes:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAutoApproveRoutes(v)
 		return nil
 	case meshsetting.FieldUpdatedAt:
 		v, ok := value.(time.Time)
@@ -6167,6 +6269,12 @@ func (m *MeshSettingMutation) ResetField(name string) error {
 		return nil
 	case meshsetting.FieldRequireDeviceApproval:
 		m.ResetRequireDeviceApproval()
+		return nil
+	case meshsetting.FieldConnRecordsDisabled:
+		m.ResetConnRecordsDisabled()
+		return nil
+	case meshsetting.FieldAutoApproveRoutes:
+		m.ResetAutoApproveRoutes()
 		return nil
 	case meshsetting.FieldUpdatedAt:
 		m.ResetUpdatedAt()

@@ -7,4 +7,4 @@ package ent
 // Codegen tool pinned to v0.14.4 (the version that generated the committed
 // code) and run without -mod=mod so `go generate` works under go.work
 // workspace mode and reproduces the committed output exactly.
-//go:generate go run entgo.io/ent/cmd/ent@v0.14.6 generate ./schema
+//go:generate go run entgo.io/ent/cmd/ent@v0.14.4 generate ./schema

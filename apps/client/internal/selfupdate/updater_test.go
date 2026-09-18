@@ -71,7 +71,7 @@ func TestUpdater_AppliesNewer(t *testing.T) {
 		DownloadDir:    t.TempDir(),
 		Privileged:     true,
 		Managed:        managedForTest,
-		Apply:          func(_ context.Context, p string) error { appliedPath = p; return nil },
+		Apply:          func(_ context.Context, p string) (func() error, error) { appliedPath = p; return nil, nil },
 	}
 	applied, err := u.CheckAndApply(context.Background())
 	if err != nil || !applied {
@@ -97,7 +97,7 @@ func TestUpdater_UpToDate(t *testing.T) {
 		DownloadDir:    t.TempDir(),
 		Privileged:     true,
 		Managed:        managedForTest,
-		Apply:          func(_ context.Context, _ string) error { called = true; return nil },
+		Apply:          func(_ context.Context, _ string) (func() error, error) { called = true; return nil, nil },
 	}
 	applied, err := u.CheckAndApply(context.Background())
 	if err != nil || applied {
@@ -125,7 +125,7 @@ func TestUpdater_BadSHARefuses(t *testing.T) {
 		DownloadDir:    t.TempDir(),
 		Privileged:     true,
 		Managed:        managedForTest,
-		Apply:          func(_ context.Context, _ string) error { called = true; return nil },
+		Apply:          func(_ context.Context, _ string) (func() error, error) { called = true; return nil, nil },
 	}
 	applied, err := u.CheckAndApply(context.Background())
 	if err == nil || applied {
@@ -152,7 +152,7 @@ func TestUpdater_BadSignatureRefuses(t *testing.T) {
 		DownloadDir:    t.TempDir(),
 		Privileged:     true,
 		Managed:        managedForTest,
-		Apply:          func(_ context.Context, _ string) error { called = true; return nil },
+		Apply:          func(_ context.Context, _ string) (func() error, error) { called = true; return nil, nil },
 	}
 	applied, err := u.CheckAndApply(context.Background())
 	if err == nil || applied {
@@ -181,7 +181,7 @@ func TestUpdater_UnsignedManifestRefused(t *testing.T) {
 		DownloadDir:    t.TempDir(),
 		Privileged:     true,
 		Managed:        managedForTest,
-		Apply:          func(_ context.Context, _ string) error { called = true; return nil },
+		Apply:          func(_ context.Context, _ string) (func() error, error) { called = true; return nil, nil },
 	}
 	applied, err := u.CheckAndApply(context.Background())
 	if err == nil || applied {
@@ -209,7 +209,7 @@ func TestUpdater_ForeignManifestSignatureRefused(t *testing.T) {
 		DownloadDir:    t.TempDir(),
 		Privileged:     true,
 		Managed:        managedForTest,
-		Apply:          func(context.Context, string) error { t.Fatal("apply must not run"); return nil },
+		Apply:          func(context.Context, string) (func() error, error) { t.Fatal("apply must not run"); return nil, nil },
 	}
 	if _, err := u.CheckAndApply(context.Background()); err == nil {
 		t.Fatal("a manifest signed by an unknown key was accepted")

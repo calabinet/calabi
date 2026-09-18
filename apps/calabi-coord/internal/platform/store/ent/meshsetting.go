@@ -23,6 +23,10 @@ type MeshSetting struct {
 	AliasAddrBudget int `json:"alias_addr_budget,omitempty"`
 	// new devices must be approved by an admin before they can reach anything
 	RequireDeviceApproval bool `json:"require_device_approval,omitempty"`
+	// the org switched its connection records off (and had the stored ones deleted)
+	ConnRecordsDisabled bool `json:"conn_records_disabled,omitempty"`
+	// subnet routes take effect without an admin; false (the default) = an admin approves each
+	AutoApproveRoutes bool `json:"auto_approve_routes,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
 	UpdatedAt    time.Time `json:"updated_at,omitempty"`
 	selectValues sql.SelectValues
@@ -33,7 +37,7 @@ func (*MeshSetting) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case meshsetting.FieldRequireDeviceApproval:
+		case meshsetting.FieldRequireDeviceApproval, meshsetting.FieldConnRecordsDisabled, meshsetting.FieldAutoApproveRoutes:
 			values[i] = new(sql.NullBool)
 		case meshsetting.FieldID, meshsetting.FieldMeshnetID, meshsetting.FieldAliasAddrBudget:
 			values[i] = new(sql.NullInt64)
@@ -77,6 +81,18 @@ func (ms *MeshSetting) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field require_device_approval", values[i])
 			} else if value.Valid {
 				ms.RequireDeviceApproval = value.Bool
+			}
+		case meshsetting.FieldConnRecordsDisabled:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field conn_records_disabled", values[i])
+			} else if value.Valid {
+				ms.ConnRecordsDisabled = value.Bool
+			}
+		case meshsetting.FieldAutoApproveRoutes:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field auto_approve_routes", values[i])
+			} else if value.Valid {
+				ms.AutoApproveRoutes = value.Bool
 			}
 		case meshsetting.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -128,6 +144,12 @@ func (ms *MeshSetting) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("require_device_approval=")
 	builder.WriteString(fmt.Sprintf("%v", ms.RequireDeviceApproval))
+	builder.WriteString(", ")
+	builder.WriteString("conn_records_disabled=")
+	builder.WriteString(fmt.Sprintf("%v", ms.ConnRecordsDisabled))
+	builder.WriteString(", ")
+	builder.WriteString("auto_approve_routes=")
+	builder.WriteString(fmt.Sprintf("%v", ms.AutoApproveRoutes))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
 	builder.WriteString(ms.UpdatedAt.Format(time.ANSIC))

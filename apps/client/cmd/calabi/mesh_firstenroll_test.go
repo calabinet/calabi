@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"testing"
+
+	"github.com/calabi/calabi/apps/client/internal/platform/meshenroll"
 )
 
 // A fingerprint present at the FIRST enrollment rides that registration; there
@@ -14,7 +16,7 @@ func TestMeshController_FirstEnrollmentIsNotAFingerprintArrival(t *testing.T) {
 	writeCreds(t, "fp_abc")
 	var started []*startRec
 	c := newTestController(recordingStarter(&started))
-	enr := meshEnrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 7}
+	enr := meshenroll.Enrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 7}
 	ctx := context.Background()
 
 	c.reconcile(ctx, enr)

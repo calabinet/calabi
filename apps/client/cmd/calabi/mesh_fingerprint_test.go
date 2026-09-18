@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/calabi/calabi/apps/client/internal/mesh"
+	"github.com/calabi/calabi/apps/client/internal/platform/meshenroll"
 	"github.com/calabi/calabi/apps/client/internal/platform/statusapi"
 )
 
@@ -44,7 +45,7 @@ func TestMeshController_ReportsFingerprintWithoutReEnrolling(t *testing.T) {
 	writeCreds(t, "")
 	var started []*startRec
 	c := newTestController(recordingStarter(&started))
-	enr := meshEnrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 7}
+	enr := meshenroll.Enrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 7}
 	ctx := context.Background()
 
 	c.reconcile(ctx, enr)
@@ -90,7 +91,7 @@ func TestMeshController_FingerprintFallsBackToReEnroll(t *testing.T) {
 	writeCreds(t, "")
 	var started []*startRec
 	c := newTestController(recordingStarter(&started))
-	enr := meshEnrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 7}
+	enr := meshenroll.Enrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 7}
 	ctx := context.Background()
 
 	c.reconcile(ctx, enr)
@@ -116,7 +117,7 @@ func TestMeshController_LosingTheFingerprintDoesNothing(t *testing.T) {
 	writeCreds(t, "fp_abc")
 	var started []*startRec
 	c := newTestController(recordingStarter(&started))
-	enr := meshEnrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 7}
+	enr := meshenroll.Enrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 7}
 	ctx := context.Background()
 
 	c.reconcile(ctx, enr)
@@ -150,7 +151,7 @@ func TestMeshController_ServiceEditUpdatesInPlace(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	c.ctx = ctx
-	c.reconcile(ctx, meshEnrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 7})
+	c.reconcile(ctx, meshenroll.Enrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 7})
 
 	if err := c.SetMeshServices([]statusapi.MeshServiceDecl{
 		{Name: "db", Proto: "tcp", Port: 5432},
@@ -179,7 +180,7 @@ func TestMeshController_ServiceEditFallsBackToReEnroll(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	c.ctx = ctx
-	c.reconcile(ctx, meshEnrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 7})
+	c.reconcile(ctx, meshenroll.Enrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 7})
 	started[0].lease.updateErr = errors.New("coordinator says no")
 
 	if err := c.SetMeshServices([]statusapi.MeshServiceDecl{

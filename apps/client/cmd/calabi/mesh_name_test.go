@@ -56,6 +56,9 @@ func TestMeshNodeLabelTruncates(t *testing.T) {
 // An explicit --name wins; its absence must never reach the flag's "daemon"
 // default, which is a fine CLIENT name and a broken MESH name.
 func TestMeshNodeNameFor(t *testing.T) {
+	// meshNodeNameFor("") persists the label it mints. Without this the call
+	// below wrote it into the developer's real creds file on every test run.
+	isolateCreds(t)
 	if got := meshNodeNameFor("Office NAS"); got != "office-nas" {
 		t.Errorf("explicit name = %q, want office-nas", got)
 	}

@@ -1,10 +1,13 @@
-//go:build !linux
+//go:build !linux || android
 
 package mesh
 
 import (
 	"errors"
+	"log/slog"
 	"net/netip"
+
+	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
 )
 
 // errSubnetRouterUnsupported: the subnet-router glue (IP forwarding + NAT) isn't
@@ -20,7 +23,7 @@ var errSubnetRouterUnsupported = errors.New("mesh: subnet-router forwarding not 
 // subnetrouter_linux.go for why the answer lives beside the backend.
 func SubnetRouterSupported() bool { return false }
 
-func EnableSubnetRouter(routes []netip.Prefix) (func(), error) {
+func EnableSubnetRouter(_ meshproto.NodeKey, routes []netip.Prefix, _ *slog.Logger) (func(), error) {
 	if len(routes) == 0 {
 		return func() {}, nil
 	}
@@ -32,7 +35,7 @@ func EnableSubnetRouter(routes []netip.Prefix) (func(), error) {
 // cannot forward cannot be a subnet router at all, so it can never hold an
 // alias either — the console refuses the role up front
 // (statusapi.newAdvertisementRefused), and this is the backstop.
-func EnableSubnetAliases(aliases []SubnetAlias) (func(), error) {
+func EnableSubnetAliases(_ meshproto.NodeKey, aliases []SubnetAlias, _ *slog.Logger) (func(), error) {
 	if len(aliases) == 0 {
 		return func() {}, nil
 	}

@@ -425,7 +425,7 @@ func runDaemon(args []string) int {
 	// "Is anything moving through this client" — the signal the update policy
 	// uses to hold a routine restart back. Sampled below; never blocks.
 	traffic := newTrafficWatch()
-	updateAgent := newUpdateAgent(logger, version, func() bool { return traffic.busy(time.Now()) })
+	updateAgent := newUpdateAgent(logger, version, bffConsoleURL, func() bool { return traffic.busy(time.Now()) })
 	// Assigned through a nil check ON PURPOSE. A typed nil pointer stored in an
 	// interface field is NOT == nil, so `Update: updateAgent` would make the
 	// handlers believe an agent exists and then call through it.
@@ -484,6 +484,10 @@ func runDaemon(args []string) int {
 			// kick above does not reach it. Its meshnet is the org behind the
 			// credential — which just changed — so re-enroll too.
 			meshCtl.Rebind("login")
+			// A different account may belong to an org with update rules.
+			if updateAgent != nil {
+				go updateAgent.RefreshOrgPolicy(context.Background())
+			}
 		},
 		// Same kick when the SPA flips to a different Org. The new
 		// access_token carries a different org_id claim, but the
@@ -533,6 +537,10 @@ func runDaemon(args []string) int {
 			// — so the node stayed on the old org's meshnet and then jumped at the
 			// next reconnect, whenever that happened to be.
 			meshCtl.Rebind("org switch")
+			// The new org's update rules replace the old one's.
+			if updateAgent != nil {
+				go updateAgent.RefreshOrgPolicy(context.Background())
+			}
 		},
 		// SPA logout: same teardown shape as Org switch. The handler
 		// has already wiped the bearer + APIKey from creds, so the
@@ -553,6 +561,10 @@ func runDaemon(args []string) int {
 			// drop. The follow-up enrollment fetch fails (no bearer), which is
 			// what keeps mesh down until the next login.
 			meshCtl.Rebind("logout")
+			// No org any more, so no org's update rules either.
+			if updateAgent != nil {
+				go updateAgent.RefreshOrgPolicy(context.Background())
+			}
 		},
 		// SPA dismissed the edge-switch banner — clear the state
 		// payload so the next /tunnels poll has edge_switch=null and
@@ -604,7 +616,10 @@ func runDaemon(args []string) int {
 	// Mesh enrollment: poll the control plane + reconcile the node's
 	// meshnet session. Bound to ctx, torn down on shutdown. No-op until the
 	// platform configures a coordinator (enrollment reports enabled:false).
-	go meshCtl.Run(ctx)
+	// Exit waits for the session to tear down (see awaitMeshTeardown); the defer
+	// cancels first, so it cannot wait on a context nothing has cancelled.
+	meshStopped := startMeshController(ctx, meshCtl)
+	defer awaitMeshTeardown(logger, cancel, meshStopped, meshTeardownTimeout)
 	// Self-update: poll the signed manifest. Every daemon records what it finds
 	// (the :7400 console renders it); only the machine-wide system service
 	// applies. Nil for a dev build or when updates are disabled.

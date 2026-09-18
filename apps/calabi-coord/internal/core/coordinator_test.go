@@ -445,6 +445,7 @@ func TestRenameNodeNameUniquePerMeshnet(t *testing.T) {
 func TestRouteApprovalGrandfathersUnreviewedNodes(t *testing.T) {
 	c := newTestCoord()
 	ctx := context.Background()
+	autoApproveRoutes(t, c, 1) // the org switched approval off
 	lan := netip.MustParsePrefix("192.168.1.0/24")
 	other := netip.MustParsePrefix("10.9.1.0/24") // a /8 is refused as too broad
 
@@ -454,7 +455,7 @@ func TestRouteApprovalGrandfathersUnreviewedNodes(t *testing.T) {
 		t.Fatalf("register: %v", err)
 	}
 	if len(n.ApprovedRoutes) != 2 || n.RoutesReviewed {
-		t.Fatalf("an unreviewed node should route what it claims: %+v reviewed=%v", n.ApprovedRoutes, n.RoutesReviewed)
+		t.Fatalf("in a meshnet that auto-approves, an unreviewed node should route what it claims: %+v reviewed=%v", n.ApprovedRoutes, n.RoutesReviewed)
 	}
 
 	// The admin narrows it to one route.
@@ -493,6 +494,7 @@ func TestRouteApprovalGrandfathersUnreviewedNodes(t *testing.T) {
 func TestApproveRoutesRejectsUnclaimedAndCrossTenant(t *testing.T) {
 	c := newTestCoord()
 	ctx := context.Background()
+	autoApproveRoutes(t, c, 1)
 	lan := netip.MustParsePrefix("192.168.1.0/24")
 	n, _ := c.Register(ctx, RegisterInput{Meshnet: 1, Name: "router", NodeKey: key(1),
 		AdvertisedRoutes: []netip.Prefix{lan}})

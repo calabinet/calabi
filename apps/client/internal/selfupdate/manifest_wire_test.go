@@ -3,11 +3,13 @@ package selfupdate
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 // updatekitOutput is a manifest COPIED VERBATIM from what
-// `scripts/updatekit merge --critical --min-supported 1.10.0` writes (only the
-// hashes shortened). Not hand-written to match this package's struct tags —
+// `scripts/updatekit merge --critical --min-supported 1.10.0 --rollback` followed
+// by `updatekit rollout --hours 48` and `--cap 30` writes (2026-09-16, a
+// throwaway key). Not hand-written to match this package's struct tags —
 // that would only prove the struct agrees with itself.
 //
 // updatekit is a separate module: it cannot import this package and there is no
@@ -19,15 +21,20 @@ import (
 // it and re-signed the result, which then looked perfectly valid.
 const updatekitOutput = `{
   "version": "1.12.0",
-  "pub_date": "2026-09-15T14:39:56Z",
+  "pub_date": "2026-09-16T12:50:46Z",
+  "rollback": true,
   "critical": true,
   "min_supported": "1.10.0",
-  "rollback": true,
+  "rollout": {
+    "start": "2026-09-16T12:50:46Z",
+    "hours": 48,
+    "cap_percent": 30
+  },
   "platforms": {
     "darwin-universal": {
       "url": "https://example.test/d.pkg",
-      "sha256": "9b889519bfa1ec73abc1af25d17b646688f5580246221f721470a40be37977dc",
-      "signature": "oseqrkf0U0b0nfQF5BDewZ0wz9y+RH01eP1mt2QWu/J3PgnOvJNLoB+Iv45LlBYoIQokTQLnkZI/EfLJU1eYDw=="
+      "sha256": "ec09b58055ca508e9b7f2e3a1d5a843bf7d18c6eef631f5e0007858c34bc62f4",
+      "signature": "rVNmpNEESrDXazwI3aMhJlfoS7q7jvU1Nhnv2E+5rj7kTK8KJwU3ruQCDD6AYytMJWvTjh0SHu5rERqL5Ol7BA=="
     }
   }
 }`
@@ -52,6 +59,12 @@ func TestManifestReadsEveryFieldUpdatekitWrites(t *testing.T) {
 	if !m.Rollback {
 		t.Error("rollback did not survive the wire — the anti-rollback floor would refuse the documented recovery")
 	}
+	// A schedule that did not survive is a release that reaches everyone at
+	// once — exactly what the rollout was published to prevent.
+	if r := m.Rollout; r == nil || r.Hours != 48 || r.CapPercent == nil || *r.CapPercent != 30 ||
+		!r.Start.Equal(time.Date(2026, 9, 16, 12, 50, 46, 0, time.UTC)) {
+		t.Errorf("rollout did not survive the wire: %+v", m.Rollout)
+	}
 	a, ok := m.Platforms["darwin-universal"]
 	if !ok || a.SHA256 == "" || a.Signature == "" || a.URL == "" {
 		t.Errorf("platform entry did not decode: %+v (ok=%v)", a, ok)
@@ -66,7 +79,7 @@ func TestEveryActionableManifestFieldIsProducible(t *testing.T) {
 	if err := json.Unmarshal([]byte(updatekitOutput), &got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	for _, field := range []string{"version", "critical", "min_supported", "rollback", "platforms"} {
+	for _, field := range []string{"version", "critical", "min_supported", "rollback", "rollout", "platforms"} {
 		if _, ok := got[field]; !ok {
 			t.Errorf("%q is acted on by this package but updatekit does not emit it", field)
 		}

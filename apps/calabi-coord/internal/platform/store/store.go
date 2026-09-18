@@ -477,6 +477,8 @@ func (s *Store) GetSettings(ctx context.Context, t core.MeshnetID) (core.Meshnet
 	}
 	return core.MeshnetSettings{
 		RequireDeviceApproval: row.RequireDeviceApproval,
+		ConnRecordsDisabled:   row.ConnRecordsDisabled,
+		AutoApproveRoutes:     row.AutoApproveRoutes,
 		AliasAddrBudget:       row.AliasAddrBudget,
 	}, nil
 }
@@ -488,6 +490,8 @@ func (s *Store) SetSettings(ctx context.Context, t core.MeshnetID, in core.Meshn
 		return s.client.MeshSetting.Create().
 			SetMeshnetID(int64(t)).
 			SetRequireDeviceApproval(in.RequireDeviceApproval).
+			SetConnRecordsDisabled(in.ConnRecordsDisabled).
+			SetAutoApproveRoutes(in.AutoApproveRoutes).
 			SetAliasAddrBudget(in.AliasAddrBudget).
 			Exec(ctx)
 	}
@@ -496,6 +500,8 @@ func (s *Store) SetSettings(ctx context.Context, t core.MeshnetID, in core.Meshn
 	}
 	return s.client.MeshSetting.UpdateOneID(existing.ID).
 		SetRequireDeviceApproval(in.RequireDeviceApproval).
+		SetConnRecordsDisabled(in.ConnRecordsDisabled).
+		SetAutoApproveRoutes(in.AutoApproveRoutes).
 		SetAliasAddrBudget(in.AliasAddrBudget).
 		Exec(ctx)
 }

@@ -56,6 +56,7 @@ const (
 	HoldSecurityOnly  = "security-only"  // mode=security, and this is not critical
 	HoldOutsideWindow = "outside-window" // waiting for the maintenance window
 	HoldBusy          = "busy"           // traffic is moving through this client
+	HoldRollout       = "rollout"        // the release is being rolled out and this machine's turn has not come
 )
 
 // DefaultPolicy: install automatically, but at night, and never hold anything
@@ -149,9 +150,18 @@ func (p Policy) Decide(st Status, now time.Time, busy bool, waitingSince time.Ti
 	if st.Mandatory {
 		return Decision{Install: true}
 	}
+	// The staged rollout (U5b) holds back everything below the floor, critical
+	// included: the publisher decides how fast a release spreads, and one that
+	// wants a security fix everywhere at once publishes it without a ramp. It is
+	// checked AFTER the machine's own mode, so a "tell me only" machine is told
+	// that, and BEFORE the backstop, which exists to end the machine's own
+	// waiting, not the publisher's.
 	if st.Critical {
 		if p.Mode == ModeNotify {
 			return Decision{Hold: HoldNotifyOnly}
+		}
+		if !st.Rollout.Included(now) {
+			return Decision{Hold: HoldRollout}
 		}
 		return Decision{Install: true}
 	}
@@ -160,6 +170,9 @@ func (p Policy) Decide(st Status, now time.Time, busy bool, waitingSince time.Ti
 		return Decision{Hold: HoldNotifyOnly}
 	case ModeSecurity:
 		return Decision{Hold: HoldSecurityOnly}
+	}
+	if !st.Rollout.Included(now) {
+		return Decision{Hold: HoldRollout}
 	}
 	// The backstop is checked BEFORE the reasons to wait, so that a machine
 	// which is never idle inside its window still lands the update.

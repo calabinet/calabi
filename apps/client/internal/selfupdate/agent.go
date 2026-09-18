@@ -29,13 +29,25 @@ type Agent struct {
 	mu     sync.Mutex
 	snap   Snapshot
 	policy Policy
+	// org is the org's requirement (U5c), nil when none applies. The agent acts
+	// on policy.Tighten(org); policy itself stays the machine's own choice.
+	org    *OrgPolicy
 	busyOp bool
-	// launched latches once an installer has been handed off: the daemon is
-	// about to be restarted underneath us, so the state must stop reading "idle".
+	// launched is set while a handed-off installer runs: the daemon is about to
+	// be restarted underneath us, so the state must stop reading "idle", and no
+	// check or second installer may start. Cleared only if the installer exits
+	// with us still alive (watchInstaller) — that is a failed update.
 	launched  bool
 	lastCheck time.Time
 	logf      func(string, ...any)
 	now       func() time.Time
+
+	// outboxMu serialises reads and writes of the report queue file. Sending
+	// happens outside it, so a slow platform never holds up an install.
+	outboxMu sync.Mutex
+	// reportFailing keeps a platform that cannot be reached to one log line per
+	// outage. Guarded by outboxMu.
+	reportFailing bool
 }
 
 // Snapshot is what GET /v1/update renders: the last check's Status, the policy
@@ -63,6 +75,9 @@ type Snapshot struct {
 	// zero value went out on the wire as "0001-01-01T00:00:00Z", the console read
 	// that as a real date, and the panel offered "等你决定。· 最迟 1/1/1".
 	HoldUntil *time.Time `json:"hold_until,omitempty"`
+	// OrgPolicy is the org's requirement when one applies (U5c). Policy above
+	// stays the machine's own setting; the console shows what the org locks.
+	OrgPolicy *OrgPolicy `json:"org_policy,omitempty"`
 	// Timezone is the abbreviation for the MACHINE's local zone (e.g. CST, CEST).
 	// The maintenance window is on this clock, not the viewer's: the restart
 	// happens here. A console opened from another country has to be able to say
@@ -111,17 +126,33 @@ var ErrDisabled = errors.New("selfupdate: not configured on this daemon")
 // nil (treated as never busy).
 func NewAgent(u *Updater, busy func() bool) *Agent {
 	p := LoadPolicy(u.DownloadDir)
+	// Close the attempt the previous process opened, if any. This process
+	// existing on the new version is what "succeeded" means — the one that
+	// launched the installer never lives to see it.
+	if ev := resolvePending(u.DownloadDir, u.CurrentVersion, time.Now()); ev != nil {
+		u.logf("selfupdate: last update %s → %s: %s", ev.From, ev.To, ev.Result)
+		if u.Report != nil {
+			if err := appendOutbox(u.DownloadDir, *ev); err != nil {
+				u.logf("selfupdate: could not queue the result of the last update: %v", err)
+			}
+		}
+	}
+	// The last org policy fetched: the machine keeps its org's rules across a
+	// restart and while the control plane is unreachable.
+	org := loadOrgPolicy(u.DownloadDir)
 	return &Agent{
 		u:      u,
 		busy:   busy,
 		policy: p,
+		org:    org,
 		logf:   u.logf,
 		now:    time.Now,
 		snap: Snapshot{
-			Status: Status{Current: u.CurrentVersion},
-			Policy: p,
-			Auto:   p.Mode == ModeAuto && u.Privileged,
-			State:  StateIdle,
+			Status:    Status{Current: u.CurrentVersion},
+			Policy:    p,
+			OrgPolicy: org,
+			Auto:      p.Tighten(org).Mode == ModeAuto && u.Privileged,
+			State:     StateIdle,
 		},
 	}
 }
@@ -169,7 +200,7 @@ func (a *Agent) SetPolicy(p Policy) (Snapshot, error) {
 	a.mu.Lock()
 	a.policy = p
 	a.snap.Policy = p
-	a.snap.Auto = p.Mode == ModeAuto && a.u.Privileged
+	a.snap.Auto = p.Tighten(a.org).Mode == ModeAuto && a.u.Privileged
 	st := a.snap.Status
 	a.mu.Unlock()
 
@@ -233,12 +264,10 @@ func (a *Agent) Apply(ctx context.Context) error {
 	if !st.CanApply {
 		return ErrCannotApply
 	}
-	if _, err := a.u.CheckAndApply(ctx); err != nil {
+	if _, err := a.launch(ctx, TriggerManual); err != nil {
 		a.record(st, err)
 		return err
 	}
-	clearDeferState(a.u.DownloadDir)
-	a.latchLaunched()
 	return nil
 }
 
@@ -260,10 +289,14 @@ func (a *Agent) Run(ctx context.Context, interval time.Duration) {
 			return
 		case <-t.C:
 		}
-		launched, held := a.tick(ctx, interval)
-		if launched {
-			return
-		}
+		// Results first: right after an install, this is the new process
+		// delivering what the old one could not.
+		a.flushReports(ctx)
+		// A launch does not end the loop. A successful install ends the process;
+		// one that fails leaves this daemon running, and it must go on checking
+		// (on the slow clock: the same failure every ten minutes helps no one).
+		// While the installer runs, ticks are refused by enter.
+		_, held := a.tick(ctx, interval)
 		next := interval
 		if held {
 			next = pendingEvalInterval
@@ -273,7 +306,7 @@ func (a *Agent) Run(ctx context.Context, interval time.Duration) {
 }
 
 // tick fetches when due, then evaluates. Reports whether an update was launched
-// (the loop should stop) and whether one is being held (come back sooner).
+// and whether one is being held (come back sooner).
 func (a *Agent) tick(ctx context.Context, checkEvery time.Duration) (launched, held bool) {
 	if err := a.enter(StateChecking); err != nil {
 		return false, false // a manual check/apply holds the agent; skip this tick
@@ -316,6 +349,8 @@ const slowCheckWarn = 3 * time.Second
 
 // fetch runs one check and records it.
 func (a *Agent) fetch(ctx context.Context) (Status, error) {
+	// The org's rules first, so the decision made on this result uses them.
+	a.refreshOrgPolicy(ctx)
 	start := a.now()
 	st, err := a.u.Check(ctx)
 	// The console's button spins for exactly as long as this call takes, so "the
@@ -343,7 +378,7 @@ func (a *Agent) evaluate(st Status, install bool) (launched bool) {
 		return false
 	}
 	a.mu.Lock()
-	p := a.policy
+	p := a.policy.Tighten(a.org)
 	a.mu.Unlock()
 
 	now := a.now()
@@ -352,6 +387,12 @@ func (a *Agent) evaluate(st Status, install bool) (launched bool) {
 		var until time.Time
 		// Only the WAITING holds run a clock. notify-only and security-only are
 		// indefinite by design — they are waiting for a person, not a deadline.
+		if d.Hold == HoldRollout {
+			// The publisher's schedule, not the machine's: no backstop clock.
+			if eta, ok := st.Rollout.ETA(); ok {
+				until = eta
+			}
+		}
 		if d.Hold == HoldOutsideWindow || d.Hold == HoldBusy {
 			noteDeferred(dir, st.Latest, now)
 			if s := waitingSince(dir, st.Latest); !s.IsZero() && p.MaxDeferDays > 0 {
@@ -370,17 +411,52 @@ func (a *Agent) evaluate(st Status, install bool) (launched bool) {
 	}
 
 	a.setState(StateUpdating)
-	applied, err := a.u.CheckAndApply(context.Background())
+	trigger := TriggerAuto
+	switch {
+	case st.Mandatory:
+		trigger = TriggerMandatory
+	case st.Critical:
+		trigger = TriggerCritical
+	}
+	applied, err := a.launch(context.Background(), trigger)
 	if err != nil {
 		a.record(st, err)
 		a.logf("selfupdate: apply failed: %v", err)
 		return false
 	}
+	return applied
+}
+
+// launch runs the apply half as one reported attempt: a failure before any
+// installer ran is one event naming the stage; otherwise a pending record and a
+// "started" event are written BEFORE the installer starts, because the
+// installer's first act is to stop this process.
+func (a *Agent) launch(ctx context.Context, trigger string) (bool, error) {
+	dir := a.u.DownloadDir
+	at := newAttempt(a.u.CurrentVersion, trigger, a.now())
+	applied, wait, err := a.u.checkAndLaunch(ctx, func(st Status) {
+		at.To = st.Latest
+		if err := writePending(dir, at); err != nil {
+			a.logf("selfupdate: could not record the pending update (its result will not be reported): %v", err)
+		}
+		a.enqueueReport(at.event(ResultStarted, "", nil, a.now()))
+		a.flushReports(ctx)
+	})
+	if err != nil {
+		var ae *attemptError
+		if errors.As(err, &ae) {
+			at.To = ae.Status.Latest
+			clearPending(dir)
+			a.enqueueReport(at.event(ResultFailed, ae.Stage, err, a.now()))
+			a.flushReports(ctx)
+		}
+		return false, err
+	}
 	if applied {
 		clearDeferState(dir)
-		a.latchLaunched()
+		a.latchLaunched(wait, at)
 	}
-	return applied
+	return applied, nil
 }
 
 func (a *Agent) isBusy() bool {
@@ -390,11 +466,98 @@ func (a *Agent) isBusy() bool {
 	return a.busy()
 }
 
-func (a *Agent) latchLaunched() {
+// latchLaunched records the hand-off, THEN starts watching the installer — in
+// that order, so an installer that dies instantly is recorded after the launch
+// and not overwritten by it.
+func (a *Agent) latchLaunched(wait func() error, at attempt) {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	a.launched = true
 	a.snap.State = StateUpdating
+	a.mu.Unlock()
+	if wait != nil {
+		go a.watchInstaller(wait, at)
+	}
+}
+
+// watchInstaller waits for a launched installer. On success it never gets to
+// run its second half: the installer stops this service first and the process
+// ends with the goroutine in it. If wait returns, this daemon outlived its own
+// update, and the console must hear that instead of "updating" forever.
+func (a *Agent) watchInstaller(wait func() error, at attempt) {
+	err := installerExited(wait())
+	a.logf("%v", err)
+	// Closed here, so the next process does not report the same attempt a
+	// second time as not-replaced.
+	clearPending(a.u.DownloadDir)
+	a.enqueueReport(at.event(ResultFailed, StageInstaller, err, a.now()))
+
+	a.mu.Lock()
+	a.launched = false
+	a.snap.State = StateFailed
+	a.snap.Error = err.Error()
+	a.mu.Unlock()
+
+	a.flushReports(context.Background())
+}
+
+// reportTimeout bounds one delivery. It sits in front of an installer launch, so
+// it must stay short: an unreachable platform delays an update by this much, and
+// never blocks it.
+const reportTimeout = 5 * time.Second
+
+// enqueueReport persists an event for delivery. Queued first, sent second: the
+// process may be gone before the request completes.
+func (a *Agent) enqueueReport(ev UpdateEvent) {
+	if a.u.Report == nil {
+		return
+	}
+	a.outboxMu.Lock()
+	defer a.outboxMu.Unlock()
+	if err := appendOutbox(a.u.DownloadDir, ev); err != nil {
+		a.logf("selfupdate: could not queue update result: %v", err)
+	}
+}
+
+// flushReports sends whatever is queued. Best-effort by design: a failure keeps
+// the events for next time and is logged once per outage.
+func (a *Agent) flushReports(ctx context.Context) {
+	if a.u.Report == nil {
+		return
+	}
+	dir := a.u.DownloadDir
+	a.outboxMu.Lock()
+	evs := readOutbox(dir)
+	a.outboxMu.Unlock()
+	if len(evs) == 0 {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, reportTimeout)
+	err := a.u.Report(ctx, evs)
+	cancel()
+
+	a.outboxMu.Lock()
+	defer a.outboxMu.Unlock()
+	switch {
+	case err == nil:
+		if a.reportFailing {
+			a.reportFailing = false
+			a.logf("selfupdate: reporting update results recovered")
+		}
+	case errors.Is(err, ErrReportRejected):
+		a.logf("selfupdate: the platform rejected %d update results; dropping them: %v", len(evs), err)
+	case errors.Is(err, ErrReportNoCredential):
+		return // not logged in: keep them, say nothing
+	default:
+		if !a.reportFailing {
+			a.reportFailing = true
+			a.logf("selfupdate: could not report update results (kept %d for later): %v", len(evs), err)
+		}
+		return
+	}
+	if err := removeFromOutbox(dir, evs); err != nil {
+		a.logf("selfupdate: could not clear sent update results: %v", err)
+	}
 }
 
 // enter claims the agent for one operation. Only one check/apply runs at a time:
@@ -403,7 +566,10 @@ func (a *Agent) latchLaunched() {
 func (a *Agent) enter(state string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.busyOp {
+	// An installer is running and about to stop this daemon. A check now would
+	// flip the state away from "updating"; a tick could start a second installer
+	// on top of the first.
+	if a.busyOp || a.launched {
 		return ErrBusy
 	}
 	a.busyOp = true
@@ -456,7 +622,7 @@ func (a *Agent) record(st Status, err error) Snapshot {
 	}
 	a.snap.Status = st
 	a.snap.Policy = a.policy
-	a.snap.Auto = a.policy.Mode == ModeAuto && a.u.Privileged
+	a.snap.Auto = a.policy.Tighten(a.org).Mode == ModeAuto && a.u.Privileged
 	a.snap.Error = ""
 	return a.snap
 }

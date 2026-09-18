@@ -22,12 +22,13 @@ import {
   message,
 } from "antd";
 import type { UploadFile } from "antd";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { UpdatePanel, useUpdateInfo } from "../components/UpdateNotice";
-import type { Healthz } from "../api/types";
+import type { AccountMe, Healthz } from "../api/types";
+import { useLogout } from "../hooks/use-logout";
+import { useServiceMode } from "../hooks/use-service-mode";
 import { useTranslation } from "react-i18next";
 
 const { Title, Text, Paragraph } = Typography;
@@ -37,8 +38,6 @@ export default function Settings() {
   const [importOpen, setImportOpen] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
   const [importFile, setImportFile] = useState<UploadFile | null>(null);
-  const qc = useQueryClient();
-  const navigate = useNavigate();
 
   // Same shared query the panel itself reads, so the card and its contents can
   // never disagree about whether there is anything to show.
@@ -49,22 +48,17 @@ export default function Settings() {
     queryFn: api.healthz,
   });
 
-  // M7.1: in-window logout. Calls /v1/auth/logout which revokes the
-  // session on identity-svc AND clears local creds, then bounces to
-  // the login screen.
-  const logout = useMutation({
-    mutationFn: api.logout,
-    onSuccess: async () => {
-      message.success(t("common.loggedOut"));
-      await qc.invalidateQueries();
-      navigate("/login", { replace: true });
-    },
-    onError: () => {
-      // Local creds were cleared either way — punt to login.
-      qc.invalidateQueries();
-      navigate("/login", { replace: true });
-    },
+  const logout = useLogout();
+  // Signing out only exists for a daemon a person logged into. An agent runs on
+  // the API key its service was installed with and the daemon refuses the call;
+  // standalone has no account at all. Same rule as the account menu in Layout.
+  const { agentMode } = useServiceMode();
+  const { data: me } = useQuery<AccountMe>({
+    queryKey: ["me"],
+    queryFn: api.me,
+    retry: false,
   });
+  const standalone = me?.plan?.code === "standalone";
 
   async function doExport() {
     try {
@@ -188,19 +182,27 @@ export default function Settings() {
         </Space>
       </Card>
 
-      <Card title={t("settings.logoutCard")} size="small">
-        <Space direction="vertical" size={8} style={{ width: "100%" }}>
-          <Text type="secondary">{t("settings.logoutHint")}</Text>
-          <Button
-            danger
-            icon={<LogoutOutlined />}
-            loading={logout.isPending}
-            onClick={() => logout.mutate()}
-          >
-            {t("topbar.logout")}
-          </Button>
-        </Space>
-      </Card>
+      {agentMode ? (
+        <Card title={t("settings.identityCard")} size="small">
+          <Text type="secondary">{t("settings.agentIdentityHint")}</Text>
+        </Card>
+      ) : (
+        !standalone && (
+          <Card title={t("settings.logoutCard")} size="small">
+            <Space direction="vertical" size={8} style={{ width: "100%" }}>
+              <Text type="secondary">{t("settings.logoutHint")}</Text>
+              <Button
+                danger
+                icon={<LogoutOutlined />}
+                loading={logout.isPending}
+                onClick={() => logout.mutate()}
+              >
+                {t("topbar.logout")}
+              </Button>
+            </Space>
+          </Card>
+        )
+      )}
 
       <Modal
         title={t("settings.importModalTitle")}

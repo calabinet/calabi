@@ -24,6 +24,7 @@ import (
 	"github.com/calabi/calabi/apps/client/internal/creds"
 	"github.com/calabi/calabi/apps/client/internal/localweb"
 	"github.com/calabi/calabi/apps/client/internal/mesh"
+	"github.com/calabi/calabi/apps/client/internal/platform/meshenroll"
 )
 
 // meshConfig is the daemon YAML `mesh:` block. Empty/disabled = the daemon runs
@@ -145,9 +146,9 @@ type meshRunner struct {
 	// refuses the one authKeyFn returned; it returns the new credential, or ""
 	// when there is nothing to do. The platform daemon sets it for a login
 	// session — see refreshAfterDenial for why the mesh cannot wait for anyone
-	// else to. lastRefresh is its cooldown; loop goroutine only.
+	// else to. refreshGate is its cooldown; loop goroutine only.
 	refreshFn   func(context.Context) string
-	lastRefresh time.Time
+	refreshGate meshenroll.RefreshGate
 
 	// tune is the retry loop's knobs and steps; the zero value is production.
 	// Only tests set it (see loop).
@@ -392,7 +393,7 @@ func (r *meshRunner) startDataPlane() (*meshDataPlane, error) {
 	}
 
 	if len(routes) > 0 {
-		if cleanup, e := mesh.EnableSubnetRouter(routes); e != nil {
+		if cleanup, e := mesh.EnableSubnetRouter(priv.Public(), routes, r.logger); e != nil {
 			r.logger.Warn("mesh: subnet-router forwarding not enabled; advertising anyway", "err", e)
 		} else {
 			stops = append(stops, cleanup)

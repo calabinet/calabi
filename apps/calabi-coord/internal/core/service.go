@@ -498,6 +498,19 @@ func (s *MemServiceStore) DeleteService(_ context.Context, id int64) error {
 // is what every meshnet runs on until an admin changes something.
 type MeshnetSettings struct {
 	RequireDeviceApproval bool `json:"require_device_approval"`
+	// AutoApproveRoutes lets a device's subnet routes take effect without an
+	// admin, the way every route did before approval existed. The console shows
+	// it as the "routes require approval" switch, ON by default.
+	//
+	// Phrased as the opt-OUT so the zero value is the safe one: a meshnet that
+	// never touched it, and any caller that builds these settings without
+	// knowing the field, both land on "an admin decides". A route is a claim
+	// that hands the device everyone else's traffic for that network; letting
+	// it through should be a choice, not what happens when a field is forgotten.
+	//
+	// Exit routes (0.0.0.0/0) are never auto-approved either way, and routes a
+	// peer already publishes wait for an admin regardless (MESH-1).
+	AutoApproveRoutes bool `json:"auto_approve_routes"`
 	// ConnRecordsDisabled turns the data-plane audit trail OFF for this org.
 	//
 	// Phrased as "disabled" so the zero value keeps the platform behaviour: a

@@ -2,8 +2,9 @@ package mesh
 
 import (
 	"fmt"
-	"net"
 	"net/netip"
+
+	"github.com/calabi/calabi/apps/client/internal/hostnet"
 )
 
 // privateV4Blocks are the IPv4 ranges an exit-node client keeps on the physical
@@ -37,7 +38,7 @@ var privateV4Blocks = []netip.Prefix{
 // mesh), because the destination IP is ambiguous and hijacking the machine's own
 // LAN is the worse failure. See selectSubnetRoutes and (MESH.7).
 func localDirectSubnets(excludeIfname string) ([]netip.Prefix, error) {
-	ifaces, err := net.Interfaces()
+	ifaces, err := hostnet.Interfaces()
 	if err != nil {
 		return nil, fmt.Errorf("mesh: list interfaces: %w", err)
 	}
@@ -47,29 +48,17 @@ func localDirectSubnets(excludeIfname string) ([]netip.Prefix, error) {
 		if iface.Name == excludeIfname {
 			continue // never treat our own tun as a "local network"
 		}
-		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+		if !iface.Up || iface.Loopback {
 			continue
 		}
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-		for _, a := range addrs {
-			ipn, ok := a.(*net.IPNet)
-			if !ok {
-				continue
-			}
-			addr, ok := netip.AddrFromSlice(ipn.IP)
-			if !ok {
-				continue
-			}
-			addr = addr.Unmap()
+		for _, a := range iface.Addrs {
+			addr := a.Addr.Unmap()
 			if addr.IsLoopback() || addr.IsLinkLocalUnicast() || addr.IsLinkLocalMulticast() {
 				continue
 			}
-			ones, _ := ipn.Mask.Size()
-			if ones == 0 {
-				continue // a /0 address mask is not a "local subnet"
+			ones := a.Bits
+			if ones <= 0 {
+				continue // no mask, or a /0 one: not a "local subnet"
 			}
 			p := netip.PrefixFrom(addr, ones).Masked()
 			if !p.IsValid() || seen[p] {

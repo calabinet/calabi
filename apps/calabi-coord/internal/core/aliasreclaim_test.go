@@ -144,6 +144,7 @@ func TestAliasPoolCoalescesOnRelease(t *testing.T) {
 func TestDeleteNodeReturnsTheWholeAliasBlock(t *testing.T) {
 	ctx := context.Background()
 	c := newTestCoord()
+	c.AutoApproveAllRoutes = true // aliases follow approval; how routes get approved is not this test's subject
 	pool := NewMemAliasIPAM()
 	c.AliasIPAM = pool
 	full := pool.FreeAddrs()

@@ -21,8 +21,7 @@
     "logs": "Protokolle",
     "tools": "Werkzeuge",
     "settings": "Einstellungen",
-    "mesh": "Mesh",
-    "services": "Dienste"
+    "mesh": "Mesh"
   },
   "plan": {
     "free": "Free",
@@ -445,7 +444,10 @@
     "exportBtn": "Konfiguration exportieren (.json)",
     "importBtn": "Konfiguration importieren",
     "logoutCard": "Abmelden",
-    "logoutHint": "Beim Abmelden ruft der Client identity-svc auf, um die aktuelle Sitzung zu widerrufen, und löscht die Access- / Refresh-Token dieses Rechners. Der Geräte-Fingerabdruck + API-Key bleiben erhalten, sodass beim nächsten Mal keine erneute Kopplung nötig ist.",
+    "logoutHint": "Nach dem Abmelden läuft dieser Rechner nicht mehr unter diesem Konto, und seine Tunnel und das Mesh werden getrennt. Die Tunnel selbst werden nicht gelöscht.",
+    "logoutFailed": "Abmelden fehlgeschlagen",
+    "identityCard": "Identität",
+    "agentIdentityHint": "Dieser Client läuft als Dienst unter dem API-Schlüssel, mit dem er installiert wurde. Abmelden oder Kontowechsel ist hier daher nicht möglich. Für eine andere Identität installieren Sie den Dienst mit einem neuen Schlüssel neu. Um diesen Rechner außer Betrieb zu nehmen, deinstallieren Sie den Dienst oder widerrufen Sie den Schlüssel in der Web-Konsole.",
     "importModalTitle": "Konfiguration importieren",
     "dragHint": "Klicke hier oder ziehe eine .json-Datei hierher",
     "formatHint": "Die Datei muss im Format calabi-config.json vorliegen (schema_version=1)",
@@ -483,6 +485,8 @@
     "holdSecurity": "Kein Sicherheitsupdate — wartet auf Sie.",
     "holdUntil": "spätestens {{date}}",
     "holdWindow": "Wird im Wartungsfenster installiert.",
+    "holdRollout": "Diese Version wird schrittweise verteilt; dieser Rechner ist noch nicht an der Reihe.",
+    "holdRolloutEta": "voraussichtlich bis {{time}}",
     "mandatory": "Erforderlich",
     "mandatoryHint": "Diese Version wird nicht mehr unterstützt und aktualisiert sich daher unabhängig von der Einstellung unten.",
     "modeAuto": "Automatisch",
@@ -505,12 +509,15 @@
     "upToDate": "Aktuell",
     "windowLabel": "Nur im Wartungsfenster aktualisieren",
     "windowTz": "Rechnerzeit ({{tz}})",
-    "reasonManagedElsewhere": "Diese Kopie wurde nicht mit dem Calabi-Installer installiert (zum Beispiel über Homebrew, scoop oder ein entpacktes Archiv) und aktualisiert sich daher nicht selbst. Aktualisieren Sie sie auf dem Weg, auf dem Sie sie installiert haben."
+    "reasonManagedElsewhere": "Diese Kopie wurde nicht mit dem Calabi-Installer installiert (zum Beispiel über Homebrew, scoop oder ein entpacktes Archiv) und aktualisiert sich daher nicht selbst. Aktualisieren Sie sie auf dem Weg, auf dem Sie sie installiert haben.",
+    "orgMinMode": "Ihre Organisation verlangt mindestens „{{mode}}“.",
+    "orgMaxDefer": "Ihre Organisation erlaubt, ein Update höchstens {{n}} Tage zurückzuhalten.",
+    "orgNoDefer": "Ihre Organisation erlaubt nicht, Updates zurückzuhalten."
   },
   "serviceMode": {
     "readonlyTag": "Schreibgeschützt",
-    "agentTooltip": "Dieser Client läuft unter einer festen Identität ({{identity}}); die lokale Konsole ist schreibgeschützt. Verwalten Sie Tunnel und Konto in der Web-Konsole.",
-    "agentManageTooltip": "Dieser Client läuft unter einer festen Identität ({{identity}}). Sie können hier die Tunnel dieser Organisation verwalten; Anmeldung und Org-Wechsel erfolgen in der Web-Konsole.",
+    "agentTooltip": "Dieser Client läuft unter einer festen Identität ({{identity}}); die lokale Konsole ist schreibgeschützt. Verwalten Sie Tunnel in der Web-Konsole. Um die Identität zu ändern, installieren Sie den Dienst mit einem anderen API-Schlüssel neu.",
+    "agentManageTooltip": "Dieser Client läuft unter einer festen Identität ({{identity}}). Sie können hier die Tunnel dieser Organisation verwalten. Um die Identität zu ändern, installieren Sie den Dienst mit einem anderen API-Schlüssel neu.",
     "tunnelsReadonly": "Im Agent-Modus schreibgeschützt – Tunnel in der Web-Konsole verwalten",
     "agentBannerTitle": "Schreibgeschützte Konsole (Agent-Modus)",
     "agentBannerDesc": "Dieser Client läuft als Dienst unter einer festen API-Schlüssel-Identität. Tunnel erstellen, bearbeiten und löschen Sie in der Web-Konsole.",
@@ -597,7 +604,6 @@
       "routesHelp": "CIDRs aus dem LAN dieses Geräts, die im Mesh verfügbar sein sollen, z. B. 192.168.1.0/24. Peers erreichen sie über dieses Gerät.",
       "save": "Speichern",
       "saved": "Gespeichert – die Mesh-Sitzung wird neu gestartet, damit die Änderung wirkt.",
-      "title": "Routing (Subnetz-Router / Exit-Gerät)",
       "useExit": "Eigenen Verkehr über ein Exit-Gerät leiten",
       "useExitHelp": "Der Standardverkehr dieses Geräts läuft über den angegebenen Exit-Peer (Name oder Overlay-IP). Leer lassen, wenn keiner verwendet werden soll.",
       "acceptSection": "Vom Mesh annehmen",
@@ -624,7 +630,7 @@
     "colPath": "Pfad",
     "colPeer": "Peer",
     "blockedBanner": "Dieser Rechner weist alle eingehenden Verbindungen ab",
-    "blockedBannerHelp": "Peers sehen ihn und er erreicht sie weiterhin, aber niemand kann eine Verbindung zu ihm öffnen. Abschalten unter Einstellungen → Vom Mesh annehmen.",
+    "blockedBannerHelp": "Peers sehen ihn und er erreicht sie weiterhin, aber niemand kann eine Verbindung zu ihm öffnen. Abschalten unter Routing → Vom Mesh annehmen.",
     "peerFilter": "Nach Name / Adresse filtern",
     "peerFilterNoMatch": "Kein passender Peer",
     "colTraffic": "Transfer",
@@ -691,6 +697,11 @@
       "targetTip": "Die Adresse, die dieses Gerät bei der Selbstprüfung anwählt – und die lokale Adresse, wenn der Dienst als Tunnel veröffentlicht wird. Der Mesh-Verkehr läuft NICHT darüber: Das Paket eines Peers kommt an der Mesh-Adresse dieses Geräts an."
     },
     "title": "Mesh",
+    "tabs": {
+      "devices": "Geräte",
+      "services": "Dienste",
+      "routing": "Routing"
+    },
     "unavailable": "Der Mesh-Status ist für diesen Daemon nicht verfügbar.",
     "relayRtt": "Zum Relay",
     "relayRttHint": "Nur ein Teilstück: dieser Rechner zum Relay. Nicht mit der Ende-zu-Ende-RTT einer Direktverbindung vergleichbar."

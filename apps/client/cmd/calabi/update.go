@@ -72,6 +72,10 @@ type updateSnap struct {
 	Policy    struct {
 		Mode string `json:"mode"`
 	} `json:"policy"`
+	OrgPolicy *struct {
+		MinMode      string `json:"min_mode"`
+		MaxDeferDays *int   `json:"max_defer_days"`
+	} `json:"org_policy"`
 }
 
 // daemonUpdateStatus asks the local daemon to re-check, and optionally to
@@ -202,6 +206,20 @@ func printUpdateStatus(s *updateSnap, base string, checkOnly bool) {
 		fmt.Println("status:    run `calabi update` to install it")
 	case s.Hold != "":
 		fmt.Printf("status:    waiting (%s) — mode %q\n", s.Hold, s.Policy.Mode)
+	}
+	// The org's requirement explains a machine updating more eagerly than its
+	// own mode says, which is otherwise a mystery from this side.
+	if o := s.OrgPolicy; o != nil {
+		var req []string
+		if o.MinMode != "" {
+			req = append(req, fmt.Sprintf("mode at least %q", o.MinMode))
+		}
+		if o.MaxDeferDays != nil {
+			req = append(req, fmt.Sprintf("updates held back at most %d days", *o.MaxDeferDays))
+		}
+		if len(req) > 0 {
+			fmt.Printf("org:       requires %s\n", strings.Join(req, ", "))
+		}
 	}
 	if base != "" {
 		fmt.Printf("settings:  %s → Settings\n", base)

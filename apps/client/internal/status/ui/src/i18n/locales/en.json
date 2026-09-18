@@ -21,8 +21,7 @@
     "logs": "Logs",
     "tools": "Tools",
     "settings": "Settings",
-    "mesh": "Mesh",
-    "services": "Services"
+    "mesh": "Mesh"
   },
   "plan": {
     "free": "Free",
@@ -445,7 +444,10 @@
     "exportBtn": "Export config (.json)",
     "importBtn": "Import config",
     "logoutCard": "Sign out",
-    "logoutHint": "Signing out calls identity-svc to revoke the current session and clears this machine's access / refresh tokens. The device fingerprint + API key are kept, so no re-pairing is needed next time.",
+    "logoutHint": "After you sign out, this machine no longer runs as this account, and its tunnels and mesh disconnect. The tunnels themselves are not deleted.",
+    "logoutFailed": "Sign-out failed",
+    "identityCard": "Identity",
+    "agentIdentityHint": "This client runs as a service under the API key it was installed with, so you can't sign out or switch accounts here. To run it under a different identity, reinstall the service with a new key. To take this machine offline, uninstall the service or revoke the key in the web console.",
     "importModalTitle": "Import config",
     "dragHint": "Click or drag a .json file here",
     "formatHint": "The file must be in calabi-config.json format (schema_version=1)",
@@ -483,6 +485,8 @@
     "holdSecurity": "Not a security update — waiting for you.",
     "holdUntil": "by {{date}} at the latest",
     "holdWindow": "Will install during the maintenance window.",
+    "holdRollout": "This version is being rolled out in stages; this machine's turn has not come yet.",
+    "holdRolloutEta": "expected by {{time}}",
     "mandatory": "Required",
     "mandatoryHint": "This version is no longer supported, so it will update itself regardless of the setting below.",
     "modeAuto": "Automatically",
@@ -505,12 +509,15 @@
     "upToDate": "Up to date",
     "windowLabel": "Only update during a maintenance window",
     "windowTz": "machine time ({{tz}})",
-    "reasonManagedElsewhere": "This copy was not installed by the Calabi installer (for example Homebrew, scoop, or an extracted archive), so it does not update itself. Update it the way you installed it."
+    "reasonManagedElsewhere": "This copy was not installed by the Calabi installer (for example Homebrew, scoop, or an extracted archive), so it does not update itself. Update it the way you installed it.",
+    "orgMinMode": "Your organization requires at least “{{mode}}”.",
+    "orgMaxDefer": "Your organization allows holding an update back for at most {{n}} days.",
+    "orgNoDefer": "Your organization does not allow holding updates back."
   },
   "serviceMode": {
     "readonlyTag": "Read-only",
-    "agentTooltip": "This client runs under a fixed identity ({{identity}}); the local console is read-only. Manage tunnels and your account from the web console.",
-    "agentManageTooltip": "This client runs under a fixed identity ({{identity}}). You can manage this organization's tunnels here; sign-in and org switching are done from the web console.",
+    "agentTooltip": "This client runs under a fixed identity ({{identity}}); the local console is read-only. Manage tunnels from the web console. To change the identity, reinstall the service with a different API key.",
+    "agentManageTooltip": "This client runs under a fixed identity ({{identity}}). You can manage this organization's tunnels here. To change the identity, reinstall the service with a different API key.",
     "tunnelsReadonly": "Read-only in agent mode — manage tunnels from the web console",
     "agentBannerTitle": "Read-only console (agent mode)",
     "agentBannerDesc": "This client runs as a service under a pinned API-key identity. Create, edit, and delete tunnels from the web console.",
@@ -581,6 +588,11 @@
   },
   "mesh": {
     "title": "Mesh",
+    "tabs": {
+      "devices": "Devices",
+      "services": "Services",
+      "routing": "Routing"
+    },
     "state": "State",
     "stateUp": "up",
     "stateDown": "down",
@@ -598,7 +610,7 @@
     "pausedHint": "This device left the meshnet. Click Start to rejoin.",
     "colPeer": "Peer",
     "blockedBanner": "This machine is refusing all incoming connections",
-    "blockedBannerHelp": "Peers can see it and it can still reach them, but nothing can open a connection to it. Turn it off under Settings → Accept from the mesh.",
+    "blockedBannerHelp": "Peers can see it and it can still reach them, but nothing can open a connection to it. Turn it off under Routing → Accept from the mesh.",
     "peerFilter": "Filter by name / address",
     "peerFilterNoMatch": "No peer matches that",
     "colAllowed": "Allowed IPs",
@@ -619,7 +631,6 @@
     "notConfiguredHint": "Add a mesh: block (coord / relay / auth_key) to the daemon config, then restart.",
     "unavailable": "Mesh status is unavailable on this daemon.",
     "adv": {
-      "title": "Routing (subnet router / exit device)",
       "offerSection": "Offer to the mesh",
       "egressSection": "This device's internet egress",
       "routes": "Advertise subnet routes",

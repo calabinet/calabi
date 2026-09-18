@@ -5,6 +5,16 @@
 // config has a `mesh:` block (see daemon_local_mesh.go); this page surfaces the
 // node's overlay IP, coordinator/relay, and each peer's live WireGuard state
 // (handshake age + bytes), the same data `calabi mesh status` prints.
+//
+// Three tabs under one heading, each at its own URL:
+//
+//   设备 /mesh          — this machine's state and the peers it can reach
+//   服务 /mesh/services — ports it offers to the mesh (pages/Services.tsx)
+//   路由 /mesh/routing  — subnets / exit device it offers, routes it accepts
+//
+// 服务 and 路由 are the same question at two sizes — what this machine offers
+// the mesh, one port or a whole subnet — which is why they sit side by side.
+// The web console's 组网配置 uses the same 设备 / 服务 split.
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -32,7 +42,8 @@ import { useTranslation } from "react-i18next";
 
 import { api, ApiError } from "../api/client";
 import { parseRoute, formatRoute } from "../lib/cidr";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import Services from "./Services";
 
 import type {
   MeshAdvertise,
@@ -100,6 +111,13 @@ function shortKey(k: string): string {
 export default function Mesh() {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const tab = pathname.startsWith("/mesh/services")
+    ? "services"
+    : pathname.startsWith("/mesh/routing")
+      ? "routing"
+      : "devices";
   // Peer filter. A fleet of 20 machines turns this table into scrolling, and the
   // thing you arrive knowing is the machine's NAME — so match on that first,
   // then on the address you might have pasted from somewhere, then on the key
@@ -150,11 +168,11 @@ export default function Mesh() {
     refetchInterval: 5_000,
     retry: false,
   });
-  // Same query key the settings card below uses, so it costs no extra fetch. The
-  // page needs it for one thing: a machine that is refusing every inbound
-  // connection looks EXACTLY like a healthy one on this page — up, addressed,
-  // peers listed — and the switch that did it is three clicks away in a tab. A
-  // setting whose effect is invisible from the page it breaks is a support call.
+  // Same query key the 路由 tab's card uses, so it costs no extra fetch. The
+  // 设备 tab needs it for one thing: a machine that is refusing every inbound
+  // connection looks EXACTLY like a healthy one there — up, addressed, peers
+  // listed — and the switch that did it is on another tab. A setting whose
+  // effect is invisible from the page it breaks is a support call.
   const { data: adv } = useQuery<MeshAdvertise>({
     queryKey: ["mesh-advertise"],
     queryFn: api.meshAdvertise,
@@ -669,8 +687,20 @@ export default function Mesh() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {header}
-      {body}
-      <MeshAdvertiseCard />
+      {/* Panes as Tabs children, not rendered by hand off `tab`: antd keeps a
+          visited pane mounted while another is shown. The 路由 card holds its
+          edits in local state until Save, and they used to share a page with
+          the peer list — glancing back at 设备 must not throw them away. */}
+      <Tabs
+        activeKey={tab}
+        onChange={(k) => navigate(k === "devices" ? "/mesh" : `/mesh/${k}`)}
+        tabBarStyle={{ marginBottom: 12 }}
+        items={[
+          { key: "devices", label: t("mesh.tabs.devices"), children: body },
+          { key: "services", label: t("mesh.tabs.services"), children: <Services /> },
+          { key: "routing", label: t("mesh.tabs.routing"), children: <MeshAdvertiseCard /> },
+        ]}
+      />
     </div>
   );
 }
@@ -834,9 +864,10 @@ function CidrListEditor({
 // a tab with unsaved edits carries a dot, otherwise switching tabs would hide
 // pending changes behind a Save button that looks idle.
 //
-// Hidden on daemons with no mesh controller (the GET 404s there). Forwarding is
-// Linux-only; off Linux the offer tab warns that the node advertises but won't
-// forward.
+// It is the whole of 组网 → 路由, so it no longer hides itself: on a daemon with
+// no mesh controller (the GET 404s there) it says so, in the words the 设备 tab
+// uses. Forwarding is Linux-only; off Linux the offer tab warns that the node
+// advertises but won't forward.
 function MeshAdvertiseCard() {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -909,8 +940,20 @@ function MeshAdvertiseCard() {
     onError: (e) => message.error((e as Error).message),
   });
 
-  if (error instanceof ApiError && error.status === 404) return null; // no mesh here
-  if (!data) return null;
+  if (error instanceof ApiError && error.status === 404) {
+    return (
+      <Card size="small">
+        <Empty description={t("mesh.unavailable")} />
+      </Card>
+    );
+  }
+  if (!data) {
+    return (
+      <Card size="small" loading={!error}>
+        {error && <Empty description={(error as Error).message} />}
+      </Card>
+    );
+  }
 
   const norm = (a: string[]) => [...a].sort().join(",");
   // Per-tab, so a tab holding unsaved edits can say so while you are looking at
@@ -964,8 +1007,9 @@ function MeshAdvertiseCard() {
     </span>
   );
 
+  // No card title: the 路由 tab above already names it.
   return (
-    <Card title={t("mesh.adv.title")} size="small">
+    <Card size="small">
       <Tabs
         size="small"
         items={[

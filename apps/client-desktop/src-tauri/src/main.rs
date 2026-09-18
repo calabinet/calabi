@@ -269,6 +269,35 @@ fn desktop_user_agent() -> String {
     )
 }
 
+/// How to restart / stop the machine-wide service from a terminal, on this
+/// platform — the body of the notification the tray shows instead of doing it.
+///
+/// It used to say "sudo calabi daemon restart|stop" everywhere, which worked for
+/// nobody who only ran an installer: neither installer puts `calabi` on PATH,
+/// Windows has no `sudo`, and on macOS those commands did not reach the
+/// installer's LaunchDaemon at all until the CLI learned its label. These name
+/// tools the OS always has. (Linux keeps the CLI: there is no Linux installer,
+/// so a service there was put in place by `calabi daemon install`.)
+fn service_restart_hint() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "Restart it from Terminal: sudo launchctl kickstart -k system/com.calabi.daemon"
+    } else if cfg!(target_os = "windows") {
+        "Restart it from PowerShell run as administrator: Restart-Service calabi"
+    } else {
+        "Restart it from a terminal: sudo calabi daemon restart"
+    }
+}
+
+fn service_stop_hint() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "Stop it from Terminal: sudo launchctl bootout system/com.calabi.daemon"
+    } else if cfg!(target_os = "windows") {
+        "Stop it from PowerShell run as administrator: Stop-Service calabi"
+    } else {
+        "Stop it from a terminal: sudo calabi daemon stop"
+    }
+}
+
 fn build_tray(handle: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let open = MenuItemBuilder::with_id("open", "Open dashboard").build(handle)?;
     let probe = MenuItemBuilder::with_id("probe", "Refresh status").build(handle)?;
@@ -347,7 +376,7 @@ fn build_tray(handle: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                                     .notification()
                                     .builder()
                                     .title("Calabi runs as a system service")
-                                    .body("Restart it from a terminal: sudo calabi daemon restart")
+                                    .body(service_restart_hint())
                                     .show();
                                 return;
                             }
@@ -391,7 +420,7 @@ fn build_tray(handle: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                                     .notification()
                                     .builder()
                                     .title("Calabi runs as a system service")
-                                    .body("Stop it from a terminal: sudo calabi daemon stop")
+                                    .body(service_stop_hint())
                                     .show();
                                 return;
                             }

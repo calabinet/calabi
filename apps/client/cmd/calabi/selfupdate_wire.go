@@ -51,7 +51,7 @@ const updateCheckInterval = 6 * time.Hour
 // Returns nil for a dev/self-built daemon: an unparseable version can never be
 // "older" than a release, so the check could only ever be a pointless request to
 // the CDN from every developer's machine.
-func newUpdateAgent(logger *slog.Logger, version string, busy func() bool) *selfupdate.Agent {
+func newUpdateAgent(logger *slog.Logger, version, bffConsoleURL string, busy func() bool) *selfupdate.Agent {
 	manifest := envOr("CALABI_UPDATE_MANIFEST", defaultUpdateManifest)
 	if manifest == "" || updatePubKeyB64 == "" {
 		return nil
@@ -77,6 +77,10 @@ func newUpdateAgent(logger *slog.Logger, version string, busy func() bool) *self
 		DownloadDir:    filepath.Join(dir, "updates"),
 		Privileged:     privileged,
 		Logf:           func(f string, a ...any) { logger.Info(fmt.Sprintf(f, a...)) },
+		// U5a: results go to the platform this daemon is logged into.
+		Report: newUpdateReporter(bffConsoleURL),
+		// U5c: the org's requirement, merged with this machine's own setting.
+		OrgPolicy: newOrgPolicyFetcher(bffConsoleURL),
 	}
 	agent := selfupdate.NewAgent(u, busy)
 	p := agent.Policy()

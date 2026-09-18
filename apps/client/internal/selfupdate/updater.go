@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -25,10 +26,12 @@ type Updater struct {
 	// say "there is a newer version" — but must never run an installer it cannot
 	// complete. Wired from privilegedForUpdates (cmd/calabi/selfupdate_wire.go).
 	Privileged bool
-	// Apply runs the verified installer. Default (nil) = applyInstaller: the OS
-	// installer, spawned DETACHED so it survives the service restart it triggers.
-	// Overridable in tests.
-	Apply func(ctx context.Context, installerPath string) error
+	// Apply starts the verified installer and returns without waiting for it.
+	// wait blocks until that installer process exits; nil = nothing to watch
+	// (Linux swaps the binary in this process). Default (nil) = applyInstaller:
+	// the OS installer, spawned DETACHED so it survives the service restart it
+	// triggers. Overridable in tests.
+	Apply func(ctx context.Context, installerPath string) (wait func() error, err error)
 	Logf  func(format string, args ...any)
 	// Managed reports whether the running binary is the copy this platform's
 	// update artifact replaces (installed by the desktop installer /.pkg /
@@ -36,9 +39,26 @@ type Updater struct {
 	// fail-safe default: forgetting to wire it cannot switch the gate off.
 	// Tests set it.
 	Managed func() bool
+	// Report delivers update results to the platform this daemon is logged
+	// into (U5a). nil = nothing is reported: tests, and every daemon that is not
+	// wired to a control plane. Returning ErrReportRejected drops the batch;
+	// any other error keeps it for the next attempt.
+	Report func(ctx context.Context, events []UpdateEvent) error
+	// OrgPolicy reads the org's update requirement (U5c). nil = no org can set
+	// one here. Return ErrNoOrg when the daemon belongs to no org; any other
+	// error keeps the last policy.
+	OrgPolicy     func(ctx context.Context) (*OrgPolicy, error)
+	installIDOnce sync.Once
+	installIDVal  string
 	// FetchTimeout bounds the manifest+signature fetch. Zero = the default below.
 	// Only tests set it; there is no knob for it in the daemon.
 	FetchTimeout time.Duration
+}
+
+// installID is this install's rollout identity, read (or minted) once.
+func (u *Updater) installID() string {
+	u.installIDOnce.Do(func() { u.installIDVal = loadInstallID(u.DownloadDir) })
+	return u.installIDVal
 }
 
 func (u *Updater) fetchTimeout() time.Duration {
@@ -65,17 +85,33 @@ func (u *Updater) logf(format string, args ...any) {
 // reporting it as a failure every 6 hours is how that population's log filled
 // with noise while nobody learned they were out of date.
 func (u *Updater) CheckAndApply(ctx context.Context) (bool, error) {
+	applied, wait, err := u.checkAndLaunch(ctx, nil)
+	if wait != nil {
+		go func() { u.logf("%v", installerExited(wait())) }()
+	}
+	return applied, err
+}
+
+// checkAndLaunch is CheckAndApply minus the watcher, for the Agent: it has to
+// record the launch BEFORE it can see the installer exit, or a fast failure
+// lands first and the launch overwrites it with "updating" for good.
+//
+// onLaunch (may be nil) runs after every gate has passed and immediately before
+// the installer starts — the last moment this process is guaranteed to still be
+// alive, since the installer's first act is to stop it. A failure once the
+// download has begun comes back as an *attemptError naming the stage.
+func (u *Updater) checkAndLaunch(ctx context.Context, onLaunch func(Status)) (bool, func() error, error) {
 	st, art, err := u.check(ctx)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	if !st.Available {
 		u.logf("selfupdate: up to date (current %s, manifest %s)", u.CurrentVersion, st.Latest)
-		return false, nil
+		return false, nil, nil
 	}
 	if !st.CanApply {
 		u.logf("selfupdate: %s is available but this install cannot apply it (%s)", st.Latest, st.Reason)
-		return false, nil
+		return false, nil, nil
 	}
 
 	// A FIXED filename. The version is attacker-controlled input and has no
@@ -85,16 +121,16 @@ func (u *Updater) CheckAndApply(ctx context.Context) (bool, error) {
 	dest := filepath.Join(u.DownloadDir, "calabi-update"+installerExt())
 	u.logf("selfupdate: downloading %s", art.URL)
 	if err := Download(ctx, art.URL, dest); err != nil {
-		return false, err
+		return false, nil, &attemptError{Stage: StageDownload, Status: st, Err: err}
 	}
 	// Two independent gates before a privileged service runs a downloaded file.
 	if err := VerifySHA256(dest, art.SHA256); err != nil {
 		os.Remove(dest)
-		return false, err
+		return false, nil, &attemptError{Stage: StageVerify, Status: st, Err: err}
 	}
 	if err := VerifySignature(dest, art.Signature, u.PubKey); err != nil {
 		os.Remove(dest)
-		return false, err
+		return false, nil, &attemptError{Stage: StageVerify, Status: st, Err: err}
 	}
 	u.logf("selfupdate: verified update %s (sha256+sig) — applying", st.Latest)
 
@@ -102,10 +138,14 @@ func (u *Updater) CheckAndApply(ctx context.Context) (bool, error) {
 	if apply == nil {
 		apply = applyInstaller
 	}
-	if err := apply(ctx, dest); err != nil {
-		return false, fmt.Errorf("selfupdate: apply: %w", err)
+	if onLaunch != nil {
+		onLaunch(st)
 	}
-	return true, nil
+	wait, err := apply(ctx, dest)
+	if err != nil {
+		return false, nil, &attemptError{Stage: StageLaunch, Status: st, Err: fmt.Errorf("selfupdate: apply: %w", err)}
+	}
+	return true, wait, nil
 }
 
 // RunPeriodic checks on an interval until ctx is cancelled. A successful apply

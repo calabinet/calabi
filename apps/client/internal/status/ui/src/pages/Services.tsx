@@ -1,4 +1,4 @@
-// Services.tsx — what THIS machine offers on the mesh.
+// Services.tsx — 组网 → 服务: what THIS machine offers on the mesh.
 //
 // A declaration is a claim, not an authorization: the coordinator records it as
 // pending and an admin confirms it in the web console before any access rule
@@ -8,9 +8,13 @@
 // Entries from --mesh-service / the config file are read-only here: the file
 // re-declares them at every restart, so removing one would just flip back.
 //
-// Lives on its own menu item rather than inside Connect: what this machine
-// serves is a fact about the machine, and the Tools port scanner hands off to
-// it directly.
+// A tab of 组网 (/mesh/services), not a menu entry of its own. It was one from
+// 2026-08-23 to 09-16, on the idea that a service sits above both mesh access
+// and public tunnels. It does not: it exists only in the mesh, and a tunnel
+// needs no service (`calabi http 8080` never makes one). "发布到公网" below is a
+// shortcut into the tunnel form, not a second switch on the same object —
+// docs/runbook/facility-and-service-model.md §一. The tab still has its own URL,
+// which is what the Tools port scanner hands off to.
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -31,10 +35,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
-import { api } from "../api/client";
+import { api, ApiError } from "../api/client";
 import type { MeshServiceDecl, TunnelList } from "../api/types";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 // isLoopbackTarget reports whether a "host:port" points at loopback (127.x /
 // localhost / ::1) — where the fix for "mesh can't reach it" is "bind 0.0.0.0",
@@ -73,7 +77,7 @@ export default function Services() {
   const [note, setNote] = useState("");
   const [adding, setAdding] = useState(false);
 
-  const { data, isLoading } = useQuery<{ items: MeshServiceDecl[] }>({
+  const { data, isLoading, error } = useQuery<{ items: MeshServiceDecl[] }>({
     queryKey: ["mesh-services"],
     queryFn: api.meshServices,
     retry: false,
@@ -104,7 +108,7 @@ export default function Services() {
     return m;
   }, [tunnelData]);
 
-  // The Tools port scanner hands off here (/mesh?declare_port=5432&declare_name=postgres)
+  // The Tools port scanner hands off here (/mesh/services?declare_port=5432&declare_name=postgres)
   // so there is exactly one declaration form in the app.
   useEffect(() => {
     const p = Number(searchParams.get("declare_port") || 0);
@@ -169,13 +173,19 @@ export default function Services() {
     navigate("/tunnels/new?" + q.toString());
   };
 
-  return (
-    <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-      <Title level={4} style={{ margin: 0 }}>
-        {t("nav.services")}
-      </Title>
+  // A daemon with no mesh at all. Said once, in the same words as the 设备 tab,
+  // instead of an empty list with an "add" button whose every save would fail.
+  if (error instanceof ApiError && error.status === 404) {
+    return (
+      <Card size="small">
+        <Empty description={t("mesh.unavailable")} />
+      </Card>
+    );
+  }
 
-      <Card size="small" loading={isLoading}>
+  // No page title: 组网 already has one, and the tab names this part of it.
+  return (
+    <Card size="small" loading={isLoading}>
       <Alert
         type="info"
         showIcon
@@ -365,7 +375,6 @@ export default function Services() {
           {t("mesh.svc.add")}
         </Button>
       )}
-      </Card>
-    </Space>
+    </Card>
   );
 }

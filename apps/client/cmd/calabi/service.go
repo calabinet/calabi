@@ -28,6 +28,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -57,29 +58,189 @@ import (
 // CALABI_SERVICE_NAME). A service installed under --service-name is invisible
 // here. That is a known, deliberate limit — see the note in runLogin.
 func serviceStatus() (service.Status, bool) {
-	svc, err := buildService(nil, nil)
-	if err != nil {
-		return service.StatusUnknown, false
+	if svc, err := buildService(nil, nil); err == nil {
+		if st, installed := classifyServiceStatus(svc.Status()); installed {
+			return st, true
+		}
 	}
-	st, err := svc.Status()
-	if err != nil {
-		return service.StatusUnknown, false // ErrNotInstalled / ErrServiceNotFound
+	if macInstallerServicePresent(runtime.GOOS, macInstallerDaemonPlist) {
+		return service.StatusUnknown, true
 	}
-	return st, true
+	return service.StatusUnknown, false
 }
 
-// serviceNote is what `calabi login` prints when a service is registered. Split
-// out so the wording of each state is pinned by a test rather than by whoever
-// reads the switch next.
-func serviceNote(st service.Status) string {
-	if st == service.StatusRunning {
-		return "  a calabi service is installed and running — that is this machine's daemon"
+// classifyServiceStatus turns a service manager's answer into (state, installed).
+//
+// "Not allowed to ask" is INSTALLED, state unknown. Windows answers a non-admin
+// status query for the LocalSystem service with Access is denied (kardianos
+// opens it asking for start/stop rights too), while a name that does not exist
+// still comes back as not-installed — checked 2026-09-16 from a non-admin
+// shell. Reading the refusal as not-installed is how `calabi login` came to
+// start a second daemon next to the desktop app's service on every Windows
+// install. Any other error still degrades to not-installed, as it always has,
+// so a machine with no usable service manager keeps its transient daemon.
+func classifyServiceStatus(st service.Status, err error) (service.Status, bool) {
+	switch {
+	case err == nil:
+		return st, true
+	case errors.Is(err, os.ErrPermission):
+		return service.StatusUnknown, true
+	default:
+		return service.StatusUnknown, false // ErrNotInstalled / ErrServiceNotFound
 	}
-	// Stopped, or registered-but-unqueryable. Either way nothing is serving,
-	// and the caller has already established that no daemon of this client is
-	// either — so say so, and name both ways out.
-	return "  a calabi service is installed but NOT running — start it with " +
-		"`calabi daemon start`,\n  or run `calabi daemon` in this shell for this login"
+}
+
+// macInstallerDaemonPlist is the LaunchDaemon the macOS installer registers —
+// DAEMON_LABEL in scripts/package-macos-pkg.sh. The service library never finds
+// it: it looks for a job named after resolveServiceName ("calabi"), and from a
+// non-root shell only among LaunchAgents.
+const macInstallerDaemonPlist = "/Library/LaunchDaemons/com.calabi.daemon.plist"
+
+func macInstallerServicePresent(goos, plist string) bool {
+	if goos != "darwin" {
+		return false
+	}
+	_, err := os.Stat(plist)
+	return err == nil
+}
+
+// serviceNote is what `calabi login` prints about an installed service when no
+// console answered for it. Split out so the wording of each state is pinned by a
+// test rather than by whoever reads the switch next.
+//
+// Whatever the state, the service keeps its OWN credential — a sign-in made in
+// its console, or an API key — so this login is never "handed" to it. The old
+// running line ("that is this machine's daemon") read as if it had been.
+func serviceNote(st service.Status) string {
+	switch st {
+	case service.StatusRunning:
+		return "  a calabi service is installed and running — it keeps its own sign-in, so this\n" +
+			"  login is for commands run in this shell"
+	case service.StatusStopped:
+		// Nothing is serving, and the caller has already established that no
+		// daemon of this client is either — so say so, and name both ways out.
+		return "  a calabi service is installed but NOT running — start it with " +
+			"`calabi daemon start`,\n  or run `calabi daemon` in this shell for this login"
+	default:
+		return "  a calabi service is installed (this shell is not allowed to ask whether it is\n" +
+			"  running) — it keeps its own sign-in, so this login is for commands run in this shell"
+	}
+}
+
+// reportDaemonStatus prints `calabi daemon status` from the service manager's
+// answer (st, err). published is the console URL the service last wrote, if this
+// shell can read it; candidates are where to look for a console when it cannot.
+// (The macOS installer's service never gets here — see service_mac_installer.go.)
+//
+// A refusal to answer is not a failure to report. From a non-admin shell on
+// Windows the service manager answers Access is denied for the installed
+// service, and this used to print exactly that and exit 1 — on every desktop
+// install, to the person the service was installed for. The service IS there;
+// only its state is out of reach, and its console usually is not.
+func reportDaemonStatus(ctx context.Context, stdout, stderr io.Writer, st service.Status, err error,
+	published string, candidates []string) int {
+	switch {
+	case err == nil:
+	case errors.Is(err, os.ErrPermission):
+		fmt.Fprintln(stdout, "  installed — this shell is not allowed to query its state (an administrator shell can)")
+		reportServiceConsole(ctx, stdout, published, candidates)
+		return 0
+	case errors.Is(err, service.ErrNotInstalled):
+		// kardianos returns ErrNotInstalled / ErrServiceNotFound
+		// depending on platform — both mean "service entry missing".
+		fmt.Fprintln(stdout, "  not installed (run: calabi daemon install)")
+		return 0
+	default:
+		fmt.Fprintln(stderr, "status:", err)
+		return 1
+	}
+	switch st {
+	case service.StatusRunning:
+		fmt.Fprintln(stdout, "  running")
+		// Show the console address — but only after confirming something
+		// answers there. "a running service keeps it current" was the old
+		// comment here and it is not true: a bind slower than the two
+		// seconds startStatusPage waits never overwrote the file, so this
+		// printed the PREVIOUS run's port (see publishConsoleURLLate).
+		if published != "" {
+			cctx, ccancel := context.WithTimeout(ctx, 2*time.Second)
+			ok := consoleAnswers(cctx, consoleAddrOf(published, ""))
+			ccancel()
+			if ok {
+				fmt.Fprintln(stdout, "  console: "+published)
+			} else {
+				fmt.Fprintln(stdout, "  console: not answering (last published: "+published+")")
+			}
+		}
+	case service.StatusStopped:
+		fmt.Fprintln(stdout, "  stopped")
+	default:
+		fmt.Fprintln(stdout, "  unknown")
+	}
+	return 0
+}
+
+// reportServiceConsole names the console for a service whose state could not be
+// read: the one it published, when this shell can read that and it answers;
+// otherwise every calabi console answering on this machine, with what each runs
+// on. Nothing at all is printed when nothing answers — the state is unknown,
+// and "not running" would be a guess.
+func reportServiceConsole(ctx context.Context, w io.Writer, published string, candidates []string) {
+	if published != "" {
+		cctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		ok := consoleAnswers(cctx, consoleAddrOf(published, ""))
+		cancel()
+		if ok {
+			fmt.Fprintln(w, "  console: "+published)
+			return
+		}
+	}
+	for _, c := range probeOtherClients(ctx, "", candidates) {
+		how := "keeps its own sign-in"
+		if c.Agent {
+			how = "runs on an API key"
+		}
+		fmt.Fprintf(w, "  a calabi console is answering at http://%s (%s)\n", c.Addr, how)
+	}
+}
+
+// publishedServiceConsoleURL is the console URL an installed service last
+// wrote: next to the executable for a legacy Windows service, in the
+// machine-wide data dir for a --system one. The second is often unreadable
+// from a non-admin shell, which just leaves it out.
+func publishedServiceConsoleURL() string {
+	if u := awaitConsoleURL(time.Time{}, 0); u != "" {
+		return u
+	}
+	return awaitConsoleURLIn(creds.SystemDataDir(), time.Time{}, 0)
+}
+
+// installedServiceNote is the whole of what login says once it has found an
+// installed service: what each console answering on this machine runs on — the
+// service's, in practice — and, when login would otherwise have started a
+// daemon, that it did not and how to get one anyway.
+func installedServiceNote(st service.Status, others []otherClient, wantedStart bool) string {
+	var lines []string
+	if len(others) == 0 {
+		lines = append(lines, serviceNote(st))
+	} else {
+		for _, c := range others {
+			if c.Agent {
+				lines = append(lines, "  the calabi client at http://"+c.Addr+" runs on its own API key — this login\n"+
+					"  does not change it")
+			} else {
+				lines = append(lines, "  the calabi client at http://"+c.Addr+" keeps its own sign-in — this login\n"+
+					"  does not change it; to switch its account, sign in from that console")
+			}
+		}
+		lines = append(lines, "  this login is for commands run in this shell")
+	}
+	// A stopped service with nothing answering already names `calabi daemon`.
+	if wantedStart && (len(others) > 0 || st != service.StatusStopped) {
+		lines = append(lines, "  not starting a second daemon next to it — run `calabi daemon` if you want\n"+
+			"  one for this login too")
+	}
+	return strings.Join(lines, "\n")
 }
 
 // killDaemonOnStatusPort terminates the calabi daemon LISTENING on the status
@@ -159,6 +320,15 @@ func runDaemonService(args []string) int {
 		return 2
 	}
 	sub := args[0]
+
+	// The macOS installer's LaunchDaemon, which the service library cannot reach
+	// (see service_mac_installer.go). Checked before install's credential step:
+	// on such a machine nothing is going to be installed.
+	if drivesMacInstallerService(runtime.GOOS, args[1:], macInstallerDaemonPlist) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return newMacInstallerService(geteuid(), os.Stdout, os.Stderr).run(ctx, sub)
+	}
 
 	// On install, provision a credential the service can use. The service runs
 	// in a DIFFERENT OS account than your interactive shell (LocalSystem on
@@ -318,40 +488,10 @@ func runDaemonService(args []string) int {
 		return 0
 	case "status":
 		st, err := svc.Status()
-		if err != nil {
-			// kardianos returns ErrNotInstalled / ErrServiceNotFound
-			// depending on platform — both mean "service entry missing".
-			if errors.Is(err, service.ErrNotInstalled) {
-				fmt.Println("  not installed (run: calabi daemon install)")
-				return 0
-			}
-			fmt.Fprintln(os.Stderr, "status:", err)
-			return 1
-		}
-		switch st {
-		case service.StatusRunning:
-			fmt.Println("  running")
-			// Show the console address — but only after confirming something
-			// answers there. "a running service keeps it current" was the old
-			// comment here and it is not true: a bind slower than the two
-			// seconds startStatusPage waits never overwrote the file, so this
-			// printed the PREVIOUS run's port (see publishConsoleURLLate).
-			if url := awaitConsoleURL(time.Time{}, 0); url != "" {
-				cctx, ccancel := context.WithTimeout(context.Background(), 2*time.Second)
-				ok := consoleAnswers(cctx, consoleAddrOf(url, ""))
-				ccancel()
-				if ok {
-					fmt.Println("  console: " + url)
-				} else {
-					fmt.Println("  console: not answering (last published: " + url + ")")
-				}
-			}
-		case service.StatusStopped:
-			fmt.Println("  stopped")
-		default:
-			fmt.Println("  unknown")
-		}
-		return 0
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return reportDaemonStatus(ctx, os.Stdout, os.Stderr, st, err,
+			publishedServiceConsoleURL(), otherConsoleCandidates())
 	}
 	fmt.Fprintf(os.Stderr, "calabi daemon: unknown subcommand %q\n", sub)
 	return 2

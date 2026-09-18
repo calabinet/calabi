@@ -18,9 +18,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -31,27 +29,9 @@ import (
 	"github.com/calabi/calabi/apps/client/internal/creds"
 	"github.com/calabi/calabi/apps/client/internal/localweb"
 	"github.com/calabi/calabi/apps/client/internal/mesh"
+	"github.com/calabi/calabi/apps/client/internal/platform/meshenroll"
 	"github.com/calabi/calabi/apps/client/internal/platform/statusapi"
 )
-
-// meshEnrollment is the control plane's answer to GET /v1/mesh/enrollment. When
-// Enabled is false (org not entitled, or the platform hasn't wired a coordinator)
-// the daemon stays off the mesh entirely.
-type meshEnrollment struct {
-	Enabled   bool   `json:"enabled"`
-	CoordAddr string `json:"coord_addr"`
-	RelayAddr string `json:"relay_addr"`
-	NodeName  string `json:"node_name"` // optional; daemon falls back to hostname / --name
-	// OrgID is the meshnet this enrollment is for (meshnet == org). It is the
-	// ONLY field that changes when the operator switches org: coord/relay are
-	// platform-wide and NodeName is the hostname. 0 from a bff that predates it.
-	OrgID int64 `json:"org_id"`
-}
-
-// wantsRun reports whether this enrollment should bring the datapath up.
-func (e meshEnrollment) wantsRun() bool {
-	return e.Enabled && e.CoordAddr != "" && e.RelayAddr != ""
-}
 
 // meshLease is a running mesh session the controller can query + stop. The real
 // implementation wraps *meshRunner; tests inject a fake so reconcile logic is
@@ -119,10 +99,10 @@ type platformMeshController struct {
 	// against fresh enrollments to catch an org switch; also reported in
 	// MeshStatus so the console shows what is ACTUALLY running.
 	leaseOrgID int64
-	cur        meshEnrollment // last APPLIED enrollment (for change detection)
-	homePref   string         // last APPLIED relay-home bias ("own"/"platform"); a change re-homes
-	homePin    string         // last APPLIED facility pin (relay region); a change re-homes
-	routeSig   string         // last APPLIED consumer route policy; a change re-installs
+	cur        meshenroll.Enrollment // last APPLIED enrollment (for change detection)
+	homePref   string                // last APPLIED relay-home bias ("own"/"platform"); a change re-homes
+	homePin    string                // last APPLIED facility pin (relay region); a change re-homes
+	routeSig   string                // last APPLIED consumer route policy; a change re-installs
 	// deviceFP is the Publish-side fingerprint the RUNNING session registered
 	// with. It is read from creds at session start, and on a fresh install the
 	// mesh comes up BEFORE the device registration that mints it — so the first
@@ -262,45 +242,20 @@ func (c *platformMeshController) tick(ctx context.Context) {
 	c.reconcile(ctx, enr)
 }
 
-// fetch calls GET /v1/mesh/enrollment with the daemon's credential. An empty
-// credential (pre-login) or non-200 is an error so tick keeps the prior state.
-func (c *platformMeshController) fetch(ctx context.Context) (meshEnrollment, error) {
-	if c.bffURL == "" {
-		return meshEnrollment{}, fmt.Errorf("no bff-console URL")
-	}
+// fetch asks bff-console for this daemon's enrollment with its current
+// credential (see meshenroll.Fetch for why a failure keeps the current state).
+func (c *platformMeshController) fetch(ctx context.Context) (meshenroll.Enrollment, error) {
 	tok := ""
 	if c.authKey != nil {
 		tok = c.authKey()
 	}
-	if tok == "" {
-		return meshEnrollment{}, fmt.Errorf("no credential yet")
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.bffURL+"/v1/mesh/enrollment", nil)
-	if err != nil {
-		return meshEnrollment{}, err
-	}
-	req.Header.Set("Authorization", "Bearer "+tok)
-	req.Header.Set("Accept", "application/json")
-	resp, err := c.hc.Do(req)
-	if err != nil {
-		return meshEnrollment{}, err
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
-	if resp.StatusCode != http.StatusOK {
-		return meshEnrollment{}, fmt.Errorf("enrollment: %s", resp.Status)
-	}
-	var enr meshEnrollment
-	if err := json.Unmarshal(body, &enr); err != nil {
-		return meshEnrollment{}, fmt.Errorf("decode enrollment: %w", err)
-	}
-	return enr, nil
+	return meshenroll.Fetch(ctx, c.hc, c.bffURL, tok)
 }
 
 // reconcile brings the running session in line with the desired enrollment:
 // start when newly enabled, restart when the coordinator/relay/name changes, and
 // stop when disabled or locally paused.
-func (c *platformMeshController) reconcile(ctx context.Context, enr meshEnrollment) {
+func (c *platformMeshController) reconcile(ctx context.Context, enr meshenroll.Enrollment) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -308,7 +263,7 @@ func (c *platformMeshController) reconcile(ctx context.Context, enr meshEnrollme
 		c.stopLocked("locally paused")
 		return
 	}
-	if !enr.wantsRun() {
+	if !enr.WantsRun() {
 		c.stopLocked("enrollment disabled")
 		c.cur = enr
 		return
@@ -453,6 +408,48 @@ func (c *platformMeshController) shutdown() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.stopLocked("daemon shutdown")
+}
+
+// meshTeardownTimeout bounds how long daemon exit waits for the mesh session to
+// come down. Removing the NAT rules is two iptables calls per route, normally
+// milliseconds; the bound is for a teardown stuck behind the xtables lock, and a
+// Windows service stop, which the SCM does not wait on forever.
+const meshTeardownTimeout = 15 * time.Second
+
+// startMeshController runs the controller in the background and returns a
+// channel closed once Run has returned — that is, once shutdown has stopped the
+// session and the session has removed what it installed.
+func startMeshController(ctx context.Context, c *platformMeshController) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		c.Run(ctx)
+	}()
+	return done
+}
+
+// awaitMeshTeardown cancels the daemon and waits for the mesh session to finish
+// tearing down, so that returning from runDaemon — which exits the process —
+// cannot cut the teardown short.
+//
+// Nothing used to wait. The controller ran as a bare goroutine, and the daemon
+// returned as soon as its tunnel loop noticed the cancellation, racing the mesh
+// session's cleanup — which has to stop the session and then shell out to
+// iptables once per rule. Every stop that lost the race (`systemctl restart`, an
+// update's restart) left its MASQUERADE rules behind, and the next start added
+// another copy: field report 2026-09-17, ~40 of them. Installation now reclaims what
+// an earlier run left (mesh.EnableSubnetRouter), which covers the exits no one
+// can wait for — a crash, SIGKILL; this makes the ordinary stop clean up after
+// itself, which is also what takes the rules away when forwarding is meant to
+// end with the daemon.
+func awaitMeshTeardown(logger *slog.Logger, cancel context.CancelFunc, done <-chan struct{}, limit time.Duration) {
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(limit):
+		logger.Warn("mesh: still tearing down at exit; leaving without it (the next start removes any NAT rules it left)",
+			"waited", limit.String())
+	}
 }
 
 // MeshStatus implements statusapi.MeshStatusSource: the node's live mesh state.

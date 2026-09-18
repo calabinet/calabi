@@ -1,0 +1,45 @@
+package net.calabi.app.ui
+
+import net.calabi.app.R
+
+// Edge region codes to city names: the web console's edgeRegion table
+// (web/console/src/i18n/locales). A code missing here is shown as the code.
+internal val regionNames: Map<String, Int> = mapOf(
+    "cn-beijing" to R.string.region_cn_beijing,
+    "cn-shanghai" to R.string.region_cn_shanghai,
+    "cn-hangzhou" to R.string.region_cn_hangzhou,
+    "cn-shenzhen" to R.string.region_cn_shenzhen,
+    "cn-guangzhou" to R.string.region_cn_guangzhou,
+    "cn-chengdu" to R.string.region_cn_chengdu,
+    "ap-hongkong" to R.string.region_ap_hongkong,
+    "ap-taipei" to R.string.region_ap_taipei,
+    "ap-tokyo" to R.string.region_ap_tokyo,
+    "ap-osaka" to R.string.region_ap_osaka,
+    "ap-seoul" to R.string.region_ap_seoul,
+    "ap-singapore" to R.string.region_ap_singapore,
+    "ap-kualalumpur" to R.string.region_ap_kualalumpur,
+    "ap-jakarta" to R.string.region_ap_jakarta,
+    "ap-bangkok" to R.string.region_ap_bangkok,
+    "ap-manila" to R.string.region_ap_manila,
+    "ap-mumbai" to R.string.region_ap_mumbai,
+    "ap-sydney" to R.string.region_ap_sydney,
+    "me-dubai" to R.string.region_me_dubai,
+    "me-riyadh" to R.string.region_me_riyadh,
+    "eu-frankfurt" to R.string.region_eu_frankfurt,
+    "eu-london" to R.string.region_eu_london,
+    "eu-amsterdam" to R.string.region_eu_amsterdam,
+    "eu-paris" to R.string.region_eu_paris,
+    "eu-milan" to R.string.region_eu_milan,
+    "eu-madrid" to R.string.region_eu_madrid,
+    "eu-stockholm" to R.string.region_eu_stockholm,
+    "us-virginia" to R.string.region_us_virginia,
+    "us-newyork" to R.string.region_us_newyork,
+    "us-chicago" to R.string.region_us_chicago,
+    "us-dallas" to R.string.region_us_dallas,
+    "us-siliconvalley" to R.string.region_us_siliconvalley,
+    "us-losangeles" to R.string.region_us_losangeles,
+    "us-seattle" to R.string.region_us_seattle,
+    "ca-toronto" to R.string.region_ca_toronto,
+    "sa-saopaulo" to R.string.region_sa_saopaulo,
+    "af-johannesburg" to R.string.region_af_johannesburg,
+)

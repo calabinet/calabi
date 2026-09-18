@@ -21,8 +21,7 @@
     "logs": "Logs",
     "tools": "Ferramentas",
     "settings": "Configurações",
-    "mesh": "Malha",
-    "services": "Serviços"
+    "mesh": "Malha"
   },
   "plan": {
     "free": "Free",
@@ -445,7 +444,10 @@
     "exportBtn": "Exportar configuração (.json)",
     "importBtn": "Importar configuração",
     "logoutCard": "Sair",
-    "logoutHint": "Sair chama o identity-svc para revogar a sessão atual e limpa os tokens de access / refresh desta máquina. A impressão digital do dispositivo + a chave de API são mantidas, então não é necessário reemparelhar na próxima vez.",
+    "logoutHint": "Ao sair, esta máquina deixa de ser executada com esta conta e seus túneis e a malha são desconectados. Os túneis em si não são excluídos.",
+    "logoutFailed": "Não foi possível sair",
+    "identityCard": "Identidade",
+    "agentIdentityHint": "Este cliente é executado como serviço com a chave de API usada na instalação, por isso não é possível sair nem trocar de conta aqui. Para usar outra identidade, reinstale o serviço com uma nova chave. Para desativar esta máquina, desinstale o serviço ou revogue a chave no console web.",
     "importModalTitle": "Importar configuração",
     "dragHint": "Clique ou arraste um arquivo .json para cá",
     "formatHint": "O arquivo deve estar no formato calabi-config.json (schema_version=1)",
@@ -483,6 +485,8 @@
     "holdSecurity": "Não é uma atualização de segurança — à espera da sua decisão.",
     "holdUntil": "o mais tardar em {{date}}",
     "holdWindow": "Será instalada na janela de manutenção.",
+    "holdRollout": "Esta versão está sendo distribuída em etapas; ainda não chegou a vez desta máquina.",
+    "holdRolloutEta": "previsto até {{time}}",
     "mandatory": "Obrigatória",
     "mandatoryHint": "Esta versão já não tem suporte, por isso será atualizada independentemente da definição abaixo.",
     "modeAuto": "Automaticamente",
@@ -505,12 +509,15 @@
     "upToDate": "Atualizado",
     "windowLabel": "Atualizar apenas numa janela de manutenção",
     "windowTz": "hora da máquina ({{tz}})",
-    "reasonManagedElsewhere": "Esta cópia não foi instalada com o instalador do Calabi (por exemplo, via Homebrew, scoop ou um arquivo extraído), por isso não se atualiza sozinha. Atualize-a da mesma forma que a instalou."
+    "reasonManagedElsewhere": "Esta cópia não foi instalada com o instalador do Calabi (por exemplo, via Homebrew, scoop ou um arquivo extraído), por isso não se atualiza sozinha. Atualize-a da mesma forma que a instalou.",
+    "orgMinMode": "Sua organização exige no mínimo “{{mode}}”.",
+    "orgMaxDefer": "Sua organização permite adiar uma atualização por no máximo {{n}} dias.",
+    "orgNoDefer": "Sua organização não permite adiar atualizações."
   },
   "serviceMode": {
     "readonlyTag": "Somente leitura",
-    "agentTooltip": "Este cliente é executado sob uma identidade fixa ({{identity}}); o console local é somente leitura. Gerencie os túneis e a conta no console web.",
-    "agentManageTooltip": "Este cliente é executado sob uma identidade fixa ({{identity}}). Você pode gerenciar os túneis desta organização aqui; o login e a troca de organização são feitos no console web.",
+    "agentTooltip": "Este cliente é executado sob uma identidade fixa ({{identity}}); o console local é somente leitura. Gerencie os túneis no console web. Para mudar a identidade, reinstale o serviço com outra chave de API.",
+    "agentManageTooltip": "Este cliente é executado sob uma identidade fixa ({{identity}}). Você pode gerenciar os túneis desta organização aqui. Para mudar a identidade, reinstale o serviço com outra chave de API.",
     "tunnelsReadonly": "Somente leitura no modo agente — gerencie os túneis no console web",
     "agentBannerTitle": "Console somente leitura (modo agente)",
     "agentBannerDesc": "Este cliente é executado como serviço sob uma identidade de chave de API fixa. Crie, edite e exclua túneis no console web.",
@@ -597,7 +604,6 @@
       "routesHelp": "CIDRs da rede local desta máquina para expor à Malha, por exemplo 192.168.1.0/24. Os pares acessam essas redes através deste dispositivo.",
       "save": "Salvar",
       "saved": "Salvo — a sessão da Malha reinicia para aplicar.",
-      "title": "Roteamento (roteador de sub-rede / dispositivo de saída)",
       "useExit": "Rotear meu tráfego por um dispositivo de saída",
       "useExitHelp": "O tráfego padrão desta máquina sai pelo par de saída indicado (o nome dele ou o IP overlay). Deixe em branco para não usar nenhum.",
       "acceptSection": "Aceitar da malha",
@@ -624,7 +630,7 @@
     "colPath": "Caminho",
     "colPeer": "Par",
     "blockedBanner": "Esta máquina está a recusar todas as ligações de entrada",
-    "blockedBannerHelp": "Os pares veem-na e ela continua a alcançá-los, mas ninguém consegue abrir uma ligação para ela. Desligue em Definições → Aceitar da malha.",
+    "blockedBannerHelp": "Os pares veem-na e ela continua a alcançá-los, mas ninguém consegue abrir uma ligação para ela. Desligue em Roteamento → Aceitar da malha.",
     "peerFilter": "Filtrar por nome / endereço",
     "peerFilterNoMatch": "Nenhum par corresponde",
     "colTraffic": "Transferência",
@@ -691,6 +697,11 @@
       "targetTip": "É o endereço que esta máquina acessa ao verificar a si mesma e também o endereço local usado quando este serviço é publicado como túnel. O tráfego da Malha NÃO passa por ele — o pacote de um par chega no endereço de Malha desta máquina."
     },
     "title": "Malha",
+    "tabs": {
+      "devices": "Dispositivos",
+      "services": "Serviços",
+      "routing": "Roteamento"
+    },
     "unavailable": "O estado da Malha não está disponível neste daemon.",
     "relayRtt": "Até o relay",
     "relayRttHint": "Apenas um trecho: desta máquina até o relay. Não é comparável ao RTT ponta a ponta de um caminho direto."

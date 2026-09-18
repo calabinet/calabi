@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"log/slog"
 	"net/netip"
 )
@@ -27,6 +28,21 @@ const advertiseMinBitsV4 = 24
 // /24.
 func routeTooBroad(p netip.Prefix) bool {
 	return p.Addr().Is4() && p.Bits() < advertiseMinBitsV4
+}
+
+// isExitRoute reports whether p is a default route (0.0.0.0/0 or ::/0): the
+// exit-device advertisement, not a subnet.
+//
+// Neither limit below is about it, and both used to catch it. It is "too
+// broad" only by the measure of the alias pool, and it is never aliased. It
+// "overlaps" the mesh's address space only in the sense that it contains
+// everything: a consumer routes by longest prefix, so it cannot take a single
+// overlay /32 away from the node that owns it (the MESH-1 interception), and a
+// consumer sends it traffic only after choosing that device as its exit. From
+// 2026-09-06 until this exemption every exit-device advertisement was refused at
+// registration, on every platform, with nothing but a coordinator log line.
+func isExitRoute(p netip.Prefix) bool {
+	return p.Bits() == 0
 }
 
 // routeInOverlaySpace reports whether p lands inside the mesh's OWN address
@@ -64,7 +80,19 @@ func routeInOverlaySpace(p netip.Prefix) bool {
 //
 // The unclaimed routes are still recorded in AdvertisedRoutes, so the console
 // shows them as awaiting approval rather than losing them.
-func autoApprovable(claims []netip.Prefix, peers []*Node, selfID int64, logger *slog.Logger, t MeshnetID) []netip.Prefix {
+//
+// An exit route is approved only with allowExit, which only a coordinator with
+// no console to approve in passes: a device that becomes an exit carries all of
+// its consumers' internet traffic, which is a decision for an admin even in a
+// meshnet that auto-approves subnets and where nobody else publishes anything.
+func autoApprovable(claims []netip.Prefix, peers []*Node, selfID int64, allowExit bool, logger *slog.Logger, t MeshnetID) []netip.Prefix {
+	subnets := make([]netip.Prefix, 0, len(claims))
+	for _, r := range claims {
+		if allowExit || !isExitRoute(r) {
+			subnets = append(subnets, r)
+		}
+	}
+	claims = subnets
 	if len(claims) == 0 || len(peers) == 0 {
 		return claims
 	}
@@ -107,6 +135,55 @@ func autoApprovable(claims []netip.Prefix, peers []*Node, selfID int64, logger *
 	return out
 }
 
+// routeApproval is how a registration's route claims turn into approvals.
+type routeApproval int
+
+const (
+	// routesWaitForAdmin: a claim takes effect only once an admin approves it.
+	// What is already approved stays approved. The platform default.
+	routesWaitForAdmin routeApproval = iota
+	// routesAutoSubnets: the org switched approval off. A never-reviewed device's
+	// uncontested subnet routes take effect by themselves; exit routes still wait.
+	routesAutoSubnets
+	// routesAutoAll: a coordinator with no console (Coordinator.AutoApproveAllRoutes).
+	// Every uncontested claim takes effect, exit routes included.
+	routesAutoAll
+)
+
+// routeApprovalFor decides how this meshnet's route claims are handled.
+//
+// A settings read that fails lands on routesWaitForAdmin. That is the opposite
+// of the device-approval gate, which degrades open, and deliberately: a blip
+// there would stop a device from enrolling at all, while here it only delays a
+// NEW route until an admin looks — routes that already work keep working.
+func (c *Coordinator) routeApprovalFor(ctx context.Context, t MeshnetID) routeApproval {
+	if c.AutoApproveAllRoutes {
+		return routesAutoAll
+	}
+	if c.Settings == nil {
+		return routesWaitForAdmin
+	}
+	set, err := c.Settings.GetSettings(ctx, t)
+	if err != nil {
+		if c.Logger != nil {
+			c.Logger.Warn("settings read failed; new routes wait for an admin", "meshnet", t, "err", err)
+		}
+		return routesWaitForAdmin
+	}
+	if set.AutoApproveRoutes {
+		return routesAutoSubnets
+	}
+	return routesWaitForAdmin
+}
+
+// newNodeApprovals is what a brand-new device's claims approve to.
+func newNodeApprovals(mode routeApproval, claims []netip.Prefix, peers []*Node, logger *slog.Logger, t MeshnetID) []netip.Prefix {
+	if mode == routesWaitForAdmin {
+		return nil
+	}
+	return autoApprovable(claims, peers, 0, mode == routesAutoAll, logger, t)
+}
+
 // splitAdvertised divides what a node claims into what it may publish and what
 // is refused for being too broad.
 //
@@ -119,7 +196,7 @@ func autoApprovable(claims []netip.Prefix, peers []*Node, selfID int64, logger *
 func splitAdvertised(routes []netip.Prefix) (keep, refused []netip.Prefix) {
 	for _, p := range routes {
 		m := p.Masked()
-		if routeTooBroad(m) || routeInOverlaySpace(m) {
+		if !isExitRoute(m) && (routeTooBroad(m) || routeInOverlaySpace(m)) {
 			refused = append(refused, m)
 			continue
 		}

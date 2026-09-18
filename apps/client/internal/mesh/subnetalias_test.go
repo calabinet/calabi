@@ -22,8 +22,12 @@ func TestIptablesAliasRules(t *testing.T) {
 		{"-t", "nat", "-A", "PREROUTING", "-d", "100.96.5.0/24", "-j", "NETMAP", "--to", "192.168.1.0/24"},
 		{"-t", "nat", "-A", "PREROUTING", "-d", "100.96.6.0/24", "-j", "NETMAP", "--to", "10.0.0.0/24"},
 	}
-	if !reflect.DeepEqual(rules, want) {
-		t.Fatalf("rules =\n%v\nwant\n%v", rules, want)
+	var got [][]string
+	for _, r := range rules {
+		got = append(got, r.args("-A", ""))
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("rules =\n%v\nwant\n%v", got, want)
 	}
 }
 

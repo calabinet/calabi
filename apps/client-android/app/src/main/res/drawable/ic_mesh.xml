@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The mark as drawn in the app: a triangle with a node at each corner. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.8"
+        android:strokeLineJoin="round"
+        android:pathData="M12,6L6.2,16.5H17.8Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M12,3a2.5,2.5 0,1 1,0 5a2.5,2.5 0,1 1,0 -5zM5.8,14.5a2.5,2.5 0,1 1,0 5a2.5,2.5 0,1 1,0 -5zM18.2,14.5a2.5,2.5 0,1 1,0 5a2.5,2.5 0,1 1,0 -5z" />
+</vector>

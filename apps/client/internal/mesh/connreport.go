@@ -128,8 +128,12 @@ func (c *Controller) connReportLoop(ctx context.Context) {
 	if !ok {
 		return
 	}
+	every := c.timing().ConnReport
+	if every <= 0 {
+		return
+	}
 	r := newConnReporter()
-	t := time.NewTicker(connReportInterval)
+	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
 		select {

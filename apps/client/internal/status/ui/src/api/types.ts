@@ -728,14 +728,26 @@ export interface UpdateInfo {
   // notify-only | security-only | outside-window | busy. Empty = nothing
   // waiting. Different from `reason`, which is why it CANNOT be installed here.
   hold?: string;
-  // When the max-defer backstop expires for a held version.
+  // When the max-defer backstop expires for a held version — or, for a
+  // "rollout" hold, when this machine's turn is expected.
   hold_until?: string;
+  // The org's requirement (U5c), when one applies. `policy` stays the machine's
+  // own choice; the daemon acts on the stricter of the two.
+  org_policy?: OrgUpdatePolicy;
   // The MACHINE's timezone abbreviation. The window is on this clock, not the
   // browser's — the restart happens on the machine.
   timezone?: string;
   // idle | checking | updating | failed
   state: string;
   error?: string;
+}
+
+export interface OrgUpdatePolicy {
+  org_id: number;
+  // "" | security | auto
+  min_mode?: string;
+  // Upper bound on max_defer_days. Absent = no bound.
+  max_defer_days?: number;
 }
 
 // UpdatePolicy — the machine's update setting. PUT /v1/update/policy merges,

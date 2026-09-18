@@ -10,6 +10,180 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## 1.12.0 — 2026-09-18
+
+**The first Android app**, and staged rollouts for the automatic update. Client
+and edge move together, as always; the edge has no changes of its own.
+
+**What is in this repository and what is not.** Calabi is also a hosted service,
+and one release covers both. **Updates**, **Mesh**, **Local console** and
+**Mobile** below are changes in what this release ships, built from this tree.
+The last section, **On calabi.net**, is the hosted control plane: its code is not
+in this repository, and a self-hosted deployment does not get it.
+
+**Two things behave differently for setups that already exist.**
+
+- **A platform daemon now reports how each of its self-updates went** — from and
+  to which version, which step failed, the error — to the control plane it is
+  signed in to, over the connection it already registers the device on. A
+  standalone daemon has no update agent and reports nothing.
+- **On calabi.net, a newly advertised subnet route waits for an administrator.**
+  Routes that are already working keep working. An organization that wants
+  routes to take effect on their own turns off *Routes need approval* under
+  Mesh → Settings. A self-hosted coordinator is unchanged: it has no console to
+  approve in, so it still approves every route itself, exit routes included.
+
+### Updates
+
+- **Added** — **Staged rollouts.** A release can reach machines over a number of
+  hours instead of all at once. Each machine works out from its own install ID
+  whether its turn has come, and the local console says so — *being rolled out
+  in stages; this machine's turn has not come yet* — with the time its turn is
+  expected. *Update now* is not held back, and neither is a machine below the
+  minimum supported version. Clients 1.11.x and older do not know about stages
+  and install 1.12.0 as soon as they see it.
+- **Added** — **Update results** (see above). The daemon records that an update
+  started before it launches the installer, so an install that takes the service
+  down and never brings it back still shows up — as started, with no result. The
+  next process to start reports whether it is the new version. Results that
+  cannot be sent yet wait in a local queue of at most 50.
+- **Fixed** — **macOS: an automatic update could stop at "Updating" for good.**
+  The package let the installer put `Calabi.app` wherever it found another copy
+  with the same bundle ID, and on a machine with a second copy the install
+  stopped before the service was restarted. The package now always installs to
+  `/Applications`. The daemon also waits for the installer it started: if the
+  installer exits and the daemon is still the old one, the console reports the
+  failure with the installer's last line of output, and a second installer is
+  never started while one is running.
+
+### Mesh
+
+- **Fixed** — **Exit devices did not work.** Two route checks each read the
+  default route as a claim on the mesh's own address range: from 1.8.0 the
+  coordinator dropped a device's `0.0.0.0/0` advertisement when it registered,
+  and from 1.9.0 the client dropped the chosen exit device's default route
+  before it reached WireGuard. Both now treat `0.0.0.0/0` and `::/0` on their
+  own; every other route overlapping the mesh range is still refused. On
+  calabi.net the coordinator side is already fixed — a device that already had
+  exit-device mode on needs it turned off and on once to advertise again. A
+  self-hosted coordinator needs this release.
+- **Fixed** — **Linux subnet routers piled up NAT rules across restarts.** A
+  router that crashed or was killed, rather than stopped, added its masquerade
+  rule again on the next start; one machine had forty identical copies. Rules
+  now carry a comment naming the device, and each start removes the ones it left
+  behind — including uncommented copies from older versions — before adding its
+  own. With nftables every device has its own table, so two clients on one
+  machine no longer delete each other's rules. The platform daemon also waits for
+  the mesh to shut down, up to 15 seconds, before it exits.
+- **Changed** — (coordinator) A device's periodic endpoint report no longer
+  pushes a new network map to every peer unless its endpoints or home region
+  actually changed. In a mesh of N devices, each one used to receive about N maps
+  a minute.
+
+### Local console
+
+- **Changed** — Services are a tab of the Mesh page, beside Devices and Routing,
+  as they are in the web console. The old `/services` address redirects.
+- **Fixed** — **On a machine with the desktop app installed, `calabi login`
+  started a second daemon.** From a terminal without administrator rights it
+  could not query the service, took that for "not installed", and started
+  another daemon on `:7401` — a second device, joining the mesh as whoever typed
+  the command. Not being allowed to query the service now counts as installed:
+  login leaves the service alone and says whether it runs on its own sign-in or
+  on an API key.
+- **Fixed** — `calabi daemon status` in the same terminal printed
+  `Access is denied` and exited 1. It now says the service is installed, that
+  this shell cannot query its state, and where its console answers.
+- **Fixed** — **macOS: `calabi daemon start`, `stop` and `restart` operate the
+  service the installer registered** (`com.calabi.daemon`). They looked for a
+  service named `calabi` that the installer never creates, and `install` would
+  register a second root service over the same data directory. `install` now
+  refuses, and `uninstall` prints the removal steps.
+- **Fixed** — `calabi logout` said "logged out" when nothing had been: when the
+  daemon runs on an API key and refused, when an installed service it cannot see
+  was still signed in, and when there was no sign-in at all. It now says what it
+  did and did not touch, and exits 1 when refused.
+- **Fixed** — The command line and the running daemon no longer spend the same
+  refresh token. A refresh token works once; when both refreshed at the same
+  moment, the one that lost was signed out.
+- **Fixed** — Settings no longer offers *Sign out* on a daemon that runs on an
+  API key or in standalone mode, where it failed and the page flashed back as if
+  it had worked. On an API key it shows the identity the service runs as, and
+  how to change it: reinstall the service with a different key.
+- **Fixed** — The desktop tray's *Restart* and *Stop* hints give commands that
+  work on that platform — `launchctl` on macOS, `Restart-Service` and
+  `Stop-Service` in an administrator PowerShell on Windows — instead of
+  `sudo calabi daemon restart`, which neither installer puts on the PATH.
+
+### Mobile
+
+**Calabi for Android, first release.** It makes a phone a device in your
+organization's mesh. It signs in to calabi.net; it does not join a self-hosted
+coordinator. Android 8.0 or later, 64-bit and 32-bit ARM, in English and
+Simplified Chinese.
+
+It is not on Google Play: `calabi-android.apk` is on the download page, and
+Android warns before installing an app from outside the store. It does not
+update itself — a newer APK installs over it. The certificate it is signed with
+is printed on the releases page, to check before installing.
+
+- **Mesh device** — connect and disconnect in the app or from a Quick Settings
+  tile, and see the organization's devices and whether each is reached directly
+  or through a relay. After Wi-Fi drops, the mesh is back within about two
+  seconds of the network returning.
+- **Exit device** — send all of the phone's traffic out through a device in
+  your mesh. Other mesh devices stay on direct connections meanwhile.
+- **Connect at startup** — off by default.
+- **Background running** — some Android builds stop background apps, VPN
+  included, a while after the screen goes off. When the app finds it was stopped
+  that way it says so and opens the vendor's page for allowing background
+  activity (Huawei, Honor, Xiaomi); on other phones it asks to be exempt from
+  battery optimization.
+- **Tunnels, read-only** — the tunnels you can see in the organization, with
+  their public addresses to copy, share or open, and access records for the last
+  24 hours or 7 days. The phone does not serve tunnels.
+- **Usage** — this month's traffic against the plan's limit, the last seven
+  days, and mesh device seats.
+- **Replace an old device** — reinstalling the app creates a new mesh key, so
+  the phone joins as a new device. The app offers to remove your own offline
+  device of the same platform and take over its name.
+
+### On calabi.net
+
+The hosted control plane. **None of this is in this repository**, and a
+self-hosted deployment does not get it.
+
+- **Added** — **An organization update policy**, under Clients → Update policy.
+  Administrators can require the organization's machines to install at least
+  security updates, or everything, automatically, and cap how many days a
+  machine may hold an update back. It only tightens: each machine follows
+  whichever of its own setting and the organization's is stricter, and gets its
+  own choice back when the policy is removed. It needs a 1.12.0 client, whose
+  local console shows the setting in effect and greys out what the organization
+  does not allow.
+- **Added** — The client list marks a machine whose last update failed, and the
+  client's details show its most recent update.
+- **Changed** — **New subnet routes wait for an administrator** (see the top of
+  this release). The switch is *Routes need approval* under Mesh → Settings; an
+  exit device always needs approval.
+- **Changed** — In Mesh → Devices, a device offering to be an exit device shows
+  one *Exit device* tag — green when approved, orange when waiting — which an
+  administrator clicks to approve or revoke.
+- **Fixed** — Turning off mesh connection records did not stay off: the stored
+  records were deleted once, recording carried on, and the switch showed as on
+  after a refresh. An organization that turned them off before this fix needs to
+  turn them off again.
+- **Fixed** — Saving one mesh setting could switch another back — device
+  approval, connection records, route approval.
+- **Fixed** — A member could read a colleague's tunnel by its ID through the API
+  although the list hid it. They now get the same "not found" as for a tunnel
+  that does not exist.
+- **Fixed** — Typing the two-step verification code through an input method put
+  each digit into two boxes.
+- **Changed** — The sign-in page shows a preview of the console beside the form.
+- **Added** — The download page offers the Android app, and the version number
+  links to that release's notes.
+
 ## 1.11.1 — 2026-09-16
 
 A fix release for the automatic update 1.11.0 introduced. Client and edge move

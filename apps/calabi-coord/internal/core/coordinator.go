@@ -90,7 +90,14 @@ type Coordinator struct {
 	// Nil = this coordinator issues none, which is correct while its relays still
 	// run with relay.require_auth off. See relaygrant.go.
 	RelayGrants RelayGrantIssuer
-	Logger      *slog.Logger
+	// AutoApproveAllRoutes lets every device's routes, exit routes included,
+	// take effect without an admin, whatever a meshnet's settings say. It is for
+	// a coordinator with no console to approve them in — the self-hosted build on
+	// static auth keys — where requiring approval would silently switch off every
+	// subnet router and exit device its documentation describes. The platform
+	// leaves it false and each org decides (MeshnetSettings.AutoApproveRoutes).
+	AutoApproveAllRoutes bool
+	Logger               *slog.Logger
 
 	// enrollLocks serializes enrollment PER MESHNET.
 	//
@@ -189,6 +196,7 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 	if err != nil {
 		return nil, fmt.Errorf("core: list meshnet: %w", err)
 	}
+	routeMode := c.routeApprovalFor(ctx, in.Meshnet)
 
 	// Re-enrollment: reuse the existing node (same id + overlay), just refresh the
 	// mutable fields. No new IPAM allocation.
@@ -238,16 +246,22 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 			existing.OS = in.OS
 		}
 		existing.AdvertisedRoutes = in.AdvertisedRoutes
-		if existing.RoutesReviewed {
-			// An admin has managed this node: keep their decision, but drop
-			// approvals for routes the node no longer claims — a node that stopped
-			// advertising a CIDR must stop receiving its traffic.
+		if existing.RoutesReviewed || routeMode == routesWaitForAdmin {
+			// An admin has managed this node, or the org has routes wait for one:
+			// keep what is approved, but drop approvals for routes the node no
+			// longer claims — a node that stopped advertising a CIDR must stop
+			// receiving its traffic. A claim it did not have before waits.
+			//
+			// Under routesWaitForAdmin this also keeps a never-reviewed node's
+			// earlier, automatic approvals: turning approval on stops new routes
+			// from taking effect by themselves, it does not cut the subnet routers
+			// that already work.
 			existing.ApprovedRoutes = intersectPrefixes(existing.ApprovedRoutes, in.AdvertisedRoutes)
 		} else {
-			// Never reviewed: behave as before approval existed, so the feature
-			// doesn't silently cut subnet routers that work today — except for a
-			// CIDR a peer already publishes, which now waits for an admin (MESH-1).
-			existing.ApprovedRoutes = autoApprovable(in.AdvertisedRoutes, peers, existing.ID, c.Logger, in.Meshnet)
+			// Never reviewed, in a meshnet that auto-approves: behave as before
+			// approval existed — except for a CIDR a peer already publishes, which
+			// waits for an admin (MESH-1).
+			existing.ApprovedRoutes = autoApprovable(in.AdvertisedRoutes, peers, existing.ID, routeMode == routesAutoAll, c.Logger, in.Meshnet)
 		}
 		// A daemon restart with an edited config is how an alias request changes,
 		// so reconcile on the re-enrollment path too — and AFTER the approval
@@ -340,9 +354,9 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 		Tags:             in.Tags,
 		OwnerUserID:      in.OwnerUserID,
 		AdvertisedRoutes: in.AdvertisedRoutes,
-		// Not yet reviewed (see RoutesReviewed), minus anything a peer already
-		// publishes — that one waits for an admin (MESH-1).
-		ApprovedRoutes:    autoApprovable(in.AdvertisedRoutes, peers, 0, c.Logger, in.Meshnet),
+		// Nothing approved unless the meshnet auto-approves, and even then not
+		// what a peer already publishes — that waits for an admin (MESH-1).
+		ApprovedRoutes:    newNodeApprovals(routeMode, in.AdvertisedRoutes, peers, c.Logger, in.Meshnet),
 		AliasedRoutes:     in.AliasedRoutes,
 		Overlay:           addr,
 		DeviceFingerprint: in.DeviceFingerprint,

@@ -1,0 +1,12 @@
+Fonts bundled with this app
+
+Manrope (res/font/manrope.ttf)
+Copyright 2018 The Manrope Project Authors (https://github.com/googlefonts/manrope)
+
+JetBrains Mono (res/font/jetbrains_mono.ttf)
+Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)
+
+Both are licensed under the SIL Open Font License, Version 1.1; the full text is
+in OFL.txt next to this file. Both files are the variable-weight builds from the
+Google Fonts repository (https://github.com/google/fonts, ofl/manrope and
+ofl/jetbrainsmono).

@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"testing"
+
+	"github.com/calabi/calabi/apps/client/internal/platform/meshenroll"
 )
 
 // meshnet == org, so switching org must move this node to a DIFFERENT mesh.
@@ -13,7 +15,7 @@ import (
 func TestMeshController_OrgSwitchRestarts(t *testing.T) {
 	var started []*startRec
 	c := newTestController(recordingStarter(&started))
-	base := meshEnrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 7}
+	base := meshenroll.Enrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 7}
 
 	c.reconcile(context.Background(), base)
 	if len(started) != 1 {
@@ -49,7 +51,7 @@ func TestMeshController_OrgSwitchRestarts(t *testing.T) {
 func TestMeshController_MissingOrgIDDoesNotChurn(t *testing.T) {
 	var started []*startRec
 	c := newTestController(recordingStarter(&started))
-	old := meshEnrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340"} // OrgID 0
+	old := meshenroll.Enrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340"} // OrgID 0
 
 	c.reconcile(context.Background(), old)
 	c.reconcile(context.Background(), old)
@@ -88,7 +90,7 @@ func TestMeshController_MissingOrgIDDoesNotChurn(t *testing.T) {
 func TestMeshController_RebindDropsSession(t *testing.T) {
 	var started []*startRec
 	c := newTestController(recordingStarter(&started))
-	c.reconcile(context.Background(), meshEnrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 7})
+	c.reconcile(context.Background(), meshenroll.Enrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 7})
 	if len(started) != 1 {
 		t.Fatalf("start count = %d, want 1", len(started))
 	}
@@ -107,7 +109,7 @@ func TestMeshController_RebindDropsSession(t *testing.T) {
 	}
 
 	// The next enrollment brings it back on the NEW org.
-	c.reconcile(context.Background(), meshEnrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 9})
+	c.reconcile(context.Background(), meshenroll.Enrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 9})
 	if len(started) != 2 {
 		t.Fatalf("no re-enrollment after Rebind: count = %d, want 2", len(started))
 	}
@@ -121,13 +123,13 @@ func TestMeshController_RebindDropsSession(t *testing.T) {
 func TestMeshController_RebindKeepsPause(t *testing.T) {
 	var started []*startRec
 	c := newTestController(recordingStarter(&started))
-	c.reconcile(context.Background(), meshEnrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 7})
+	c.reconcile(context.Background(), meshenroll.Enrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 7})
 	if err := c.MeshDown(); err != nil {
 		t.Fatalf("MeshDown: %v", err)
 	}
 
 	c.Rebind("org switch")
-	c.reconcile(context.Background(), meshEnrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 9})
+	c.reconcile(context.Background(), meshenroll.Enrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340", OrgID: 9})
 	if len(started) != 1 {
 		t.Fatalf("paused node re-enrolled: count = %d, want 1", len(started))
 	}

@@ -28,12 +28,12 @@ export default function Tools() {
     refetchInterval: false,
   });
 
-  // Declaring a mesh service reuses the Connect page's form rather than
+  // Declaring a mesh service reuses the form on 组网 → 服务 rather than
   // duplicating one here — same shape as the tunnel hand-off below.
   function declareService(r: ProbePort) {
     const q = new URLSearchParams({ declare_port: String(r.port) });
     if (r.hint) q.set("declare_name", r.hint);
-    navigate("/services?" + q.toString());
+    navigate("/mesh/services?" + q.toString());
   }
 
   function go(port: number) {

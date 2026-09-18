@@ -24,9 +24,6 @@ import (
 // policy tier rests on and the tests need to flip it.
 func manifestServer(t *testing.T, version string, priv ed25519.PrivateKey, critical bool, minSupported string) *httptest.Server {
 	t.Helper()
-	installer := []byte("fake calabi installer payload")
-	sig := base64.StdEncoding.EncodeToString(ed25519.Sign(priv, installer))
-	sum := sha256Hex(installer)
 	crit := ""
 	if critical {
 		crit = `"critical":true,`
@@ -34,6 +31,17 @@ func manifestServer(t *testing.T, version string, priv ed25519.PrivateKey, criti
 	if minSupported != "" {
 		crit += fmt.Sprintf(`"min_supported":%q,`, minSupported)
 	}
+	return manifestServerWith(t, version, priv, crit)
+}
+
+// manifestServerWith serves a signed manifest whose top level also carries
+// extra — raw JSON members, each followed by a comma.
+func manifestServerWith(t *testing.T, version string, priv ed25519.PrivateKey, extra string) *httptest.Server {
+	t.Helper()
+	installer := []byte("fake calabi installer payload")
+	sig := base64.StdEncoding.EncodeToString(ed25519.Sign(priv, installer))
+	sum := sha256Hex(installer)
+	crit := extra
 	var body []byte
 	build := func(host string) []byte {
 		if len(body) == 0 {
@@ -63,6 +71,8 @@ type agentOpts struct {
 	policy          Policy
 	unprivileged    bool
 	busy            bool
+	// rollout is a raw "rollout":{...}, member for the manifest, or empty.
+	rollout string
 	// at pins the agent's clock. Zero = a time inside the default 03:00–05:00
 	// window, so a test that does not care about the window is not silently
 	// gated by whatever hour it happens to run at. That bit matters: this suite
@@ -70,10 +80,17 @@ type agentOpts struct {
 	at time.Time
 }
 
-func newAgent(t *testing.T, o agentOpts, apply func(context.Context, string) error) (*Agent, func()) {
+func newAgent(t *testing.T, o agentOpts, apply func(context.Context, string) (func() error, error)) (*Agent, func()) {
 	t.Helper()
 	pub, priv, _ := ed25519.GenerateKey(nil)
-	srv := manifestServer(t, o.latest, priv, o.critical, o.minSupported)
+	extra := ""
+	if o.critical {
+		extra = `"critical":true,`
+	}
+	if o.minSupported != "" {
+		extra += fmt.Sprintf(`"min_supported":%q,`, o.minSupported)
+	}
+	srv := manifestServerWith(t, o.latest, priv, extra+o.rollout)
 	u := &Updater{
 		ManifestURL:    srv.URL + "/latest.json",
 		CurrentVersion: o.current,
@@ -99,11 +116,11 @@ func newAgent(t *testing.T, o agentOpts, apply func(context.Context, string) err
 	return a, srv.Close
 }
 
-func mustNotApply(t *testing.T) func(context.Context, string) error {
+func mustNotApply(t *testing.T) func(context.Context, string) (func() error, error) {
 	t.Helper()
-	return func(context.Context, string) error {
+	return func(context.Context, string) (func() error, error) {
 		t.Error("an installer was launched when it must not have been")
-		return nil
+		return nil, nil
 	}
 }
 
@@ -148,7 +165,7 @@ func TestModeSecurityInstallsOnlyCriticalReleases(t *testing.T) {
 	var applied bool
 	crit, done2 := newAgent(t, agentOpts{current: "1.10.0", latest: "1.11.0", critical: true,
 		policy: Policy{Mode: ModeSecurity, MaxDeferDays: 7}},
-		func(context.Context, string) error { applied = true; return nil })
+		func(context.Context, string) (func() error, error) { applied = true; return nil, nil })
 	defer done2()
 	if launched, _ := crit.tick(context.Background(), time.Hour); !launched || !applied {
 		t.Fatalf("a critical release did not install under security-only (launched=%v applied=%v)", launched, applied)
@@ -183,7 +200,7 @@ func TestBelowMinSupportedInstallsEvenUnderNotifyOnly(t *testing.T) {
 	a, done := newAgent(t, agentOpts{current: "1.9.0", latest: "1.11.0", minSupported: "1.10.0",
 		at: noon, busy: true,
 		policy: Policy{Mode: ModeNotify, WindowStartHour: 3, WindowEndHour: 5, MaxDeferDays: 7}},
-		func(context.Context, string) error { applied = true; return nil })
+		func(context.Context, string) (func() error, error) { applied = true; return nil, nil })
 	defer done()
 
 	if launched, _ := a.tick(context.Background(), time.Hour); !launched || !applied {
@@ -237,7 +254,7 @@ func TestCriticalIgnoresTheWindowAndBusy(t *testing.T) {
 	a, done := newAgent(t, agentOpts{current: "1.10.0", latest: "1.11.0", critical: true,
 		at: noon, busy: true,
 		policy: Policy{Mode: ModeAuto, WindowStartHour: 3, WindowEndHour: 5, MaxDeferDays: 7}},
-		func(context.Context, string) error { applied = true; return nil })
+		func(context.Context, string) (func() error, error) { applied = true; return nil, nil })
 	defer done()
 
 	if launched, _ := a.tick(context.Background(), time.Hour); !launched || !applied {
@@ -284,7 +301,7 @@ func TestBackstopInstallsEvenOutsideTheWindow(t *testing.T) {
 	var applied bool
 	a, done := newAgent(t, agentOpts{current: "1.10.0", latest: "1.11.0", at: noon,
 		policy: Policy{Mode: ModeAuto, WindowStartHour: 3, WindowEndHour: 5, MaxDeferDays: 7}},
-		func(context.Context, string) error { applied = true; return nil })
+		func(context.Context, string) (func() error, error) { applied = true; return nil, nil })
 	defer done()
 
 	// It has already been waiting eight days.
@@ -316,7 +333,7 @@ func TestZeroDeferDaysIgnoresWindowAndBusy(t *testing.T) {
 	var applied bool
 	a, done := newAgent(t, agentOpts{current: "1.10.0", latest: "1.11.0", at: noon, busy: true,
 		policy: Policy{Mode: ModeAuto, WindowStartHour: 3, WindowEndHour: 5, MaxDeferDays: 0}},
-		func(context.Context, string) error { applied = true; return nil })
+		func(context.Context, string) (func() error, error) { applied = true; return nil, nil })
 	defer done()
 
 	if launched, _ := a.tick(context.Background(), time.Hour); !launched || !applied {
@@ -342,7 +359,7 @@ func TestTickLogsThatItCannotApply(t *testing.T) {
 		DownloadDir:    t.TempDir(),
 		Privileged:     true,
 		Managed:        managedForTest,
-		Apply:          func(context.Context, string) error { t.Fatal("apply must not run"); return nil },
+		Apply:          func(context.Context, string) (func() error, error) { t.Fatal("apply must not run"); return nil, nil },
 		Logf:           func(f string, a ...any) { lines = append(lines, fmt.Sprintf(f, a...)) },
 	}
 	a := NewAgent(u, nil)
@@ -398,7 +415,7 @@ func TestManualApplyIgnoresThePolicy(t *testing.T) {
 	var applied bool
 	a, done := newAgent(t, agentOpts{current: "1.10.0", latest: "1.11.0", at: noon, busy: true,
 		policy: Policy{Mode: ModeNotify, WindowStartHour: 3, WindowEndHour: 5, MaxDeferDays: 7}},
-		func(context.Context, string) error { applied = true; return nil })
+		func(context.Context, string) (func() error, error) { applied = true; return nil, nil })
 	defer done()
 
 	if err := a.Apply(context.Background()); err != nil {

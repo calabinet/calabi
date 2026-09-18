@@ -199,6 +199,8 @@ var (
 		{Name: "meshnet_id", Type: field.TypeInt64, Unique: true},
 		{Name: "alias_addr_budget", Type: field.TypeInt, Default: 0},
 		{Name: "require_device_approval", Type: field.TypeBool, Default: false},
+		{Name: "conn_records_disabled", Type: field.TypeBool, Default: false},
+		{Name: "auto_approve_routes", Type: field.TypeBool, Default: false},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
 	// MeshSettingsTable holds the schema information for the "mesh_settings" table.

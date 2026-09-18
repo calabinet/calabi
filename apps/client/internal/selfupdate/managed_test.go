@@ -85,9 +85,9 @@ func TestForeignInstallChecksButNeverApplies(t *testing.T) {
 			DownloadDir:    t.TempDir(),
 			Privileged:     privileged,
 			Managed:        func() bool { return false }, // e.g. scoop
-			Apply: func(context.Context, string) error {
+			Apply: func(context.Context, string) (func() error, error) {
 				t.Fatal("the installer must not run for an install it did not make")
-				return nil
+				return nil, nil
 			},
 		}
 		st, err := u.Check(context.Background())

@@ -21,8 +21,7 @@
     "logs": "Log",
     "tools": "Strumenti",
     "settings": "Impostazioni",
-    "mesh": "Mesh",
-    "services": "Servizi"
+    "mesh": "Mesh"
   },
   "plan": {
     "free": "Free",
@@ -445,7 +444,10 @@
     "exportBtn": "Esporta configurazione (.json)",
     "importBtn": "Importa configurazione",
     "logoutCard": "Esci",
-    "logoutHint": "La disconnessione chiama identity-svc per revocare la sessione attuale e cancella gli access / refresh token di questa macchina. L'impronta del dispositivo + la API key vengono conservate, quindi non è necessario un nuovo abbinamento la prossima volta.",
+    "logoutHint": "Dopo la disconnessione questa macchina non funziona più con questo account e i suoi tunnel e la mesh vengono scollegati. I tunnel in sé non vengono eliminati.",
+    "logoutFailed": "Disconnessione non riuscita",
+    "identityCard": "Identità",
+    "agentIdentityHint": "Questo client è in esecuzione come servizio con la chiave API usata per installarlo, quindi qui non puoi disconnetterti né cambiare account. Per usare un'altra identità, reinstalla il servizio con una nuova chiave. Per mettere fuori servizio questa macchina, disinstalla il servizio o revoca la chiave dalla console web.",
     "importModalTitle": "Importa configurazione",
     "dragHint": "Clicca o trascina qui un file .json",
     "formatHint": "Il file deve essere in formato calabi-config.json (schema_version=1)",
@@ -483,6 +485,8 @@
     "holdSecurity": "Non è un aggiornamento di sicurezza: in attesa di una tua decisione.",
     "holdUntil": "entro il {{date}}",
     "holdWindow": "Sarà installato nella finestra di manutenzione.",
+    "holdRollout": "Questa versione viene distribuita a scaglioni; non è ancora il turno di questa macchina.",
+    "holdRolloutEta": "previsto entro {{time}}",
     "mandatory": "Obbligatorio",
     "mandatoryHint": "Questa versione non è più supportata, quindi si aggiornerà da sola a prescindere dall'impostazione qui sotto.",
     "modeAuto": "Automaticamente",
@@ -505,12 +509,15 @@
     "upToDate": "Aggiornato",
     "windowLabel": "Aggiorna solo in una finestra di manutenzione",
     "windowTz": "ora della macchina ({{tz}})",
-    "reasonManagedElsewhere": "Questa copia non è stata installata con l'installer di Calabi (ad esempio con Homebrew, scoop o un archivio estratto), quindi non si aggiorna da sola. Aggiornala nello stesso modo in cui l'hai installata."
+    "reasonManagedElsewhere": "Questa copia non è stata installata con l'installer di Calabi (ad esempio con Homebrew, scoop o un archivio estratto), quindi non si aggiorna da sola. Aggiornala nello stesso modo in cui l'hai installata.",
+    "orgMinMode": "La tua organizzazione richiede almeno «{{mode}}».",
+    "orgMaxDefer": "La tua organizzazione consente di rimandare un aggiornamento al massimo di {{n}} giorni.",
+    "orgNoDefer": "La tua organizzazione non consente di rimandare gli aggiornamenti."
   },
   "serviceMode": {
     "readonlyTag": "Sola lettura",
-    "agentTooltip": "Questo client è in esecuzione con un'identità fissa ({{identity}}); la console locale è di sola lettura. Gestisci i tunnel e l'account dalla console web.",
-    "agentManageTooltip": "Questo client è in esecuzione con un'identità fissa ({{identity}}). Puoi gestire i tunnel di questa organizzazione qui; l'accesso e il cambio di organizzazione si effettuano dalla console web.",
+    "agentTooltip": "Questo client è in esecuzione con un'identità fissa ({{identity}}); la console locale è di sola lettura. Gestisci i tunnel dalla console web. Per cambiare identità, reinstalla il servizio con un'altra chiave API.",
+    "agentManageTooltip": "Questo client è in esecuzione con un'identità fissa ({{identity}}). Puoi gestire i tunnel di questa organizzazione qui. Per cambiare identità, reinstalla il servizio con un'altra chiave API.",
     "tunnelsReadonly": "Sola lettura in modalità agente: gestisci i tunnel dalla console web",
     "agentBannerTitle": "Console di sola lettura (modalità agente)",
     "agentBannerDesc": "Questo client è in esecuzione come servizio con un'identità a chiave API fissa. Crea, modifica ed elimina i tunnel dalla console web.",
@@ -597,7 +604,6 @@
       "routesHelp": "I CIDR della LAN di questa macchina da esporre alla Mesh, es. 192.168.1.0/24. I peer li raggiungono attraverso questo dispositivo.",
       "save": "Salva",
       "saved": "Salvato — la sessione Mesh si riavvia per applicare la modifica.",
-      "title": "Routing (router di sottorete / dispositivo di uscita)",
       "useExit": "Instrada il mio traffico attraverso un dispositivo di uscita",
       "useExitHelp": "Il traffico predefinito di questa macchina passa dal peer di uscita indicato (nome del dispositivo o IP overlay). Lascia vuoto per non usarne nessuno.",
       "acceptSection": "Accetta dalla mesh",
@@ -624,7 +630,7 @@
     "colPath": "Percorso",
     "colPeer": "Peer",
     "blockedBanner": "Questa macchina rifiuta tutte le connessioni in entrata",
-    "blockedBannerHelp": "I peer la vedono e lei riesce a raggiungerli, ma nessuno può aprire una connessione verso di lei. Disattivalo in Impostazioni → Accetta dalla mesh.",
+    "blockedBannerHelp": "I peer la vedono e lei riesce a raggiungerli, ma nessuno può aprire una connessione verso di lei. Disattivalo in Routing → Accetta dalla mesh.",
     "peerFilter": "Filtra per nome / indirizzo",
     "peerFilterNoMatch": "Nessun peer corrispondente",
     "colTraffic": "Trasferimento",
@@ -691,6 +697,11 @@
       "targetTip": "L'indirizzo che questa macchina contatta quando esegue il controllo automatico, e l'indirizzo locale usato se il servizio viene pubblicato come tunnel. Il traffico Mesh NON passa da qui — il pacchetto di un peer arriva all'indirizzo Mesh di questa macchina."
     },
     "title": "Mesh",
+    "tabs": {
+      "devices": "Dispositivi",
+      "services": "Servizi",
+      "routing": "Routing"
+    },
     "unavailable": "Lo stato Mesh non è disponibile su questo daemon.",
     "relayRtt": "Al relay",
     "relayRttHint": "Solo una tratta: da questa macchina al relay. Non confrontabile con l'RTT end-to-end di un percorso diretto."

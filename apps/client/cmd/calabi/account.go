@@ -263,18 +263,26 @@ func runLogin(args []string) int {
 
 	// Starting one is a separate question, and only arises when none is up.
 	wantStart := !daemonUp && *startDaemon && !*noStartDaemon && envOr("CALABI_NO_START_DAEMON", "") != "1"
-	// Once the daemon is installed as an OS service, the service is the single
-	// canonical daemon — don't auto-spawn a second one that would fight it for
-	// :7400 and this account's tunnel claims. Defer to the service instead.
+	// An installed service is a client of its own: it keeps its own sign-in, or
+	// runs on an API key, and this login does not reach it — its data dir is
+	// machine-wide and this shell cannot even read it. So never start a second
+	// daemon next to it (a second device for the same machine, joining the
+	// meshnet as this account), and say what this login does apply to.
 	//
-	// Only a service under the DEFAULT name (or CALABI_SERVICE_NAME) is seen
-	// here; one installed with --service-name is not, and login then starts a
-	// daemon of its own. Left as is deliberately: with the API-key agent model,
-	// "an org's agent service plus a human signing in" is a legitimate pair on
-	// one machine, and recognising the service in order to refuse would block it.
-	if wantStart {
+	// serviceStatus has to answer "installed" even when this shell may not ask:
+	// Windows refuses a non-admin status query outright, and that used to read as
+	// "not installed" and start the second daemon on every desktop install. The
+	// console answering on this machine is what says what the service runs on.
+	//
+	// Only a service under the DEFAULT name (or CALABI_SERVICE_NAME), or the
+	// macOS installer's LaunchDaemon, is recognised. One installed with
+	// --service-name is not, and login starts a daemon of its own next to it; so
+	// does a console answering with no service installed at all, which is another
+	// client's data dir on this machine — the multi-client setup, unchanged.
+	if !daemonUp {
 		if st, installed := serviceStatus(); installed {
-			fmt.Println(serviceNote(st))
+			others := probeOtherClients(dctx, "", otherConsoleCandidates())
+			fmt.Println(installedServiceNote(st, others, wantStart))
 			wantStart = false
 		}
 	}
@@ -350,14 +358,45 @@ func logoutViaDaemon(ctx context.Context, addr string) error {
 		return err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 	if resp.StatusCode != http.StatusOK {
 		// 403 is the agent block: a pinned API-key client has no login session
 		// to end, and its credential lives in the service environment rather
-		// than in this creds file.
-		return fmt.Errorf("daemon refused (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		// than in this creds file. See isAgentRefusal.
+		return readDaemonRefusal(resp)
 	}
 	return nil
+}
+
+// daemonRefusal is a daemon answering a local write with anything but 200. The
+// status stays separate from the text so a caller can tell the agent block
+// (403) from everything else, and Msg is the daemon's own sentence rather than
+// the JSON envelope it arrived in.
+type daemonRefusal struct {
+	Status int
+	Msg    string
+}
+
+func (e *daemonRefusal) Error() string {
+	return fmt.Sprintf("daemon refused (%d): %s", e.Status, e.Msg)
+}
+
+func readDaemonRefusal(resp *http.Response) error {
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+	msg := strings.TrimSpace(string(body))
+	var envelope struct {
+		Error string `json:"error"`
+	}
+	if json.Unmarshal(body, &envelope) == nil && envelope.Error != "" {
+		msg = envelope.Error
+	}
+	return &daemonRefusal{Status: resp.StatusCode, Msg: msg}
+}
+
+// isAgentRefusal reports the agent block: the daemon runs on an API key, so it
+// has no sign-in to end or to replace, and it stays online as that key.
+func isAgentRefusal(err error) bool {
+	var r *daemonRefusal
+	return errors.As(err, &r) && r.Status == http.StatusForbidden
 }
 
 // rebindDaemon tells the daemon of THIS data dir that the creds file underneath
@@ -385,12 +424,11 @@ func rebindDaemon(ctx context.Context, addr string) error {
 		return err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 	if resp.StatusCode != http.StatusOK {
 		// 403 = pinned API-key agent: its credential is the service env key, not
 		// this file, and a login here was never going to move it.
 		// 404 = a daemon older than this endpoint.
-		return fmt.Errorf("daemon refused (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return readDaemonRefusal(resp)
 	}
 	return nil
 }
@@ -489,57 +527,114 @@ func runLogout(args []string) int {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	return logout(ctx, os.Stdout, os.Stderr, cruntime.DaemonRunning(), otherConsoleCandidates())
+}
+
+// logout is runLogout with its surroundings passed in: whether a daemon holds
+// this data dir's lock, and where ANOTHER client's console might be answering.
+//
+// Every line it prints has to be true of the machine afterwards. It used to end
+// in "logged out" whatever had happened, and three common cases made that a lie
+// (all reproduced 2026-09-16):
+//
+//   - the daemon of this data dir runs on an API key (a container, or
+//     `CALABI_API_KEY=… calabi daemon`): it refuses, keeps running as the key,
+//     and never "reconnects" out of it — the key is in its environment;
+//   - the daemon that matters is not this data dir's at all: an installed
+//     service keeps its data machine-wide (ProgramData, /var/lib/calabi), which
+//     a shell cannot even read, so the CLI never saw it and said nothing;
+//   - CALABI_API_KEY is set in this shell, so every later command still
+//     authenticates, whatever the creds file says.
+func logout(ctx context.Context, stdout, stderr io.Writer, daemonUp bool, others []string) int {
+	cfg, _ := creds.Load()
+	saved := cfg != nil && (cfg.AccessToken != "" || cfg.RefreshToken != "" || cfg.APIKey != "")
 
 	// A daemon for THIS data dir owns the live session; let it do the work.
 	// (DaemonRunning is the data-dir flock, not a port probe — another client
 	// on this machine has its own daemon and its own logout.)
-	daemonUp := cruntime.DaemonRunning()
+	own := ""
+	agent := false
 	if daemonUp {
 		dataDir, _ := creds.DataDir()
 		// Verified, not merely published — see liveConsoleAddr. An unchecked
 		// address here would turn into "could not log out through the running
 		// daemon: connection refused", which reads as a fault in the daemon
 		// rather than in the file we read.
-		if addr := liveConsoleAddr(ctx, dataDir); addr != "" {
-			if err := logoutViaDaemon(ctx, addr); err == nil {
-				fmt.Println("  logged out — the daemon dropped its edge session, so tunnels and")
-				fmt.Println("  presence are offline now, and it left the meshnet")
-				return 0
-			} else {
-				fmt.Fprintln(os.Stderr, "  (could not log out through the running daemon:", err, ")")
-			}
+		own = liveConsoleAddr(ctx, dataDir)
+		if own == "" {
+			fmt.Fprintln(stderr, "  (a daemon of this client is running but its console is not answering, "+
+				"so it could not be signed out)")
+		} else if err := logoutViaDaemon(ctx, own); err == nil {
+			fmt.Fprintln(stdout, "  logged out — the daemon dropped its edge session, so tunnels and")
+			fmt.Fprintln(stdout, "  presence are offline now, and it left the meshnet")
+			noteKeyInEnvironment(stdout)
+			noteOtherClients(ctx, stdout, own, others)
+			return 0
+		} else if isAgentRefusal(err) {
+			agent = true
 		} else {
-			fmt.Fprintln(os.Stderr, "  (a daemon is running but its console is not answering; "+
-				"clearing the local credentials only)")
+			fmt.Fprintln(stderr, "  (could not log out through the running daemon:", err, ")")
 		}
 	}
 
-	cli, err := authedClient()
-	if err == nil {
-		// Best-effort: server might 401 if token already expired, that's fine.
-		_ = cli.Do(ctx, "POST", "/v1/auth/logout", nil, nil)
-	}
-	// Clear local creds regardless. Same fields the SPA's logout clears, and
-	// for the same reasons: the API key is a fallback resolveCredential would
-	// pick straight back up, and ActiveOrgID belongs to the session that just
-	// ended. Fingerprint / DeviceID / email stay so logging back in reuses the
-	// same device row and pre-fills the form.
-	cfg, _ := creds.Load()
-	if cfg != nil {
+	if saved {
+		if cli, err := authedClient(); err == nil {
+			// Best-effort: server might 401 if token already expired, that's fine.
+			_ = cli.Do(ctx, "POST", "/v1/auth/logout", nil, nil)
+		}
+		// Same fields the SPA's logout clears, and for the same reasons: the API
+		// key is a fallback resolveCredential would pick straight back up, and
+		// ActiveOrgID belongs to the session that just ended. Fingerprint /
+		// DeviceID / email stay so logging back in reuses the same device row and
+		// pre-fills the form.
 		cfg.AccessToken = ""
 		cfg.RefreshToken = ""
 		cfg.APIKey = ""
 		cfg.ActiveOrgID = 0
 		_ = creds.Save(cfg)
+		if agent {
+			fmt.Fprintln(stdout, "  cleared the sign-in saved for this client")
+		} else {
+			fmt.Fprintln(stdout, "  logged out (local creds cleared)")
+		}
+	} else if !agent {
+		// Nothing to clear — and no file written just to hold nothing.
+		fmt.Fprintln(stdout, "  not logged in — there was no saved sign-in to clear")
 	}
-	fmt.Println("  logged out (local creds cleared)")
+
+	if agent {
+		fmt.Fprintln(stdout, "  this client's daemon runs on an API key, not a sign-in, so logging out does")
+		fmt.Fprintln(stdout, "  not stop it — it stays online as that key. Stop the daemon (or its container)")
+		fmt.Fprintln(stdout, "  to take it offline; to change who it runs as, start it with a different key")
+		noteOtherClients(ctx, stdout, own, others)
+		return 1
+	}
+	noteKeyInEnvironment(stdout)
 	if daemonUp {
 		// Say the part that is NOT true, rather than let "logged out" cover for
 		// it: the daemon kept the session it already had.
-		fmt.Println("  note: a daemon is still running and keeps its current session until it")
-		fmt.Println("  reconnects — stop it (`calabi daemon stop`) if you want it offline now")
+		fmt.Fprintln(stdout, "  note: a daemon is still running and keeps its current session until it")
+		fmt.Fprintln(stdout, "  reconnects — stop it (`calabi daemon stop`) if you want it offline now")
+		// Not noteOtherClients: with this daemon's own console silent, an answer on
+		// :7400 may well be this daemon, and calling it "another client" would be
+		// the kind of guess this function exists to stop making.
+		return 0
 	}
+	noteOtherClients(ctx, stdout, own, others)
 	return 0
+}
+
+// noteKeyInEnvironment says so when an API key in this shell's environment will
+// keep authenticating every command after the logout. resolveCredential reads
+// these ahead of the creds file's key, and no command can unset them.
+func noteKeyInEnvironment(w io.Writer) {
+	for _, k := range []string{"CALABI_API_KEY", "CALABI_TOKEN"} {
+		if strings.TrimSpace(os.Getenv(k)) != "" {
+			fmt.Fprintf(w, "  note: %s is still set in this shell, and commands keep authenticating\n", k)
+			fmt.Fprintln(w, "  with it — unset it to stop")
+			return
+		}
+	}
 }
 
 func prompt(label string) string {

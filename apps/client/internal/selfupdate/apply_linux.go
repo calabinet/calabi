@@ -18,7 +18,17 @@ import (
 // (Status.Reason == ReasonUnsupportedOS) the console can explain.
 const applySupported = true
 
-// applyInstaller on Linux is a BINARY SWAP, not an installer run.
+// installerLogHint is where a person reads more when the installer fails. The
+// Linux path runs no installer process, so there is nowhere to point.
+const installerLogHint = ""
+
+// applyInstaller on Linux swaps the binary in this process; there is no
+// separate installer to watch, so wait is always nil. See swapBinary.
+func applyInstaller(ctx context.Context, archivePath string) (func() error, error) {
+	return nil, swapBinary(ctx, archivePath)
+}
+
+// swapBinary is the Linux apply: a BINARY SWAP, not an installer run.
 //
 // There is no.pkg or.msi here; the published artifact is the release tarball,
 // one static binary in it. That turns out to be simpler than either installer:
@@ -30,7 +40,7 @@ const applySupported = true
 // replaced there is no half-applied state worth reasoning about — either the
 // service comes back on the new binary or a human has `calabi.old` sitting right
 // next to it.
-func applyInstaller(ctx context.Context, archivePath string) error {
+func swapBinary(ctx context.Context, archivePath string) error {
 	// Refuse before touching anything if we could not restart afterwards.
 	// Swapping the binary of a service nothing can restart leaves a machine
 	// running the old code with the new one on disk, and nothing saying so.

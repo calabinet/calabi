@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Calabi mark (web/www/public/favicon.svg), monochrome as tiles and notifications require. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="18"
+    android:viewportHeight="18">
+    <group
+        android:translateX="-7.5"
+        android:translateY="-7">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M9,10c0,-1.1 0.9,-2 2,-2h10c1.1,0 2,0.9 2,2v3h-3v-2H12v10h8v-2h3v3c0,1.1 -0.9,2 -2,2H11c-1.1,0 -2,-0.9 -2,-2V10z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M22,14a2,2 0,1 1,0 4a2,2 0,1 1,0 -4z" />
+    </group>
+</vector>

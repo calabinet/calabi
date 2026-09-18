@@ -207,11 +207,14 @@ Environment:
 | `CALABI_UPDATE_MANIFEST` | update-manifest URL; **set it empty to disable the update check** — see below |
 
 **What the client can reach out to.** In standalone mode it dials your edge and
-nothing else. There is no telemetry and no analytics anywhere in this tree, and
-the whole client carries exactly one hard-coded non-local address: the signed
-update manifest at `download.calabi.net`. Only one path reaches it — the
-platform daemon, which polls it every six hours — and the standalone daemon is
-routed away before that code runs. If you want it gone by construction rather than by routing, install with
+nothing else. There are no analytics anywhere in this tree, and the whole client
+carries exactly one hard-coded non-local address: the signed update manifest at
+`download.calabi.net`. Only one path reaches it — the platform daemon, which
+polls it every six hours — and the standalone daemon is routed away before that
+code runs. The platform daemon also reports how its own self-updates went (from
+and to which version, which step failed, the error) to the control plane it is
+logged into, over the same connection it registers the device on; the standalone
+daemon has no update agent, so it has nothing to report. If you want it gone by construction rather than by routing, install with
 `CALABI_UPDATE_MANIFEST=` set to the empty string, or point it at your own
 mirror.
 

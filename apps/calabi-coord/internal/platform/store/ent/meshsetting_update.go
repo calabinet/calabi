@@ -84,6 +84,34 @@ func (msu *MeshSettingUpdate) SetNillableRequireDeviceApproval(b *bool) *MeshSet
 	return msu
 }
 
+// SetConnRecordsDisabled sets the "conn_records_disabled" field.
+func (msu *MeshSettingUpdate) SetConnRecordsDisabled(b bool) *MeshSettingUpdate {
+	msu.mutation.SetConnRecordsDisabled(b)
+	return msu
+}
+
+// SetNillableConnRecordsDisabled sets the "conn_records_disabled" field if the given value is not nil.
+func (msu *MeshSettingUpdate) SetNillableConnRecordsDisabled(b *bool) *MeshSettingUpdate {
+	if b != nil {
+		msu.SetConnRecordsDisabled(*b)
+	}
+	return msu
+}
+
+// SetAutoApproveRoutes sets the "auto_approve_routes" field.
+func (msu *MeshSettingUpdate) SetAutoApproveRoutes(b bool) *MeshSettingUpdate {
+	msu.mutation.SetAutoApproveRoutes(b)
+	return msu
+}
+
+// SetNillableAutoApproveRoutes sets the "auto_approve_routes" field if the given value is not nil.
+func (msu *MeshSettingUpdate) SetNillableAutoApproveRoutes(b *bool) *MeshSettingUpdate {
+	if b != nil {
+		msu.SetAutoApproveRoutes(*b)
+	}
+	return msu
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (msu *MeshSettingUpdate) SetUpdatedAt(t time.Time) *MeshSettingUpdate {
 	msu.mutation.SetUpdatedAt(t)
@@ -154,6 +182,12 @@ func (msu *MeshSettingUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := msu.mutation.RequireDeviceApproval(); ok {
 		_spec.SetField(meshsetting.FieldRequireDeviceApproval, field.TypeBool, value)
+	}
+	if value, ok := msu.mutation.ConnRecordsDisabled(); ok {
+		_spec.SetField(meshsetting.FieldConnRecordsDisabled, field.TypeBool, value)
+	}
+	if value, ok := msu.mutation.AutoApproveRoutes(); ok {
+		_spec.SetField(meshsetting.FieldAutoApproveRoutes, field.TypeBool, value)
 	}
 	if value, ok := msu.mutation.UpdatedAt(); ok {
 		_spec.SetField(meshsetting.FieldUpdatedAt, field.TypeTime, value)
@@ -230,6 +264,34 @@ func (msuo *MeshSettingUpdateOne) SetRequireDeviceApproval(b bool) *MeshSettingU
 func (msuo *MeshSettingUpdateOne) SetNillableRequireDeviceApproval(b *bool) *MeshSettingUpdateOne {
 	if b != nil {
 		msuo.SetRequireDeviceApproval(*b)
+	}
+	return msuo
+}
+
+// SetConnRecordsDisabled sets the "conn_records_disabled" field.
+func (msuo *MeshSettingUpdateOne) SetConnRecordsDisabled(b bool) *MeshSettingUpdateOne {
+	msuo.mutation.SetConnRecordsDisabled(b)
+	return msuo
+}
+
+// SetNillableConnRecordsDisabled sets the "conn_records_disabled" field if the given value is not nil.
+func (msuo *MeshSettingUpdateOne) SetNillableConnRecordsDisabled(b *bool) *MeshSettingUpdateOne {
+	if b != nil {
+		msuo.SetConnRecordsDisabled(*b)
+	}
+	return msuo
+}
+
+// SetAutoApproveRoutes sets the "auto_approve_routes" field.
+func (msuo *MeshSettingUpdateOne) SetAutoApproveRoutes(b bool) *MeshSettingUpdateOne {
+	msuo.mutation.SetAutoApproveRoutes(b)
+	return msuo
+}
+
+// SetNillableAutoApproveRoutes sets the "auto_approve_routes" field if the given value is not nil.
+func (msuo *MeshSettingUpdateOne) SetNillableAutoApproveRoutes(b *bool) *MeshSettingUpdateOne {
+	if b != nil {
+		msuo.SetAutoApproveRoutes(*b)
 	}
 	return msuo
 }
@@ -334,6 +396,12 @@ func (msuo *MeshSettingUpdateOne) sqlSave(ctx context.Context) (_node *MeshSetti
 	}
 	if value, ok := msuo.mutation.RequireDeviceApproval(); ok {
 		_spec.SetField(meshsetting.FieldRequireDeviceApproval, field.TypeBool, value)
+	}
+	if value, ok := msuo.mutation.ConnRecordsDisabled(); ok {
+		_spec.SetField(meshsetting.FieldConnRecordsDisabled, field.TypeBool, value)
+	}
+	if value, ok := msuo.mutation.AutoApproveRoutes(); ok {
+		_spec.SetField(meshsetting.FieldAutoApproveRoutes, field.TypeBool, value)
 	}
 	if value, ok := msuo.mutation.UpdatedAt(); ok {
 		_spec.SetField(meshsetting.FieldUpdatedAt, field.TypeTime, value)

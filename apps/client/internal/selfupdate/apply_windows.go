@@ -24,16 +24,21 @@ const (
 // (Status.Reason == ReasonUnsupportedOS) the console can explain.
 const applySupported = true
 
+// installerLogHint: a silent NSIS install writes no log anywhere.
+const installerLogHint = ""
+
 // applyInstaller runs the NSIS installer silently. The service is LocalSystem
 // (already elevated), so /S installs with no prompt; the installer stops +
-// reinstalls the service, restarting US. Detached + not waited so it outlives us.
-func applyInstaller(_ context.Context, setupPath string) error {
+// reinstalls the service, restarting US. Detached so it outlives us. The wait is
+// only for the case where it does NOT take us down: the PREINSTALL hook aborts
+// (a service it did not create, or an exe that would not unlock) and exits 2.
+func applyInstaller(_ context.Context, setupPath string) (func() error, error) {
 	cmd := exec.Command(setupPath, "/S")
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: detachedProcess | createNewProcessGroup | createBreakawayFromJob,
 	}
 	if err := cmd.Start(); err != nil {
-		return err
+		return nil, err
 	}
-	return cmd.Process.Release()
+	return cmd.Wait, nil
 }

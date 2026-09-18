@@ -21,8 +21,7 @@
     "logs": "日志",
     "tools": "工具",
     "settings": "设置",
-    "mesh": "组网",
-    "services": "服务"
+    "mesh": "组网"
   },
   "plan": {
     "free": "体验版",
@@ -445,7 +444,10 @@
     "exportBtn": "导出配置 (.json)",
     "importBtn": "导入配置",
     "logoutCard": "退出",
-    "logoutHint": "退出会调用 identity-svc 撤销当前会话,并清掉本机的 access / refresh token。设备指纹 + API key 保留,下次登录无需重新配对。",
+    "logoutHint": "退出后本机不再以这个账号运行，隧道和组网随即断开。隧道本身不会被删除。",
+    "logoutFailed": "退出失败",
+    "identityCard": "身份",
+    "agentIdentityHint": "本机以服务方式运行，身份由安装服务时使用的 API 密钥决定，不能在这里退出或切换账号。要换成其他身份，请用新密钥重新安装服务；要停用这台机器，请卸载服务，或在网页控制台吊销这把密钥。",
     "importModalTitle": "导入配置",
     "dragHint": "点击或拖动 .json 文件到此处",
     "formatHint": "文件需为 calabi-config.json 格式(schema_version=1)",
@@ -483,6 +485,8 @@
     "holdSecurity": "这不是安全更新，等你决定。",
     "holdUntil": "最迟 {{date}}",
     "holdWindow": "会在维护窗口内装上。",
+    "holdRollout": "这个版本正在分批推送，还没轮到本机。",
+    "holdRolloutEta": "预计 {{time}} 前轮到",
     "mandatory": "必须更新",
     "mandatoryHint": "本版本已不再受支持，会自动更新，不受下面的设置影响。",
     "modeAuto": "自动更新",
@@ -505,12 +509,15 @@
     "upToDate": "已是最新",
     "windowLabel": "只在维护窗口内更新",
     "windowTz": "机器本地时间（{{tz}}）",
-    "reasonManagedElsewhere": "这份客户端不是用 Calabi 安装包装的（例如 Homebrew、scoop 或手动解压），不会自己更新。请用当初安装它的方式更新。"
+    "reasonManagedElsewhere": "这份客户端不是用 Calabi 安装包装的（例如 Homebrew、scoop 或手动解压），不会自己更新。请用当初安装它的方式更新。",
+    "orgMinMode": "你的组织要求至少「{{mode}}」。",
+    "orgMaxDefer": "你的组织要求推迟不超过 {{n}} 天。",
+    "orgNoDefer": "你的组织要求不推迟更新。"
   },
   "serviceMode": {
     "readonlyTag": "只读",
-    "agentTooltip": "本机以固定身份（{{identity}}）运行，本地控制台为只读。隧道与账号请在网页控制台管理。",
-    "agentManageTooltip": "本机以固定身份（{{identity}}）运行。可在此管理本组织的隧道；登录与组织切换请在网页控制台进行。",
+    "agentTooltip": "本机以固定身份（{{identity}}）运行，本地控制台为只读，隧道请在网页控制台管理。要更换身份，请用其他 API 密钥重新安装服务。",
+    "agentManageTooltip": "本机以固定身份（{{identity}}）运行，可在此管理本组织的隧道。要更换身份，请用其他 API 密钥重新安装服务。",
     "tunnelsReadonly": "代理模式只读，请在网页控制台管理隧道",
     "agentBannerTitle": "只读控制台（代理模式）",
     "agentBannerDesc": "本机以服务方式、绑定固定 API 密钥身份运行。隧道的新建、编辑与删除请在网页控制台完成。",
@@ -581,6 +588,11 @@
   },
   "mesh": {
     "title": "组网",
+    "tabs": {
+      "devices": "设备",
+      "services": "服务",
+      "routing": "路由"
+    },
     "state": "状态",
     "stateUp": "已连接",
     "stateDown": "已停止",
@@ -598,7 +610,7 @@
     "pausedHint": "本设备已离开组网。点击「启动组网」重新加入。",
     "colPeer": "对端",
     "blockedBanner": "这台机器正在拒绝所有入站连接",
-    "blockedBannerHelp": "对端看得到它、它也连得出去，但谁都连不进来。要关掉在下方「组网设置 → 从组网接受」里。",
+    "blockedBannerHelp": "对端看得到它、它也连得出去，但谁都连不进来。要关掉在「路由 → 接受对端」里。",
     "peerFilter": "按名称 / 地址筛选",
     "peerFilterNoMatch": "没有匹配的对端",
     "colAllowed": "允许网段",
@@ -619,7 +631,6 @@
     "notConfiguredHint": "在守护进程配置里加 mesh: 块（coord / relay / auth_key），然后重启。",
     "unavailable": "此守护进程不支持组网状态。",
     "adv": {
-      "title": "路由（子网路由 / 出口设备）",
       "offerSection": "对外提供",
       "egressSection": "本机出网",
       "routes": "发布子网路由",

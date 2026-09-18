@@ -1,10 +1,13 @@
 package mesh
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/netip"
 	"strings"
+
+	"github.com/calabi/calabi/apps/client/internal/hostnet"
 )
 
 // splitDefaultV4 is the classic pair of routes that override the physical
@@ -96,7 +99,7 @@ func resolveBypass(hosts []string) ([]netip.Addr, error) {
 			}
 			continue
 		}
-		ips, err := net.LookupIP(host)
+		ips, err := hostnet.Resolver().LookupIP(context.Background(), "ip", host)
 		if err != nil {
 			return nil, fmt.Errorf("resolve bypass host %q: %w", host, err)
 		}

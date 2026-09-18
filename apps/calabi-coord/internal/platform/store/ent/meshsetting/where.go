@@ -69,6 +69,16 @@ func RequireDeviceApproval(v bool) predicate.MeshSetting {
 	return predicate.MeshSetting(sql.FieldEQ(FieldRequireDeviceApproval, v))
 }
 
+// ConnRecordsDisabled applies equality check predicate on the "conn_records_disabled" field. It's identical to ConnRecordsDisabledEQ.
+func ConnRecordsDisabled(v bool) predicate.MeshSetting {
+	return predicate.MeshSetting(sql.FieldEQ(FieldConnRecordsDisabled, v))
+}
+
+// AutoApproveRoutes applies equality check predicate on the "auto_approve_routes" field. It's identical to AutoApproveRoutesEQ.
+func AutoApproveRoutes(v bool) predicate.MeshSetting {
+	return predicate.MeshSetting(sql.FieldEQ(FieldAutoApproveRoutes, v))
+}
+
 // UpdatedAt applies equality check predicate on the "updated_at" field. It's identical to UpdatedAtEQ.
 func UpdatedAt(v time.Time) predicate.MeshSetting {
 	return predicate.MeshSetting(sql.FieldEQ(FieldUpdatedAt, v))
@@ -162,6 +172,26 @@ func RequireDeviceApprovalEQ(v bool) predicate.MeshSetting {
 // RequireDeviceApprovalNEQ applies the NEQ predicate on the "require_device_approval" field.
 func RequireDeviceApprovalNEQ(v bool) predicate.MeshSetting {
 	return predicate.MeshSetting(sql.FieldNEQ(FieldRequireDeviceApproval, v))
+}
+
+// ConnRecordsDisabledEQ applies the EQ predicate on the "conn_records_disabled" field.
+func ConnRecordsDisabledEQ(v bool) predicate.MeshSetting {
+	return predicate.MeshSetting(sql.FieldEQ(FieldConnRecordsDisabled, v))
+}
+
+// ConnRecordsDisabledNEQ applies the NEQ predicate on the "conn_records_disabled" field.
+func ConnRecordsDisabledNEQ(v bool) predicate.MeshSetting {
+	return predicate.MeshSetting(sql.FieldNEQ(FieldConnRecordsDisabled, v))
+}
+
+// AutoApproveRoutesEQ applies the EQ predicate on the "auto_approve_routes" field.
+func AutoApproveRoutesEQ(v bool) predicate.MeshSetting {
+	return predicate.MeshSetting(sql.FieldEQ(FieldAutoApproveRoutes, v))
+}
+
+// AutoApproveRoutesNEQ applies the NEQ predicate on the "auto_approve_routes" field.
+func AutoApproveRoutesNEQ(v bool) predicate.MeshSetting {
+	return predicate.MeshSetting(sql.FieldNEQ(FieldAutoApproveRoutes, v))
 }
 
 // UpdatedAtEQ applies the EQ predicate on the "updated_at" field.

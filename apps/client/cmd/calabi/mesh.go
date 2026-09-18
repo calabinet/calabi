@@ -135,7 +135,7 @@ func runMeshUp(args []string) int {
 	// --advertise-exit-node), enable local forwarding + NAT so peers can reach the
 	// advertised LAN — or the internet — through this node (best-effort; advertise anyway).
 	if len(routes) > 0 {
-		if cleanup, err := mesh.EnableSubnetRouter(routes); err != nil {
+		if cleanup, err := mesh.EnableSubnetRouter(priv.Public(), routes, logger); err != nil {
 			logger.Warn("mesh: subnet-router forwarding not enabled; advertising routes anyway", "err", err)
 		} else {
 			defer cleanup()

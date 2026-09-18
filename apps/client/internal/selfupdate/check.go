@@ -41,6 +41,9 @@ type Status struct {
 	// say so plainly — an unavoidable restart deserves a sentence, not a
 	// surprise.
 	Mandatory bool `json:"mandatory,omitempty"`
+	// Rollout is the release's staged-rollout schedule and this machine's place
+	// in it; nil when the release goes to every machine at once.
+	Rollout *RolloutState `json:"rollout,omitempty"`
 	// Reason says why CanApply is false while Available is true, so the console
 	// can tell "you must update by hand" apart from "something is wrong".
 	Reason    string    `json:"reason,omitempty"`
@@ -148,6 +151,14 @@ func (u *Updater) check(ctx context.Context) (Status, PlatformArtifact, error) {
 				"selfupdate: manifest requires at least %s but only publishes %s — refusing", m.MinSupported, m.Version)
 		}
 		st.Mandatory = IsNewer(u.CurrentVersion, m.MinSupported)
+	}
+	if m.Rollout != nil {
+		// Malformed = refused, like min_supported: a schedule nothing can follow
+		// must not quietly become "everyone now".
+		if err := m.Rollout.validate(); err != nil {
+			return st, PlatformArtifact{}, err
+		}
+		st.Rollout = newRolloutState(m.Rollout, rolloutBucket(u.installID(), m.Version))
 	}
 	switch {
 	case m.Rollback:

@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/calabi/calabi/apps/client/internal/hostnet"
 	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
 	"github.com/calabi/calabi/pkg/mesh-proto/stun"
 )
@@ -61,9 +62,16 @@ const stunProbeTimeout = 2 * time.Second
 // peer that reaches the advertised address hits our DISCO handler and its data
 // lands in the same NAT binding.
 func newMagicSock(disco DiscoPrivateKey, logger *slog.Logger) (*magicSock, error) {
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{Port: 0}) // dual-stack, ephemeral
+	// Through hostnet: this socket carries the tunnel, so on a phone it must be
+	// kept out of the tunnel it carries.
+	pc, err := hostnet.ListenConfig().ListenPacket(context.Background(), "udp", ":0") // dual-stack, ephemeral
 	if err != nil {
 		return nil, fmt.Errorf("mesh: open direct-path socket: %w", err)
+	}
+	conn, ok := pc.(*net.UDPConn)
+	if !ok {
+		_ = pc.Close()
+		return nil, fmt.Errorf("mesh: direct-path socket type %T", pc)
 	}
 	la, ok := conn.LocalAddr().(*net.UDPAddr)
 	if !ok {

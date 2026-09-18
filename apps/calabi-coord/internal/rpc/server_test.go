@@ -6,7 +6,9 @@ import (
 	"crypto/rand"
 	"log/slog"
 	"net"
+	"net/netip"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -388,6 +390,121 @@ func TestReportEndpointsSetsMeasuredHome(t *testing.T) {
 	}
 	if seen != "lax" {
 		t.Fatalf("peer a's derp_home = %q, want the region it reported (lax)", seen)
+	}
+}
+
+// Every node re-reports its endpoints each minute whether or not it roamed.
+// Only a report that changes what peers see (the endpoint set, the home region)
+// may push a netmap: each push re-sends the full map to every stream in the
+// meshnet, which on a phone is a radio wake-up per push.
+func TestReportEndpointsPushesOnlyOnChange(t *testing.T) {
+	c := startTestServer(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	a := register(t, c, "a")
+	b := register(t, c, "b")
+
+	stream, err := c.PullNetMap(ctx, &meshpb.PullNetMapRequest{NodeId: a.id, SessionToken: a.token})
+	if err != nil {
+		t.Fatalf("pull: %v", err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("recv initial: %v", err)
+	}
+	pushes := make(chan *meshpb.NetMap, 16)
+	go func() {
+		for {
+			nm, err := stream.Recv()
+			if err != nil {
+				close(pushes)
+				return
+			}
+			pushes <- nm
+		}
+	}()
+	report := func(home string, eps ...string) {
+		t.Helper()
+		if _, err := c.ReportEndpoints(ctx, &meshpb.ReportEndpointsRequest{
+			NodeId: b.id, SessionToken: b.token, Endpoints: eps, HomeRegion: home,
+		}); err != nil {
+			t.Fatalf("report %v: %v", eps, err)
+		}
+	}
+	// next returns B's endpoints and home as the next pushed netmap shows them.
+	next := func() (map[string]bool, string) {
+		t.Helper()
+		select {
+		case nm, ok := <-pushes:
+			if !ok {
+				t.Fatal("netmap stream ended")
+			}
+			for _, p := range nm.GetPeers() {
+				if p.GetNodeKey() == b.key.String() {
+					eps := map[string]bool{}
+					for _, ep := range p.GetEndpoints() {
+						eps[ep] = true
+					}
+					return eps, p.GetDerpHome()
+				}
+			}
+			t.Fatal("pushed netmap has no peer b")
+		case <-time.After(5 * time.Second):
+			t.Fatal("no netmap pushed")
+		}
+		return nil, ""
+	}
+	// quiet asserts nothing is pushed for a while. Only used right before a
+	// report that DOES push, whose content then tells which report it came from.
+	quiet := func(what string) {
+		t.Helper()
+		select {
+		case <-pushes:
+			t.Fatalf("%s pushed a netmap", what)
+		case <-time.After(300 * time.Millisecond):
+		}
+	}
+
+	report("", "203.0.113.7:41641", "192.0.2.10:41641")
+	if eps, _ := next(); !eps["203.0.113.7:41641"] || !eps["192.0.2.10:41641"] {
+		t.Fatalf("first report: peer b endpoints = %v", eps)
+	}
+
+	report("", "192.0.2.10:41641", "203.0.113.7:41641") // same set, other order
+	quiet("re-reporting the same endpoints")
+
+	report("", "198.51.100.3:41641") // roamed
+	if eps, _ := next(); !eps["198.51.100.3:41641"] || len(eps) != 1 {
+		t.Fatalf("after roaming: peer b endpoints = %v, want just the new one", eps)
+	}
+
+	report("lax", "198.51.100.3:41641") // same endpoints, new home
+	if _, home := next(); home != "lax" {
+		t.Fatalf("after home change: peer b derp_home = %q, want lax", home)
+	}
+
+	report("lax", "198.51.100.3:41641")
+	quiet("re-reporting the same endpoints and home")
+}
+
+func TestSameAddrPortSet(t *testing.T) {
+	ap := netip.MustParseAddrPort
+	x, y, z := ap("192.0.2.1:1"), ap("192.0.2.2:2"), ap("192.0.2.3:3")
+	for _, tc := range []struct {
+		a, b []netip.AddrPort
+		want bool
+	}{
+		{nil, nil, true},
+		{nil, []netip.AddrPort{x}, false},
+		{[]netip.AddrPort{x}, nil, false},
+		{[]netip.AddrPort{x, y}, []netip.AddrPort{y, x}, true},
+		{[]netip.AddrPort{x, y}, []netip.AddrPort{x, y, y}, true},
+		{[]netip.AddrPort{x, y}, []netip.AddrPort{x, z}, false},
+		{[]netip.AddrPort{x, y}, []netip.AddrPort{x}, false},
+		{[]netip.AddrPort{x}, []netip.AddrPort{x, y}, false},
+	} {
+		if got := sameAddrPortSet(tc.a, tc.b); got != tc.want {
+			t.Errorf("sameAddrPortSet(%v, %v) = %v, want %v", tc.a, tc.b, got, tc.want)
+		}
 	}
 }
 

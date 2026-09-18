@@ -214,7 +214,11 @@ func (c *Controller) serviceHealthLoop(ctx context.Context, nodeID int64) {
 	if !c.waitForOverlay(ctx) {
 		return
 	}
-	t := time.NewTicker(serviceHealthInterval)
+	every := c.timing().ServiceHealth
+	if every <= 0 {
+		return
+	}
+	t := time.NewTicker(every)
 	defer t.Stop()
 	sent := 0
 	for {

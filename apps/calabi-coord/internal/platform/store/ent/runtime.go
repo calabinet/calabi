@@ -228,8 +228,16 @@ func init() {
 	meshsettingDescRequireDeviceApproval := meshsettingFields[2].Descriptor()
 	// meshsetting.DefaultRequireDeviceApproval holds the default value on creation for the require_device_approval field.
 	meshsetting.DefaultRequireDeviceApproval = meshsettingDescRequireDeviceApproval.Default.(bool)
+	// meshsettingDescConnRecordsDisabled is the schema descriptor for conn_records_disabled field.
+	meshsettingDescConnRecordsDisabled := meshsettingFields[3].Descriptor()
+	// meshsetting.DefaultConnRecordsDisabled holds the default value on creation for the conn_records_disabled field.
+	meshsetting.DefaultConnRecordsDisabled = meshsettingDescConnRecordsDisabled.Default.(bool)
+	// meshsettingDescAutoApproveRoutes is the schema descriptor for auto_approve_routes field.
+	meshsettingDescAutoApproveRoutes := meshsettingFields[4].Descriptor()
+	// meshsetting.DefaultAutoApproveRoutes holds the default value on creation for the auto_approve_routes field.
+	meshsetting.DefaultAutoApproveRoutes = meshsettingDescAutoApproveRoutes.Default.(bool)
 	// meshsettingDescUpdatedAt is the schema descriptor for updated_at field.
-	meshsettingDescUpdatedAt := meshsettingFields[3].Descriptor()
+	meshsettingDescUpdatedAt := meshsettingFields[5].Descriptor()
 	// meshsetting.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	meshsetting.DefaultUpdatedAt = meshsettingDescUpdatedAt.Default.(func() time.Time)
 	// meshsetting.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

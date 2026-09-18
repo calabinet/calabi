@@ -20,6 +20,10 @@ import (
 
 // isolateCreds points creds + local token at a temp dir so the test never
 // touches the developer's real daemon files. It returns the minted local token.
+//
+// Both variables, always: CALABI_CONFIG names the config FILE, and the local
+// token resolves from the data dir without looking at it. Five mesh tests once
+// set only CALABI_CONFIG and minted into the developer's real local_token.
 func isolateCreds(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()

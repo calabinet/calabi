@@ -1,8 +1,9 @@
 package mesh
 
 import (
-	"net"
 	"net/netip"
+
+	"github.com/calabi/calabi/apps/client/internal/hostnet"
 )
 
 // filterCandidateIPs reduces a host's raw interface addresses to the ones worth
@@ -36,33 +37,21 @@ func filterCandidateIPs(addrs []netip.Addr) []netip.Addr {
 }
 
 // candidateHostIPs enumerates the unicast addresses on the host's up, non-loopback
-// interfaces. Impure (reads the OS interface table); the selection logic lives in
-// the pure filterCandidateIPs.
+// interfaces. Impure (reads the interface table, or what the platform reports in
+// its place — see hostnet); the selection logic lives in the pure
+// filterCandidateIPs.
 func candidateHostIPs() ([]netip.Addr, error) {
-	ifaces, err := net.Interfaces()
+	ifaces, err := hostnet.Interfaces()
 	if err != nil {
 		return nil, err
 	}
 	var addrs []netip.Addr
 	for _, ifc := range ifaces {
-		if ifc.Flags&net.FlagUp == 0 || ifc.Flags&net.FlagLoopback != 0 {
+		if !ifc.Up || ifc.Loopback {
 			continue
 		}
-		as, err := ifc.Addrs()
-		if err != nil {
-			continue
-		}
-		for _, a := range as {
-			var ip net.IP
-			switch v := a.(type) {
-			case *net.IPNet:
-				ip = v.IP
-			case *net.IPAddr:
-				ip = v.IP
-			}
-			if na, ok := netip.AddrFromSlice(ip); ok {
-				addrs = append(addrs, na.Unmap())
-			}
+		for _, a := range ifc.Addrs {
+			addrs = append(addrs, a.Addr.Unmap())
 		}
 	}
 	return addrs, nil

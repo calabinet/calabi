@@ -19,6 +19,10 @@ const (
 	FieldAliasAddrBudget = "alias_addr_budget"
 	// FieldRequireDeviceApproval holds the string denoting the require_device_approval field in the database.
 	FieldRequireDeviceApproval = "require_device_approval"
+	// FieldConnRecordsDisabled holds the string denoting the conn_records_disabled field in the database.
+	FieldConnRecordsDisabled = "conn_records_disabled"
+	// FieldAutoApproveRoutes holds the string denoting the auto_approve_routes field in the database.
+	FieldAutoApproveRoutes = "auto_approve_routes"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
 	// Table holds the table name of the meshsetting in the database.
@@ -31,6 +35,8 @@ var Columns = []string{
 	FieldMeshnetID,
 	FieldAliasAddrBudget,
 	FieldRequireDeviceApproval,
+	FieldConnRecordsDisabled,
+	FieldAutoApproveRoutes,
 	FieldUpdatedAt,
 }
 
@@ -49,6 +55,10 @@ var (
 	DefaultAliasAddrBudget int
 	// DefaultRequireDeviceApproval holds the default value on creation for the "require_device_approval" field.
 	DefaultRequireDeviceApproval bool
+	// DefaultConnRecordsDisabled holds the default value on creation for the "conn_records_disabled" field.
+	DefaultConnRecordsDisabled bool
+	// DefaultAutoApproveRoutes holds the default value on creation for the "auto_approve_routes" field.
+	DefaultAutoApproveRoutes bool
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
@@ -76,6 +86,16 @@ func ByAliasAddrBudget(opts ...sql.OrderTermOption) OrderOption {
 // ByRequireDeviceApproval orders the results by the require_device_approval field.
 func ByRequireDeviceApproval(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRequireDeviceApproval, opts...).ToFunc()
+}
+
+// ByConnRecordsDisabled orders the results by the conn_records_disabled field.
+func ByConnRecordsDisabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldConnRecordsDisabled, opts...).ToFunc()
+}
+
+// ByAutoApproveRoutes orders the results by the auto_approve_routes field.
+func ByAutoApproveRoutes(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAutoApproveRoutes, opts...).ToFunc()
 }
 
 // ByUpdatedAt orders the results by the updated_at field.

@@ -4,11 +4,13 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"github.com/gofrs/flock"
 )
 
 // ExchangeFunc spends refreshToken at the control plane (bff-console's
 // /v1/auth/refresh) and returns the new pair. RefreshSession only calls it with
-// the process-wide exchange lock held.
+// the exchange lock held.
 type ExchangeFunc func(ctx context.Context, refreshToken string) (accessToken, newRefreshToken string, err error)
 
 var (
@@ -18,6 +20,11 @@ var (
 	// the second comes back refused. There used to be two locks: the local
 	// console's proxy (statusapi) and the daemon's edge/mesh recovery each had
 	// their own, and they collided.
+	//
+	// It only covers this process. Two PROCESSES sharing one creds file collide
+	// the same way — the CLI beside a running daemon, and on a phone the app
+	// beside its VPN extension, which run separately by design — so an exchange
+	// also holds a file lock next to the creds file (lockExchange).
 	refreshMu sync.Mutex
 
 	// failKey / failAt back off after a failed exchange, so a dead session
@@ -48,6 +55,11 @@ var (
 func RefreshSession(ctx context.Context, refused string, exchange ExchangeFunc) string {
 	refreshMu.Lock()
 	defer refreshMu.Unlock()
+	unlock, ok := lockExchange(ctx)
+	if !ok {
+		return "" // gave up waiting while another process refreshed
+	}
+	defer unlock()
 
 	cfg, err := Load()
 	if err != nil || cfg == nil {
@@ -97,4 +109,43 @@ func RefreshSession(ctx context.Context, refused string, exchange ExchangeFunc) 
 	// retry; the next refusal simply refreshes again.
 	_ = Save(cur)
 	return access
+}
+
+// exchangeLockPoll is how often a waiting process retries the file lock.
+const exchangeLockPoll = 20 * time.Millisecond
+
+// lockExchange takes the cross-process half of the exchange lock: a file lock
+// beside the creds file, held across read, exchange and write. ok=false only
+// when ctx ended while another process held it.
+//
+// A lock file that cannot be opened at all — no data dir yet, or a directory
+// this user may not write, such as a service's — does not stop the refresh:
+// this process's own lock still holds, which is all there was before, and
+// refusing would turn a missing directory into a sign-out.
+//
+// On iOS the lock sits in the app group container the app shares with its
+// extension; the app must not be suspended while holding it (the system kills
+// a process suspended holding a lock in a shared container), so it takes it
+// inside a background task.
+func lockExchange(ctx context.Context) (unlock func(), ok bool) {
+	p, err := Path()
+	if err != nil {
+		return func() {}, true
+	}
+	fl := flock.New(p + ".lock")
+	locked, err := fl.TryLock()
+	if err != nil {
+		return func() {}, true // the lock file is unusable here; see above
+	}
+	if !locked {
+		// Another process is mid-exchange. Wait for it: what it saves is most
+		// likely the very token this caller is after.
+		if locked, err = fl.TryLockContext(ctx, exchangeLockPoll); !locked {
+			if err != nil && ctx.Err() == nil {
+				return func() {}, true
+			}
+			return nil, false
+		}
+	}
+	return func() { _ = fl.Unlock() }, true
 }

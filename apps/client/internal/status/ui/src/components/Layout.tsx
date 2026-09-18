@@ -7,7 +7,6 @@ import {
   BarsOutlined,
   CheckOutlined,
   CloudServerOutlined,
-  ApiOutlined,
   DeploymentUnitOutlined,
   DownOutlined,
   ExclamationCircleOutlined,
@@ -36,7 +35,7 @@ import {
 } from "antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import Logo from "./Logo";
 import type {
@@ -50,6 +49,7 @@ import type {
   TunnelList,
 } from "../api/types";
 import { planLabel } from "../utils/plan";
+import { useLogout } from "../hooks/use-logout";
 import { useServiceMode } from "../hooks/use-service-mode";
 import { useTranslation } from "react-i18next";
 import { LANGS, resolveLang, type LangCode } from "../i18n/languages";
@@ -72,7 +72,6 @@ export default function Layout() {
   const { t, i18n } = useTranslation();
   const currentLang: LangCode = resolveLang(i18n.language);
   const location = useLocation();
-  const navigate = useNavigate();
   const qc = useQueryClient();
   const active = location.pathname.split("/")[1] || "overview";
 
@@ -180,20 +179,7 @@ export default function Layout() {
     },
   });
 
-  const logout = useMutation({
-    mutationFn: api.logout,
-    onSuccess: async () => {
-      message.success(t("common.loggedOut"));
-      await qc.invalidateQueries();
-      navigate("/login", { replace: true });
-    },
-    onError: () => {
-      // Even on upstream failure the local creds were cleared by the
-      // handler — push the user to login anyway.
-      qc.invalidateQueries();
-      navigate("/login", { replace: true });
-    },
-  });
+  const logout = useLogout();
 
   // Org switcher dropdown items. Built outside JSX so the menu config
   // stays readable. Active Org gets a check mark + brand-blue highlight.
@@ -670,11 +656,6 @@ export default function Layout() {
               key: "mesh",
               icon: <DeploymentUnitOutlined />,
               label: <Link to="/mesh">{t("nav.mesh")}</Link>,
-            },
-            {
-              key: "services",
-              icon: <ApiOutlined />,
-              label: <Link to="/services">{t("nav.services")}</Link>,
             },
             {
               key: "logs",

@@ -41,9 +41,21 @@ func TestClientAnswersChallengeWithTheCurrentGrant(t *testing.T) {
 		err   error
 	}
 	answers := make(chan answer, 2)
+	// The relay holds the re-challenge until the test has refreshed the grant.
+	// Without the gate it sends the second challenge the instant it has read the
+	// first proof, and a client that answers before grant.Store runs presents
+	// grant-v1 quite correctly — the test would be racing itself, not the client.
+	refreshed := make(chan struct{})
 
 	addr := startRelay(t, self, func(conn net.Conn) {
 		for i := 0; i < 2; i++ {
+			if i == 1 {
+				select {
+				case <-refreshed:
+				case <-t.Context().Done():
+					return
+				}
+			}
 			ch, ephPriv, err := meshproto.NewDERPAuthChallenge()
 			if err != nil {
 				answers <- answer{err: err}
@@ -85,6 +97,7 @@ func TestClientAnswersChallengeWithTheCurrentGrant(t *testing.T) {
 
 	// The netmap refreshes the grant; the next challenge must pick it up.
 	grant.Store([]byte("grant-v2"))
+	close(refreshed)
 	second := recvAnswer(t, answers)
 	if second.err != nil {
 		t.Fatalf("relay could not open the second proof: %v", second.err)

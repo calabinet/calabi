@@ -86,9 +86,19 @@ function holdKey(hold?: string): string | null {
       return "update.holdWindow";
     case "busy":
       return "update.holdBusy";
+    // The publisher's staged rollout (U5b): the machine is ready, the release
+    // has not reached it yet.
+    case "rollout":
+      return "update.holdRollout";
     default:
       return null;
   }
+}
+
+// modeRank orders modes loosest → strictest, as the daemon does. An unknown
+// mode ranks loosest, so it can never lock anything.
+function modeRank(m?: string): number {
+  return m === "auto" ? 2 : m === "security" ? 1 : 0;
 }
 
 const HOURS = Array.from({ length: 24 }, (_, h) => ({
@@ -139,6 +149,14 @@ export function UpdatePanel() {
   if (!data) return null;
   const p = data.policy;
   const windowOn = !!p && p.window_start_hour !== p.window_end_hour;
+  // What the daemon acts on: the machine's choice, tightened by the org's
+  // requirement. Shown instead of the stored choice — a radio button sitting on
+  // "tell me only" while the machine installs on its own would be a lie.
+  const org = data.org_policy;
+  const orgMin = modeRank(org?.min_mode);
+  const effMode = p && orgMin > modeRank(p.mode) ? org!.min_mode! : p?.mode;
+  const deferCap = org?.max_defer_days;
+  const effDefer = p && deferCap !== undefined && deferCap < p.max_defer_days ? deferCap : p?.max_defer_days;
   const hold = holdKey(data.hold);
   const until = data.hold_until ? new Date(data.hold_until) : null;
 
@@ -183,7 +201,12 @@ export function UpdatePanel() {
       {data.available && data.can_apply && hold && (
         <Text type="secondary" style={{ fontSize: 12 }}>
           {t(hold)}
-          {until && ` · ${t("update.holdUntil", { date: until.toLocaleDateString() })}`}
+          {until &&
+            // A rollout ETA is hours away, not days: give the time, and say it
+            // is an estimate rather than a deadline.
+            (data.hold === "rollout"
+              ? ` · ${t("update.holdRolloutEta", { time: until.toLocaleString() })}`
+              : ` · ${t("update.holdUntil", { date: until.toLocaleDateString() })}`)}
         </Text>
       )}
       {data.error && (
@@ -226,26 +249,40 @@ export function UpdatePanel() {
           </div>
           <Radio.Group
             size="small"
-            value={p.mode}
+            value={effMode}
             disabled={savePolicy.isPending}
             onChange={(e) => savePolicy.mutate({ mode: e.target.value })}
             style={{ marginTop: 4 }}
           >
+            {/* Looser than the org allows = not offered. */}
             <Radio.Button value="auto">{t("update.modeAuto")}</Radio.Button>
-            <Radio.Button value="security">{t("update.modeSecurity")}</Radio.Button>
-            <Radio.Button value="notify">{t("update.modeNotify")}</Radio.Button>
+            <Radio.Button value="security" disabled={orgMin > 1}>
+              {t("update.modeSecurity")}
+            </Radio.Button>
+            <Radio.Button value="notify" disabled={orgMin > 0}>
+              {t("update.modeNotify")}
+            </Radio.Button>
           </Radio.Group>
           <div style={{ marginTop: 4 }}>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {t(`update.mode${p.mode === "auto" ? "Auto" : p.mode === "security" ? "Security" : "Notify"}Hint`)}
+              {t(`update.mode${effMode === "auto" ? "Auto" : effMode === "security" ? "Security" : "Notify"}Hint`)}
             </Text>
           </div>
+          {orgMin > 0 && (
+            <div>
+              <Text type="warning" style={{ fontSize: 12 }}>
+                {t("update.orgMinMode", {
+                  mode: t(orgMin > 1 ? "update.modeAuto" : "update.modeSecurity"),
+                })}
+              </Text>
+            </div>
+          )}
 
           {/* The window and the defer cap only ever bind in "auto": under
               "security" the only thing that installs is a critical release,
               which skips both, and under "notify" nothing installs at all.
               Rendering them there would be three controls that do nothing. */}
-          {p.mode === "auto" && (
+          {effMode === "auto" && (
             <>
               <div style={{ marginTop: 8 }}>
                 <Switch
@@ -298,20 +335,28 @@ export function UpdatePanel() {
                 <Select
                   size="small"
                   style={{ width: 96 }}
-                  value={p.max_defer_days}
+                  value={effDefer}
                   disabled={savePolicy.isPending}
                   onChange={(v) => savePolicy.mutate({ max_defer_days: v })}
                   options={[0, 1, 3, 7, 14, 30].map((n) => ({
                     value: n,
                     label: n === 0 ? t("update.deferNever") : t("update.deferDays", { n }),
+                    disabled: deferCap !== undefined && n > deferCap,
                   }))}
                 />
               </div>
               <div style={{ marginTop: 2 }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  {p.max_defer_days === 0 ? t("update.deferNeverHint") : t("update.deferHint")}
+                  {effDefer === 0 ? t("update.deferNeverHint") : t("update.deferHint")}
                 </Text>
               </div>
+              {deferCap !== undefined && (
+                <div>
+                  <Text type="warning" style={{ fontSize: 12 }}>
+                    {deferCap === 0 ? t("update.orgNoDefer") : t("update.orgMaxDefer", { n: deferCap })}
+                  </Text>
+                </div>
+              )}
             </>
           )}
         </div>

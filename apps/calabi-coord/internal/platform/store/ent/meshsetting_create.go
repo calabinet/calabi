@@ -54,6 +54,34 @@ func (msc *MeshSettingCreate) SetNillableRequireDeviceApproval(b *bool) *MeshSet
 	return msc
 }
 
+// SetConnRecordsDisabled sets the "conn_records_disabled" field.
+func (msc *MeshSettingCreate) SetConnRecordsDisabled(b bool) *MeshSettingCreate {
+	msc.mutation.SetConnRecordsDisabled(b)
+	return msc
+}
+
+// SetNillableConnRecordsDisabled sets the "conn_records_disabled" field if the given value is not nil.
+func (msc *MeshSettingCreate) SetNillableConnRecordsDisabled(b *bool) *MeshSettingCreate {
+	if b != nil {
+		msc.SetConnRecordsDisabled(*b)
+	}
+	return msc
+}
+
+// SetAutoApproveRoutes sets the "auto_approve_routes" field.
+func (msc *MeshSettingCreate) SetAutoApproveRoutes(b bool) *MeshSettingCreate {
+	msc.mutation.SetAutoApproveRoutes(b)
+	return msc
+}
+
+// SetNillableAutoApproveRoutes sets the "auto_approve_routes" field if the given value is not nil.
+func (msc *MeshSettingCreate) SetNillableAutoApproveRoutes(b *bool) *MeshSettingCreate {
+	if b != nil {
+		msc.SetAutoApproveRoutes(*b)
+	}
+	return msc
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (msc *MeshSettingCreate) SetUpdatedAt(t time.Time) *MeshSettingCreate {
 	msc.mutation.SetUpdatedAt(t)
@@ -111,6 +139,14 @@ func (msc *MeshSettingCreate) defaults() {
 		v := meshsetting.DefaultRequireDeviceApproval
 		msc.mutation.SetRequireDeviceApproval(v)
 	}
+	if _, ok := msc.mutation.ConnRecordsDisabled(); !ok {
+		v := meshsetting.DefaultConnRecordsDisabled
+		msc.mutation.SetConnRecordsDisabled(v)
+	}
+	if _, ok := msc.mutation.AutoApproveRoutes(); !ok {
+		v := meshsetting.DefaultAutoApproveRoutes
+		msc.mutation.SetAutoApproveRoutes(v)
+	}
 	if _, ok := msc.mutation.UpdatedAt(); !ok {
 		v := meshsetting.DefaultUpdatedAt()
 		msc.mutation.SetUpdatedAt(v)
@@ -127,6 +163,12 @@ func (msc *MeshSettingCreate) check() error {
 	}
 	if _, ok := msc.mutation.RequireDeviceApproval(); !ok {
 		return &ValidationError{Name: "require_device_approval", err: errors.New(`ent: missing required field "MeshSetting.require_device_approval"`)}
+	}
+	if _, ok := msc.mutation.ConnRecordsDisabled(); !ok {
+		return &ValidationError{Name: "conn_records_disabled", err: errors.New(`ent: missing required field "MeshSetting.conn_records_disabled"`)}
+	}
+	if _, ok := msc.mutation.AutoApproveRoutes(); !ok {
+		return &ValidationError{Name: "auto_approve_routes", err: errors.New(`ent: missing required field "MeshSetting.auto_approve_routes"`)}
 	}
 	if _, ok := msc.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "MeshSetting.updated_at"`)}
@@ -168,6 +210,14 @@ func (msc *MeshSettingCreate) createSpec() (*MeshSetting, *sqlgraph.CreateSpec) 
 	if value, ok := msc.mutation.RequireDeviceApproval(); ok {
 		_spec.SetField(meshsetting.FieldRequireDeviceApproval, field.TypeBool, value)
 		_node.RequireDeviceApproval = value
+	}
+	if value, ok := msc.mutation.ConnRecordsDisabled(); ok {
+		_spec.SetField(meshsetting.FieldConnRecordsDisabled, field.TypeBool, value)
+		_node.ConnRecordsDisabled = value
+	}
+	if value, ok := msc.mutation.AutoApproveRoutes(); ok {
+		_spec.SetField(meshsetting.FieldAutoApproveRoutes, field.TypeBool, value)
+		_node.AutoApproveRoutes = value
 	}
 	if value, ok := msc.mutation.UpdatedAt(); ok {
 		_spec.SetField(meshsetting.FieldUpdatedAt, field.TypeTime, value)

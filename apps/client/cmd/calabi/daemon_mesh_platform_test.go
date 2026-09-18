@@ -7,12 +7,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/calabi/calabi/apps/client/internal/creds"
 	"github.com/calabi/calabi/apps/client/internal/localweb"
 	"github.com/calabi/calabi/apps/client/internal/mesh"
+	"github.com/calabi/calabi/apps/client/internal/platform/meshenroll"
 	"github.com/calabi/calabi/apps/client/internal/platform/statusapi"
 )
 
@@ -79,7 +81,7 @@ func newTestController(start meshLeaseStarter) *platformMeshController {
 func TestMeshController_EnabledStarts(t *testing.T) {
 	var started []*startRec
 	c := newTestController(recordingStarter(&started))
-	c.reconcile(context.Background(), meshEnrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340"})
+	c.reconcile(context.Background(), meshenroll.Enrollment{Enabled: true, CoordAddr: "coord:7014", RelayAddr: "derp:3340"})
 
 	if len(started) != 1 {
 		t.Fatalf("start count: got %d, want 1", len(started))
@@ -98,7 +100,7 @@ func TestMeshController_AdvertiseFlowsThrough(t *testing.T) {
 	var started []*startRec
 	c := newTestController(recordingStarter(&started))
 	c.adv = meshAdvertise{Routes: []string{"192.168.1.0/24"}, ExitNode: true, ExitPeer: "gw"}
-	c.reconcile(context.Background(), meshEnrollment{Enabled: true, CoordAddr: "c:1", RelayAddr: "r:1"})
+	c.reconcile(context.Background(), meshenroll.Enrollment{Enabled: true, CoordAddr: "c:1", RelayAddr: "r:1"})
 	if len(started) != 1 {
 		t.Fatalf("expected 1 start, got %d", len(started))
 	}
@@ -113,7 +115,7 @@ func TestMeshController_AdvertiseFlowsThrough(t *testing.T) {
 func TestMeshController_NodeNameOverride(t *testing.T) {
 	var started []*startRec
 	c := newTestController(recordingStarter(&started))
-	c.reconcile(context.Background(), meshEnrollment{Enabled: true, CoordAddr: "c:1", RelayAddr: "r:1", NodeName: "custom"})
+	c.reconcile(context.Background(), meshenroll.Enrollment{Enabled: true, CoordAddr: "c:1", RelayAddr: "r:1", NodeName: "custom"})
 	if started[0].cfg.Name != "custom" {
 		t.Fatalf("node name: got %q, want custom", started[0].cfg.Name)
 	}
@@ -123,8 +125,8 @@ func TestMeshController_NodeNameOverride(t *testing.T) {
 func TestMeshController_DisableStops(t *testing.T) {
 	var started []*startRec
 	c := newTestController(recordingStarter(&started))
-	c.reconcile(context.Background(), meshEnrollment{Enabled: true, CoordAddr: "c:1", RelayAddr: "r:1"})
-	c.reconcile(context.Background(), meshEnrollment{Enabled: false})
+	c.reconcile(context.Background(), meshenroll.Enrollment{Enabled: true, CoordAddr: "c:1", RelayAddr: "r:1"})
+	c.reconcile(context.Background(), meshenroll.Enrollment{Enabled: false})
 
 	if !started[0].lease.stopped {
 		t.Fatalf("lease not stopped on disable")
@@ -138,7 +140,7 @@ func TestMeshController_DisableStops(t *testing.T) {
 func TestMeshController_SteadyNoRestart(t *testing.T) {
 	var started []*startRec
 	c := newTestController(recordingStarter(&started))
-	enr := meshEnrollment{Enabled: true, CoordAddr: "c:1", RelayAddr: "r:1"}
+	enr := meshenroll.Enrollment{Enabled: true, CoordAddr: "c:1", RelayAddr: "r:1"}
 	c.reconcile(context.Background(), enr)
 	c.reconcile(context.Background(), enr)
 	c.reconcile(context.Background(), enr)
@@ -151,8 +153,8 @@ func TestMeshController_SteadyNoRestart(t *testing.T) {
 func TestMeshController_AddrChangeRestarts(t *testing.T) {
 	var started []*startRec
 	c := newTestController(recordingStarter(&started))
-	c.reconcile(context.Background(), meshEnrollment{Enabled: true, CoordAddr: "c:1", RelayAddr: "r:1"})
-	c.reconcile(context.Background(), meshEnrollment{Enabled: true, CoordAddr: "c:2", RelayAddr: "r:1"})
+	c.reconcile(context.Background(), meshenroll.Enrollment{Enabled: true, CoordAddr: "c:1", RelayAddr: "r:1"})
+	c.reconcile(context.Background(), meshenroll.Enrollment{Enabled: true, CoordAddr: "c:2", RelayAddr: "r:1"})
 	if len(started) != 2 {
 		t.Fatalf("addr change start count: got %d, want 2", len(started))
 	}
@@ -166,7 +168,7 @@ func TestMeshController_AddrChangeRestarts(t *testing.T) {
 func TestMeshController_MeshDownPauses(t *testing.T) {
 	var started []*startRec
 	c := newTestController(recordingStarter(&started))
-	c.reconcile(context.Background(), meshEnrollment{Enabled: true, CoordAddr: "c:1", RelayAddr: "r:1"})
+	c.reconcile(context.Background(), meshenroll.Enrollment{Enabled: true, CoordAddr: "c:1", RelayAddr: "r:1"})
 	if err := c.MeshDown(); err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +176,7 @@ func TestMeshController_MeshDownPauses(t *testing.T) {
 		t.Fatalf("MeshDown did not stop the session")
 	}
 	// A subsequent enabled poll must stay paused.
-	c.reconcile(context.Background(), meshEnrollment{Enabled: true, CoordAddr: "c:1", RelayAddr: "r:1"})
+	c.reconcile(context.Background(), meshenroll.Enrollment{Enabled: true, CoordAddr: "c:1", RelayAddr: "r:1"})
 	if len(started) != 1 {
 		t.Fatalf("paused controller restarted: %d starts", len(started))
 	}
@@ -237,7 +239,7 @@ func TestMeshController_Fetch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !enr.wantsRun() || enr.CoordAddr != "coord:7014" || enr.RelayAddr != "derp:3340" {
+	if !enr.WantsRun() || enr.CoordAddr != "coord:7014" || enr.RelayAddr != "derp:3340" {
 		t.Fatalf("fetched %+v", enr)
 	}
 }
@@ -369,8 +371,7 @@ func TestMeshServicesCarryTheSelfCheckAndConsoleEntries(t *testing.T) {
 // declarations: the next registration would then claim the name locally too,
 // leaving two rows for one service and only one of them authorized.
 func TestSetMeshServicesRefusesToAdoptAConsoleEntry(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("CALABI_CONFIG_DIR", dir)
+	isolateCreds(t)
 	c := newTestController(func(context.Context, meshConfig, func() string) meshLease {
 		return &fakeLease{}
 	})
@@ -406,5 +407,71 @@ func TestRemovedServiceDoesNotComeBackAsAConsoleEntry(t *testing.T) {
 		if s.Name == "gone" {
 			t.Fatalf("a removed local service came back as %+v", s)
 		}
+	}
+}
+
+// slowStopLease is a session whose teardown takes a while, the way removing NAT
+// rules through iptables does.
+type slowStopLease struct {
+	*fakeLease
+	took    time.Duration
+	removed *atomic.Bool
+}
+
+func (l *slowStopLease) stop() {
+	time.Sleep(l.took)
+	l.removed.Store(true)
+}
+
+// Daemon exit must not outrun the mesh session's teardown. It did: the
+// controller ran as a bare goroutine, runDaemon returned (and the process
+// exited) as soon as the tunnel loop saw the cancellation, and a subnet router
+// restarted by systemd left its MASQUERADE rules behind every time it lost that
+// race — ~40 copies on one host (2026-09-17).
+func TestDaemonExitWaitsForMeshTeardown(t *testing.T) {
+	bff := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/mesh/enrollment" {
+			_, _ = w.Write([]byte(`{"enabled":true,"coord_addr":"coord:7014","relay_addr":"derp:3340"}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer bff.Close()
+
+	var removed atomic.Bool
+	c := newTestController(func(_ context.Context, cfg meshConfig, _ func() string) meshLease {
+		return &slowStopLease{
+			fakeLease: &fakeLease{st: statusapi.MeshStatus{Enabled: true, Up: true, Coord: cfg.Coord}},
+			took:      200 * time.Millisecond,
+			removed:   &removed,
+		}
+	})
+	c.bffURL = bff.URL
+	c.hc = bff.Client()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stopped := startMeshController(ctx, c)
+	deadline := time.Now().Add(5 * time.Second)
+	for !c.MeshStatus().Enabled {
+		if time.Now().After(deadline) {
+			t.Fatal("the mesh session never started")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	awaitMeshTeardown(c.logger, cancel, stopped, 5*time.Second) // what runDaemon defers
+	if !removed.Load() {
+		t.Fatal("runDaemon would have returned before the mesh session finished tearing down")
+	}
+}
+
+// A teardown that hangs must not hold the daemon's exit hostage.
+func TestDaemonExitDoesNotWaitForeverOnMeshTeardown(t *testing.T) {
+	never := make(chan struct{})
+	start := time.Now()
+	awaitMeshTeardown(slog.New(slog.NewTextHandler(io.Discard, nil)), func() {}, never, 50*time.Millisecond)
+	if d := time.Since(start); d > 2*time.Second {
+		t.Fatalf("waited %v on a teardown that never finishes", d)
 	}
 }

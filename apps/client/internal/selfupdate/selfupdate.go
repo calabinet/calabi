@@ -98,6 +98,9 @@ type Manifest struct {
 	// Signed like the rest of the manifest — it can override the user's setting,
 	// so it must not be possible to add or strip without the key.
 	MinSupported string `json:"min_supported,omitempty"`
+	// Rollout staggers this release across machines over time (U5b). Absent =
+	// every machine at once. Signed like the rest: see Rollout.
+	Rollout *Rollout `json:"rollout,omitempty"`
 }
 
 // PlatformArtifact is one platform's installer: where to get it and how to

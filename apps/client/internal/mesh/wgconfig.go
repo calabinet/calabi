@@ -140,6 +140,15 @@ func ownOverlayOnly(p Peer) []netip.Prefix {
 	pool := netip.MustParsePrefix(meshNodePoolCIDR)
 	kept := make([]netip.Prefix, 0, len(p.AllowedIPs))
 	for _, aip := range p.AllowedIPs {
+		// An exit device's default route overlaps the pool only by containing
+		// everything. It cannot take a peer's /32 (WireGuard routes by longest
+		// prefix), and the datapath hands it to WireGuard only for the exit this
+		// node chose. Stripping it here broke every exit device on every client
+		// from 2026-09-10 until this exemption.
+		if isDefaultRoute(aip) {
+			kept = append(kept, aip)
+			continue
+		}
 		if pool.Overlaps(aip) && !(aip.Addr() == p.Overlay && aip.Bits() == aip.Addr().BitLen()) {
 			continue
 		}

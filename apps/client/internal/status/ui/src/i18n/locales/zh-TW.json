@@ -21,8 +21,7 @@
     "logs": "日誌",
     "tools": "工具",
     "settings": "設定",
-    "mesh": "組網",
-    "services": "服務"
+    "mesh": "組網"
   },
   "plan": {
     "free": "體驗版",
@@ -445,7 +444,10 @@
     "exportBtn": "匯出設定 (.json)",
     "importBtn": "匯入設定",
     "logoutCard": "登出",
-    "logoutHint": "登出會呼叫 identity-svc 撤銷目前工作階段,並清掉本機的 access / refresh token。裝置指紋 + API key 保留,下次登入無需重新配對。",
+    "logoutHint": "登出後本機不再以這個帳號執行，通道與組網隨即中斷。通道本身不會被刪除。",
+    "logoutFailed": "登出失敗",
+    "identityCard": "身分",
+    "agentIdentityHint": "本機以服務方式執行，身分由安裝服務時使用的 API 金鑰決定，無法在此登出或切換帳號。若要改用其他身分，請以新金鑰重新安裝服務；若要停用這台機器，請解除安裝服務，或於網頁主控台撤銷這把金鑰。",
     "importModalTitle": "匯入設定",
     "dragHint": "點擊或拖曳 .json 檔案到此處",
     "formatHint": "檔案需為 calabi-config.json 格式(schema_version=1)",
@@ -483,6 +485,8 @@
     "holdSecurity": "這不是安全更新，等你決定。",
     "holdUntil": "最遲 {{date}}",
     "holdWindow": "會在維護視窗內裝上。",
+    "holdRollout": "這個版本正在分批推送，還沒輪到本機。",
+    "holdRolloutEta": "預計 {{time}} 前輪到",
     "mandatory": "必須更新",
     "mandatoryHint": "本版本已不再受支援，會自動更新，不受下面的設定影響。",
     "modeAuto": "自動更新",
@@ -505,12 +509,15 @@
     "upToDate": "已是最新",
     "windowLabel": "只在維護視窗內更新",
     "windowTz": "機器本地時間（{{tz}}）",
-    "reasonManagedElsewhere": "這份用戶端不是用 Calabi 安裝程式安裝的（例如 Homebrew、scoop 或手動解壓），不會自行更新。請用當初安裝它的方式更新。"
+    "reasonManagedElsewhere": "這份用戶端不是用 Calabi 安裝程式安裝的（例如 Homebrew、scoop 或手動解壓），不會自行更新。請用當初安裝它的方式更新。",
+    "orgMinMode": "你的組織要求至少「{{mode}}」。",
+    "orgMaxDefer": "你的組織要求延後不超過 {{n}} 天。",
+    "orgNoDefer": "你的組織要求不延後更新。"
   },
   "serviceMode": {
     "readonlyTag": "唯讀",
-    "agentTooltip": "本機以固定身分（{{identity}}）執行，本機主控台為唯讀。通道與帳號請於網頁主控台管理。",
-    "agentManageTooltip": "本機以固定身分（{{identity}}）執行。可於此處管理本組織的通道；登入與組織切換請於網頁主控台進行。",
+    "agentTooltip": "本機以固定身分（{{identity}}）執行，本機主控台為唯讀，通道請於網頁主控台管理。若要更換身分，請以其他 API 金鑰重新安裝服務。",
+    "agentManageTooltip": "本機以固定身分（{{identity}}）執行，可於此處管理本組織的通道。若要更換身分，請以其他 API 金鑰重新安裝服務。",
     "tunnelsReadonly": "代理模式唯讀，請於網頁主控台管理通道",
     "agentBannerTitle": "唯讀主控台（代理模式）",
     "agentBannerDesc": "本機以服務方式、綁定固定 API 金鑰身分執行。通道的新增、編輯與刪除請於網頁主控台完成。",
@@ -581,6 +588,11 @@
   },
   "mesh": {
     "title": "組網",
+    "tabs": {
+      "devices": "裝置",
+      "services": "服務",
+      "routing": "路由"
+    },
     "state": "狀態",
     "stateUp": "已連接",
     "stateDown": "已停止",
@@ -594,7 +606,7 @@
     "stopConfirm": "在本機停止組網？本裝置會離開組網，直到你再次啟動。",
     "colPeer": "對端",
     "blockedBanner": "這台機器正在拒絕所有入站連線",
-    "blockedBannerHelp": "對端看得到它、它也連得出去，但誰都連不進來。要關掉在下方「組網設定 → 從組網接受」裡。",
+    "blockedBannerHelp": "對端看得到它、它也連得出去，但誰都連不進來。要關掉在「路由 → 接受對端」裡。",
     "peerFilter": "依名稱 / 位址篩選",
     "peerFilterNoMatch": "沒有符合的對端",
     "colAllowed": "允許網段",
@@ -633,7 +645,6 @@
       "routesHelp": "把本機區域網路的網段開放給組網，例如 192.168.1.0/24；對端會經由本機存取這些網段。",
       "save": "儲存",
       "saved": "已儲存 —— 組網會重新啟動以套用設定。",
-      "title": "路由（子網路由 / 出口裝置）",
       "useExit": "本機對外流量走出口裝置",
       "useExitHelp": "本機的預設流量會經由指定的出口裝置對外（填它的裝置名稱或 Overlay 位址）；留空則不使用。",
       "acceptSection": "接受對端",

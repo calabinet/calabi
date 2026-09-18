@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/calabi/calabi/apps/client/internal/hostnet"
 	"github.com/calabi/calabi/apps/client/internal/wake"
 )
 
@@ -76,6 +77,9 @@ type Controller struct {
 	// explicitly, so "nobody wired it up" fails closed rather than quietly
 	// installing whatever the mesh offers.
 	Routes RoutePolicy
+	// Timing is how often the session's periodic loops run. nil is
+	// DesktopTiming; a phone passes its own (see Timing).
+	Timing *Timing
 	Logger *slog.Logger
 
 	// disco is the per-session DISCO private key generated in Run; its public half
@@ -119,6 +123,12 @@ type Controller struct {
 	derpMap    DERPMap
 	homeRegion string
 
+	// netChanged carries NetworkChanged signals to the running session's loop.
+	// Buffered by one so NetworkChanged never blocks and a burst of changes
+	// coalesces into one repair. Created on first use (netChanges).
+	netChangedOnce sync.Once
+	netChanged     chan struct{}
+
 	// reportEvery overrides endpointReportInterval when non-zero. Same-package
 	// tests set it before Run so the loop can be watched in milliseconds; the
 	// daemon never touches it. A field rather than a mutable package var, so
@@ -126,12 +136,12 @@ type Controller struct {
 	reportEvery time.Duration
 }
 
-// reportInterval is the cadence endpointReportLoop actually runs at.
+// reportInterval is the cadence endpointReportLoop actually runs at; 0 = off.
 func (c *Controller) reportInterval() time.Duration {
 	if c.reportEvery > 0 {
 		return c.reportEvery
 	}
-	return endpointReportInterval
+	return c.timing().EndpointReport
 }
 
 // endpointReportInterval re-reports candidate endpoints periodically so a roam
@@ -172,6 +182,14 @@ func (c *Controller) Run(ctx context.Context) error {
 	ctx, stopSession := context.WithCancel(ctx)
 	defer stopSession()
 
+	// A network change signalled while no session ran is reflected in the fresh
+	// sockets and first endpoint report this session is about to make. Dropped
+	// HERE, before any of that, so a change arriving mid-setup is still acted on.
+	select {
+	case <-c.netChanges():
+	default:
+	}
+
 	// Fresh DISCO keypair per session; its public half rides registration so peers
 	// can authenticate this node's hole-punching probes (used from the probe slice).
 	// Best-effort: a failure just leaves this session relay-only.
@@ -210,7 +228,7 @@ func (c *Controller) Run(ctx context.Context) error {
 			// DISCO prober: ping peers' candidate endpoints and record which reach
 			// them (MESH.4 B3).
 			prober = newDiscoProber(ms, c.Logger)
-			go prober.run(ctx, c.peers)
+			go prober.run(ctx, c.timing().DiscoProbe, c.peers)
 			// Hand the socket + prober to the datapath, so WireGuard traffic can
 			// take a validated direct path instead of the relay (MESH.4 B3-3). A
 			// datapath that doesn't support it (the dry-run logger, test fakes) just
@@ -238,7 +256,11 @@ func (c *Controller) Run(ctx context.Context) error {
 	// Watch for the machine having been suspended. Every socket and NAT mapping
 	// this session holds is invalid on the far side of a sleep, and none of the
 	// loops above would notice for the better part of a minute.
-	go c.wakeLoop(ctx, reg.NodeID, ms, prober)
+	if c.timing().WakeDetect {
+		go c.wakeLoop(ctx, reg.NodeID, ms, prober)
+	}
+	// And for the platform saying the network itself changed (NetworkChanged).
+	go c.networkChangeLoop(ctx, reg.NodeID, ms, prober)
 
 	// Session-local: the refused set last logged. Owned by the callback below,
 	// which Watch invokes sequentially, so it needs no lock.
@@ -251,6 +273,9 @@ func (c *Controller) Run(ctx context.Context) error {
 		c.setOverlay(nm.Self.Overlay)
 		c.setSelfServices(nm.SelfServices)
 		cfg := BuildWGConfig(nm)
+		for i := range cfg.Peers {
+			cfg.Peers[i].PersistentKeepalive = c.timing().PersistentKeepalive
+		}
 		// Consumer-side route policy, applied before anything sees the config: a
 		// refused prefix never reaches WireGuard's allowed-ips, so it can neither
 		// be routed to nor sourced from. Logged only when the refused SET changes —
@@ -286,7 +311,7 @@ func (c *Controller) Run(ctx context.Context) error {
 			dropAliases()
 			dropAliases, aliasFP = func() {}, fp
 			if len(nm.SubnetAliases) > 0 {
-				cleanup, err := EnableSubnetAliases(nm.SubnetAliases)
+				cleanup, err := EnableSubnetAliases(c.Params.NodeKey, nm.SubnetAliases, c.Logger)
 				// Record the outcome either way: having actually installed the
 				// rules (or been refused) is far better evidence of what this host
 				// can do than the console's separate probe, which used to be asked
@@ -487,7 +512,11 @@ func rttOf(region string, measured []regionRTT) time.Duration {
 // homeProbeLoop re-measures the fleet periodically so a node that moves (or whose
 // path to its home degrades) re-homes without reconnecting.
 func (c *Controller) homeProbeLoop(ctx context.Context, nodeID int64, ms *magicSock) {
-	t := time.NewTicker(homeProbeInterval)
+	every := c.timing().HomeProbe
+	if every <= 0 {
+		return // re-measured on a changed relay map, a wake and a network change only
+	}
+	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
 		select {
@@ -579,7 +608,7 @@ func resolveSTUNServer(ctx context.Context, hostPort string) (netip.AddrPort, bo
 	if ip, err := netip.ParseAddr(host); err == nil {
 		return netip.AddrPortFrom(ip.Unmap(), uint16(port)), true
 	}
-	ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+	ips, err := hostnet.Resolver().LookupNetIP(ctx, "ip", host)
 	if err != nil || len(ips) == 0 {
 		return netip.AddrPort{}, false
 	}
@@ -609,6 +638,44 @@ func (c *Controller) wakeLoop(ctx context.Context, nodeID int64, ms *magicSock, 
 	})
 }
 
+// NetworkChanged tells the running session that the device's network changed:
+// Wi-Fi to cellular, a new Wi-Fi network, an interface coming back. What that
+// invalidates is what a suspend invalidates — the relay links, every NAT mapping
+// behind a direct path, this node's reflexive address — so it takes the same
+// repair (onWake), now rather than after the next endpoint report or relay
+// timeout.
+//
+// A desktop has no one to call this and relies on the timers; a phone's platform
+// calls it from its network callback (NWPathMonitor, ConnectivityManager), since
+// on a phone this is the common case, not the exception. Safe from any goroutine; never
+// blocks; changes that arrive before the session handles the first coalesce.
+func (c *Controller) NetworkChanged() {
+	select {
+	case c.netChanges() <- struct{}{}:
+	default: // one already pending
+	}
+}
+
+func (c *Controller) netChanges() chan struct{} {
+	c.netChangedOnce.Do(func() { c.netChanged = make(chan struct{}, 1) })
+	return c.netChanged
+}
+
+// networkChangeLoop runs the wake repair for each NetworkChanged signal until
+// the session ends.
+func (c *Controller) networkChangeLoop(ctx context.Context, nodeID int64, ms *magicSock, prober *discoProber) {
+	ch := c.netChanges()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ch:
+			c.Logger.Info("mesh: network changed; re-establishing paths")
+			c.onWake(ctx, nodeID, ms, prober)
+		}
+	}
+}
+
 // onWake redoes the three things a suspend invalidated, in the order that gets
 // the node carrying traffic soonest.
 func (c *Controller) onWake(ctx context.Context, nodeID int64, ms *magicSock, prober *discoProber) {
@@ -632,7 +699,11 @@ func (c *Controller) onWake(ctx context.Context, nodeID int64, ms *magicSock, pr
 // endpointReportLoop re-reports endpoints on a fixed interval until ctx ends, so
 // a network change is reflected without a reconnect.
 func (c *Controller) endpointReportLoop(ctx context.Context, nodeID int64, ms *magicSock) {
-	t := time.NewTicker(c.reportInterval())
+	every := c.reportInterval()
+	if every <= 0 {
+		return // reported on a changed home, a wake and a network change only
+	}
+	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
 		select {

@@ -1,15 +1,18 @@
-//go:build linux
+//go:build linux && !android
 
 package mesh
 
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/netip"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
+
+	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
 )
 
 // How long ONE iptables invocation may take. These exist because the -w below
@@ -66,12 +69,16 @@ func SubnetRouterSupported() bool { return true }
 // route is an exit node (MASQUERADE everything leaving the mesh). Returns a
 // cleanup that removes the NAT rules. Needs CAP_NET_ADMIN.
 //
+// node is this node's key and names the rules as its own (see natOwner): any
+// that an earlier run of the same node failed to remove are deleted first, so a
+// start after an unclean exit replaces the rules instead of adding a copy.
+//
 // NAT backend: prefers `iptables` (which on modern systems is the iptables-nft
 // shim, so it programs nftables anyway), and falls back to native `nft` when the
 // iptables binary is absent. If NEITHER is installed it returns a clear error so
 // the daemon can warn the operator — advertising still happens, but this node
 // won't forward until a backend exists.
-func EnableSubnetRouter(routes []netip.Prefix) (func(), error) {
+func EnableSubnetRouter(node meshproto.NodeKey, routes []netip.Prefix, logger *slog.Logger) (func(), error) {
 	if len(routes) == 0 {
 		return func() {}, nil
 	}
@@ -87,11 +94,15 @@ func EnableSubnetRouter(routes []netip.Prefix) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	return be.masquerade(routes)
+	cleanup, reclaimed, err := be.masquerade(node, routes)
+	logReclaimedNAT(logger, "masquerade", reclaimed)
+	return cleanup, err
 }
 
 // EnableSubnetAliases installs the rewrite from each published alias prefix to
 // the real subnet behind this node, and returns a cleanup that removes them.
+// Like EnableSubnetRouter it first removes whatever an earlier run of this node
+// left in place.
 //
 // Separate from EnableSubnetRouter because the two learn their inputs at
 // different times: the routes come from this machine's own config and are known
@@ -103,7 +114,7 @@ func EnableSubnetRouter(routes []netip.Prefix) (func(), error) {
 // Forwarding itself (ip_forward + MASQUERADE) is EnableSubnetRouter's job and is
 // assumed already done: an alias without it rewrites packets that then go
 // nowhere.
-func EnableSubnetAliases(aliases []SubnetAlias) (func(), error) {
+func EnableSubnetAliases(node meshproto.NodeKey, aliases []SubnetAlias, logger *slog.Logger) (func(), error) {
 	if len(aliases) == 0 {
 		return func() {}, nil
 	}
@@ -111,7 +122,18 @@ func EnableSubnetAliases(aliases []SubnetAlias) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	return be.aliasRewrite(aliases)
+	cleanup, reclaimed, err := be.aliasRewrite(node, aliases)
+	logReclaimedNAT(logger, "alias rewrite", reclaimed)
+	return cleanup, err
+}
+
+// logReclaimedNAT says when a start had to clear rules an earlier run left. It
+// is the only trace of that run having exited without cleaning up, and it
+// explains a slow first start on a host that had piled up many copies.
+func logReclaimedNAT(logger *slog.Logger, kind string, n int) {
+	if n > 0 && logger != nil {
+		logger.Info("mesh: removed NAT rules an earlier run of this node left behind", "kind", kind, "removed", n)
+	}
 }
 
 func ipForwardEnabled() bool {
@@ -120,103 +142,27 @@ func ipForwardEnabled() bool {
 }
 
 // natBackend applies the overlay MASQUERADE rules for a set of advertised routes,
-// and the 1:1 rewrite rules for any of them published under an alias.
+// and the 1:1 rewrite rules for any of them published under an alias. Both
+// report how many leftover rules of this node's they removed first.
 type natBackend interface {
-	masquerade(routes []netip.Prefix) (func(), error)
-	aliasRewrite(aliases []SubnetAlias) (func(), error)
+	masquerade(node meshproto.NodeKey, routes []netip.Prefix) (func(), int, error)
+	aliasRewrite(node meshproto.NodeKey, aliases []SubnetAlias) (func(), int, error)
 }
 
 // pickNATBackend selects a NAT implementation: iptables if present (works via
 // legacy or the nft-compat shim), else nft, else a clear "install one" error.
 func pickNATBackend() (natBackend, error) {
 	if _, err := exec.LookPath("iptables"); err == nil {
-		return iptablesNAT{}, nil
+		return iptablesNAT{run: runIptables}, nil
 	}
 	if _, err := exec.LookPath("nft"); err == nil {
-		return nftNAT{}, nil
+		return nftNAT{run: runNft}, nil
 	}
 	return nil, fmt.Errorf("subnet-router / exit-node forwarding needs a NAT backend, but neither `iptables` nor `nft` was found — install one (e.g. `apt install iptables` or `apt install nftables`) and restart the daemon")
 }
 
-// --- iptables backend -------------------------------------------------------
-
-type iptablesNAT struct{}
-
-func (iptablesNAT) masquerade(routes []netip.Prefix) (func(), error) {
-	var added [][]string
-	for _, rule := range iptablesMasqueradeRules(routes) {
-		if out, err := runIptables(rule...); err != nil {
-			cleanupIptablesRules(added)
-			return nil, fmt.Errorf("iptables masquerade %v: %v: %s", rule, err, strings.TrimSpace(string(out)))
-		}
-		added = append(added, rule)
-	}
-	return func() { cleanupIptablesRules(added) }, nil
-}
-
-func (iptablesNAT) aliasRewrite(aliases []SubnetAlias) (func(), error) {
-	var added [][]string
-	for _, rule := range iptablesAliasRules(aliases) {
-		if out, err := runIptables(rule...); err != nil {
-			cleanupIptablesRules(added)
-			return nil, fmt.Errorf("iptables alias rewrite %v: %v: %s (the NETMAP target needs the xt_NETMAP module)",
-				rule, err, strings.TrimSpace(string(out)))
-		}
-		added = append(added, rule)
-	}
-	return func() { cleanupIptablesRules(added) }, nil
-}
-
-func cleanupIptablesRules(rules [][]string) {
-	for _, rule := range rules {
-		del := append([]string(nil), rule...)
-		del[2] = "-D" // -A -> -D
-		_, _ = runIptables(del...)
-	}
-}
-
-// --- nftables backend -------------------------------------------------------
-
-// nftTable is a dedicated table so cleanup is a single atomic `delete table`
-// that can't touch the operator's own rules.
-const nftTable = "calabi_mesh"
-
-type nftNAT struct{}
-
-func (nftNAT) masquerade(routes []netip.Prefix) (func(), error) {
-	rules := nftMasqueradeRules(routes)
-	if len(rules) == 0 {
-		return func() {}, nil
-	}
-	// Fresh table each session: delete any leftover (ignore error), then create.
-	_ = exec.Command("nft", "delete", "table", "ip", nftTable).Run()
-	setup := [][]string{
-		{"add", "table", "ip", nftTable},
-		{"add", "chain", "ip", nftTable, "postrouting", "{", "type", "nat", "hook", "postrouting", "priority", "100", ";", "}"},
-	}
-	for _, r := range rules {
-		setup = append(setup, append([]string{"add", "rule", "ip", nftTable, "postrouting"}, strings.Fields(r)...))
-	}
-	for _, args := range setup {
-		if out, err := exec.Command("nft", args...).CombinedOutput(); err != nil {
-			_ = exec.Command("nft", "delete", "table", "ip", nftTable).Run()
-			return nil, fmt.Errorf("nft %s: %v: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
-		}
-	}
-	return func() { _ = exec.Command("nft", "delete", "table", "ip", nftTable).Run() }, nil
-}
-
-// aliasRewrite is not implemented on the nft backend. A 1:1 block rewrite is
-// what iptables spells NETMAP; nft expresses it differently and the translation
-// is not one this has been tested against, so it says so rather than installing
-// rules that might mean something else. iptables is the preferred backend
-// anyway (pickNATBackend tries it first, and on a modern system it is the
-// nft-compat shim, which programs nftables regardless).
-func (nftNAT) aliasRewrite(aliases []SubnetAlias) (func(), error) {
-	if len(aliases) == 0 {
-		return func() {}, nil
-	}
-	return nil, fmt.Errorf("subnet aliases need the `iptables` NAT backend (NETMAP target); this host has only `nft` — install iptables (e.g. `apt install iptables`) and restart the daemon")
+func runNft(args ...string) ([]byte, error) {
+	return exec.Command("nft", args...).CombinedOutput()
 }
 
 // probeSubnetAlias answers "can this host install the 1:1 alias rewrite" by

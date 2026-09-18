@@ -127,7 +127,12 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 		Presence:        core.NewPresence(),
 		ServiceHealth:   core.NewServiceHealthTracker(),
 		RelayGrants:     relayGrantIssuer(logger, newRelayScopeSource(logger)),
-		Logger:          logger,
+		// Without identity-svc there is no console to approve a route in (the
+		// self-hosted build on static keys, or a local dev run), so routes keep
+		// taking effect by themselves, as documented for self-hosting. On the
+		// platform each org decides (MeshnetSettings.AutoApproveRoutes).
+		AutoApproveAllRoutes: env("IDENTITY_ADDR") == "",
+		Logger:               logger,
 	}
 
 	if addr := env("IDENTITY_ADDR"); addr != "" {

@@ -23,6 +23,12 @@ func (MeshSetting) Fields() []ent.Field {
 		field.Bool("require_device_approval").
 			Default(false).
 			Comment("new devices must be approved by an admin before they can reach anything"),
+		field.Bool("conn_records_disabled").
+			Default(false).
+			Comment("the org switched its connection records off (and had the stored ones deleted)"),
+		field.Bool("auto_approve_routes").
+			Default(false).
+			Comment("subnet routes take effect without an admin; false (the default) = an admin approves each"),
 		field.Time("updated_at").
 			Default(time.Now).
 			UpdateDefault(time.Now),

@@ -21,8 +21,7 @@
     "logs": "Journaux",
     "tools": "Outils",
     "settings": "Paramètres",
-    "mesh": "Maillage",
-    "services": "Services"
+    "mesh": "Maillage"
   },
   "plan": {
     "free": "Gratuit",
@@ -445,7 +444,10 @@
     "exportBtn": "Exporter la config (.json)",
     "importBtn": "Importer la config",
     "logoutCard": "Se déconnecter",
-    "logoutHint": "La déconnexion appelle identity-svc pour révoquer la session actuelle et efface les jetons d'accès / de rafraîchissement de cette machine. L'empreinte de l'appareil + la clé API sont conservées, aucun nouvel appairage n'est donc nécessaire la prochaine fois.",
+    "logoutHint": "Après la déconnexion, cette machine ne fonctionne plus sous ce compte, et ses tunnels et le maillage sont déconnectés. Les tunnels eux-mêmes ne sont pas supprimés.",
+    "logoutFailed": "Échec de la déconnexion",
+    "identityCard": "Identité",
+    "agentIdentityHint": "Ce client s'exécute en tant que service avec la clé API utilisée lors de son installation : vous ne pouvez donc pas vous déconnecter ni changer de compte ici. Pour utiliser une autre identité, réinstallez le service avec une nouvelle clé. Pour mettre cette machine hors service, désinstallez le service ou révoquez la clé depuis la console web.",
     "importModalTitle": "Importer la config",
     "dragHint": "Cliquez ou glissez un fichier .json ici",
     "formatHint": "Le fichier doit être au format calabi-config.json (schema_version=1)",
@@ -483,6 +485,8 @@
     "holdSecurity": "Ce n'est pas une mise à jour de sécurité — en attente de votre décision.",
     "holdUntil": "au plus tard le {{date}}",
     "holdWindow": "Sera installée pendant la fenêtre de maintenance.",
+    "holdRollout": "Cette version est déployée par étapes ; ce n'est pas encore le tour de cette machine.",
+    "holdRolloutEta": "prévu d'ici {{time}}",
     "mandatory": "Obligatoire",
     "mandatoryHint": "Cette version n'est plus prise en charge : elle se mettra à jour quel que soit le réglage ci-dessous.",
     "modeAuto": "Automatiquement",
@@ -505,12 +509,15 @@
     "upToDate": "À jour",
     "windowLabel": "Mettre à jour uniquement pendant une fenêtre de maintenance",
     "windowTz": "heure de la machine ({{tz}})",
-    "reasonManagedElsewhere": "Cette copie n'a pas été installée avec l'installateur Calabi (par exemple via Homebrew, scoop ou une archive extraite) : elle ne se met donc pas à jour seule. Mettez-la à jour de la même façon que vous l'avez installée."
+    "reasonManagedElsewhere": "Cette copie n'a pas été installée avec l'installateur Calabi (par exemple via Homebrew, scoop ou une archive extraite) : elle ne se met donc pas à jour seule. Mettez-la à jour de la même façon que vous l'avez installée.",
+    "orgMinMode": "Votre organisation exige au minimum « {{mode}} ».",
+    "orgMaxDefer": "Votre organisation autorise à retarder une mise à jour au plus {{n}} jours.",
+    "orgNoDefer": "Votre organisation n'autorise pas à retarder les mises à jour."
   },
   "serviceMode": {
     "readonlyTag": "Lecture seule",
-    "agentTooltip": "Ce client s'exécute sous une identité fixe ({{identity}}) ; la console locale est en lecture seule. Gérez les tunnels et votre compte depuis la console web.",
-    "agentManageTooltip": "Ce client s'exécute sous une identité fixe ({{identity}}). Vous pouvez gérer les tunnels de cette organisation ici ; la connexion et le changement d'organisation se font depuis la console web.",
+    "agentTooltip": "Ce client s'exécute sous une identité fixe ({{identity}}) ; la console locale est en lecture seule. Gérez les tunnels depuis la console web. Pour changer d'identité, réinstallez le service avec une autre clé API.",
+    "agentManageTooltip": "Ce client s'exécute sous une identité fixe ({{identity}}). Vous pouvez gérer les tunnels de cette organisation ici. Pour changer d'identité, réinstallez le service avec une autre clé API.",
     "tunnelsReadonly": "Lecture seule en mode agent — gérez les tunnels depuis la console web",
     "agentBannerTitle": "Console en lecture seule (mode agent)",
     "agentBannerDesc": "Ce client s'exécute en tant que service sous une identité à clé API fixe. Créez, modifiez et supprimez les tunnels depuis la console web.",
@@ -597,7 +604,6 @@
       "routesHelp": "CIDR du réseau local de cette machine à exposer au Maillage, p. ex. 192.168.1.0/24. Les pairs y accèdent via cet appareil.",
       "save": "Enregistrer",
       "saved": "Enregistré — la session Maillage redémarre pour appliquer la modification.",
-      "title": "Routage (routeur de sous-réseau / appareil de sortie)",
       "useExit": "Faire passer mon trafic par un appareil de sortie",
       "useExitHelp": "Le trafic par défaut de cette machine passe par le pair de sortie indiqué (son nom ou son IP overlay). Laissez vide pour n'en utiliser aucun.",
       "acceptSection": "Accepter depuis le réseau",
@@ -624,7 +630,7 @@
     "colPath": "Chemin",
     "colPeer": "Pair",
     "blockedBanner": "Cette machine refuse toutes les connexions entrantes",
-    "blockedBannerHelp": "Les pairs la voient et elle peut toujours les joindre, mais personne ne peut ouvrir une connexion vers elle. Désactivez-le sous Réglages → Accepter du réseau maillé.",
+    "blockedBannerHelp": "Les pairs la voient et elle peut toujours les joindre, mais personne ne peut ouvrir une connexion vers elle. Désactivez-le sous Routage → Accepter depuis le réseau.",
     "peerFilter": "Filtrer par nom / adresse",
     "peerFilterNoMatch": "Aucun pair correspondant",
     "colTraffic": "Transfert",
@@ -691,6 +697,11 @@
       "targetTip": "L'adresse que cette machine contacte lors de son auto-vérification, et l'adresse locale utilisée si ce service est publié comme tunnel. Le trafic du Maillage ne passe PAS par elle — le paquet d'un pair arrive sur l'adresse de cette machine dans le Maillage."
     },
     "title": "Maillage",
+    "tabs": {
+      "devices": "Appareils",
+      "services": "Services",
+      "routing": "Routage"
+    },
     "unavailable": "L'état du Maillage n'est pas disponible sur ce daemon.",
     "relayRtt": "Vers le relais",
     "relayRttHint": "Un seul segment : cette machine vers le relais. Non comparable au RTT de bout en bout d'un chemin direct."

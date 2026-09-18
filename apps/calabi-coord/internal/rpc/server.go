@@ -389,6 +389,14 @@ func (s *Server) ReportConnections(ctx context.Context, req *meshpb.ReportConnec
 
 // ReportEndpoints records a node's discovered candidate endpoints and notifies
 // its peers so they can attempt direct paths (used from MESH.4).
+//
+// Peers are notified only when something they would see actually moved: the
+// endpoint set or the measured home region. Every node re-reports each minute
+// whether or not it roamed, and each notification re-sends the FULL netmap to
+// every stream in the meshnet, so bumping unconditionally made an N-node meshnet
+// push N netmaps a minute to every one of its nodes — a radio wake-up each on a
+// phone. The store write still happens
+// on every report: it is what refreshes the node's last_seen.
 func (s *Server) ReportEndpoints(ctx context.Context, req *meshpb.ReportEndpointsRequest) (*meshpb.ReportEndpointsResponse, error) {
 	self, err := s.authorizeNode(ctx, req.GetSessionToken(), req.GetNodeId())
 	if err != nil {
@@ -402,21 +410,43 @@ func (s *Server) ReportEndpoints(ctx context.Context, req *meshpb.ReportEndpoint
 		}
 		eps = append(eps, ap)
 	}
+	endpointsMoved := !sameAddrPortSet(self.Endpoints, eps)
 	if err := s.coord.Nodes.UpdateEndpoints(ctx, self.ID, eps); err != nil {
 		return nil, status.Errorf(codes.Internal, "update endpoints: %v", err)
 	}
 	// The node also reports the relay region it measured as closest (MESH.4 B2b).
 	// Only a region this coordinator published is accepted; a bad one is the
 	// node's bug, not a reason to lose the endpoints it just reported, so the
-	// endpoint update above stands either way.
-	if _, err := s.coord.SetDERPHome(ctx, self.ID, req.GetHomeRegion()); err != nil {
+	// endpoint update above stands either way — and so does telling the peers.
+	homeMoved, err := s.coord.SetDERPHome(ctx, self.ID, req.GetHomeRegion())
+	if endpointsMoved || homeMoved {
+		s.notif.Bump(self.Meshnet)
+	}
+	if err != nil {
 		if errors.Is(err, core.ErrUnknownDERPRegion) {
 			return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 		}
 		return nil, status.Errorf(codes.Internal, "update derp home: %v", err)
 	}
-	s.notif.Bump(self.Meshnet)
 	return &meshpb.ReportEndpointsResponse{}, nil
+}
+
+// sameAddrPortSet reports whether a and b hold the same endpoints, ignoring
+// order and duplicates: a node lists the same candidates in whatever order its
+// interfaces enumerate, and peers probe all of them, so a reshuffle is not news.
+func sameAddrPortSet(a, b []netip.AddrPort) bool {
+	in := make(map[netip.AddrPort]bool, len(a))
+	for _, ap := range a {
+		in[ap] = true
+	}
+	seen := make(map[netip.AddrPort]bool, len(b))
+	for _, ap := range b {
+		if !in[ap] {
+			return false
+		}
+		seen[ap] = true
+	}
+	return len(seen) == len(in)
 }
 
 // negotiate returns the working protocol version + capability subset: the min of

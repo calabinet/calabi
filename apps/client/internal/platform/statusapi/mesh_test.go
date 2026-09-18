@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -129,11 +128,7 @@ func TestMesh_Enabled_ReturnsStatus(t *testing.T) {
 
 // POST /v1/mesh/down is local-token gated (guarded write), then calls MeshDown.
 func TestMeshDown_LocalTokenGate(t *testing.T) {
-	t.Setenv("CALABI_CONFIG", filepath.Join(t.TempDir(), "creds.json"))
-	tok, err := creds.MintLocalToken()
-	if err != nil {
-		t.Fatal(err)
-	}
+	tok := isolateCreds(t)
 	src := &fakeMeshSource{st: MeshStatus{Enabled: true, Up: true}}
 	h := meshServer(t, src)
 
@@ -181,11 +176,7 @@ func TestMeshAdvertiseGet(t *testing.T) {
 // POST /v1/mesh/advertise: local-token gated, validates CIDRs, persists to creds,
 // and calls SetAdvertise. A bad CIDR is a 400 with no SetAdvertise.
 func TestMeshAdvertiseSet(t *testing.T) {
-	t.Setenv("CALABI_CONFIG", filepath.Join(t.TempDir(), "creds.json"))
-	tok, err := creds.MintLocalToken()
-	if err != nil {
-		t.Fatal(err)
-	}
+	tok := isolateCreds(t)
 	src := &fakeMeshSource{}
 	h := meshServer(t, src)
 	// Pinned: this test is about validation and persistence, and it must give the
@@ -231,11 +222,7 @@ func TestMeshAdvertiseSet(t *testing.T) {
 
 // POST /v1/mesh/up is local-token gated and calls MeshUp (resume).
 func TestMeshUp_LocalTokenGate(t *testing.T) {
-	t.Setenv("CALABI_CONFIG", filepath.Join(t.TempDir(), "creds.json"))
-	tok, err := creds.MintLocalToken()
-	if err != nil {
-		t.Fatal(err)
-	}
+	tok := isolateCreds(t)
 	src := &fakeMeshSource{st: MeshStatus{Enabled: false, Paused: true}}
 	h := meshServer(t, src)
 
@@ -269,11 +256,7 @@ func setServices(t *testing.T, h http.Handler, tok, body string) *httptest.Respo
 // servicesServer wires a handler with a minted local token for guarded writes.
 func servicesServer(t *testing.T) (http.Handler, *fakeMeshSource, string) {
 	t.Helper()
-	t.Setenv("CALABI_CONFIG", filepath.Join(t.TempDir(), "creds.json"))
-	tok, err := creds.MintLocalToken()
-	if err != nil {
-		t.Fatal(err)
-	}
+	tok := isolateCreds(t)
 	src := &fakeMeshSource{}
 	return meshServer(t, src), src, tok
 }
@@ -403,11 +386,7 @@ func pinForwarding(t *testing.T, ok bool) {
 // The gate is the API's rule, not just a greyed-out switch: a node that cannot
 // forward refuses to take the role on, and nothing reaches SetAdvertise or creds.
 func TestMeshAdvertiseSetRefusesAForwardingRoleItCannotHonour(t *testing.T) {
-	t.Setenv("CALABI_CONFIG", filepath.Join(t.TempDir(), "creds.json"))
-	tok, err := creds.MintLocalToken()
-	if err != nil {
-		t.Fatal(err)
-	}
+	tok := isolateCreds(t)
 	src := &fakeMeshSource{}
 	h := meshServer(t, src)
 	pinForwarding(t, false)

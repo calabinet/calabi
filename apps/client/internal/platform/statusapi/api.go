@@ -548,8 +548,12 @@ func (s *Server) handleEdgeSwitchDismiss(w http.ResponseWriter, _ *http.Request)
 func (s *Server) agentBlock(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if s.cfg.AgentMode {
+			// Say how to change it, not where: the web console cannot re-bind a
+			// running agent either — only reinstalling the service with another
+			// key does.
 			writeError(w, http.StatusForbidden,
-				"this client runs as a pinned API-key agent; sign-in, sign-out and org switching are managed from the web console")
+				"this client runs as a service on the API key it was installed with, so it cannot sign in, sign out or switch orgs; "+
+					"to change its identity, reinstall the service with a different key")
 			return
 		}
 		next(w, r)

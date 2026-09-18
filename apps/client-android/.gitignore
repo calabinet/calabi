@@ -1,0 +1,9 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+# Built by scripts/mobile/build-core-android.ps1 from apps/client/mobile.
+app/libs/calabicore.aar
+app/libs/calabicore-sources.jar
