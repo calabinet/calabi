@@ -98,6 +98,8 @@ func (c *Core) forgetSelfHosted() {
 	c.dropView()
 	_ = os.Remove(c.keyPath())
 	_ = os.Remove(c.profilePath())
+	// Its exit device is a device of that server.
+	c.clearExitNode()
 }
 
 func writeFileAtomic(path string, b []byte) error {

@@ -556,8 +556,15 @@ func TestSignOutForgetsTheServer(t *testing.T) {
 	if code, out := call(t, c, "POST", "/v1/selfhosted/join", fmt.Sprintf(`{"link":%q}`, coord.link("ck_invite"))); code != http.StatusOK {
 		t.Fatalf("join: %d %v", code, out)
 	}
+	if code, _ := call(t, c, "PUT", "/v1/settings", `{"exit_node":"home-server"}`); code != http.StatusOK {
+		t.Fatalf("choose the exit device: %d", code)
+	}
 	if code, _ := call(t, c, "POST", "/v1/auth/logout", ""); code != http.StatusOK {
 		t.Fatalf("logout: %d", code)
+	}
+	// Its exit device is a device of the server left.
+	if _, s := call(t, c, "GET", "/v1/settings", ""); s["exit_node"] != "" {
+		t.Fatalf("after signing out of the server, exit = %v; want none", s["exit_node"])
 	}
 	coord.mu.Lock()
 	signedOut := coord.signedOut

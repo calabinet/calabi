@@ -543,6 +543,10 @@ func runPlatformDaemon(args []string) int {
 			// switch handlers.
 			if c, err := creds.Load(); err == nil && c != nil {
 				state.SetActiveOrgID(c.ActiveOrgID)
+				// The switch cleared the exit device unless it was to the same
+				// org (it names a device of the org left); the Rebind below
+				// starts the new session without it.
+				meshCtl.setExitPeer(c.MeshExitNode)
 				if c.LastEdgeNodeID != 0 || c.LastEdgeRegion != "" {
 					c.LastEdgeNodeID = 0
 					c.LastEdgeRegion = ""
@@ -581,7 +585,9 @@ func runPlatformDaemon(args []string) int {
 			// Leave the meshnet too: without this the mesh session keeps running
 			// on a credential that no longer exists until its stream happens to
 			// drop. The follow-up enrollment fetch fails (no bearer), which is
-			// what keeps mesh down until the next login.
+			// what keeps mesh down until the next login. The exit device went
+			// with the sign-out (it belongs to that account's org).
+			meshCtl.setExitPeer("")
 			meshCtl.Rebind("logout")
 			// No org any more, so no org's update rules either.
 			if updateAgent != nil {

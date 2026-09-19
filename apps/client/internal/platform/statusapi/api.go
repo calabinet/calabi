@@ -771,6 +771,9 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		cfg.RefreshToken = ""
 		cfg.APIKey = ""
 		cfg.ActiveOrgID = 0
+		// The exit device belongs to the organization signed out of; the next
+		// sign-in may be another account's.
+		cfg.MeshExitNode = ""
 		// Keep cfg.Fingerprint + cfg.DeviceID + cfg.User.Email so the
 		// next register cycle reuses the same device row + the login
 		// form pre-fills the email. DeviceID gets refreshed on the
@@ -893,6 +896,12 @@ func (s *Server) handleOrgSwitch(w http.ResponseWriter, r *http.Request) {
 	cfg, _ := creds.Load()
 	if cfg == nil {
 		cfg = &creds.Config{}
+	}
+	// The exit device is a device of the organization just left, chosen by
+	// name: the new one's device of that name — if it has one — is someone
+	// else's machine. OnOrgSwitched carries this into the running mesh.
+	if req.TargetOrgID != cfg.ActiveOrgID {
+		cfg.MeshExitNode = ""
 	}
 	cfg.AccessToken = switchResp.AccessToken
 	cfg.RefreshToken = switchResp.RefreshToken

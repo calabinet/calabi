@@ -4,10 +4,9 @@
 #   docker compose up -d
 #   docker compose exec coord calabi-coord invite --note "my laptop"
 #
-# The invite link is how a device joins (`calabi join "<link>"`, or the client's
-# console → Connect to a self-hosted server). Joining is the sign-in: the
-# coordinator then names this edge to the device and signs the grant the edge
-# takes, so the device's tunnels and its mesh work from that one step.
+# A device joins with the invite link (`calabi join "<link>"`, or the client's
+# console → Connect to a self-hosted server). After that one step it has tunnels
+# and the mesh.
 #
 #   coord   the coordinator (7012/tcp): devices, addresses, ACLs, invites; signs grants
 #   edge    tunnels (7443/tcp; 80/tcp, 443/tcp; 20000–20999 tcp and udp)
@@ -16,9 +15,8 @@
 # Open all of those ports to the internet (README.md has the table). The
 # coordinator's admin ports (9122, 9500) listen on 127.0.0.1 only.
 #
-# Both use the host's network: the edge hands out TCP and UDP ports from
-# 20000–20999 for tunnels, and publishing a thousand ports through Docker's proxy
-# is not practical.
+# Both use the host's network: the edge's TCP and UDP tunnels use a thousand
+# ports (20000–20999).
 #
 # Runs with Docker Compose or podman compose.
 

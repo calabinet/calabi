@@ -1,59 +1,47 @@
 # Contributing
 
-Thanks for your interest in contributing! This is the open-source data plane
-(edge + client) of Calabi, released under **Apache-2.0** (see `LICENSE`).
+This repository is the open-source part of Calabi — the client, the edge, the
+coordinator and the Android app — under **Apache-2.0** (see `LICENSE`).
+Contributions are welcome.
 
-## Developer Certificate of Origin (DCO)
+## Sign off every commit (DCO)
 
-We use the [Developer Certificate of Origin](DCO) (DCO 1.1) — **not** a CLA.
-It's a lightweight, one-line-per-commit certification that you have the right to
-submit your contribution under this project's license.
-
-Every commit must be **signed off**. Adding a sign-off is one flag:
+Every commit needs a sign-off under the [Developer Certificate of Origin](DCO)
+(DCO 1.1). There is no CLA. The sign-off certifies that you wrote the change, or
+otherwise have the right to submit it under Apache-2.0.
 
 ```bash
 git commit -s -m "your message"
 ```
 
-That appends a line to the commit message:
+That adds this line to the commit message:
 
 ```
 Signed-off-by: Your Name <you@example.com>
 ```
 
-By signing off you certify the [DCO](DCO) (you wrote the code, or otherwise have
-the right to submit it under Apache-2.0). The name/email must be real and match
-the commit author.
+Use your real name and email, matching the commit author. A CI check
+(`.github/workflows/dco.yml`) verifies every commit in a pull request.
 
-> Why a sign-off? The code in this repository is the same data plane that powers
-> Calabi's hosted product — not a stripped-down copy of it. The DCO is how every
-> contributor confirms they have the right to contribute the code, which keeps
-> that shared core clean for everyone, self-hosted and hosted alike.
-
-### Fixing a missing sign-off
-
-If CI flags a commit without a sign-off:
+### Adding a missing sign-off
 
 ```bash
-# last commit:
+# the last commit:
 git commit --amend -s --no-edit && git push --force-with-lease
 
-# multiple commits on your branch (replace main with your base):
+# several commits on your branch (replace main with your base):
 git rebase --signoff main && git push --force-with-lease
 ```
 
-A CI check (`.github/workflows/dco.yml`) verifies every commit in a pull request
-is signed off.
-
 ## Pull requests
 
-- Keep changes focused; one logical change per PR.
+- One logical change per pull request.
 - Run `make build` and `make verify` before pushing.
 - Match the surrounding code style.
-- Describe what changed and why in the PR description.
+- Describe what changed and why.
 
 ## Reporting issues
 
-Please include your OS/arch, the `calabi` / `calabi-edge` / `calabi-coord`
-version (`calabi version`), whether you are self-hosting or on the hosted
-platform, and steps to reproduce.
+Include your OS and architecture, the version (`calabi version`, and
+`calabi-edge` / `calabi-coord` if they are involved), whether you run your own
+server or use calabi.net, and the steps to reproduce.

@@ -10,6 +10,26 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## Unreleased
+
+Changes since 1.13.0, going into the next release.
+
+### Mesh
+
+- **Fixed** — **Switching organization kept the exit device of the one left.**
+  The phone and the desktop went on showing it, and looked for a device of that
+  name in the new organization; one there that offered an exit would have
+  carried all the traffic. Switching to another organization or signing out now
+  clears the exit device, and so does leaving a self-hosted server on the phone.
+  Switching to the organization you are already in keeps it.
+
+### Mobile
+
+- **Fixed** — *Forgot password* on the sign-in page opened the page the reset
+  email links to, which said the link was invalid or expired. It now opens the
+  form that sends the email. calabi.net already forwards the old link there, so
+  earlier versions of the app work too.
+
 ## 1.13.0 — 2026-09-19
 
 **Your own server, as one thing.** `calabi-coord` and `calabi-edge` together are

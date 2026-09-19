@@ -640,6 +640,15 @@ func (c *platformMeshController) Rebind(reason string) {
 	}
 }
 
+// setExitPeer replaces the exit-device selection without restarting the
+// session: an org switch or a sign-out has just cleared it in creds, and the
+// Rebind that follows starts the next session with it.
+func (c *platformMeshController) setExitPeer(peer string) {
+	c.mu.Lock()
+	c.adv.ExitPeer = peer
+	c.mu.Unlock()
+}
+
 // Nudge re-reconciles the meshnet session NOW instead of at the next 30s poll,
 // so an edge-affinity flip moves the relay home promptly (the co-switch: "use my
 // node" switches edge egress AND relay home together). Unlike Rebind it does not

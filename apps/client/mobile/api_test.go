@@ -83,6 +83,53 @@ func TestLogoutForgetsTheSessionButNotTheEmail(t *testing.T) {
 	}
 }
 
+// The exit device is chosen by name among the organization's devices. Another
+// organization's device of that name is someone else's machine, so moving to
+// another organization — by switching, or by signing out — forgets it.
+func TestTheExitDeviceStaysWithItsOrganization(t *testing.T) {
+	bff := &fakeBFF{}
+	c := newTestCore(t, bff, &fakePlatform{})
+	signIn(t, c) // organization 7
+	exit := func() any {
+		_, s := call(t, c, "GET", "/v1/settings", "")
+		return s["exit_node"]
+	}
+	choose := func() {
+		t.Helper()
+		if code, _ := call(t, c, "PUT", "/v1/settings", `{"exit_node":"home-server"}`); code != http.StatusOK {
+			t.Fatalf("choose the exit device = %d", code)
+		}
+	}
+
+	choose()
+	if code, _ := call(t, c, "POST", "/v1/orgs/switch", `{"target_org_id":7}`); code != http.StatusOK {
+		t.Fatalf("switch to the same organization = %d", code)
+	}
+	if got := exit(); got != "home-server" {
+		t.Fatalf("after switching to the organization it is in, exit = %v; want it kept", got)
+	}
+	if code, _ := call(t, c, "POST", "/v1/orgs/switch", `{"target_org_id":13}`); code != http.StatusForbidden {
+		t.Fatalf("a refused switch = %d, want 403", code)
+	}
+	if got := exit(); got != "home-server" {
+		t.Fatalf("after a refused switch, exit = %v; want it kept", got)
+	}
+	if code, _ := call(t, c, "POST", "/v1/orgs/switch", `{"target_org_id":9}`); code != http.StatusOK {
+		t.Fatalf("switch = %d", code)
+	}
+	if got := exit(); got != "" {
+		t.Fatalf("after switching organization, exit = %v; want none", got)
+	}
+
+	choose()
+	if code, _ := call(t, c, "POST", "/v1/auth/logout", ""); code != http.StatusOK {
+		t.Fatalf("logout = %d", code)
+	}
+	if got := exit(); got != "" {
+		t.Fatalf("after signing out, exit = %v; want none", got)
+	}
+}
+
 func TestSettingsDefaultsAndChanges(t *testing.T) {
 	c := newTestCore(t, &fakeBFF{}, &fakePlatform{})
 

@@ -97,6 +97,23 @@ func (f *fakeBFF) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "POST /v1/auth/logout":
 		f.logouts = append(f.logouts, r.Header.Get("Authorization"))
 		reply(http.StatusOK, map[string]string{})
+	case "POST /v1/orgs/switch":
+		// Every org but 13 is one the user belongs to; a switch issues a new
+		// session for it, as identity-svc does.
+		var in struct {
+			TargetOrgID int64 `json:"target_org_id"`
+		}
+		_ = json.Unmarshal(body, &in)
+		if !authed {
+			reply(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+			return
+		}
+		if in.TargetOrgID == 13 {
+			reply(http.StatusForbidden, map[string]string{"error": "not a member of this organization"})
+			return
+		}
+		access, refresh := f.issue()
+		reply(http.StatusOK, map[string]any{"access_token": access, "refresh_token": refresh, "active_org_id": in.TargetOrgID})
 	case "GET /v1/account/me":
 		if !authed {
 			reply(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})

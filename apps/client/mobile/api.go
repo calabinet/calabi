@@ -185,6 +185,9 @@ func (c *Core) handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 	if cfg != nil {
 		cfg.AccessToken, cfg.RefreshToken, cfg.APIKey, cfg.ActiveOrgID = "", "", "", 0
+		// The exit device belongs to the organization signed out of; the next
+		// sign-in may be another account's.
+		cfg.MeshExitNode = ""
 		// The email stays to pre-fill the next sign-in; the mesh key stays in
 		// its own file, so signing back in is the same device, not a new seat.
 		if err := creds.Save(cfg); err != nil {
@@ -227,6 +230,12 @@ func (c *Core) handleOrgSwitch(w http.ResponseWriter, r *http.Request) {
 	cfg, _ := creds.Load()
 	if cfg == nil {
 		cfg = &creds.Config{}
+	}
+	// The exit device is a device of the organization just left, chosen by
+	// name: the new one's device of that name — if it has one — is someone
+	// else's machine. Joining a self-hosted server forgets it the same way.
+	if req.TargetOrgID != cfg.ActiveOrgID {
+		cfg.MeshExitNode = ""
 	}
 	cfg.AccessToken, cfg.RefreshToken = out.AccessToken, out.RefreshToken
 	if out.ActiveOrgID != 0 {

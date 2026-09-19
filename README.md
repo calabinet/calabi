@@ -71,7 +71,7 @@ off on a device while its tunnels run.
 
 The data plane: the `calabi` client, the `calabi-edge` data node, and the
 `calabi-coord` coordinator. Everything needed to run tunnels and a mesh on
-your own machines is here, and self-hosted it needs no account and calls no
+your own machines is here. Self-hosted, it needs no account and connects to no
 service of ours.
 
 It also holds the Android app, which joins your own server with an invite, or
@@ -135,28 +135,26 @@ code, bound in with gomobile (`apps/client/mobile`).
 
 ## Mesh
 
-- **Real WireGuard** — the data plane is WireGuard, keys generated on each device.
-  `calabi-coord` never sees a private key and never sees plaintext.
-- **Direct when possible, relayed when not** — devices discover each other's
-  endpoints, measure latency to each relay over STUN, and hole-punch. A relayed
-  path is the fallback, not the design.
+- **WireGuard** — each device makes its own keys. `calabi-coord` never has a
+  private key and never sees your traffic.
+- **Direct when possible** — devices find each other's addresses and connect
+  directly through NAT. When that fails, traffic goes through a relay.
 - **Your own relay** — `calabi-edge` with `role: relay` (or `both`, as
-  `deploy/server` runs it) is the relay. It moves already-encrypted packets
-  between device keys and **cannot decrypt them**; the isolation is structural,
-  enforced by a dependency test, not by a config flag.
-  Run one relay or several, in as many regions as you like.
+  `deploy/server` runs it). It forwards encrypted packets between devices and has
+  no code that could decrypt them. Run one relay or several, in different
+  regions.
 - **Stable addresses** — every device gets a `100.64.0.0/10` address that
   follows it across networks, on every platform.
 - **A switch on each device** — `calabi mesh down`, or the console, takes a
   device out of the mesh and leaves its tunnels running; `calabi mesh up` puts
   it back.
 - **ACLs** — a JSON policy file of groups and rules decides which devices may
-  reach which, on which ports. It hot-reloads, and a broken file **fails closed**
-  (deny all) rather than open.
-- **Subnet routers and exit devices** — advertise a LAN behind one device so
-  the whole mesh can reach it, or route a device's default traffic through a
-  peer.
-  Advertising works everywhere; the forwarding/NAT side is automated on Linux.
+  reach which, on which ports. It reloads when changed; a broken file denies all
+  traffic.
+- **Subnet routers and exit devices** — share a LAN behind one device with the
+  whole mesh, or send a device's internet traffic out through another. A Linux
+  device can share a subnet or be an exit device, with forwarding and NAT set up
+  for it; devices on every platform can use them.
 - **Per-day usage split** — the local console books mesh traffic as *direct* vs
   *relayed*, so you can see how much actually needed a relay.
 
@@ -231,11 +229,10 @@ calabi http 8080                 # → https://u000001.<your tunnel domain>
 ping 100.64.0.2                  # another device, over WireGuard
 ```
 
-The joined client's daemon is running: its console at `http://127.0.0.1:7400`
-creates tunnels and switches the mesh off and on (tunnels keep working with it
-off). The coordinator is the one identity a device has — it names the edge and
-signs the grant the edge lets the device in with — so there is no token to copy
-and no certificate to confirm for the edge.
+After joining, the client's daemon is running. Its console at
+`http://127.0.0.1:7400` creates tunnels and switches the mesh on and off; tunnels
+keep working with the mesh off. There is no token to copy and no edge
+certificate to confirm: the coordinator provides both.
 
 **Full guide** — running the binaries without Docker, every coordinator and edge
 setting, per-tunnel security policy, servers and fleets that join from a config
@@ -246,45 +243,38 @@ see **[docs/self-hosting.md](docs/self-hosting.md)**.
 
 ## Releases, and checking them yourself
 
-Every release is published in two places with **the same files**: the
-[GitHub Releases](https://github.com/calabinet/calabi/releases) page of this
-repository, and `download.calabi.net`. Same version number, same bytes — the
-GitHub Release is not a separate CI build, it is the same artifacts uploaded.
+Every release is published on the
+[GitHub Releases](https://github.com/calabinet/calabi/releases) page and on
+`download.calabi.net`. Both have the same files.
 
-The point of publishing this source is that you do not have to take our word for
-what is in those binaries. **They are built from this repository**, not from an
-internal tree, and each release ships a `build-manifest.json` naming the exact
-commit, toolchain, flags, and the one input that is not in this repo (the
-platform's edge-CA root — a public certificate, carried in the manifest
-verbatim). Rebuild them yourself:
+**The binaries are built from this repository.** Each release has a
+`build-manifest.json` with the commit, the Go toolchain, the build flags, and the
+one input from outside this repository: the platform's edge-CA root, a public
+certificate included in the manifest. To rebuild every released binary and
+compare:
 
 ```bash
 curl -fsSLO https://download.calabi.net/latest/build-manifest.json
 bash scripts/verify-reproducible-build.sh build-manifest.json
 ```
 
-That clones this repository at the commit the manifest names, rebuilds every
-released binary, and compares hashes. It needs the same Go version the manifest
-names; a different one is the usual reason a check fails, and the script says so
-up front.
+The script clones this repository at the manifest's commit, rebuilds each binary
+and compares hashes. It needs the Go version the manifest names, and checks that
+first.
 
-It compares the **binary**, not the `.zip`/`.tar.gz` you downloaded, because
-archives are not reproducible — tar+gzip and zip both record modification times,
-so the same bytes packaged a second later hash differently. Use `SHA256SUMS` for
-the archive: that answers "did my download arrive intact", a different question
-from "was it built from this source".
+It compares binaries, not archives
+([why](#why-compare-binaries-and-not-the-archives)). To check a downloaded
+archive, use `SHA256SUMS`.
 
-**Not yet covered**, listed in the manifest itself so it stays honest: the
-Windows desktop installer and the macOS `.pkg` (separate Rust/Tauri toolchains),
-the docker images, and two inputs that ship as committed blobs rather than being
-built here — the local console's compiled web bundle and the third-party
-`wintun.dll`. Those are byte-identical for anyone building a given commit, but
-this repository does not derive them from their own sources.
+**Not covered by the manifest** (the manifest lists them too):
 
-The Android APK is not reproducible yet either. Its Go core records the
-directory it was built in, so the same commit built in another directory gives
-a different library. Each release's notes print the certificate the APK is
-signed with; check it before installing:
+- the Windows installer and the macOS `.pkg` (built with Rust and Tauri);
+- the docker images;
+- two files committed here rather than built: the local console's compiled web
+  bundle and `wintun.dll`;
+- the Android APK ([why](#why-is-the-android-apk-not-reproducible)). Each
+  release's notes print the certificate it is signed with; check it before
+  installing:
 
 ```bash
 apksigner verify --print-certs calabi-android.apk
@@ -305,11 +295,25 @@ apksigner verify --print-certs calabi-android.apk
 - Reach your machines from an Android phone, over your own mesh or a calabi.net
   one.
 
+## Questions
+
+### Why compare binaries and not the archives?
+
+Archives are not reproducible: tar, gzip and zip record file times, so the same
+binary packaged twice gives two different archive hashes. `SHA256SUMS` tells you
+a download arrived intact; the manifest tells you the binary inside was built
+from this source.
+
+### Why is the Android APK not reproducible?
+
+Its Go core records the directory it was built in, so the same commit built in
+another directory gives a different library.
+
 ## Contributing
 
 Issues and patches to the edge, the client, the coordinator, the local console
-and the Android app are welcome. We use a **DCO** (Developer Certificate of Origin), not a
-CLA — every commit just needs a sign-off:
+and the Android app are welcome. Every commit needs a **DCO** sign-off (Developer
+Certificate of Origin); there is no CLA:
 
 ```bash
 git commit -s -m "your message"

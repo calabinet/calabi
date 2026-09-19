@@ -82,9 +82,9 @@ docker compose exec coord calabi-coord authkey revoke 2    # stops new devices j
   (`coord.db`), the key the coordinator signs grants with, and its certificate,
   whose fingerprint every device has pinned. Without it, every device joins
   again with a new invite.
-- `calabi_edge-state` holds the edge's certificate and the counter behind the
-  tunnel names (`u000001`, …). The coordinator reads the edge's certificate and
-  tells devices its fingerprint, so a new one is followed on its own.
+- Back up `calabi_edge-state` too: the edge's certificate and the counter behind
+  tunnel names (`u000001`, …). A new edge certificate reaches the devices through
+  the coordinator, with nothing for you to do.
 
 ## HTTPS
 

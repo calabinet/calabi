@@ -157,7 +157,10 @@ fun LoginScreen(onSignedIn: () -> Unit, onSelfHosted: () -> Unit) {
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally)) {
                     Link(stringResource(R.string.login_register)) { openConsole("/register") }
-                    Link(stringResource(R.string.login_forgot)) { openConsole("/reset-password") }
+                    // The console's request form. /reset-password is where the
+                    // emailed link lands (it needs its token); 1.13.0 and earlier
+                    // opened it here, and the console now forwards those.
+                    Link(stringResource(R.string.login_forgot)) { openConsole("/login?mode=forgot") }
                 }
             }
             Spacer(Modifier.height(48.dp))

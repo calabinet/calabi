@@ -54,9 +54,8 @@ A signed release build: set `CALABI_ANDROID_KEYSTORE` (path to your `.jks`),
 `CALABI_ANDROID_KEYSTORE_PASSWORD` and, if the alias is not `calabi`,
 `CALABI_ANDROID_KEY_ALIAS`, then `.\gradlew.bat -PcalabiVersion=<version> assembleRelease`.
 Without the keystore variables the release APK comes out unsigned. The official
-APK is built by `scripts/mobile/build-release-android.ps1`, which runs from the
-maintainers' tree (it reads the `VERSION` file this repository does not carry)
-and checks that the APK is signed by the certificate in
+APK is built with `scripts/mobile/build-release-android.ps1` from the
+maintainers' tree; it checks that the APK is signed by the certificate in
 `scripts/mobile/android-release-cert.sha256`.
 
 ## Layout

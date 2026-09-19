@@ -1,22 +1,17 @@
-# Example config for the Calabi local daemon on a device of your own server:
+# An example tunnels.yaml for a device of your own server:
 #
 #   calabi daemon --config tunnels.yaml
 #
-# The device joins your server's coordinator, and the coordinator names the edge
-# the tunnels below run on and signs this device's way in: nothing here names
-# the edge. The simplest start needs no file at all — `calabi join <invite>`,
-# then manage tunnels in the console, which keeps its own config. Write a file
-# like this one when the tunnels should come from a file you keep (a server, a
-# fleet provisioned the same way).
+# The device joins your coordinator, and the coordinator names the edge, so
+# nothing here names the edge. A file like this is for tunnels you keep in a
+# file (a server, or many machines set up the same way). Otherwise run
+# `calabi join <invite>` and manage tunnels in the console.
 #
-# One process establishes every tunnel below, applies each tunnel's security
-# policy locally (passwords are bcrypt-hashed before they leave this machine),
-# and auto-reconnects on drop.
-#
-# Your edge enforces each tunnel's `security:` block: IP allow/deny on every
-# tunnel type, and on HTTP tunnels Basic auth, rate limiting, header rewrite and
-# the OAuth login wall. Passwords are bcrypt-hashed on this machine before
-# they're sent.
+# The daemon runs every tunnel below in one process and reconnects on its own.
+# Your edge applies each tunnel's `security:` block: IP allow/deny on every
+# tunnel type, and on HTTP tunnels also Basic auth, rate limits, header rewrite
+# and OAuth sign-in. Passwords are bcrypt-hashed on this machine before they are
+# sent.
 
 # Your server's coordinator.
 mesh:
@@ -31,10 +26,9 @@ mesh:
   # Also join the mesh (WireGuard) — tunnels work either way.
   # enabled: true
 
-# `tunnels:` may be empty (`tunnels: []`) or omitted entirely — the daemon still
-# joins, connects to the edge and serves the local console at http://127.0.0.1:7400,
-# where you can create / delete tunnels and edit their security live (changes are
-# written back to this file). The entries below are optional examples.
+# `tunnels:` may be empty (`tunnels: []`) or left out. The daemon still joins and
+# serves the console at http://127.0.0.1:7400, where you can create and delete
+# tunnels and edit their security; changes are written back to this file.
 tunnels:
   # HTTP tunnel with a login wall (Basic auth) + an IP allowlist.
   - name: app
@@ -46,8 +40,8 @@ tunnels:
       basic_auth: ["admin:s3cret", "ops:hunter2"]   # bcrypt-hashed locally
       # Also: rate, set_header / del_header, oauth_* — see docs/self-hosting.md.
 
-  # Raw TCP tunnel (e.g. SSH) on a fixed edge port. L4 tunnels accept IP rules
-  # only — basic_auth is HTTP-only and rejected here.
+  # TCP tunnel (e.g. SSH) on a fixed port — open it on the edge too. TCP and UDP
+  # tunnels take IP rules only; basic_auth is for HTTP tunnels.
   - name: ssh
     type: tcp
     local: 127.0.0.1:22
