@@ -1,6 +1,7 @@
 package mesh
 
 import (
+	"errors"
 	"log/slog"
 	"net"
 	"net/netip"
@@ -96,7 +97,33 @@ type meshBind struct {
 	// the address it arrived from. Only known peers are recorded, so it stays
 	// bounded by the netmap.
 	srcOf map[netip.AddrPort]meshproto.DiscoKey
+
+	// held keeps the few packets WireGuard sent a peer while nothing could carry
+	// them: no relay link up yet (errNoRelayLink) and no direct path. That is the
+	// first instant of every self-hosted device — its home relay comes with the
+	// first netmap, and WireGuard's first handshake goes out in the same instant.
+	// They go out as soon as a relay link comes up or a direct path is found
+	// (retryHeld), instead of being lost and the handshake waiting out
+	// WireGuard's 5-second retry. Bounded: heldPerPeer packets a peer, heldTTL
+	// old; one that expires or is pushed out counts as a relay send error.
+	hmu  sync.Mutex
+	held map[meshproto.NodeKey][]heldPacket
+	// heldGen counts retryHeld runs. A send that found no path, but saw a retry
+	// start before its packets were held, retries at once — or the link that came
+	// up in between would never carry them.
+	heldGen atomic.Uint64
 }
+
+// heldPacket is a packet waiting in meshBind.held, with when it was first held.
+type heldPacket struct {
+	buf []byte
+	at  time.Time
+}
+
+const (
+	heldPerPeer = 8
+	heldTTL     = 3 * time.Second
+)
 
 // relaySender is the relay transport the bind falls back to — the relayPool in
 // production, a recorder in tests. relayAddr names WHICH relay to send through
@@ -174,6 +201,9 @@ func (b *meshBind) attachDirect(ms *magicSock, paths pathFinder) {
 
 	ms.setWGHandler(b.deliverDirect)
 	ms.setSourceHandler(b.noteDiscoSource)
+	if f, ok := paths.(interface{ setOnPathFound(func()) }); ok {
+		f.setOnPathFound(b.retryHeld)
+	}
 }
 
 // detachDirect drops the direct transport (the socket is about to close, e.g. the
@@ -396,6 +426,9 @@ func (b *meshBind) Close() error {
 		close(b.closed)
 		b.open = false
 	}
+	b.hmu.Lock()
+	b.held = nil
+	b.hmu.Unlock()
 	return nil
 }
 
@@ -411,6 +444,13 @@ func (b *meshBind) Send(bufs [][]byte, ep conn.Endpoint) error {
 	if !ok {
 		return conn.ErrWrongEndpointType
 	}
+	return b.send(bufs, me, time.Time{})
+}
+
+// send is Send for one endpoint. heldAt is when these packets were first held
+// (retryHeld), zero for a fresh send: a packet that still finds no path keeps
+// its age, so retrying never extends its life.
+func (b *meshBind) send(bufs [][]byte, me *meshEndpoint, heldAt time.Time) error {
 	if ms, ap, disco, ok := b.directTarget(me); ok {
 		err := sendAllDirect(ms, bufs, ap)
 		if err == nil {
@@ -435,14 +475,75 @@ func (b *meshBind) Send(bufs [][]byte, ep conn.Endpoint) error {
 		return net.ErrClosed
 	}
 	relay := b.relayFor(me.key)
-	for _, buf := range bufs {
+	gen := b.heldGen.Load()
+	for i, buf := range bufs {
 		if err := b.client.Send(relay, me.key, buf); err != nil {
+			if errors.Is(err, errNoRelayLink) {
+				b.hold(me.key, bufs[i:], heldAt)
+				if b.heldGen.Load() != gen {
+					b.retryHeld()
+				}
+				return nil
+			}
 			b.txRelayErr.Add(1)
 			return err
 		}
 		b.txRelay.Add(1)
 	}
 	return nil
+}
+
+// hold keeps copies of bufs for key until retryHeld (WireGuard reuses the
+// buffers once Send returns). at is when they were first held; zero means now.
+func (b *meshBind) hold(key meshproto.NodeKey, bufs [][]byte, at time.Time) {
+	now := time.Now()
+	if at.IsZero() {
+		at = now
+	}
+	b.hmu.Lock()
+	defer b.hmu.Unlock()
+	if b.held == nil {
+		b.held = make(map[meshproto.NodeKey][]heldPacket)
+	}
+	q := b.held[key][:0:0]
+	for _, p := range b.held[key] {
+		if now.Sub(p.at) > heldTTL {
+			b.txRelayErr.Add(1)
+			continue
+		}
+		q = append(q, p)
+	}
+	for _, buf := range bufs {
+		q = append(q, heldPacket{buf: append([]byte(nil), buf...), at: at})
+	}
+	if over := len(q) - heldPerPeer; over > 0 {
+		b.txRelayErr.Add(uint64(over))
+		q = q[over:]
+	}
+	b.held[key] = q
+}
+
+// retryHeld sends every held packet that has not expired, over whatever carries
+// it now — a direct path first, then the relay. Called when a relay link comes up
+// and when a direct path is found. A packet that still finds no path is held
+// again with its original age.
+func (b *meshBind) retryHeld() {
+	b.heldGen.Add(1)
+	b.hmu.Lock()
+	held := b.held
+	b.held = nil
+	b.hmu.Unlock()
+	now := time.Now()
+	for key, q := range held {
+		me := &meshEndpoint{b: b, key: key}
+		for _, p := range q {
+			if now.Sub(p.at) > heldTTL {
+				b.txRelayErr.Add(1)
+				continue
+			}
+			_ = b.send([][]byte{p.buf}, me, p.at)
+		}
+	}
 }
 
 // stats fills in the bind's half of DatapathStats, and the socket's if one is

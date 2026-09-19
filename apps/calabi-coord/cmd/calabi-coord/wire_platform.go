@@ -126,7 +126,7 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 		Quota:           nodeQuota(logger),
 		Presence:        core.NewPresence(),
 		ServiceHealth:   core.NewServiceHealthTracker(),
-		RelayGrants:     relayGrantIssuer(logger, newRelayScopeSource(logger)),
+		RelayGrants:     relayGrantIssuer(logger, newRelayScopeSource(logger), env("IDENTITY_ADDR") == ""),
 		// Without identity-svc there is no console to approve a route in (the
 		// self-hosted build on static keys, or a local dev run), so routes keep
 		// taking effect by themselves, as documented for self-hosting. On the
@@ -136,6 +136,9 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 	}
 
 	if addr := env("IDENTITY_ADDR"); addr != "" {
+		if env(edgeAddrEnv) != "" {
+			logger.Warn("coord: " + envPrefix + "_" + edgeAddrEnv + " is ignored: devices on the platform find their edges through its API")
+		}
 		auth, err := identity.Dial(logger, addr)
 		if err != nil {
 			return nil, nil, fmt.Errorf("identity dial: %w", err)
@@ -144,10 +147,44 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 		return coord, auth, nil
 	}
 
-	logger.Warn("CALABI_COORD_IDENTITY_ADDR unset; using dev StaticAuth (NOT for production) — set it to verify tk_ keys via identity-svc")
-	auth, err := devStaticAuth()
+	// Self-hosted: no identity service. The coordinator mints its own keys
+	// (invites), kept in the database when there is one.
+	keys, durable := authKeyStore(nodes)
+	coord.AuthKeys = keys
+	auth, err := selfHostedAuth(logger, keys, durable)
 	if err != nil {
 		return nil, nil, err
+	}
+	if !durable {
+		logger.Warn("coord: minted auth keys are kept in memory and are lost on restart; give the coordinator a database (CALABI_COORD_DB_DSN)")
+	}
+	// What the daemons report about their tunnels, for the phone. Without a
+	// database the list lives in memory (each daemon reports again within
+	// minutes) and there is no traffic history: usage reads as unavailable.
+	// Where devices serve tunnels, and how they trust it (edgedir.go).
+	edges, err := edgeDirectoryFromEnv(logger)
+	if err != nil {
+		return nil, nil, err
+	}
+	if edges != nil {
+		coord.Edges = edges
+		switch {
+		case edges.system:
+			logger.Info("coord: edge for tunnels", "addr", edges.addr, "trust", "system")
+		case !edges.learns():
+			logger.Info("coord: edge for tunnels", "addr", edges.addr, "fingerprint", edges.pin)
+		default:
+			logger.Info("coord: edge for tunnels; reading its certificate", "addr", edges.addr, "read_from", edges.probeAddr)
+		}
+	} else {
+		logger.Info("coord: no edge configured (" + envPrefix + "_" + edgeAddrEnv + "); devices can join the mesh but not serve tunnels")
+	}
+	coord.Tunnels = core.NewMemTunnelStore()
+	if s, ok := nodes.(interface {
+		core.TunnelStore
+		core.TunnelUsageStore
+	}); ok {
+		coord.Tunnels, coord.TunnelUsage = s, s
 	}
 	return coord, auth, nil
 }
@@ -161,7 +198,7 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 // (MESH.8c/8e). A configured-but-broken DSN aborts startup rather than silently
 // losing persistence.
 func platformStores(logger *slog.Logger) (core.NodeStore, core.ACLStore, core.ACLRevisionStore, core.ServiceStore, core.SettingsStore, core.RelayStore, core.ConnRecordStore, error) {
-	dsn := svcboot.DBDsn(envPrefix+"_DB_DSN", legacyEnvPrefix+"_DB_DSN")
+	dsn := dbDSN()
 	if dsn == "" {
 		logger.Warn("no CALABI_COORD_DB_DSN / CALABI_DB_DSN; using in-memory node + ACL stores (state lost on restart)")
 		// No connection-record store on this path, deliberately. An audit trail
@@ -186,6 +223,22 @@ func platformStores(logger *slog.Logger) (core.NodeStore, core.ACLStore, core.AC
 		conn = nil
 	}
 	return st, st, st, st, st, st, conn, nil
+}
+
+// dbDSN is the database the mesh stores use; "" = in memory.
+func dbDSN() string { return svcboot.DBDsn(envPrefix+"_DB_DSN", legacyEnvPrefix+"_DB_DSN") }
+
+// dbConfigured reports whether the coordinator keeps its state in a database.
+func dbConfigured() bool { return dbDSN() != "" }
+
+// authKeyStore is where minted auth keys live: the database store when there is
+// one (durable), else memory. A type assertion for the same reason as
+// platformSettings below — it is the same object as the node store.
+func authKeyStore(nodes core.NodeStore) (core.AuthKeyStore, bool) {
+	if s, ok := nodes.(core.AuthKeyStore); ok {
+		return s, true
+	}
+	return core.NewMemAuthKeyStore(), false
 }
 
 // platformSettings exposes the ent store as the operator-settings store when
@@ -245,6 +298,36 @@ func runConnRecordPurge(ctx context.Context, logger *slog.Logger, coord *core.Co
 		}
 		if n > 0 {
 			logger.Info("mesh: purged connection records past retention", "rows", n, "keep_days", days)
+		}
+	}
+	purge()
+	t := time.NewTicker(24 * time.Hour)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			purge()
+		}
+	}
+}
+
+// runTunnelUsagePurge trims tunnel traffic past core.TunnelUsageRetention, once
+// at startup and daily after, like the connection records. Its own loop because
+// a coordinator can keep tunnel traffic with connection records switched off.
+func runTunnelUsagePurge(ctx context.Context, logger *slog.Logger, coord *core.Coordinator) {
+	if coord.TunnelUsage == nil {
+		return
+	}
+	purge := func() {
+		n, err := coord.TunnelUsage.PurgeTunnelUsageBefore(ctx, time.Now().Add(-core.TunnelUsageRetention))
+		if err != nil {
+			logger.Warn("mesh: purging old tunnel traffic failed", "err", err)
+			return
+		}
+		if n > 0 {
+			logger.Info("mesh: purged tunnel traffic past retention", "rows", n)
 		}
 	}
 	purge()

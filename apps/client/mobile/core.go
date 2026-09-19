@@ -29,6 +29,7 @@ import (
 
 	"github.com/calabi/calabi/apps/client/internal/creds"
 	"github.com/calabi/calabi/apps/client/internal/hostnet"
+	"github.com/calabi/calabi/apps/client/internal/selfhosted"
 )
 
 // Platform is what the app implements for the core.
@@ -78,6 +79,10 @@ type Core struct {
 	engine *engine
 
 	selfMu sync.Mutex // guards self.json (self.go)
+
+	// A read-only session with a self-hosted server, for its lists while the
+	// phone is not connected (selfhosted_view.go).
+	viewer selfhosted.Viewer
 }
 
 // New creates the core. configJSON is a config object (see config).
@@ -150,8 +155,10 @@ func (c *Core) Connect() error {
 	if c.engine != nil {
 		return nil
 	}
-	if cfg, err := creds.Load(); err != nil || cfg == nil || cfg.AccessToken == "" {
-		return errors.New("mobile: not signed in")
+	if c.selfHosted() == nil {
+		if cfg, err := creds.Load(); err != nil || cfg == nil || cfg.AccessToken == "" {
+			return errors.New("mobile: not signed in")
+		}
 	}
 	c.engine = startEngine(c)
 	return nil

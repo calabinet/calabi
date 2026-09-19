@@ -110,6 +110,7 @@ type MeshSource interface {
 type MeshStatus struct {
 	Enabled bool   `json:"enabled"`
 	Up      bool   `json:"up"`
+	Paused  bool   `json:"paused,omitempty"` // stopped from the console; POST /v1/mesh/up resumes
 	Coord   string `json:"coord,omitempty"`
 	Relay   string `json:"relay,omitempty"`
 	// DerpHome is the region code this node is homed on ("self-…" = the org's own
@@ -227,7 +228,7 @@ type Config struct {
 	Usage     UsageSource     // /v1/usage/current; nil → always 0
 	Health    HealthSource    // /v1/probe/health; nil → enabled:false
 	Mesh      MeshSource      // /v1/mesh (mesh status); nil → enabled:false
-	Server    string          // edge control endpoint, shown in the synthetic /v1/edges row
+	EdgeAddr  func() string   // the edge the tunnels are on, shown in the synthetic /v1/edges row; nil → none
 	Region    string          // labels the synthetic edge; empty → "local"
 }
 
@@ -537,9 +538,13 @@ func (s *Server) handleEdges(w http.ResponseWriter, _ *http.Request) {
 	if region == "" {
 		region = "self-hosted" // SPA's Edge column needs a non-empty region to render
 	}
+	addr := ""
+	if s.cfg.EdgeAddr != nil {
+		addr = s.cfg.EdgeAddr()
+	}
 	edge := map[string]any{
 		"edge_node_id": SelfHostedEdgeID, "node_label": "self-hosted", "region": region,
-		"public_addr": s.cfg.Server, "healthy": true, "owned": false,
+		"public_addr": addr, "healthy": true, "owned": false,
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": []any{edge}, "owned_total": 0})
 }

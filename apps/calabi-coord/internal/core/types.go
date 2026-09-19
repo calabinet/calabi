@@ -120,7 +120,17 @@ type Node struct {
 	// from every peer's netmap and refused on (re)register, so it can neither be
 	// reached nor rejoin until re-enabled. Set out-of-band by the admin surface,
 	// never by the node itself; preserved across the node's re-enrollment.
-	Disabled  bool
+	Disabled bool
+	// EnrolledBy is what the node last enrolled with an auth key AS — the
+	// principal Authenticator.Resolve named ("user:12", "apikey:34"; "" for a
+	// self-hosted key, which names nobody). Re-registration by proof alone
+	// (node_reauth) asks the Authenticator whether it still holds.
+	EnrolledBy string
+	// SignedOut marks a node whose device signed out: it may not re-register by
+	// proof alone until it enrolls with an auth key again, which clears it.
+	// The record, the address and the seat stay — signing back in is the same
+	// device. Set by the node itself (SignOut), unlike Disabled.
+	SignedOut bool
 	CreatedAt time.Time
 	LastSeen  time.Time
 }

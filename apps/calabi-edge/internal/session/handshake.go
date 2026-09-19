@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
 	proto "github.com/calabi/calabi/pkg/protocol"
 )
 
@@ -38,11 +39,20 @@ type HandshakeResult struct {
 // instead of falling back to the daemon's snap.server_addr host (which in
 // dev is literally "localhost"). Empty string is fine — old daemons fall
 // back to the snap path.
+//
+// Exactly one of verify and grants is the edge's way to accept a client: a
+// bearer token checked by the control plane (the platform), or a coordinator
+// grant plus a proof of the device's node key (a self-hosted edge,
+// grantauth.go). With grants, HELLO_ACK carries the challenge the proof answers.
 func (s *Session) PerformServerHandshake(
 	serverID, region, baseDomain string,
 	httpPort, httpsPort uint32,
 	verify TokenVerifier,
+	grants GrantAuth,
 ) (HandshakeResult, error) {
+	if (verify == nil) == (grants == nil) {
+		return HandshakeResult{}, errors.New("session: exactly one of a token verifier and grant auth is required")
+	}
 	deadline := time.Now().Add(HandshakeDeadline)
 
 	// -- 1) read HELLO ----------------------------------------------------
@@ -78,6 +88,16 @@ func (s *Session) PerformServerHandshake(
 		HeartbeatIntervalMs: 15_000,
 		ConfigEpoch:         0,
 	}
+	var challenge meshproto.EdgeChallenge
+	var challengePriv [meshproto.KeyLen]byte
+	if grants != nil {
+		challenge, challengePriv, err = meshproto.NewEdgeChallenge()
+		if err != nil {
+			_ = s.sendError(proto.CodeInternal, "calabi.err.internal", "")
+			return HandshakeResult{}, err
+		}
+		ack.AuthChallenge = challenge.Encode()
+	}
 	if err := s.SendControl(proto.FrameHelloAck, ack); err != nil {
 		return HandshakeResult{}, fmt.Errorf("send HELLO_ACK: %w", err)
 	}
@@ -104,14 +124,29 @@ func (s *Session) PerformServerHandshake(
 		return HandshakeResult{}, err
 	}
 
-	tenantID, wsID, clientID, ok := verify.Verify(auth.Token)
-	if !ok {
-		resp := &proto.AuthResponse{
-			Error: proto.NewError(proto.CodeAuthInvalidToken,
-				"calabi.err.auth.invalid_token", "token not recognized"),
+	var tenantID, wsID, clientID string
+	if grants != nil {
+		var gerr error
+		tenantID, wsID, clientID, gerr = s.authenticateGrant(grants, challenge, challengePriv, &auth)
+		if gerr != nil {
+			resp := &proto.AuthResponse{
+				Error: proto.NewError(proto.CodeAuthInvalidToken,
+					"calabi.err.auth.invalid_grant", "grant or proof not accepted: "+gerr.Error()),
+			}
+			_ = s.SendControl(proto.FrameAuthResp, resp)
+			return HandshakeResult{}, fmt.Errorf("auth invalid grant: %w", gerr)
 		}
-		_ = s.SendControl(proto.FrameAuthResp, resp)
-		return HandshakeResult{}, errors.New("auth invalid token")
+	} else {
+		var ok bool
+		tenantID, wsID, clientID, ok = verify.Verify(auth.Token)
+		if !ok {
+			resp := &proto.AuthResponse{
+				Error: proto.NewError(proto.CodeAuthInvalidToken,
+					"calabi.err.auth.invalid_token", "token not recognized"),
+			}
+			_ = s.SendControl(proto.FrameAuthResp, resp)
+			return HandshakeResult{}, errors.New("auth invalid token")
+		}
 	}
 
 	// -- 4) reply AUTH_RESP ----------------------------------------------

@@ -31,7 +31,7 @@ func TestReplaceableIsThisUsersOfflineDevicesOnThisPlatform(t *testing.T) {
 	bff := &fakeBFF{nodes: replaceFleet()}
 	c := newTestCore(t, bff, &fakePlatform{})
 	signIn(t, c)
-	c.rememberSelf(7, "100.64.0.8") // this phone, disconnected
+	c.rememberSelf(orgKey(7), "100.64.0.8") // this phone, disconnected
 
 	code, body := call(t, c, "GET", "/v1/mesh/replaceable", "")
 	if code != http.StatusOK {

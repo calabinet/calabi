@@ -144,6 +144,12 @@ type WGDatapath struct {
 	bypassHosts []string
 	curExit     meshproto.NodeKey
 	exitCleanup func()
+	// exitPinnedNames / exitPinned are what the installed exit routes keep on the
+	// physical link, as named (host:port) and as resolved. A relay that appears
+	// later — a peer homed somewhere new, a relay added to the map — is pinned
+	// before anything dials it (widenExitBypass).
+	exitPinnedNames map[string]bool
+	exitPinned      map[netip.Addr]bool
 }
 
 // SetExitBypassHosts records the control-plane endpoints (coord + relay,
@@ -346,7 +352,14 @@ func newWGDatapath(tunDev tun.Device, routing Routing, priv PrivateKey, relayAdd
 	relays := newRelayPool(self, [meshproto.KeyLen]byte(priv), func(src meshproto.NodeKey, ct []byte) {
 		bind.deliver(src, ct)
 	}, logger)
-	if err := relays.DialHome(context.Background(), relayAddr); err != nil {
+	// What WireGuard sent while no link was up goes out on the first one.
+	relays.setOnLinkUp(func(string) { bind.retryHeld() })
+	if relayAddr == "" {
+		// No relay configured: the home comes from the coordinator's relay map
+		// with the first netmap (relayPool.setHome). Until then only direct
+		// paths can carry traffic, and before the netmap there are no peers.
+		logger.Info("mesh: no relay configured; the home relay will come from the coordinator's relay map")
+	} else if err := relays.DialHome(context.Background(), relayAddr); err != nil {
 		// Not fatal any more. Hole punching (MESH.4) means a node without a relay
 		// link is degraded, not unreachable; and under R0' a relay that requires
 		// authorization will refuse this very first dial, because the grant only
@@ -361,7 +374,7 @@ func newWGDatapath(tunDev tun.Device, routing Routing, priv PrivateKey, relayAdd
 	// so this changes nothing for a coordinator that doesn't compile filters.
 	filter := &PacketFilter{}
 	ftun := newFilteredTUN(tunDev, filter, logger)
-	dev := device.NewDevice(ftun, bind, device.NewLogger(wgLogLevel(), "calabi-mesh: "))
+	dev := device.NewDevice(ftun, bind, wgLogger(logger, wgLogLevel()))
 	if err := dev.IpcSet(fmt.Sprintf("private_key=%s\nlisten_port=0\n", priv.Hex())); err != nil {
 		dev.Close()
 		_ = relays.Close()
@@ -392,6 +405,36 @@ func newWGDatapath(tunDev tun.Device, routing Routing, priv PrivateKey, relayAdd
 		d.routing = osRouting{d}
 	}
 	return d, nil
+}
+
+// wgLogger routes wireguard-go's log lines into the daemon's logger. Its own
+// logger (device.NewLogger) prints to stdout, which a daemon run as a service
+// does not keep — its errors never reached the log file — and which a terminal
+// shows as "ERROR:" even for the ones this datapath handles itself: a send that
+// found no relay link yet (errNoRelayLink) is held and sent once one is up, so
+// it is logged at debug.
+func wgLogger(logger *slog.Logger, level int) *device.Logger {
+	l := &device.Logger{Verbosef: device.DiscardLogf, Errorf: device.DiscardLogf}
+	if logger == nil {
+		return l
+	}
+	if level >= device.LogLevelVerbose {
+		l.Verbosef = func(format string, args ...any) {
+			logger.Info("mesh wireguard", "detail", fmt.Sprintf(format, args...))
+		}
+	}
+	if level >= device.LogLevelError {
+		l.Errorf = func(format string, args ...any) {
+			lvl := slog.LevelError
+			for _, a := range args {
+				if err, ok := a.(error); ok && errors.Is(err, errNoRelayLink) {
+					lvl = slog.LevelDebug
+				}
+			}
+			logger.Log(context.Background(), lvl, "mesh wireguard", "detail", fmt.Sprintf(format, args...))
+		}
+	}
+	return l
 }
 
 // wgLogLevel maps CALABI_MESH_WG_LOG to a wireguard-go device log level.
@@ -457,6 +500,10 @@ func (d *WGDatapath) SetConfig(cfg WGConfig) error {
 	// Before Reconcile: the dials it starts must already carry the current
 	// authorization, or a relay that requires one would reject them.
 	d.relays.SetGrant(cfg.RelayGrant)
+	// Also before Reconcile: while an exit device carries the default route, a
+	// relay dialled for the first time must already be pinned to the physical
+	// link, or its connection would travel inside the tunnel it exists to carry.
+	d.widenExitBypass(cfg)
 	d.relays.Reconcile(cfg.SelfRelay, peerRelayAddrs(cfg))
 
 	// Build the UAPI peer string from a key-sorted copy so it is CANONICAL: the
@@ -585,8 +632,92 @@ func (d *WGDatapath) SetConfig(cfg WGConfig) error {
 	}
 	d.curSubnets = nextSubnetState(extra, add, del, addOK, delOK)
 
-	d.applyExitNode(cfg.ExitNode)
+	d.applyExitNode(cfg)
 	return nil
+}
+
+// exitBypassNames is every endpoint the tunnel itself travels over, which a full
+// tunnel must leave on the physical link: the coordinator and bootstrap relay,
+// every relay in the map (a peer's home, or this node's next one) and any link
+// already up. Pinning the whole map rather than today's links is what keeps a
+// relay dialled later — when a peer moves home — from looping into the tun.
+func (d *WGDatapath) exitBypassNames(cfg WGConfig) []string {
+	names := append([]string(nil), d.bypassHosts...)
+	names = append(names, cfg.SelfRelay)
+	for _, addr := range cfg.RelayByRegion {
+		names = append(names, addr)
+	}
+	names = append(names, d.relays.Addrs()...)
+	out := names[:0]
+	for _, n := range names {
+		if n != "" {
+			out = append(out, n)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// widenExitBypass re-installs the exit routes when the relay map names an
+// endpoint they do not pin yet. Names are compared first so the several netmaps
+// a minute that change nothing cost no DNS lookup.
+//
+// The routes are replaced rather than extended: pinning a host needs its route
+// over the physical link, and once the split default is in place that is not
+// what the OS answers for it. The moment between the two leaves the default on
+// the physical link, which is the safe way round for the tunnel itself, and it
+// only happens when the relay map grows.
+func (d *WGDatapath) widenExitBypass(cfg WGConfig) {
+	if d.exitCleanup == nil {
+		return
+	}
+	names := d.exitBypassNames(cfg)
+	fresh := false
+	for _, n := range names {
+		if !d.exitPinnedNames[n] {
+			fresh = true
+			break
+		}
+	}
+	if !fresh {
+		return
+	}
+	bypass, err := resolveBypass(names)
+	if err != nil {
+		d.logger.Warn("mesh: a relay the exit routes do not pin yet could not be resolved; keeping the routes as they are", "err", err)
+		return
+	}
+	covered := true
+	for _, a := range bypass {
+		if !d.exitPinned[a] {
+			covered = false
+			break
+		}
+	}
+	if covered {
+		d.exitPinnedNames = setOf(names)
+		return
+	}
+	d.exitCleanup()
+	d.exitCleanup = nil
+	cleanup, err := d.routing.EnableExitRoutes(bypass, privateV4Blocks)
+	if err != nil {
+		d.logger.Warn("mesh: re-installing the exit routes for a new relay failed; the full tunnel is off until the next netmap", "err", err)
+		d.curExit = meshproto.NodeKey{} // applyExitNode tries again
+		d.bind.setDirectEnabled(true)
+		return
+	}
+	d.exitCleanup = cleanup
+	d.exitPinnedNames, d.exitPinned = setOf(names), setOf(bypass)
+	d.logger.Info("mesh: exit routes now also keep a new relay on the physical link", "bypass", names)
+}
+
+func setOf[T comparable](xs []T) map[T]bool {
+	m := make(map[T]bool, len(xs))
+	for _, x := range xs {
+		m[x] = true
+	}
+	return m
 }
 
 // peerRelayAddrs is the set of relay addresses this node's peers are homed at —
@@ -618,13 +749,15 @@ func isDefaultRoute(pfx netip.Prefix) bool { return pfx.Bits() == 0 }
 // physical link and routes 0.0.0.0/1 + 128.0.0.0/1 at the tun so every non-mesh
 // destination flows to the exit peer. Selecting the zero key removes them.
 // Best-effort: a failure is logged, not fatal (the mesh itself still works).
-func (d *WGDatapath) applyExitNode(sel meshproto.NodeKey) {
+func (d *WGDatapath) applyExitNode(cfg WGConfig) {
+	sel := cfg.ExitNode
 	if sel.Equal(d.curExit) {
 		return
 	}
 	if d.exitCleanup != nil { // switching away from a previous exit node
 		d.exitCleanup()
 		d.exitCleanup = nil
+		d.exitPinnedNames, d.exitPinned = nil, nil
 	}
 	d.curExit = sel
 	if sel.IsZero() {
@@ -634,9 +767,11 @@ func (d *WGDatapath) applyExitNode(sel meshproto.NodeKey) {
 		}
 		return
 	}
-	// Every relay link must stay on the physical path, not just the bootstrap one:
-	// with a fleet, this node holds links to its peers' relays too.
-	bypass, err := resolveBypass(append(append([]string(nil), d.bypassHosts...), d.relays.Addrs()...))
+	// Every relay must stay on the physical path, not just the bootstrap one:
+	// with a fleet, this node holds links to its peers' relays too, and may
+	// dial another of the map's relays later (see exitBypassNames).
+	names := d.exitBypassNames(cfg)
+	bypass, err := resolveBypass(names)
 	if err != nil {
 		d.logger.Warn("mesh: exit node selected but control-plane bypass unresolved; not full-tunneling (would loop)", "err", err)
 		d.curExit = meshproto.NodeKey{} // force a retry on the next netmap
@@ -654,6 +789,7 @@ func (d *WGDatapath) applyExitNode(sel meshproto.NodeKey) {
 		return
 	}
 	d.exitCleanup = cleanup
+	d.exitPinnedNames, d.exitPinned = setOf(names), setOf(bypass)
 	// A full tunnel captures every destination not explicitly bypassed — including
 	// a peer's public IP. WireGuard's own transport must NOT be captured (it would
 	// loop back through the tun), and only the relay is on the bypass list, so
@@ -666,7 +802,7 @@ func (d *WGDatapath) applyExitNode(sel meshproto.NodeKey) {
 	}
 	d.bind.setDirectEnabled(false)
 	d.logger.Info("mesh exit node engaged (full tunnel; direct paths paused, relay only)",
-		"exit_node", sel.String(), "bypass", d.bypassHosts, "lan_keep", privateV4Blocks)
+		"exit_node", sel.String(), "bypass", names, "lan_keep", privateV4Blocks)
 }
 
 // Close tears down the exit-node routes (restoring the physical default route),

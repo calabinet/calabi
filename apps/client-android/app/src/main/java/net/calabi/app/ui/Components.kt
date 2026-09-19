@@ -279,7 +279,7 @@ fun BottomNav(tab: Int, onTab: (Int) -> Unit) {
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            NavItem(R.drawable.ic_mesh, stringResource(R.string.tab_devices), tab == 0) { onTab(0) }
+            NavItem(R.drawable.ic_mesh, stringResource(R.string.tab_mesh), tab == 0) { onTab(0) }
             NavItem(R.drawable.ic_tunnel, stringResource(R.string.tab_tunnels), tab == 1) { onTab(1) }
             NavItem(R.drawable.ic_settings, stringResource(R.string.tab_settings), tab == 2) { onTab(2) }
         }

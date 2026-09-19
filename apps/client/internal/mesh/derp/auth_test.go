@@ -65,7 +65,7 @@ func TestClientAnswersChallengeWithTheCurrentGrant(t *testing.T) {
 				answers <- answer{err: err}
 				return
 			}
-			typ, payload, err := meshproto.ReadDERPFrame(conn)
+			typ, payload, err := readSkippingPings(conn)
 			if err != nil {
 				answers <- answer{err: err}
 				return
@@ -123,7 +123,7 @@ func TestClientWithoutKeyStaysSilent(t *testing.T) {
 			return
 		}
 		_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
-		typ, _, err := meshproto.ReadDERPFrame(conn)
+		typ, _, err := readSkippingPings(conn)
 		if err == nil {
 			got <- typ
 		}
@@ -138,6 +138,65 @@ func TestClientWithoutKeyStaysSilent(t *testing.T) {
 
 	if typ, ok := <-got; ok {
 		t.Fatalf("client answered a challenge with no key configured (frame type %v)", typ)
+	}
+}
+
+// A link the relay challenged and then hung up on keeps the facts the relay pool
+// needs to call that a refusal: that it was challenged, which grant it answered
+// with, and how long it lasted — frozen at the moment it ended, not still growing.
+func TestClientRemembersTheChallengeItWasClosedOn(t *testing.T) {
+	self, priv := nodeKeys(t)
+	addr := startRelay(t, self, func(conn net.Conn) {
+		defer conn.Close()
+		ch, _, err := meshproto.NewDERPAuthChallenge()
+		if err != nil {
+			return
+		}
+		if err := meshproto.WriteDERPFrame(conn, meshproto.DERPFrameAuthChallenge, ch.Encode()); err != nil {
+			return
+		}
+		_, _, _ = readSkippingPings(conn) // the proof; then turned away, as a relay does with an expired grant
+	})
+
+	c, err := Dial(context.Background(), addr, self, Auth{Priv: priv, Grant: func() []byte { return []byte("stale") }}, nil, slog.Default())
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer c.Close()
+	select {
+	case <-c.Done():
+	case <-time.After(3 * time.Second):
+		t.Fatal("the relay's hang-up never reached the client")
+	}
+
+	grant, challenged := c.Challenged()
+	if !challenged || string(grant) != "stale" {
+		t.Fatalf("Challenged() = %q, %v; want the grant it answered with, true", grant, challenged)
+	}
+	lived := c.Lifetime()
+	time.Sleep(20 * time.Millisecond)
+	if again := c.Lifetime(); again != lived {
+		t.Fatalf("Lifetime kept counting after the link ended: %v, then %v", lived, again)
+	}
+}
+
+// A relay that never asks is not remembered as having asked.
+func TestClientNotChallengedByAnOpenRelay(t *testing.T) {
+	self, priv := nodeKeys(t)
+	addr := startRelay(t, self, func(conn net.Conn) { _ = conn.Close() })
+
+	c, err := Dial(context.Background(), addr, self, Auth{Priv: priv}, nil, slog.Default())
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer c.Close()
+	select {
+	case <-c.Done():
+	case <-time.After(3 * time.Second):
+		t.Fatal("the relay's hang-up never reached the client")
+	}
+	if _, challenged := c.Challenged(); challenged {
+		t.Fatal("a link that was never challenged reports a challenge")
 	}
 }
 

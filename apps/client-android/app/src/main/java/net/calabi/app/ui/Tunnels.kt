@@ -97,6 +97,9 @@ data class Tunnel(
     val createdByMe: Boolean,
     val traffic30d: Long,
     val createdAt: String,
+    /** On a self-hosted server: the device whose daemon serves it. */
+    val deviceName: String = "",
+    val selfHosted: Boolean = false,
 ) {
     /** How a visitor reaches it, formatted as the web console's list does; "" before an edge assigns one. */
     val address: String
@@ -116,7 +119,15 @@ fun parseTunnel(o: JSONObject): Tunnel {
     val clientOnline = o.optBoolean("client_online")
     val clientEdge = o.optLong("client_edge_node_id")
     val upstream = o.optString("upstream_state")
+    val selfHosted = o.optBoolean("self_hosted")
     val state = when {
+        // A self-hosted server's tunnels are what their daemon last reported;
+        // nobody there checks the upstream, so reported online is as far as it goes.
+        selfHosted -> when (status) {
+            "online" -> TunnelState.Active
+            "pending" -> TunnelState.Pending
+            else -> TunnelState.Offline
+        }
         o.optBoolean("disabled_by_admin") -> TunnelState.AdminDisabled
         status == "disabled" -> TunnelState.Disabled
         status == "error" -> TunnelState.Error
@@ -135,6 +146,7 @@ fun parseTunnel(o: JSONObject): Tunnel {
         edgeNodeId = edge, edgeRegion = o.optString("edge_region"), edgeOwned = o.optBoolean("edge_owned"),
         creatorEmail = o.optString("creator_email"), createdByMe = o.optBoolean("created_by_me"),
         traffic30d = o.optLong("traffic_30d"), createdAt = o.optString("created_at"),
+        deviceName = o.optString("device_name"), selfHosted = selfHosted,
     )
 }
 
@@ -162,6 +174,9 @@ fun TunnelsTab(model: AppModel, onOpen: (Tunnel) -> Unit) {
         if (model.seesOnlyOwnTunnels) {
             item { Text(stringResource(R.string.tunnels_scope_own), style = Styles.hint, modifier = Modifier.padding(start = 6.dp, top = 2.dp)) }
         }
+        if (model.selfHosted) {
+            item { Text(stringResource(R.string.tunnels_scope_self_hosted), style = Styles.hint, modifier = Modifier.padding(start = 6.dp, top = 2.dp)) }
+        }
         item { Spacer(Modifier.height(14.dp)) }
         model.tunnelsError?.let { err ->
             item { Text(err, color = Palette.danger, fontSize = 13.sp, modifier = Modifier.padding(start = 6.dp, bottom = 8.dp)) }
@@ -171,7 +186,8 @@ fun TunnelsTab(model: AppModel, onOpen: (Tunnel) -> Unit) {
             tunnels != null && tunnels.isEmpty() -> item {
                 Group {
                     Text(
-                        stringResource(R.string.tunnels_empty), style = Styles.hint.copy(fontSize = 14.sp),
+                        stringResource(if (model.selfHosted) R.string.tunnels_empty_self_hosted else R.string.tunnels_empty),
+                        style = Styles.hint.copy(fontSize = 14.sp),
                         textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(24.dp),
                     )
                 }
@@ -294,6 +310,10 @@ fun TunnelDetailScreen(model: AppModel, opened: Tunnel, onBack: () -> Unit, onAc
             InfoRow(stringResource(R.string.tunnel_local), t.localAddr.ifBlank { "—" }, mono = true)
             RowDivider()
             InfoRow(stringResource(R.string.tunnel_served_by), servedBy(t))
+            if (t.deviceName.isNotBlank()) {
+                RowDivider()
+                InfoRow(stringResource(R.string.tunnel_device), t.deviceName)
+            }
             RowDivider()
             InfoRow(stringResource(R.string.tunnel_traffic_30d), formatBytes(t.traffic30d), mono = true)
             if (t.createdByMe || t.creatorEmail.isNotBlank()) {
@@ -306,9 +326,12 @@ fun TunnelDetailScreen(model: AppModel, opened: Tunnel, onBack: () -> Unit, onAc
             }
         }
 
-        Group {
-            ActionRow(stringResource(R.string.access_title), onClick = onAccess) {
-                Glyph(R.drawable.ic_chevron_right, Palette.muted, 16.dp)
+        // A self-hosted server keeps no access log.
+        if (!t.selfHosted) {
+            Group {
+                ActionRow(stringResource(R.string.access_title), onClick = onAccess) {
+                    Glyph(R.drawable.ic_chevron_right, Palette.muted, 16.dp)
+                }
             }
         }
     }

@@ -56,6 +56,38 @@ var (
 			},
 		},
 	}
+	// MeshAuthKeysColumns holds the columns for the "mesh_auth_keys" table.
+	MeshAuthKeysColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "meshnet_id", Type: field.TypeInt64},
+		{Name: "hash", Type: field.TypeString},
+		{Name: "prefix", Type: field.TypeString, Default: ""},
+		{Name: "tags_json", Type: field.TypeString, Default: "[]"},
+		{Name: "max_uses", Type: field.TypeInt, Default: 0},
+		{Name: "uses", Type: field.TypeInt, Default: 0},
+		{Name: "expires_at", Type: field.TypeTime, Nullable: true},
+		{Name: "revoked_at", Type: field.TypeTime, Nullable: true},
+		{Name: "note", Type: field.TypeString, Default: ""},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// MeshAuthKeysTable holds the schema information for the "mesh_auth_keys" table.
+	MeshAuthKeysTable = &schema.Table{
+		Name:       "mesh_auth_keys",
+		Columns:    MeshAuthKeysColumns,
+		PrimaryKey: []*schema.Column{MeshAuthKeysColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "meshauthkey_hash",
+				Unique:  true,
+				Columns: []*schema.Column{MeshAuthKeysColumns[2]},
+			},
+			{
+				Name:    "meshauthkey_meshnet_id",
+				Unique:  false,
+				Columns: []*schema.Column{MeshAuthKeysColumns[1]},
+			},
+		},
+	}
 	// MeshConnRecordsColumns holds the columns for the "mesh_conn_records" table.
 	MeshConnRecordsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -66,6 +98,8 @@ var (
 		{Name: "bytes_tx", Type: field.TypeInt64, Default: 0},
 		{Name: "bytes_rx", Type: field.TypeInt64, Default: 0},
 		{Name: "path", Type: field.TypeString, Default: ""},
+		{Name: "relay_bytes_tx", Type: field.TypeInt64, Default: 0},
+		{Name: "relay_bytes_rx", Type: field.TypeInt64, Default: 0},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
 	// MeshConnRecordsTable holds the schema information for the "mesh_conn_records" table.
@@ -111,6 +145,8 @@ var (
 		{Name: "tags_json", Type: field.TypeString, Default: "[]"},
 		{Name: "approved", Type: field.TypeBool, Default: true},
 		{Name: "disabled", Type: field.TypeBool, Default: false},
+		{Name: "enrolled_by", Type: field.TypeString, Default: ""},
+		{Name: "signed_out", Type: field.TypeBool, Default: false},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "last_seen", Type: field.TypeTime},
 	}
@@ -209,16 +245,78 @@ var (
 		Columns:    MeshSettingsColumns,
 		PrimaryKey: []*schema.Column{MeshSettingsColumns[0]},
 	}
+	// MeshTunnelsColumns holds the columns for the "mesh_tunnels" table.
+	MeshTunnelsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "meshnet_id", Type: field.TypeInt64},
+		{Name: "node_id", Type: field.TypeInt64},
+		{Name: "name", Type: field.TypeString},
+		{Name: "type", Type: field.TypeString},
+		{Name: "public_addr", Type: field.TypeString, Default: ""},
+		{Name: "local_addr", Type: field.TypeString, Default: ""},
+		{Name: "status", Type: field.TypeString, Default: "offline"},
+		{Name: "first_seen", Type: field.TypeTime},
+		{Name: "reported_at", Type: field.TypeTime},
+	}
+	// MeshTunnelsTable holds the schema information for the "mesh_tunnels" table.
+	MeshTunnelsTable = &schema.Table{
+		Name:       "mesh_tunnels",
+		Columns:    MeshTunnelsColumns,
+		PrimaryKey: []*schema.Column{MeshTunnelsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "meshtunnel_node_id_name",
+				Unique:  true,
+				Columns: []*schema.Column{MeshTunnelsColumns[2], MeshTunnelsColumns[3]},
+			},
+			{
+				Name:    "meshtunnel_meshnet_id",
+				Unique:  false,
+				Columns: []*schema.Column{MeshTunnelsColumns[1]},
+			},
+		},
+	}
+	// MeshTunnelUsageColumns holds the columns for the "mesh_tunnel_usage" table.
+	MeshTunnelUsageColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "meshnet_id", Type: field.TypeInt64},
+		{Name: "node_id", Type: field.TypeInt64},
+		{Name: "name", Type: field.TypeString},
+		{Name: "hour", Type: field.TypeTime},
+		{Name: "bytes_in", Type: field.TypeInt64, Default: 0},
+		{Name: "bytes_out", Type: field.TypeInt64, Default: 0},
+	}
+	// MeshTunnelUsageTable holds the schema information for the "mesh_tunnel_usage" table.
+	MeshTunnelUsageTable = &schema.Table{
+		Name:       "mesh_tunnel_usage",
+		Columns:    MeshTunnelUsageColumns,
+		PrimaryKey: []*schema.Column{MeshTunnelUsageColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "meshtunnelusage_node_id_name_hour",
+				Unique:  true,
+				Columns: []*schema.Column{MeshTunnelUsageColumns[2], MeshTunnelUsageColumns[3], MeshTunnelUsageColumns[4]},
+			},
+			{
+				Name:    "meshtunnelusage_meshnet_id_hour",
+				Unique:  false,
+				Columns: []*schema.Column{MeshTunnelUsageColumns[1], MeshTunnelUsageColumns[4]},
+			},
+		},
+	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		CoordSettingsTable,
 		MeshAclsTable,
 		MeshACLRevisionsTable,
+		MeshAuthKeysTable,
 		MeshConnRecordsTable,
 		MeshNodesTable,
 		MeshRelaysTable,
 		MeshServicesTable,
 		MeshSettingsTable,
+		MeshTunnelsTable,
+		MeshTunnelUsageTable,
 	}
 )
 
@@ -232,10 +330,19 @@ func init() {
 	MeshACLRevisionsTable.Annotation = &entsql.Annotation{
 		Table: "mesh_acl_revisions",
 	}
+	MeshAuthKeysTable.Annotation = &entsql.Annotation{
+		Table: "mesh_auth_keys",
+	}
 	MeshConnRecordsTable.Annotation = &entsql.Annotation{
 		Table: "mesh_conn_records",
 	}
 	MeshRelaysTable.Annotation = &entsql.Annotation{
 		Table: "mesh_relays",
+	}
+	MeshTunnelsTable.Annotation = &entsql.Annotation{
+		Table: "mesh_tunnels",
+	}
+	MeshTunnelUsageTable.Annotation = &entsql.Annotation{
+		Table: "mesh_tunnel_usage",
 	}
 }

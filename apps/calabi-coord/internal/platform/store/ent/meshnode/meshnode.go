@@ -57,6 +57,10 @@ const (
 	FieldApproved = "approved"
 	// FieldDisabled holds the string denoting the disabled field in the database.
 	FieldDisabled = "disabled"
+	// FieldEnrolledBy holds the string denoting the enrolled_by field in the database.
+	FieldEnrolledBy = "enrolled_by"
+	// FieldSignedOut holds the string denoting the signed_out field in the database.
+	FieldSignedOut = "signed_out"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldLastSeen holds the string denoting the last_seen field in the database.
@@ -90,6 +94,8 @@ var Columns = []string{
 	FieldTagsJSON,
 	FieldApproved,
 	FieldDisabled,
+	FieldEnrolledBy,
+	FieldSignedOut,
 	FieldCreatedAt,
 	FieldLastSeen,
 }
@@ -145,6 +151,10 @@ var (
 	DefaultApproved bool
 	// DefaultDisabled holds the default value on creation for the "disabled" field.
 	DefaultDisabled bool
+	// DefaultEnrolledBy holds the default value on creation for the "enrolled_by" field.
+	DefaultEnrolledBy string
+	// DefaultSignedOut holds the default value on creation for the "signed_out" field.
+	DefaultSignedOut bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultLastSeen holds the default value on creation for the "last_seen" field.
@@ -269,6 +279,16 @@ func ByApproved(opts ...sql.OrderTermOption) OrderOption {
 // ByDisabled orders the results by the disabled field.
 func ByDisabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDisabled, opts...).ToFunc()
+}
+
+// ByEnrolledBy orders the results by the enrolled_by field.
+func ByEnrolledBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEnrolledBy, opts...).ToFunc()
+}
+
+// BySignedOut orders the results by the signed_out field.
+func BySignedOut(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSignedOut, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

@@ -45,6 +45,18 @@ func (f MeshACLRevisionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MeshACLRevisionMutation", m)
 }
 
+// The MeshAuthKeyFunc type is an adapter to allow the use of ordinary
+// function as MeshAuthKey mutator.
+type MeshAuthKeyFunc func(context.Context, *ent.MeshAuthKeyMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f MeshAuthKeyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MeshAuthKeyMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MeshAuthKeyMutation", m)
+}
+
 // The MeshConnRecordFunc type is an adapter to allow the use of ordinary
 // function as MeshConnRecord mutator.
 type MeshConnRecordFunc func(context.Context, *ent.MeshConnRecordMutation) (ent.Value, error)
@@ -103,6 +115,30 @@ func (f MeshSettingFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MeshSettingMutation", m)
+}
+
+// The MeshTunnelFunc type is an adapter to allow the use of ordinary
+// function as MeshTunnel mutator.
+type MeshTunnelFunc func(context.Context, *ent.MeshTunnelMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f MeshTunnelFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MeshTunnelMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MeshTunnelMutation", m)
+}
+
+// The MeshTunnelUsageFunc type is an adapter to allow the use of ordinary
+// function as MeshTunnelUsage mutator.
+type MeshTunnelUsageFunc func(context.Context, *ent.MeshTunnelUsageMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f MeshTunnelUsageFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MeshTunnelUsageMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MeshTunnelUsageMutation", m)
 }
 
 // Condition is a hook condition function.

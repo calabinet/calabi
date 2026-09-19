@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"sync/atomic"
@@ -36,8 +37,11 @@ type ControlOptions struct {
 	HTTPPort  uint32
 	HTTPSPort uint32
 
-	Manager   *session.Manager
+	Manager *session.Manager
+	// Verifier or Grants — exactly one — is how a client is accepted: a token
+	// the control plane checks (platform), or a coordinator grant (self-hosted).
 	Verifier  session.TokenVerifier
+	Grants    session.GrantAuth
 	Registrar session.ProxyRegistrar
 	Domains   session.DomainAllocator
 	Ports     session.PortAllocator
@@ -165,8 +169,11 @@ func (c *Control) Run(ctx context.Context) error {
 	if c.opts.TLS == nil {
 		return errors.New("listener.control: TLS config required")
 	}
-	if c.opts.Manager == nil || c.opts.Verifier == nil || c.opts.Registrar == nil {
-		return errors.New("listener.control: manager/verifier/registrar required")
+	if c.opts.Manager == nil || c.opts.Registrar == nil {
+		return errors.New("listener.control: manager/registrar required")
+	}
+	if (c.opts.Verifier == nil) == (c.opts.Grants == nil) {
+		return errors.New("listener.control: exactly one of a token verifier and grant auth required")
 	}
 	ln, err := tls.Listen("tcp", c.opts.Addr, c.opts.TLS)
 	if err != nil {
@@ -208,9 +215,16 @@ func (c *Control) handle(ctx context.Context, conn net.Conn) {
 	}
 	ctrl, err := mux.AcceptStream()
 	if err != nil {
+		_ = mux.Close()
+		if errors.Is(err, io.EOF) {
+			// Connected, maybe completed TLS, and left without a word: a
+			// self-hosted coordinator reading this edge's certificate (once a
+			// minute), or a TCP health check. Not a client that failed.
+			c.logger.Debug("connection closed before a control stream", "remote", remote)
+			return
+		}
 		c.logger.Warn("accept control stream failed", "err", err)
 		c.recordHandshakeFailure("accept_stream")
-		_ = mux.Close()
 		return
 	}
 
@@ -218,7 +232,7 @@ func (c *Control) handle(ctx context.Context, conn net.Conn) {
 	sess.ID = c.opts.Manager.NewSessionID()
 	sess.TrustClientPolicy = c.opts.TrustClientPolicy
 
-	res, err := sess.PerformServerHandshake(c.opts.ServerID, c.opts.Region, c.opts.BaseDomain, c.opts.HTTPPort, c.opts.HTTPSPort, c.opts.Verifier)
+	res, err := sess.PerformServerHandshake(c.opts.ServerID, c.opts.Region, c.opts.BaseDomain, c.opts.HTTPPort, c.opts.HTTPSPort, c.opts.Verifier, c.opts.Grants)
 	if err != nil {
 		c.logger.Info("handshake failed", "err", err, "remote", remote)
 		c.recordHandshakeFailure("auth")

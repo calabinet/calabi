@@ -15,6 +15,9 @@ type MeshACL func(*sql.Selector)
 // MeshACLRevision is the predicate function for meshaclrevision builders.
 type MeshACLRevision func(*sql.Selector)
 
+// MeshAuthKey is the predicate function for meshauthkey builders.
+type MeshAuthKey func(*sql.Selector)
+
 // MeshConnRecord is the predicate function for meshconnrecord builders.
 type MeshConnRecord func(*sql.Selector)
 
@@ -29,3 +32,9 @@ type MeshService func(*sql.Selector)
 
 // MeshSetting is the predicate function for meshsetting builders.
 type MeshSetting func(*sql.Selector)
+
+// MeshTunnel is the predicate function for meshtunnel builders.
+type MeshTunnel func(*sql.Selector)
+
+// MeshTunnelUsage is the predicate function for meshtunnelusage builders.
+type MeshTunnelUsage func(*sql.Selector)

@@ -52,6 +52,13 @@ func ApplyEnv(cfg Config) (Config, error) {
 	if v := envStr("CALABI_EDGE_RELAY_COORD_PUBKEY"); v != "" {
 		cfg.Relay.CoordPubKey = v
 	}
+	// The coordinator this edge belongs to.
+	if v := envStr("CALABI_EDGE_COORD_PUBKEY"); v != "" {
+		cfg.CoordPubKey = v
+	}
+	if v := envStr("CALABI_EDGE_COORD_PUBKEY_FILE"); v != "" {
+		cfg.CoordPubKeyFile = v
+	}
 	if v := envStr("CALABI_EDGE_RELAY_DERP_PORT"); v != "" {
 		n, err := parsePort("CALABI_EDGE_RELAY_DERP_PORT", v)
 		if err != nil {

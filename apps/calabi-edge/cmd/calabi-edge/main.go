@@ -16,6 +16,8 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
+	"errors"
 	"flag"
 	"fmt"
 	"hash/fnv"
@@ -27,7 +29,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -71,48 +72,27 @@ func run() error {
 	// Until 2026-09-05 the only flag was -config: there was no way to ask an
 	// edge binary which build it was, on a box or in a container.
 	showVersion := flag.Bool("version", false, "print the version and exit")
+	showFingerprint := flag.Bool("fingerprint", false, "print the control certificate's fingerprint (what clients pin) and exit")
 	flag.Parse()
 	if *showVersion {
 		fmt.Println(version)
 		return nil
 	}
 
-	cfg, err := config.Load(*configPath)
-	if err != nil {
-		return fmt.Errorf("load config: %w", err)
-	}
-	// Self-hosters often run without a config file at all — a relay-only node has
-	// no domain, no certificate and nothing else to configure. Env overrides for
-	// mode / role / the relay block keep that possible now that the standalone
-	// derp-node binary (which was ENTIRELY env-driven) is retired. Env wins over
-	// the file. See internal/config/env.go.
-	cfg, err = config.ApplyEnv(cfg)
+	// File → env overrides → mode normalization → role + production-posture
+	// checks. The hot-reloader runs the SAME function on every reload and diffs
+	// against this cfg, so derive nothing from the file outside it —
+	// config.LoadEffective.
+	cfg, byoiRefused, err := config.LoadEffective(*configPath)
 	if err != nil {
 		return err
+	}
+	if *showFingerprint {
+		return printControlFingerprint(cfg)
 	}
 	logger := newLogger(cfg.Log)
-
-	// Standalone normalization: a self-hosted (mode=standalone) edge has no
-	// control plane, so its control-plane addresses are cleared; a BYOI edge
-	// (bff-edge cert) is refused standalone and kept on platform semantics.
-	// See config.NormalizeForMode +
-	var byoiRefused bool
-	cfg, byoiRefused = cfg.NormalizeForMode()
 	if byoiRefused {
 		logger.Warn("mode=standalone ignored: edge is configured for bff-edge (BYOI / control-plane cert); keeping platform semantics")
-	}
-	// Role selects which data plane(s) run (edge/derp merge). Reject a typo now
-	// rather than silently run neither. Empty defaults to "edge" (unchanged).
-	if err := cfg.ValidateRole(); err != nil {
-		return err
-	}
-	// CALABI_ENV=production: none of the dev fallbacks (static token table,
-	// the shipped placeholder credential, an ungranted platform relay) may be
-	// active. Checked AFTER NormalizeForMode so "no control plane" reads as the
-	// stated standalone intent rather than a missing dependency.
-	// config/prodguard.go + F0.2.
-	if err := cfg.ValidateProductionPosture(); err != nil {
-		return err
 	}
 	// A relay with no label can run, but it cannot be registered in the org's
 	// DERP map (region code is "self-"+label) and its usage reports have no
@@ -137,12 +117,22 @@ func run() error {
 		}(),
 	)
 
-	cert, err := tlsutil.LoadOrGenerate(cfg.Control.CertPEM, cfg.Control.KeyPEM)
+	ctrlCert, err := resolveControlCert(cfg)
 	if err != nil {
 		return fmt.Errorf("tls bootstrap: %w", err)
 	}
+	switch {
+	case ctrlCert.ephemeral:
+		logger.Warn("control listener: a new self-signed certificate at every start (no state.dir, no control.cert_pem) — clients cannot pin it; set state.dir",
+			"fingerprint", ctrlCert.pin())
+	case ctrlCert.fresh:
+		logger.Info("control listener: generated a self-signed certificate; clients pin its fingerprint",
+			"cert", ctrlCert.source, "fingerprint", ctrlCert.pin())
+	default:
+		logger.Info("control listener certificate", "cert", ctrlCert.source, "fingerprint", ctrlCert.pin())
+	}
 	tlsCfg := &tls.Config{
-		Certificates: []tls.Certificate{cert},
+		Certificates: []tls.Certificate{ctrlCert.cert},
 		MinVersion:   tls.VersionTLS13,
 		NextProtos:   []string{"calabi/1"},
 	}
@@ -264,14 +254,26 @@ func run() error {
 	}
 	defer closeAll(deps.closers)
 
-	// Token verification: prefer the platform identity-svc verifier when wired,
-	// fall back to the static-YAML table for dev / standalone / demo. The
-	// static table is held behind a hot verifier so fsnotify reload can swap
-	// accepted_tokens without a restart.
-	staticVerifier := newHotTokenVerifier(cfg.AcceptedTokens)
-	var verifier session.TokenVerifier = staticVerifier
-	if deps.verifier != nil {
+	// How a client gets in: on the platform, the identity bff-edge verifies; on
+	// a standalone edge, the grant its coordinator signed, checked against the
+	// coordinator's key.
+	// The static token table that used to sit between the two is gone.
+	coordKey, err := loadCoordPubKey(ctx, cfg, logger)
+	if err != nil {
+		return err
+	}
+	var verifier session.TokenVerifier
+	var grants session.GrantAuth
+	switch {
+	case deps.verifier != nil:
 		verifier = deps.verifier
+	case coordKey != nil:
+		grants = coordGrants{pub: coordKey}
+		logger.Info("devices are accepted by their coordinator's grants",
+			"coord_pubkey", base64.StdEncoding.EncodeToString(coordKey))
+	case cfg.RunsEdge():
+		// ValidateClientAuth refuses this configuration; this is the backstop.
+		return errors.New("no way to accept a client: no control plane (bff-edge) and no coordinator key")
 	}
 
 	// Effective "trust client-supplied security policy" decision. Standalone
@@ -300,6 +302,7 @@ func run() error {
 		TrustClientPolicy:  trustClientPolicy,
 		Manager:            mgr,
 		Verifier:           verifier,
+		Grants:             grants,
 		Registrar:          registrar,
 		Domains:            domains,
 		Ports:              ports,
@@ -361,12 +364,13 @@ func run() error {
 	}
 
 	// fsnotify hot-reload of the edge.yaml. Whitelist:
-	// accepted_tokens, http.base_domain. Any other field change is
-	// refused with a logged warning until the operator restarts.
+	// base_domain. Any other field change is refused with a logged warning
+	// until the operator restarts. cfg must be exactly what
+	// config.LoadEffective returned above: it is the baseline every reload is
+	// diffed against.
 	reloader := configreload.New(*configPath, cfg, &hotReloadApplier{
-		verifier: staticVerifier,
-		domains:  domains,
-		logger:   logger,
+		domains: domains,
+		logger:  logger,
 	}, logger)
 
 	errCh := make(chan error, 16)
@@ -392,7 +396,14 @@ func run() error {
 	// Mesh-relay datapath — started for role relay/both. Ciphertext-only, isolated
 	// from the edge's TLS termination.
 	if cfg.RunsRelay() {
-		go func() { errCh <- labelErr("relay", runRelay(ctx, cfg.Relay, logger, deps.relayReporter)) }()
+		// The relay checks the same coordinator's grants; a key read from a file
+		// is handed to it here rather than written into cfg, which is the
+		// hot-reload baseline.
+		relayCfg := cfg.Relay
+		if coordKey != nil {
+			relayCfg.CoordPubKey = base64.StdEncoding.EncodeToString(coordKey)
+		}
+		go func() { errCh <- labelErr("relay", runRelay(ctx, relayCfg, logger, deps.relayReporter)) }()
 	}
 	go func() { errCh <- labelErr("admin", obs.Run(ctx)) }()
 	go func() { errCh <- labelErr("configreload", reloader.Run(ctx)) }()
@@ -510,54 +521,11 @@ func buildHTTPSListener(
 	}), nil
 }
 
-// hotTokenVerifier implements session.TokenVerifier on top of an
-// atomically-swappable token table. used a const map captured in
-// the Config struct; makes the table swappable so the
-// fsnotify reload can rotate accepted_tokens without a restart.
-//
-// Verify is on the session-establishment hot path — we avoid taking a
-// lock by holding the table behind atomic.Pointer.
-type hotTokenVerifier struct {
-	tokens atomic.Pointer[map[string]config.TokenEntry]
-}
-
-func newHotTokenVerifier(initial []config.TokenEntry) *hotTokenVerifier {
-	v := &hotTokenVerifier{}
-	v.Replace(initial)
-	return v
-}
-
-func (v *hotTokenVerifier) Replace(entries []config.TokenEntry) {
-	m := make(map[string]config.TokenEntry, len(entries))
-	for _, e := range entries {
-		m[e.Token] = e
-	}
-	v.tokens.Store(&m)
-}
-
-func (v *hotTokenVerifier) Verify(token string) (string, string, string, bool) {
-	m := v.tokens.Load()
-	if m == nil {
-		return "", "", "", false
-	}
-	e, ok := (*m)[token]
-	if !ok {
-		return "", "", "", false
-	}
-	return e.TenantID, e.WorkspaceID, e.ClientID, true
-}
-
-// hotReloadApplier wires the configreload package's whitelist callbacks
-// to the live token verifier + subdomain allocator.
+// hotReloadApplier wires the configreload package's whitelist callback to the
+// subdomain allocator.
 type hotReloadApplier struct {
-	verifier *hotTokenVerifier
-	domains  *router.SubdomainAllocator
-	logger   *slog.Logger
-}
-
-func (a *hotReloadApplier) ApplyAcceptedTokens(tokens []config.TokenEntry) {
-	a.verifier.Replace(tokens)
-	a.logger.Info("reload: accepted_tokens", "count", len(tokens))
+	domains *router.SubdomainAllocator
+	logger  *slog.Logger
 }
 
 func (a *hotReloadApplier) ApplyBaseDomain(base string) {

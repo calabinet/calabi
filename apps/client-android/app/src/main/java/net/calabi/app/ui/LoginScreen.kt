@@ -63,7 +63,7 @@ import org.json.JSONObject
 private const val CODE_LENGTH = 6
 
 @Composable
-fun LoginScreen(onSignedIn: () -> Unit) {
+fun LoginScreen(onSignedIn: () -> Unit, onSelfHosted: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var email by rememberSaveable { mutableStateOf("") }
@@ -163,8 +163,12 @@ fun LoginScreen(onSignedIn: () -> Unit) {
             Spacer(Modifier.height(48.dp))
             Text(
                 stringResource(R.string.login_footnote), fontSize = 12.sp, color = Palette.muted, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                modifier = Modifier.fillMaxWidth(),
             )
+            // Below everything calabi.net: most people never need it.
+            Row(Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 24.dp), horizontalArrangement = Arrangement.Center) {
+                Link(stringResource(R.string.login_self_hosted), onClick = onSelfHosted)
+            }
         } else {
             Spacer(Modifier.height(12.dp))
             Row(

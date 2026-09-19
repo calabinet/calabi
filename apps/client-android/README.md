@@ -6,7 +6,12 @@ bound into this app with gomobile. The app draws the screens and owns the VPN
 (`CalabiVpnService`).
 
 It signs in to calabi.net (or a development control plane, below) and enrols
-through it; it does not join a self-hosted `calabi-coord` yet.
+through it, or joins a self-hosted `calabi-coord` with an invite: scanned in the
+app (zxing-android-embedded, which needs no Google services), opened as a
+`calabi://join` link, or typed in. What it shows then is in
+[docs/self-hosting.md](../../docs/self-hosting.md#phones-and-the-desktop-console).
+Joining a self-hosted coordinator needs neither `-EdgeCa` nor the build
+properties below.
 
 ## Build
 
@@ -62,7 +67,8 @@ and checks that the APK is signed by the certificate in
 | `AppPlatform.kt` | What the core asks of Android: establish the VPN, protect sockets, list networks, log |
 | `CalabiVpnService.kt` | The VPN: foreground service, `establish()` on the core's request, network-change callbacks |
 | `ConnectTileService.kt` | Quick Settings tile |
+| `QuickTile.kt` | Getting the tile into the panel: the system's dialog on Android 13+, steps before that |
 | `BootReceiver.kt` | Connect at startup |
 | `BackgroundRun.kt` | Where each phone maker lets an app keep running in the background |
 | `CoreClient.kt` | Calls the core's in-process `/v1/*` API |
-| `ui/` | Sign-in, mesh, tunnels, settings (Jetpack Compose) |
+| `ui/` | Sign-in, mesh, tunnels, settings (Jetpack Compose); `SelfHostedScreen.kt` is joining a self-hosted server |

@@ -43,6 +43,10 @@ import type {
   UpdatePolicy,
   UsageHistory,
   MeshUsage,
+  SelfHostedJoin,
+  SelfHostedStatus,
+  SelfHostedTunnel,
+  SelfHostedUsage,
 } from "./types";
 
 export class ApiError extends Error {
@@ -409,6 +413,31 @@ export const api = {
 
   logout: async (): Promise<{ status: string }> =>
     jsonOrThrow(await writeRequest("POST", "/v1/auth/logout", {})),
+
+  // ---- a self-hosted server (docs/runbook/self-hosted-sign-in-plan.md §6.2) ----
+  // Both daemons answer: the calabi.net one says whether it can switch
+  // (mode "platform"), the local one what it is connected to. A 404 is a daemon
+  // from before this, which cannot switch at all.
+  selfHosted: async (): Promise<SelfHostedStatus> =>
+    jsonOrThrow<SelfHostedStatus>(await fetch("/v1/selfhosted")),
+  // Connect to a coordinator, an edge, or both. The daemon then starts again in
+  // the other mode ({switching: true}); failures carry {code, part, pin?}.
+  joinSelfHosted: async (body: SelfHostedJoin): Promise<{ switching: boolean }> =>
+    jsonOrThrow(await writeRequest("POST", "/v1/selfhosted/join", body)),
+  // The person compared the certificate a server presents now with what the
+  // server prints; the pin must be the one presented at this moment.
+  trustSelfHosted: async (pin: string): Promise<unknown> =>
+    jsonOrThrow(await writeRequest("POST", "/v1/selfhosted/trust", { part: "mesh", pin })),
+  leaveSelfHosted: async (): Promise<{ switching: boolean }> =>
+    jsonOrThrow(await writeRequest("POST", "/v1/selfhosted/leave", {})),
+  // Every tunnel the meshnet's daemons reported, and its traffic, in the
+  // viewer's time zone — from the coordinator, connected or not.
+  selfHostedTunnels: async (): Promise<{ items: SelfHostedTunnel[] }> =>
+    jsonOrThrow(await fetch("/v1/selfhosted/tunnels")),
+  selfHostedUsage: async (days = 7): Promise<SelfHostedUsage> =>
+    jsonOrThrow<SelfHostedUsage>(
+      await fetch("/v1/selfhosted/usage?days=" + days + "&tz=" + encodeURIComponent(viewerTZ())),
+    ),
 
   // ---- M11.7 multi-Org ----------------------------------------------------
 

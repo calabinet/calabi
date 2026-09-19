@@ -2,11 +2,12 @@
 // applies a whitelisted subset of fields without a process restart.
 //
 // What's hot-reloadable:
-//   - accepted_tokens — the static fallback token table
-//   - http.base_domain — the subdomain suffix for new tunnels
+//   - base_domain (either spelling) — the subdomain suffix for new tunnels
 //
-// Everything else (listener addresses, TLS material, upstream gRPC
-// dials) requires a restart. Editor-saved files often appear as
+// Everything else requires a restart, including every field added to
+// config.Config after this was written: the check zeroes the hot fields
+// and compares the rest whole, so there is no list of restart-only fields
+// to forget to extend. Editor-saved files often appear as
 // RENAME / WRITE / CREATE depending on platform + tool, so we coalesce
 // any of those into a re-read of the canonical path.
 //
@@ -22,11 +23,11 @@ package configreload
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,7 +43,6 @@ const debounceWindow = 250 * time.Millisecond
 // every reload regardless of whether the value changed; implementations
 // should be idempotent + cheap.
 type Applier interface {
-	ApplyAcceptedTokens(tokens []config.TokenEntry)
 	ApplyBaseDomain(base string)
 }
 
@@ -140,13 +140,18 @@ func (r *Reloader) Run(ctx context.Context) error {
 }
 
 // reload re-reads the file and applies whitelisted changes. Returns an
-// error iff the file couldn't be parsed OR a non-whitelisted field
-// changed (in which case we refuse the whole reload to avoid silently
-// ignoring an admin's intended change).
+// error iff the file couldn't be loaded or validated OR a non-whitelisted
+// field changed (in which case we refuse the whole reload to avoid
+// silently ignoring an admin's intended change).
+//
+// The file goes through config.LoadEffective, the same pipeline boot used
+// to build r.current — env overrides, mode normalization, the production
+// posture check. Load alone would make every env-overridden field read as
+// "changed" and let a reload install what boot would have refused.
 func (r *Reloader) reload() error {
-	next, err := config.Load(r.path)
+	next, _, err := config.LoadEffective(r.path)
 	if err != nil {
-		return fmt.Errorf("parse: %w", err)
+		return err
 	}
 
 	r.mu.Lock()
@@ -160,64 +165,82 @@ func (r *Reloader) reload() error {
 	// Apply each whitelisted field. The applier is responsible for
 	// being idempotent — we don't gate on "did the value change" because
 	// computing that for slices means deep-equality.
-	r.applier.ApplyAcceptedTokens(next.AcceptedTokens)
 	r.applier.ApplyBaseDomain(next.HTTP.BaseDomain)
 
 	r.mu.Lock()
 	r.current = next
 	r.mu.Unlock()
-	r.logger.Info("hot-reload applied",
-		"accepted_tokens", len(next.AcceptedTokens),
-		"base_domain", next.HTTP.BaseDomain)
+	r.logger.Info("hot-reload applied", "base_domain", next.HTTP.BaseDomain)
 	return nil
 }
 
-// requireOnlyWhitelisted compares prev vs. next and returns an error if
-// any non-whitelisted field differs. The whitelist is intentionally
-// hard-coded here (not data-driven) so it's grep-able + auditable.
+// requireOnlyWhitelisted returns an error if prev and next differ in
+// anything but the hot-reloadable fields.
 //
-// Whitelisted (allowed to change on reload):
-//   - HTTP.BaseDomain
-//   - AcceptedTokens
-//
-// Everything else (NodeLabel, Region, all listener addrs, all upstream
-// addrs, log config) is a restart-only field.
+// Inverted on purpose: it zeroes the fields a reload MAY change and
+// compares everything else whole. It used to hand-pick the fields to
+// compare, so every field added to config.Config after that list was
+// written — mode, role, relay.*, multi_region, public, state, mesh,
+// edge_class — could be edited and reloaded, the log said "hot-reload
+// applied", and nothing took effect: an operator who set
+// relay.require_auth: true kept an open relay until the next restart.
 func requireOnlyWhitelisted(prev, next config.Config) error {
-	type comparable struct {
-		NodeLabel string
-		Region    string
-		Control   config.ControlListener
-		// note: HTTP.BaseDomain is whitelisted; we only compare HTTP.Addr
-		HTTPAddr string
-		HTTPS    config.HTTPSListener
-		SNI      config.SNIListener
-		Admin    config.AdminListener
-		Identity config.IdentityClient
-		Tunnel   config.TunnelClient
-		Cert     config.CertClient
-		Config   config.ConfigClient
-		Quota    config.QuotaClient
-		Log      config.LogConfig
+	a, b := withoutHotFields(prev), withoutHotFields(next)
+	if reflect.DeepEqual(a, b) {
+		return nil
 	}
-	cmp := func(c config.Config) comparable {
-		return comparable{
-			NodeLabel: c.NodeLabel,
-			Region:    c.Region,
-			Control:   c.Control,
-			HTTPAddr:  c.HTTP.Addr,
-			HTTPS:     c.HTTPS,
-			SNI:       c.SNI,
-			Admin:     c.Admin,
-			Identity:  c.Identity,
-			Tunnel:    c.Tunnel,
-			Cert:      c.Cert,
-			Config:    c.Config,
-			Quota:     c.Quota,
-			Log:       c.Log,
+	changed := changedFields(reflect.ValueOf(a), reflect.ValueOf(b), "")
+	if len(changed) == 0 {
+		// DeepEqual found a difference no exported field accounts for.
+		// The names are for the log; the gate is DeepEqual, so still refuse.
+		changed = []string{"(unexported)"}
+	}
+	return fmt.Errorf("restart-only field(s) changed: %s (hot-reloadable: base_domain); restart calabi-edge to apply",
+		strings.Join(changed, ", "))
+}
+
+// withoutHotFields zeroes the fields a reload may change. This IS the
+// whitelist: whatever it doesn't zero is restart-only.
+func withoutHotFields(c config.Config) config.Config {
+	// Two spellings of one setting, kept equal by config.Load — changing
+	// either changes both, so both are hot.
+	c.BaseDomain = ""
+	c.HTTP.BaseDomain = ""
+	return c
+}
+
+// changedFields lists the YAML paths (e.g. relay.require_auth) of the
+// fields that differ between a and b, two values of the same struct type.
+// Names only, never values: the config carries credentials.
+func changedFields(a, b reflect.Value, prefix string) []string {
+	var out []string
+	t := a.Type()
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		if !f.IsExported() {
+			continue
+		}
+		name := yamlName(f)
+		if prefix != "" {
+			name = prefix + "." + name
+		}
+		fa, fb := a.Field(i), b.Field(i)
+		if f.Type.Kind() == reflect.Struct {
+			if sub := changedFields(fa, fb, name); len(sub) > 0 {
+				out = append(out, sub...)
+				continue
+			}
+		}
+		if !reflect.DeepEqual(fa.Interface(), fb.Interface()) {
+			out = append(out, name)
 		}
 	}
-	if !reflect.DeepEqual(cmp(prev), cmp(next)) {
-		return errors.New("non-whitelisted field changed (allowed: http.base_domain, accepted_tokens); restart calabi-edge to apply")
+	return out
+}
+
+func yamlName(f reflect.StructField) string {
+	if tag, _, _ := strings.Cut(f.Tag.Get("yaml"), ","); tag != "" && tag != "-" {
+		return tag
 	}
-	return nil
+	return f.Name
 }

@@ -53,7 +53,9 @@ func (s *Store) addOneConnRecord(ctx context.Context, r core.ConnRecord) error {
 			SetHour(hour).
 			SetBytesTx(r.BytesTx).
 			SetBytesRx(r.BytesRx).
-			SetPath(r.Path)
+			SetPath(r.Path).
+			SetRelayBytesTx(r.RelayBytesTx).
+			SetRelayBytesRx(r.RelayBytesRx)
 		if _, err := create.Save(ctx); err != nil {
 			return fmt.Errorf("coord store: create conn record: %w", err)
 		}
@@ -63,7 +65,9 @@ func (s *Store) addOneConnRecord(ctx context.Context, r core.ConnRecord) error {
 	}
 	upd := row.Update().
 		AddBytesTx(r.BytesTx).
-		AddBytesRx(r.BytesRx)
+		AddBytesRx(r.BytesRx).
+		AddRelayBytesTx(r.RelayBytesTx).
+		AddRelayBytesRx(r.RelayBytesRx)
 	// Last one in the hour wins, and only when the node actually said something:
 	// an empty path is "not reported", not "unknown path", and letting it clear a
 	// good value would make the column flicker for no reason.
@@ -115,7 +119,37 @@ func (s *Store) ListConnRecords(ctx context.Context, t core.MeshnetID, f core.Co
 			BytesTx:   m.BytesTx,
 			BytesRx:   m.BytesRx,
 			Path:      m.Path,
+
+			RelayBytesTx: m.RelayBytesTx,
+			RelayBytesRx: m.RelayBytesRx,
 		})
+	}
+	return out, nil
+}
+
+// RelayBytesByHour sums a meshnet's relayed traffic per hour in [from, to), as
+// its senders reported it.
+func (s *Store) RelayBytesByHour(ctx context.Context, t core.MeshnetID, from, to time.Time) (map[time.Time]int64, error) {
+	var rows []struct {
+		Hour  time.Time `json:"hour"`
+		Bytes int64     `json:"bytes"`
+	}
+	err := s.client.MeshConnRecord.Query().
+		Where(
+			meshconnrecord.MeshnetID(int64(t)),
+			meshconnrecord.HourGTE(from.UTC()),
+			meshconnrecord.HourLT(to.UTC()),
+			meshconnrecord.RelayBytesTxGT(0),
+		).
+		GroupBy(meshconnrecord.FieldHour).
+		Aggregate(sumInt64(meshconnrecord.FieldRelayBytesTx, "bytes")).
+		Scan(ctx, &rows)
+	if err != nil {
+		return nil, fmt.Errorf("coord store: relay bytes: %w", err)
+	}
+	out := make(map[time.Time]int64, len(rows))
+	for _, r := range rows {
+		out[r.Hour.UTC()] += r.Bytes
 	}
 	return out, nil
 }

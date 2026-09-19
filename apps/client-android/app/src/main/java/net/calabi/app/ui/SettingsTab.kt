@@ -62,7 +62,7 @@ fun SettingsTab(model: AppModel, onSignedOut: () -> Unit, onReplace: () -> Unit)
     ) {
         Text(stringResource(R.string.settings_title), style = Styles.screenTitle, modifier = Modifier.padding(start = 6.dp, bottom = 6.dp))
 
-        Group {
+        if (model.selfHosted) ServerGroup(model) else Group {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -115,6 +115,8 @@ fun SettingsTab(model: AppModel, onSignedOut: () -> Unit, onReplace: () -> Unit)
                 AppPrefs.setConnectOnBoot(context, on)
                 connectOnBoot = on
             }
+            RowDivider()
+            QuickTileRow()
             if (backgroundRow) {
                 RowDivider()
                 LinkRow(stringResource(R.string.settings_background), stringResource(BackgroundRun.hint())) {
@@ -137,7 +139,8 @@ fun SettingsTab(model: AppModel, onSignedOut: () -> Unit, onReplace: () -> Unit)
             })
             RowDivider(start = 46.dp)
             ActionRow(
-                stringResource(R.string.settings_sign_out), icon = R.drawable.ic_logout, color = Palette.danger,
+                stringResource(if (model.selfHosted) R.string.settings_leave_server else R.string.settings_sign_out),
+                icon = R.drawable.ic_logout, color = Palette.danger,
                 onClick = { confirmSignOut = true },
             )
         }
@@ -158,8 +161,15 @@ fun SettingsTab(model: AppModel, onSignedOut: () -> Unit, onReplace: () -> Unit)
         AlertDialog(
             onDismissRequest = { confirmSignOut = false },
             containerColor = Palette.surface,
-            title = { Text(stringResource(R.string.settings_sign_out_confirm), style = Styles.section) },
-            text = { Text(stringResource(R.string.settings_sign_out_body), style = Styles.row.copy(color = Palette.muted)) },
+            title = {
+                Text(stringResource(if (model.selfHosted) R.string.settings_leave_server_confirm else R.string.settings_sign_out_confirm), style = Styles.section)
+            },
+            text = {
+                Text(
+                    stringResource(if (model.selfHosted) R.string.settings_leave_server_body else R.string.settings_sign_out_body),
+                    style = Styles.row.copy(color = Palette.muted),
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     confirmSignOut = false
@@ -167,7 +177,12 @@ fun SettingsTab(model: AppModel, onSignedOut: () -> Unit, onReplace: () -> Unit)
                         CoreClient.call("POST", "/v1/auth/logout")
                         onSignedOut()
                     }
-                }) { Text(stringResource(R.string.settings_sign_out), color = Palette.danger, fontWeight = FontWeight.Bold) }
+                }) {
+                    Text(
+                        stringResource(if (model.selfHosted) R.string.settings_leave_server else R.string.settings_sign_out),
+                        color = Palette.danger, fontWeight = FontWeight.Bold,
+                    )
+                }
             },
             dismissButton = {
                 TextButton(onClick = { confirmSignOut = false }) {
@@ -201,4 +216,24 @@ private fun RenameDialog(current: String, onDismiss: () -> Unit, onSave: (String
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel), color = Palette.ink) }
         },
     )
+}
+
+/** Where the account would be: the self-hosted server this phone joined. */
+@Composable
+private fun ServerGroup(model: AppModel) {
+    Group {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(Modifier.size(44.dp).background(Palette.avatar, CircleShape), contentAlignment = Alignment.Center) {
+                Glyph(R.drawable.ic_server, Palette.ink, 22.dp)
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(stringResource(R.string.settings_server), style = Styles.rowTitle)
+                Text(model.server, style = Styles.mono.copy(fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
 }

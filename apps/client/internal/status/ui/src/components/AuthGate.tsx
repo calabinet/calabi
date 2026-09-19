@@ -13,13 +13,13 @@
 //
 // We use React Query so this probe is shared with the topbar / Overview
 // page (they all useQuery on ["me"]), avoiding a second roundtrip.
-import { LoadingOutlined } from "@ant-design/icons";
-import { Spin } from "antd";
+import { CloudServerOutlined, LoadingOutlined } from "@ant-design/icons";
+import { Button, Spin } from "antd";
 import { useQuery } from "@tanstack/react-query";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, ApiError, isConsoleLocked } from "../api/client";
-import type { AccountMe } from "../api/types";
+import type { AccountMe, SelfHostedStatus } from "../api/types";
 
 function FullPageSpin() {
   return (
@@ -38,6 +38,14 @@ function FullPageSpin() {
 
 export default function AuthGate({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  // calabi.net unreachable is not a dead end for someone who meant to use
+  // their own server: the way there is offered here too.
+  const { data: selfHosted } = useQuery<SelfHostedStatus>({
+    queryKey: ["selfhosted"],
+    queryFn: api.selfHosted,
+    retry: false,
+  });
   const { data, isLoading, error } = useQuery<AccountMe>({
     queryKey: ["me"],
     queryFn: api.me,
@@ -97,6 +105,11 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
           {primary} ({status ? `HTTP ${status}` : t("authGate.networkError")})
         </div>
         <div style={{ fontSize: 12, maxWidth: 420, textAlign: "center" }}>{hint}</div>
+        {selfHosted?.mode === "platform" && selfHosted.can_join && (
+          <Button icon={<CloudServerOutlined />} onClick={() => navigate("/connect")} style={{ marginTop: 8 }}>
+            {t("selfHosted.entry")}
+          </Button>
+        )}
       </div>
     );
   }

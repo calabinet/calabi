@@ -355,6 +355,7 @@ func (c *platformMeshController) reconcile(ctx context.Context, enr meshenroll.E
 	}
 	cfg := meshConfig{
 		Enabled:           true,
+		PlatformCoord:     true,
 		Coord:             enr.CoordAddr,
 		Relay:             enr.RelayAddr,
 		Name:              name,

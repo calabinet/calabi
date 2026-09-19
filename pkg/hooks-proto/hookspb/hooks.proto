@@ -49,6 +49,14 @@ service IdentityHooks {
   // in the DERP map. A platform derives these from its edge fleet; a
   // self-hoster can answer with a static list.
   rpc ListRelayEndpoints(ListRelayEndpointsRequest) returns (ListRelayEndpointsResponse);
+
+  // CheckEnrollment asks whether what a node enrolled as still admits it to
+  // the org: the coordinator's question when an enrolled node registers again
+  // by proof of its node key alone, without its auth key (mesh capability
+  // node_reauth). Exactly one of user_id and api_key_id is set, as recorded
+  // at enrollment. An implementation that cannot answer returns an error, and
+  // the node is refused — it can still enroll with its credential.
+  rpc CheckEnrollment(CheckEnrollmentRequest) returns (CheckEnrollmentResponse);
 }
 
 // [mirrors calabi.v1.control_plane.ValidateTokenRequest]
@@ -101,6 +109,22 @@ message RelayEndpoint {
   int32  derp_port = 3;
   // STUN responder port, used for reflexive-address discovery. 0 = none.
   int32  stun_port = 4;
+}
+
+// CheckEnrollmentRequest names an enrollment: the org and who enrolled.
+message CheckEnrollmentRequest {
+  int64 org_id     = 1;
+  // A person, enrolled with their login: still an active account and still a
+  // member of the org.
+  int64 user_id    = 2;
+  // An API key: still exists, not revoked, not expired, still the org's.
+  int64 api_key_id = 3;
+}
+
+message CheckEnrollmentResponse {
+  bool   valid  = 1;
+  // Why not, for the coordinator's log. Empty when valid.
+  string reason = 2;
 }
 
 // ===================== quota-svc =====================

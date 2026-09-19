@@ -1,0 +1,69 @@
+# syntax=docker/dockerfile:1.7
+#
+# RELEASE image for the mesh coordinator, published as
+# docker.io/calabinet/calabi-coord — for people running their own mesh.
+# calabi.net does not run this image; its coordinator is built and deployed with
+# the rest of the hosted platform.
+#
+# Like apps/calabi-edge/Dockerfile.release, this compiles NOTHING: it puts in the
+# binary behind `calabi-coord-linux-<arch>.tar.gz`, already built from the
+# public tree, published and checksummed. scripts/build-release-image.sh stages
+# the context and checks the binary against dist/release/coord/BINSUMS going in
+# and coming back out of the image. Not buildable on its own.
+#
+# What differs from the edge image, and why:
+#   - The binary is /usr/local/bin/calabi-coord, not /usr/local/bin/app. The
+#     coordinator is also its own admin CLI — `invite`, `authkey`, `fingerprint`
+#     — and `docker exec <container> calabi-coord invite` is how those run.
+#     No compose file predates this image, so there is nothing to stay
+#     compatible with.
+#   - /data is the working directory and a volume. The coordinator keeps its
+#     self-signed certificate in ./coord-tls (a new certificate is a new
+#     fingerprint, and every device that pinned the old one stops connecting),
+#     and the database default below puts the device registry there too.
+#   - /export is empty and owned by calabi, for CALABI_COORD_GRANT_PUBKEY_FILE:
+#     the public half of the grant key, for an edge on the same host to read
+#     (deploy/server mounts one volume there and read-only in the edge). A new
+#     named volume takes the ownership of the directory it is mounted on, so it
+#     has to exist here; /data is not shared because it holds the private half.
+#   - The database defaults to SQLite in /data. The binary's default is memory,
+#     for a first try on one machine; a container is recreated on every image
+#     update, and in memory that would re-enroll every device on a new address.
+#     `-e CALABI_COORD_DB_DSN=postgres://…` replaces it.
+#   - CALABI_TZ=UTC. Every Calabi binary shows times in Asia/Shanghai unless
+#     CALABI_TZ says otherwise (pkg/svcboot, which also carries tzdata): log
+#     timestamps, and the expiry `calabi-coord invite` prints. People run this
+#     image anywhere, so it shows UTC; `-e CALABI_TZ=Europe/Berlin` changes it.
+#     Stored times are instants and usage is bucketed by the viewer's zone, so
+#     this only changes how times read.
+
+FROM alpine:3.20
+
+# Filled in by BuildKit from --platform; selects which staged binary goes in.
+ARG TARGETARCH
+
+LABEL org.opencontainers.image.title="calabi-coord" \
+      org.opencontainers.image.description="Calabi mesh coordinator (device registry, addresses, ACLs, relay directory, invites)" \
+      org.opencontainers.image.source="https://github.com/calabinet/calabi" \
+      org.opencontainers.image.vendor="Calabi"
+
+# ca-certificates: a postgres:// DSN with sslmode=verify-full checks the
+# server against the system roots.
+RUN apk add --no-cache ca-certificates && \
+    addgroup -S calabi && adduser -S -G calabi calabi && \
+    mkdir -p /data /export && chown calabi:calabi /data /export
+
+ENV CALABI_COORD_DB_DSN=sqlite:/data/coord.db \
+    CALABI_TZ=UTC
+
+WORKDIR /data
+VOLUME /data
+
+# 7012 is where devices connect (CALABI_COORD_GRPC_ADDR). 9122 serves /healthz
+# and /metrics (CALABI_COORD_ADMIN_ADDR) and is deliberately not exposed.
+EXPOSE 7012
+
+COPY --chmod=0755 ${TARGETARCH}/calabi-coord /usr/local/bin/calabi-coord
+
+USER calabi:calabi
+ENTRYPOINT ["/usr/local/bin/calabi-coord"]

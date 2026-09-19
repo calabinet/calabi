@@ -1,6 +1,7 @@
 package mesh
 
 import (
+	"bytes"
 	"context"
 	"log/slog"
 	"net"
@@ -65,7 +66,10 @@ func (s *fakeRelayServer) serve(conn net.Conn) {
 		if err != nil {
 			return
 		}
-		if typ == meshproto.DERPFramePing && s.pong {
+		// Every relay answers the Ping a link sends to learn it has been admitted
+		// (derp.Client.Ready) — even one playing dead to keepalives, which is what
+		// pong=false models: a link that went quiet AFTER it was up.
+		if typ == meshproto.DERPFramePing && (s.pong || bytes.Equal(payload, []byte("calready"))) {
 			_ = meshproto.WriteDERPFrame(conn, meshproto.DERPFramePong, payload)
 			continue
 		}
@@ -103,6 +107,25 @@ func (s *fakeRelayServer) waitForward(t *testing.T) meshproto.NodeKey {
 	}
 }
 
+// waitAdmitted waits for the relay at addr to admit the pool's link. Until it
+// does, the pool does not send on it (the bind holds those packets instead).
+func waitAdmitted(t *testing.T, p *relayPool, addr string) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		p.mu.Lock()
+		c := p.clients[addr]
+		p.mu.Unlock()
+		if c != nil && c.IsReady() {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the relay at %s never admitted the link", addr)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 func (s *fakeRelayServer) links() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -124,6 +147,7 @@ func TestRelayPoolSendsViaPeerHomeRelay(t *testing.T) {
 		t.Fatalf("dial home: %v", err)
 	}
 	defer p.Close()
+	waitAdmitted(t, p, home.addr)
 
 	// First send to a not-yet-linked relay: goes out over home, dial starts.
 	if err := p.Send(remote.addr, peer, []byte("first")); err != nil {
@@ -188,6 +212,40 @@ func TestRelayPoolReconcileWarmsAndReHomes(t *testing.T) {
 	}
 }
 
+// A node started without a relay address takes its home from the first netmap,
+// in one step: there is no previous link to wait on, and until the home is set
+// nothing — not the sweep, not a resume, not a send — would ever dial it.
+func TestRelayPoolWithoutABootstrapRelayTakesItsHomeFromTheNetmap(t *testing.T) {
+	relay := startFakeRelay(t)
+	p := newRelayPool(meshproto.NodeKey{1}, [meshproto.KeyLen]byte{}, nil, slog.Default())
+	defer p.Close()
+	if p.Home() != "" {
+		t.Fatalf("home = %q before any netmap", p.Home())
+	}
+
+	p.Reconcile(relay.addr, nil) // once, as the first netmap does
+	if p.Home() != relay.addr {
+		t.Fatalf("home = %q after the first netmap, want %s", p.Home(), relay.addr)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for relay.links() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("the home relay from the netmap was never dialed")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	// Sends with no peer relay go to that home once its link is up.
+	for time.Now().Before(deadline) && len(p.Addrs()) == 0 {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := p.Send("", meshproto.NodeKey{9}, []byte("x")); err != nil {
+		t.Fatalf("send via the netmap's home relay: %v", err)
+	}
+	if got := relay.waitForward(t); got != (meshproto.NodeKey{9}) {
+		t.Fatalf("relay forwarded to %v", got)
+	}
+}
+
 // A relay whose link is unreachable must not take the node's traffic down: the
 // send falls back to the home relay, and an address that never dials just stays
 // absent.
@@ -198,6 +256,7 @@ func TestRelayPoolFallsBackWhenPeerRelayUnreachable(t *testing.T) {
 		t.Fatalf("dial home: %v", err)
 	}
 	defer p.Close()
+	waitAdmitted(t, p, home.addr)
 
 	peer := meshproto.NodeKey{2}
 	// 203.0.113.0/24 (TEST-NET-1) is unrouted: this relay can never link.

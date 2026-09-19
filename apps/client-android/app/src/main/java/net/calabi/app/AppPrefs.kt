@@ -3,6 +3,7 @@ package net.calabi.app
 import android.app.ActivityManager
 import android.app.ApplicationExitInfo
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Build
 import android.os.SystemClock
 
@@ -12,6 +13,8 @@ object AppPrefs {
     private const val CONNECT_ON_BOOT = "connect_on_boot"
     private const val REPLACE_DISMISSED = "replace_dismissed"
     private const val VPN_UP_AT = "vpn_up_at"
+    private const val TILE_ADDED = "tile_added"
+    private const val TILE_TIP_DISMISSED = "tile_tip_dismissed"
 
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
@@ -80,5 +83,39 @@ object AppPrefs {
     fun dismissReplace(context: Context, ids: Collection<Long>) {
         val all = replaceDismissed(context) + ids
         prefs(context).edit().putStringSet(REPLACE_DISMISSED, all.map { it.toString() }.toSet()).apply()
+    }
+
+    /**
+     * Whether the Quick Settings tile is in the panel, as its own callbacks last
+     * said. Android has no call that asks; a tile added before this was recorded
+     * shows up the first time the panel is opened with it in view.
+     */
+    fun tileAdded(context: Context): Boolean = prefs(context).getBoolean(TILE_ADDED, false)
+
+    fun setTileAdded(context: Context, added: Boolean) {
+        prefs(context).edit().putBoolean(TILE_ADDED, added).apply()
+    }
+
+    /**
+     * Calls [onChange] when [tileAdded] changes; returns the call that stops it.
+     * The tile is added from the notification shade, which does not pause the
+     * app, so a screen showing it cannot wait for a resume to find out. The tile
+     * service runs in this process, so its write arrives here directly.
+     */
+    fun watchTileAdded(context: Context, onChange: (Boolean) -> Unit): () -> Unit {
+        val p = prefs(context)
+        // Held here, not only by the prefs: they keep listeners weakly.
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
+            if (key == TILE_ADDED) onChange(sp.getBoolean(TILE_ADDED, false))
+        }
+        p.registerOnSharedPreferenceChangeListener(listener)
+        return { p.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    /** The user closed the "add the tile" card: the settings row stays, the card does not come back. */
+    fun tileTipDismissed(context: Context): Boolean = prefs(context).getBoolean(TILE_TIP_DISMISSED, false)
+
+    fun dismissTileTip(context: Context) {
+        prefs(context).edit().putBoolean(TILE_TIP_DISMISSED, true).apply()
     }
 }

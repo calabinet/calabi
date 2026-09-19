@@ -55,49 +55,34 @@ func publishConsoleURL(url string) {
 	}
 }
 
-// startStatusPage launches the local /status HTTP server in a background
-// goroutine. Bind failure (port in use, etc.) is logged but never fatal --
-// the tunnel always takes precedence over the diagnostics page.
+// startStatusPage launches a one-shot command's local /status page in a
+// background goroutine. Bind failure (port in use, etc.) is logged but never
+// fatal -- the tunnel always takes precedence over the diagnostics page.
 //
-// Address comes from CALABI_STATUS_ADDR or defaults to 127.0.0.1:7400.
-// Set CALABI_STATUS_ADDR=disabled to suppress entirely.
-func startStatusPage(logger *slog.Logger, state *status.State) {
-	startStatusPageWithAPI(logger, state, nil)
-}
-
-// startStatusPageWithAPI is the daemon-mode variant that also attaches
-// the writable /v1/* API surface. The api package builds its
-// own registrar so status.go doesn't need to depend on it.
+// Address comes from CALABI_STATUS_ADDR or defaults to 127.0.0.1:7400 (the
+// next free port when a daemon holds it). Set CALABI_STATUS_ADDR=disabled to
+// suppress entirely.
+//
+// It does NOT write console.url: that file says where this client's DAEMON is,
+// and `calabi join`, `calabi mesh up|down|status` and `calabi daemon status`
+// go there. A `calabi http` started beside the daemon used to take it over, and
+// those commands then spoke to the one-shot's page (404) instead.
 //
 // AllowBrowser: the local dashboard is reachable from a plain browser, not
 // just the Tauri desktop shell. The desktop-UA browserGuard was anti-footgun
 // (steer users to the desktop app), NOT a security boundary — it's trivially
-// bypassed with a curl -A header, mutating /v1/* stay local-token gated, and
-// the server only binds 127.0.0.1. Platform users asked to open :7400 in a
-// browser (screenshots / quick checks), so we relax it here too — matching
-// the standalone `--local` console (startLocalConsole).
-// startStatusPageWithAPI returns the ACTUAL console URL once bound (after any
-// port fallback), or "" if the console is disabled / didn't bind in time. The
-// daemon boot prints this so the user sees the real address rather than the
-// requested-but-maybe-wrong default.
-func startStatusPageWithAPI(logger *slog.Logger, state *status.State, attachAPI func(mux *http.ServeMux)) string {
+// bypassed with a curl -A header, and the server only binds 127.0.0.1.
+func startStatusPage(logger *slog.Logger, state *status.State) {
 	addr := envOr("CALABI_STATUS_ADDR", defaultStatusAddr)
 	if strings.EqualFold(addr, "disabled") || addr == "off" {
-		return ""
+		return
 	}
 	srv := status.NewServer(logger, state, addr)
 	srv.AllowBrowser()
 	configureConsoleUnlock(logger, srv, addr)
-	if attachAPI != nil {
-		srv.AttachAPI(attachAPI)
-	}
 	go func() {
 		_ = srv.Run(context.Background())
 	}()
-	url := waitConsoleURL(srv)
-	publishConsoleURL(url)
-	publishConsoleURLLate(srv, url)
-	return url
 }
 
 // waitConsoleURL blocks briefly for the server to report its real bound URL.
@@ -143,14 +128,19 @@ func publishConsoleURLLate(srv *status.Server, already string) {
 	}()
 }
 
-// startLocalConsole launches the status server with a LOCAL /v1/* API (no
-// bff-console proxy) and plain-browser access allowed — the self-hosted
-// read-only console for `calabi daemon --local`. attachAPI is
-// localweb.Server.Register. See internal/localweb + daemon_local.go.
-func startLocalConsole(logger *slog.Logger, state *status.State, attachAPI func(mux *http.ServeMux)) string {
+// startDaemonConsole is the daemons' console: the status server with the
+// daemon's /v1/* API (statusapi for the platform daemon, localweb for the local
+// one) and plain-browser access allowed. It stops when ctx ends; done closes once
+// the listener is released, which is what lets the other daemon take the same
+// port when the console switches between calabi.net and a self-hosted server
+// (daemon_restart.go) — bound while the old one still held it, it would fall
+// back to the next port and the open page would lose its daemon.
+func startDaemonConsole(ctx context.Context, logger *slog.Logger, state *status.State, attachAPI func(mux *http.ServeMux)) (string, <-chan struct{}) {
+	done := make(chan struct{})
 	addr := envOr("CALABI_STATUS_ADDR", defaultStatusAddr)
 	if strings.EqualFold(addr, "disabled") || addr == "off" {
-		return ""
+		close(done)
+		return "", done
 	}
 	srv := status.NewServer(logger, state, addr)
 	srv.AllowBrowser()
@@ -159,12 +149,13 @@ func startLocalConsole(logger *slog.Logger, state *status.State, attachAPI func(
 		srv.AttachAPI(attachAPI)
 	}
 	go func() {
-		_ = srv.Run(context.Background())
+		defer close(done)
+		_ = srv.Run(ctx)
 	}()
 	url := waitConsoleURL(srv)
 	publishConsoleURL(url)
 	publishConsoleURLLate(srv, url)
-	return url
+	return url, done
 }
 
 // loggingHub is a thin accessor so the daemon command can defer Close() on the
@@ -274,6 +265,9 @@ func main() {
 		os.Exit(2)
 	case "login":
 		os.Exit(runLogin(rest))
+	case "join":
+		// A self-hosted server's invite: the counterpart of login.
+		os.Exit(runJoin(rest))
 	case "logout":
 		os.Exit(runLogout(rest))
 	case "certs":
@@ -320,6 +314,9 @@ func printUsage() {
 Usage:
   calabi login    [--email EMAIL] [--password PW] [--totp CODE]
   calabi logout
+  calabi join     [--name NAME] <invite>
+     (self-hosted: join your server with the calabi://join link
+      "calabi-coord invite" prints; then tunnels and the mesh work)
   calabi certs    {upload|list|delete <id>} [--fullchain F] [--key K] [--name N]
   calabi domains  {create|verify|bind-cert|list|delete} <domain> [<cert-name>]
   calabi clients  {list|register}
@@ -329,18 +326,18 @@ Usage:
      (stay online without opening any tunnel; the web console shows
       this client as online as long as the process is running)
   calabi daemon --local --config tunnels.yaml
-     (self-hosted: run every tunnel from a local YAML config against your
-      own edge, with per-tunnel access control; auto-reconnects. No account
-      or control plane needed. See docs/examples/tunnels.yaml)
+     (self-hosted: run every tunnel from a local YAML config, with
+      per-tunnel access control, on the edge of the server this device
+      joined; auto-reconnects. See docs/examples/tunnels.yaml)
   calabi daemon install --config tunnels.yaml
      (install the local daemon as a boot-start OS service; then manage with
       calabi daemon {start|stop|status|restart|uninstall})
   calabi http <local-port> [--name NAME] [--domain DOMAIN]
   calabi tcp  <local-port> [--name NAME] [--remote-port N]
   calabi udp  <local-port> [--name NAME] [--remote-port N]
-  calabi mesh up --coord HOST:PORT --relay HOST:PORT --auth-key KEY
-     (join a private WireGuard mesh — device to device; needs a tun
-      device + privileges. See "calabi mesh help".)
+  calabi mesh {up|down|status}
+     (switch the running daemon's mesh on or off — device to device over
+      WireGuard; tunnels keep working either way. See "calabi mesh help".)
   calabi update [--check]
      (check for a new client version; install it when this machine can)
   calabi version
@@ -365,15 +362,15 @@ Environment:
                        for login / keys / certs / domains / org
                        (overrides the build-time default endpoint)
   CALABI_SERVER        calabi-edge host:port — pins the edge instead of
-                       discovering it through your account (advanced;
-                       required in standalone mode)
+                       discovering it through your account (advanced)
   CALABI_API_KEY       API key (tk_…) for running tunnels; overrides creds file
   CALABI_TOKEN         legacy alias of CALABI_API_KEY (back-compat)
   CALABI_INSECURE      "1" to skip TLS verification (dev)
-  CALABI_DEBUG         "1" for verbose logging
+  CALABI_DEBUG        "1" for verbose logging
   CALABI_CONFIG        path to credentials file (default: per-OS config dir)
-  CALABI_MODE          platform | standalone -- standalone keeps this client
-                       off the control plane entirely (see "calabi mode")
+  CALABI_MODE          platform | standalone -- standalone: this client uses
+                       the self-hosted server it joined, not calabi.net
+                       (see "calabi mode")
   CALABI_UPDATE_MANIFEST
                        signed update-manifest URL, checked only by a
                        machine-wide service (daemon install --system);
@@ -449,9 +446,14 @@ func withSignalContext() (context.Context, context.CancelFunc) {
 	// closed by serviceProgram.Stop). serviceStop only ever closes under a
 	// service-manager launch, so foreground commands are unaffected. The
 	// goroutine exits on ctx.Done(), so short-lived commands don't leak it.
+	//
+	// And when the console switches the daemon between calabi.net and a
+	// self-hosted server (requestDaemonRestart): runDaemon then starts it again.
 	go func() {
 		select {
 		case <-serviceStop:
+			cancel()
+		case <-restartCh:
 			cancel()
 		case <-ctx.Done():
 		}
@@ -495,17 +497,6 @@ const edgeDiscoveryTimeout = 20 * time.Second
 func requireEdgeAddr(logger *slog.Logger, cmd string) string {
 	if addr := envOr("CALABI_SERVER", defaultServer); addr != "" {
 		return addr
-	}
-
-	// Discovery asks a control plane which edges exist. A standalone client has
-	// none, so the question itself is wrong there: don't ask it, and don't
-	// blame the network for the empty answer.
-	if clientIsStandalone() {
-		fmt.Fprintf(os.Stderr, "calabi %s: no edge address.\n"+
-			"  This client is in standalone mode, so there is no control plane to ask which\n"+
-			"  edge to dial. Set CALABI_SERVER=<edge-host>:7443 to name yours (or run\n"+
-			"  `calabi mode platform` if you meant to use the managed platform).\n", cmd)
-		return ""
 	}
 
 	// No credential means no discovery AND no handshake: /v1/edges answers 401,

@@ -25,6 +25,8 @@ import (
 	"github.com/calabi/calabi/apps/client/internal/localweb"
 	"github.com/calabi/calabi/apps/client/internal/mesh"
 	"github.com/calabi/calabi/apps/client/internal/platform/meshenroll"
+	"github.com/calabi/calabi/apps/client/internal/selfhosted"
+	"github.com/calabi/calabi/apps/client/internal/trust"
 )
 
 // meshConfig is the daemon YAML `mesh:` block. Empty/disabled = the daemon runs
@@ -32,10 +34,19 @@ import (
 type meshConfig struct {
 	Enabled bool   `yaml:"enabled,omitempty"`
 	Coord   string `yaml:"coord,omitempty"`    // coordinator host:port (prod: your bff-console entrypoint)
-	Relay   string `yaml:"relay,omitempty"`    // relay host:port (this node's DERP home)
+	Relay   string `yaml:"relay,omitempty"`    // relay host:port to start on; optional — else the coordinator's relay map decides
 	AuthKey string `yaml:"auth_key,omitempty"` // tk_ key (platform) or pre-shared key (self-hosted)
-	Name    string `yaml:"name,omitempty"`     // node name for MagicDNS; defaults to hostname
-	KeyFile string `yaml:"key_file,omitempty"` // WireGuard private key path; default per-OS config dir
+	// Trust, Pins and CAFile say how the coordinator's certificate is checked: trust is "system", "pin"
+	// (with pins), "ca" (with ca_file), "plaintext" or "platform". Unset, the
+	// daemon decides; see coordTrust.
+	Trust  string   `yaml:"trust,omitempty"`
+	Pins   []string `yaml:"pins,omitempty"`
+	CAFile string   `yaml:"ca_file,omitempty"`
+	// PlatformCoord marks a lease the platform daemon built from its own
+	// enrollment: the coordinator is calabi.net's. Code-only, hence yaml:"-".
+	PlatformCoord bool   `yaml:"-"`
+	Name          string `yaml:"name,omitempty"`     // node name for MagicDNS; defaults to hostname
+	KeyFile       string `yaml:"key_file,omitempty"` // WireGuard private key path; default per-OS config dir
 	// AdvertiseRoutes are subnet-router CIDRs this node offers to forward (MESH.7),
 	// e.g. ["192.168.1.0/24"]. Enables local forwarding + NAT on Linux.
 	AdvertiseRoutes []string `yaml:"advertise_routes,omitempty"`
@@ -120,9 +131,16 @@ type meshServiceDecl struct {
 	Note   string `yaml:"note,omitempty"`
 }
 
-// complete reports whether the block has the minimum a node needs to join.
+// complete reports whether the block has the minimum a node needs to join. The
+// relay is not part of it: without one the node takes its home relay from the
+// coordinator's relay map.
 func (m meshConfig) complete() bool {
-	return m.Coord != "" && m.Relay != "" && m.AuthKey != ""
+	return m.Coord != "" && m.AuthKey != ""
+}
+
+// coordTrust is how this node checks the coordinator's certificate.
+func (m meshConfig) coordTrust(authKey string) (trust.Config, error) {
+	return coordTrust(coordTrustSpec{Mode: m.Trust, Pins: m.Pins, CAFile: m.CAFile, Platform: m.PlatformCoord}, authKey)
 }
 
 // meshRunner owns the mesh subsystem's lifecycle inside the daemon: it brings the
@@ -149,6 +167,29 @@ type meshRunner struct {
 	// else to. refreshGate is its cooldown; loop goroutine only.
 	refreshFn   func(context.Context) string
 	refreshGate meshenroll.RefreshGate
+
+	// reauth carries "this device is node N and may come back by proof alone"
+	// from one session to the next, so a reconnect does not present the auth
+	// key. One runner is one
+	// meshnet: the platform lease builds a new runner when the org changes.
+	reauth *mesh.ReauthState
+
+	// tunnels, when set, are the tunnels this daemon serves, reported to a
+	// self-hosted coordinator for the meshnet's phones. Only the local daemon sets
+	// it; it outlives each session like reauth. A platform coordinator refuses
+	// the report and the session stops sending it.
+	tunnels *mesh.TunnelMeter
+
+	// certs, when set, records that a self-hosted coordinator presented a
+	// certificate the node's trust refuses (only the local daemon sets it; the
+	// platform's coordinator is checked against the CA compiled in, and a
+	// mismatch there is not the user's to accept). lastRegistered says whether
+	// the session that just ended got as far as registering — one that did was
+	// not stopped by the certificate.
+	certs          *certWatch
+	lastRegistered bool
+	// lastErr is how the last session ended; r.mu.
+	lastErr error
 
 	// tune is the retry loop's knobs and steps; the zero value is production.
 	// Only tests set it (see loop).
@@ -177,7 +218,7 @@ func (r *meshRunner) authKey() string {
 // localweb API as a MeshSource before the daemon's signal context exists. Call
 // Start to launch it.
 func newMeshRunner(logger *slog.Logger, cfg meshConfig) *meshRunner {
-	return &meshRunner{cfg: cfg, logger: logger}
+	return &meshRunner{cfg: cfg, logger: logger, reauth: mesh.NewReauthState(0, false, nil)}
 }
 
 // Start launches the background loop bound to parent's lifetime. Idempotent-safe
@@ -287,12 +328,16 @@ func (r *meshRunner) loop(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
+		r.mu.Lock()
+		r.lastErr = err
+		r.mu.Unlock()
 		if time.Since(started) >= t.healthySession {
 			backoff = t.minBackoff // that session worked; don't punish the next one
 		}
 		if r.refreshAfterDenial(ctx, err) {
 			backoff = t.minBackoff // a fresh credential is worth trying straight away
 		}
+		r.checkCoordCert(ctx)
 		// Deliberately NOT an error about the mesh being down: the tun device,
 		// the peers and the relay links are all still up and carrying traffic.
 		// Only the coordinator connection is being re-established.
@@ -426,7 +471,12 @@ func (r *meshRunner) runControlPlane(ctx context.Context, data *meshDataPlane) e
 	ctx, endSession := context.WithCancel(ctx)
 	defer endSession()
 
-	conn, err := dialCoord(r.cfg.Coord)
+	authKey := r.authKey()
+	t, err := r.cfg.coordTrust(authKey)
+	if err != nil {
+		return fmt.Errorf("coordinator trust: %w", err)
+	}
+	conn, err := dialCoord(r.cfg.Coord, t)
 	if err != nil {
 		return fmt.Errorf("coordinator dial: %w", err)
 	}
@@ -440,8 +490,10 @@ func (r *meshRunner) runControlPlane(ctx context.Context, data *meshDataPlane) e
 		Coord:    mesh.NewCoordClient(conn),
 		Datapath: data.dp,
 		DNS:      data.dns,
+		Reauth:   r.reauth,
+		Tunnels:  r.tunnels,
 		Params: mesh.RegisterParams{
-			AuthKey:           r.authKey(),
+			AuthKey:           authKey,
 			NodeKey:           data.key.Public(),
 			NodePrivate:       data.key,
 			Name:              name,
@@ -468,9 +520,71 @@ func (r *meshRunner) runControlPlane(ctx context.Context, data *meshDataPlane) e
 		if r.ctrl == ctrl {
 			r.ctrl = nil
 		}
+		r.lastRegistered = ctrl.Registered()
 		r.mu.Unlock()
 	}()
 	return ctrl.Run(ctx)
+}
+
+// checkCoordCert runs after a session ended without registering: it tells a
+// coordinator that is down from one whose certificate this node's trust now
+// refuses, which only a person can accept (they compare it with what
+// `calabi-coord fingerprint` prints). The loop keeps retrying either way.
+func (r *meshRunner) checkCoordCert(ctx context.Context) {
+	if r.certs == nil || r.cfg.PlatformCoord {
+		return
+	}
+	r.mu.Lock()
+	registered := r.lastRegistered
+	r.mu.Unlock()
+	if registered {
+		r.certs.clear()
+		return
+	}
+	t, err := r.cfg.coordTrust(r.authKey())
+	if err != nil || t.Mode == trust.Plaintext || t.Mode == trust.Platform {
+		return
+	}
+	pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	presented := selfhosted.CertRefused(pctx, r.cfg.Coord, t, selfhosted.CoordALPN)
+	if presented == "" {
+		r.certs.clear()
+		return
+	}
+	if was, _ := r.certs.get(); was != presented {
+		r.logger.Warn("mesh: the coordinator presents a certificate this device does not trust; confirm it in the console",
+			"coord", r.cfg.Coord, "presented", presented, "trust", t.Mode)
+	}
+	r.certs.set(presented, firstPin(t))
+}
+
+// coordCert is the certificate problem to show, if any: none while a session is
+// registered, whatever an earlier attempt found.
+func (r *meshRunner) coordCert() (presented, pinned string) {
+	if r.certs == nil {
+		return "", ""
+	}
+	r.mu.Lock()
+	ctrl := r.ctrl
+	r.mu.Unlock()
+	if ctrl != nil && ctrl.Registered() {
+		r.certs.clear()
+		return "", ""
+	}
+	return r.certs.get()
+}
+
+// liveCoord is the running session's coordinator client once it has
+// registered, else nil.
+func (r *meshRunner) liveCoord() *mesh.CoordClient {
+	r.mu.Lock()
+	ctrl := r.ctrl
+	r.mu.Unlock()
+	if ctrl != nil && ctrl.Registered() {
+		return ctrl.Coord
+	}
+	return nil
 }
 
 // declaredServices converts the config block into what the coordinator accepts.

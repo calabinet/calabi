@@ -310,7 +310,7 @@ func relayAddrFromDaemon() (string, error) {
 		return "", fmt.Errorf("bad response from the daemon: %w", err)
 	}
 	if st.Relay == "" {
-		return "", fmt.Errorf("the daemon reports no relay")
+		return "", fmt.Errorf("the daemon has no home relay yet — without a configured relay it takes one from the coordinator's relay map once connected; pass --relay to test a specific one")
 	}
 	return st.Relay, nil
 }

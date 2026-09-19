@@ -88,6 +88,12 @@ func (MeshNode) Fields() []ent.Field {
 		field.Bool("disabled").
 			Default(false).
 			Comment("admin kill switch (MESH.8b): dropped from netmaps + refused on re-register"),
+		field.String("enrolled_by").
+			Default("").
+			Comment("principal of the auth key the node last enrolled with (user:<id> / apikey:<id>; empty for a self-hosted key); rechecked on re-registration by proof alone"),
+		field.Bool("signed_out").
+			Default(false).
+			Comment("the device signed out: no re-registration by proof alone until it enrolls with an auth key again"),
 		field.Time("created_at").
 			Default(time.Now).
 			Immutable(),

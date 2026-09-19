@@ -164,6 +164,16 @@ func Disabled(v bool) predicate.MeshNode {
 	return predicate.MeshNode(sql.FieldEQ(FieldDisabled, v))
 }
 
+// EnrolledBy applies equality check predicate on the "enrolled_by" field. It's identical to EnrolledByEQ.
+func EnrolledBy(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldEnrolledBy, v))
+}
+
+// SignedOut applies equality check predicate on the "signed_out" field. It's identical to SignedOutEQ.
+func SignedOut(v bool) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldSignedOut, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.MeshNode {
 	return predicate.MeshNode(sql.FieldEQ(FieldCreatedAt, v))
@@ -1232,6 +1242,81 @@ func DisabledEQ(v bool) predicate.MeshNode {
 // DisabledNEQ applies the NEQ predicate on the "disabled" field.
 func DisabledNEQ(v bool) predicate.MeshNode {
 	return predicate.MeshNode(sql.FieldNEQ(FieldDisabled, v))
+}
+
+// EnrolledByEQ applies the EQ predicate on the "enrolled_by" field.
+func EnrolledByEQ(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldEnrolledBy, v))
+}
+
+// EnrolledByNEQ applies the NEQ predicate on the "enrolled_by" field.
+func EnrolledByNEQ(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNEQ(FieldEnrolledBy, v))
+}
+
+// EnrolledByIn applies the In predicate on the "enrolled_by" field.
+func EnrolledByIn(vs ...string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldIn(FieldEnrolledBy, vs...))
+}
+
+// EnrolledByNotIn applies the NotIn predicate on the "enrolled_by" field.
+func EnrolledByNotIn(vs ...string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNotIn(FieldEnrolledBy, vs...))
+}
+
+// EnrolledByGT applies the GT predicate on the "enrolled_by" field.
+func EnrolledByGT(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldGT(FieldEnrolledBy, v))
+}
+
+// EnrolledByGTE applies the GTE predicate on the "enrolled_by" field.
+func EnrolledByGTE(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldGTE(FieldEnrolledBy, v))
+}
+
+// EnrolledByLT applies the LT predicate on the "enrolled_by" field.
+func EnrolledByLT(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldLT(FieldEnrolledBy, v))
+}
+
+// EnrolledByLTE applies the LTE predicate on the "enrolled_by" field.
+func EnrolledByLTE(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldLTE(FieldEnrolledBy, v))
+}
+
+// EnrolledByContains applies the Contains predicate on the "enrolled_by" field.
+func EnrolledByContains(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldContains(FieldEnrolledBy, v))
+}
+
+// EnrolledByHasPrefix applies the HasPrefix predicate on the "enrolled_by" field.
+func EnrolledByHasPrefix(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldHasPrefix(FieldEnrolledBy, v))
+}
+
+// EnrolledByHasSuffix applies the HasSuffix predicate on the "enrolled_by" field.
+func EnrolledByHasSuffix(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldHasSuffix(FieldEnrolledBy, v))
+}
+
+// EnrolledByEqualFold applies the EqualFold predicate on the "enrolled_by" field.
+func EnrolledByEqualFold(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEqualFold(FieldEnrolledBy, v))
+}
+
+// EnrolledByContainsFold applies the ContainsFold predicate on the "enrolled_by" field.
+func EnrolledByContainsFold(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldContainsFold(FieldEnrolledBy, v))
+}
+
+// SignedOutEQ applies the EQ predicate on the "signed_out" field.
+func SignedOutEQ(v bool) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldSignedOut, v))
+}
+
+// SignedOutNEQ applies the NEQ predicate on the "signed_out" field.
+func SignedOutNEQ(v bool) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNEQ(FieldSignedOut, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

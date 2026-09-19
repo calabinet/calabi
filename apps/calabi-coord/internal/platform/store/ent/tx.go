@@ -18,6 +18,8 @@ type Tx struct {
 	MeshACL *MeshACLClient
 	// MeshACLRevision is the client for interacting with the MeshACLRevision builders.
 	MeshACLRevision *MeshACLRevisionClient
+	// MeshAuthKey is the client for interacting with the MeshAuthKey builders.
+	MeshAuthKey *MeshAuthKeyClient
 	// MeshConnRecord is the client for interacting with the MeshConnRecord builders.
 	MeshConnRecord *MeshConnRecordClient
 	// MeshNode is the client for interacting with the MeshNode builders.
@@ -28,6 +30,10 @@ type Tx struct {
 	MeshService *MeshServiceClient
 	// MeshSetting is the client for interacting with the MeshSetting builders.
 	MeshSetting *MeshSettingClient
+	// MeshTunnel is the client for interacting with the MeshTunnel builders.
+	MeshTunnel *MeshTunnelClient
+	// MeshTunnelUsage is the client for interacting with the MeshTunnelUsage builders.
+	MeshTunnelUsage *MeshTunnelUsageClient
 
 	// lazily loaded.
 	client     *Client
@@ -162,11 +168,14 @@ func (tx *Tx) init() {
 	tx.CoordSetting = NewCoordSettingClient(tx.config)
 	tx.MeshACL = NewMeshACLClient(tx.config)
 	tx.MeshACLRevision = NewMeshACLRevisionClient(tx.config)
+	tx.MeshAuthKey = NewMeshAuthKeyClient(tx.config)
 	tx.MeshConnRecord = NewMeshConnRecordClient(tx.config)
 	tx.MeshNode = NewMeshNodeClient(tx.config)
 	tx.MeshRelay = NewMeshRelayClient(tx.config)
 	tx.MeshService = NewMeshServiceClient(tx.config)
 	tx.MeshSetting = NewMeshSettingClient(tx.config)
+	tx.MeshTunnel = NewMeshTunnelClient(tx.config)
+	tx.MeshTunnelUsage = NewMeshTunnelUsageClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.

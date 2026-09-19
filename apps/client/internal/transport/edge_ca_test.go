@@ -8,10 +8,13 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
+	"io/fs"
 	"math/big"
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -98,7 +101,7 @@ func TestEdgeRootCAs_VerifiesLeaf(t *testing.T) {
 	_, port, _ := net.SplitHostPort(ln.Addr().String())
 
 	// Positive: trust the CA via edgeRootCAs(extraFile) -> handshake OK.
-	pool, err := edgeRootCAs(caFile)
+	pool, err := edgeRootCAs(embeddedEdgeCA, caFile)
 	if err != nil {
 		t.Fatalf("edgeRootCAs: %v", err)
 	}
@@ -122,43 +125,90 @@ func TestEdgeRootCAs_VerifiesLeaf(t *testing.T) {
 	}
 }
 
-// TestEdgeRootCAs_FailsClosed proves we error rather than silently trust
-// nothing when neither an embedded root nor a CA file is available. Skips
-// on a production build whose certs/edge-ca.pem holds a real root.
+// trusts reports whether pool verifies leaf for localhost — i.e. the pool
+// really holds leaf's CA, which a bare non-nil check can't tell.
+func trusts(t *testing.T, pool *x509.CertPool, leaf tls.Certificate) bool {
+	t.Helper()
+	cert, err := x509.ParseCertificate(leaf.Certificate[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = cert.Verify(x509.VerifyOptions{Roots: pool, DNSName: "localhost"})
+	return err == nil
+}
+
+// TestEdgeRootCAs_FailsClosed covers a build with no embedded root, where
+// CALABI_EDGE_CA_FILE is the only possible trust. No build we ship is like
+// that (the tree carries the dev CA, releases the real root), so the root is
+// handed in empty rather than read from certs/edge-ca.pem — otherwise this
+// could only ever skip.
+//
+// The error cases check WHICH error came back, not just that one did: a
+// broken branch falls through to the final "no edge CA root available",
+// which would still be an error and still name CALABI_EDGE_CA_FILE.
 func TestEdgeRootCAs_FailsClosed(t *testing.T) {
-	if len(embeddedEdgeCA) > 0 {
-		p := x509.NewCertPool()
-		if p.AppendCertsFromPEM(embeddedEdgeCA) {
-			t.Skip("binary has a real embedded edge CA; fail-closed path not exercised")
-		}
+	caPEM, leaf := makeCAAndLeaf(t)
+	dir := t.TempDir()
+	goodCA := filepath.Join(dir, "ca.pem")
+	if err := os.WriteFile(goodCA, caPEM, 0o600); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := edgeRootCAs(""); err == nil {
-		t.Fatal(`edgeRootCAs("") with the placeholder embed should fail closed`)
+	junk := filepath.Join(dir, "junk.pem")
+	if err := os.WriteFile(junk, []byte("not a certificate\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name      string
+		extraFile string
+		wantErr   string // substring; "" means a pool is expected
+		wantIs    error
+	}{
+		{"no extra file", "", "no edge CA root available", nil},
+		{"missing extra file", filepath.Join(dir, "does-not-exist", "ca.crt"), "CALABI_EDGE_CA_FILE", fs.ErrNotExist},
+		{"extra file without PEM", junk, "no PEM certificates", nil},
+		{"valid extra file", goodCA, "", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pool, err := edgeRootCAs(nil, tc.extraFile)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("a readable CA file should be enough trust on its own: %v", err)
+				}
+				if !trusts(t, pool, leaf) {
+					t.Fatal("pool does not trust the CALABI_EDGE_CA_FILE root")
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("want an error containing %q, got a pool — fail-open", tc.wantErr)
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("error %q does not contain %q", err, tc.wantErr)
+			}
+			if tc.wantIs != nil && !errors.Is(err, tc.wantIs) {
+				t.Fatalf("error %q does not wrap %v", err, tc.wantIs)
+			}
+		})
 	}
 }
 
-// hasEmbeddedRoot reports whether this build carries a real embedded edge CA
-// (true for dev/release, false for the OSS placeholder).
-func hasEmbeddedRoot() bool {
-	return len(embeddedEdgeCA) > 0 && x509.NewCertPool().AppendCertsFromPEM(embeddedEdgeCA)
-}
-
-// TestEdgeRootCAs_StaleExtraFileTolerated: with a real embedded root, a
+// TestEdgeRootCAs_StaleExtraFileTolerated: with an embedded root, a
 // CALABI_EDGE_CA_FILE that points at a missing path is NON-FATAL — the
 // embedded root already provides trust, so a stale/relative env var left over
 // from a dev shell must not break the dial. (Regression: the daemon used to
-// hard-fail "read CALABI_EDGE_CA_FILE ...: cannot find the path".)
+// hard-fail "read CALABI_EDGE_CA_FILE ...: cannot find the path".) The root is
+// minted here so the test doesn't depend on what certs/edge-ca.pem holds.
 func TestEdgeRootCAs_StaleExtraFileTolerated(t *testing.T) {
-	if !hasEmbeddedRoot() {
-		t.Skip("placeholder build has no embedded root; the extra file is the only trust")
-	}
+	rootPEM, leaf := makeCAAndLeaf(t)
 	missing := filepath.Join(t.TempDir(), "does-not-exist", "ca.crt")
-	pool, err := edgeRootCAs(missing)
+	pool, err := edgeRootCAs(rootPEM, missing)
 	if err != nil {
 		t.Fatalf("a stale CALABI_EDGE_CA_FILE should be tolerated when embedded root is present: %v", err)
 	}
-	if pool == nil {
-		t.Fatal("expected the embedded-root pool, got nil")
+	if !trusts(t, pool, leaf) {
+		t.Fatal("expected the embedded-root pool")
 	}
 }
 
@@ -166,11 +216,12 @@ func TestEdgeRootCAs_StaleExtraFileTolerated(t *testing.T) {
 // no PEM certs is a real misconfiguration and still errors, even with an
 // embedded root — we only tolerate *absence*, not garbage.
 func TestEdgeRootCAs_MalformedExtraFileFails(t *testing.T) {
+	rootPEM, _ := makeCAAndLeaf(t)
 	bad := filepath.Join(t.TempDir(), "junk.pem")
 	if err := os.WriteFile(bad, []byte("not a certificate\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := edgeRootCAs(bad); err == nil {
+	if _, err := edgeRootCAs(rootPEM, bad); err == nil {
 		t.Fatal("a present-but-malformed CALABI_EDGE_CA_FILE should fail")
 	}
 }

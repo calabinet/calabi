@@ -2,6 +2,7 @@ package mobile
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/calabi/calabi/apps/client/internal/mesh"
 	"github.com/calabi/calabi/apps/client/internal/platform/meshenroll"
+	"github.com/calabi/calabi/apps/client/internal/selfhosted"
+	"github.com/calabi/calabi/apps/client/internal/trust"
 )
 
 // Connection states reported by GET /v1/mesh.
@@ -22,6 +25,10 @@ const (
 	stateNotEnrolled = "not_enrolled" // signed in, but this org has no meshnet access
 	stateSignedOut   = "signed_out"   // the session was refused and could not be renewed
 	stateRetrying    = "retrying"     // the last attempt failed; trying again
+	// A self-hosted server's answers (selfhosted.go):
+	stateNeedsInvite = "needs_invite" // it will not take this phone back: deleted, signed out, or the key refused
+	stateDisabled    = "disabled"     // an admin disabled this phone there
+	stateCertChanged = "cert_changed" // it presents a certificate this phone does not trust; a person has to confirm it
 )
 
 // phoneTiming is how often a phone's session does its periodic work
@@ -72,22 +79,39 @@ type engine struct {
 	// a burst of changes is one retry.
 	kick chan struct{}
 
-	mu       sync.Mutex
-	state    string
-	lastErr  string
-	enr      meshenroll.Enrollment
-	settings settings
-	dp       *mesh.WGDatapath
-	ctrl     *mesh.Controller
+	mu      sync.Mutex
+	state   string
+	lastErr string
+	// presented is the fingerprint the server showed instead of the trusted
+	// one, while the state is stateCertChanged.
+	presented string
+	enr       meshenroll.Enrollment
+	settings  settings
+	dp        *mesh.WGDatapath
+	ctrl      *mesh.Controller
 	// sessionStarted is when ctrl's session began; lastChange when the platform
 	// last reported a network change.
 	sessionStarted time.Time
 	lastChange     time.Time
+
+	// reauth carries "this phone is node N and may come back by proof alone"
+	// from one coordinator session to the next. One engine is one org's
+	// meshnet: switching org restarts the engine (Core.reconnect).
+	reauth *mesh.ReauthState
+	// profile is the self-hosted server this engine joins; nil = calabi.net.
+	// Fixed for the engine's life: joining another restarts it.
+	profile *profile
 }
 
 func startEngine(c *Core) *engine {
 	ctx, cancel := context.WithCancel(context.Background())
-	e := &engine{c: c, cancel: cancel, done: make(chan struct{}), kick: make(chan struct{}, 1), state: stateConnecting}
+	e := &engine{c: c, cancel: cancel, done: make(chan struct{}), kick: make(chan struct{}, 1), state: stateConnecting,
+		reauth: mesh.NewReauthState(0, false, nil), profile: c.selfHosted()}
+	if p := e.profile; p != nil {
+		// Persisted: a phone that has forgotten its auth key must still come
+		// back after the app restarts.
+		e.reauth = mesh.NewReauthState(p.NodeID, p.Reauth, c.recordReauth)
+	}
 	go e.run(ctx)
 	return e
 }
@@ -124,6 +148,9 @@ func (e *engine) setState(state string, err error) {
 	e.lastErr = ""
 	if err != nil {
 		e.lastErr = err.Error()
+	}
+	if state != stateCertChanged {
+		e.presented = ""
 	}
 }
 
@@ -224,11 +251,21 @@ func (e *engine) run(ctx context.Context) {
 		if time.Since(started) > time.Minute {
 			backoff = minBackoff
 		}
-		if gate.AfterDenial(ctx, err, e.c.refreshBearer) {
+		switch {
+		case e.profile != nil:
+			handled, ok := e.selfHostedEnded(ctx, err)
+			if !ok {
+				return
+			}
+			if handled {
+				continue
+			}
+			e.setState(stateRetrying, err)
+		case gate.AfterDenial(ctx, err, e.c.refreshBearer):
 			backoff = minBackoff
-		} else if isDenied(err) {
+		case isDenied(err):
 			e.setState(stateSignedOut, err)
-		} else {
+		default:
 			e.setState(stateRetrying, err)
 		}
 		logger.Warn("mesh session ended; reconnecting", "backoff", backoff.String(), "err", err)
@@ -244,9 +281,59 @@ func (e *engine) run(ctx context.Context) {
 	}
 }
 
+// selfHostedEnded handles the ends of a self-hosted session that retrying on the
+// usual backoff cannot fix. handled is false for every other end, which the
+// caller retries like any session; ok is false when the engine should stop (the
+// server will not take this phone back without a new invite).
+func (e *engine) selfHostedEnded(ctx context.Context, err error) (handled, ok bool) {
+	logger := e.c.logger.With("component", "mesh")
+	if errors.Is(err, mesh.ErrRegister) {
+		switch status.Code(err) {
+		case codes.NotFound, codes.FailedPrecondition, codes.Unauthenticated:
+			// Retrying cannot help: the device was deleted or signed out, or
+			// the key it still had was refused. The app offers to join again.
+			e.setState(stateNeedsInvite, err)
+			logger.Warn("the self-hosted server will not take this phone back; it needs a new invite", "err", err)
+			<-ctx.Done()
+			return true, false
+		case codes.PermissionDenied:
+			e.setState(stateDisabled, err)
+			logger.Warn("this phone is disabled on the self-hosted server", "err", err)
+			ok, _ := e.retryWait(ctx, notEnrolledRecheck)
+			return true, ok
+		}
+	}
+	// A handshake the saved trust refused reads as Unavailable, like a server
+	// that is down. Tell them apart with one handshake of our own: a certificate
+	// that changed is the server's administrator's doing or someone standing in
+	// for the server, and only a person can say which.
+	if status.Code(err) == codes.Unavailable {
+		pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		presented := selfhosted.CertRefused(pctx, e.profile.Server, e.profile.Trust, selfhosted.CoordALPN)
+		cancel()
+		if presented != "" {
+			e.setState(stateCertChanged, err)
+			e.mu.Lock()
+			e.presented = presented
+			e.mu.Unlock()
+			logger.Warn("the self-hosted server presents a certificate this phone does not trust; not connecting until someone confirms it",
+				"presented", presented)
+			// Still tried now and then: an administrator who restores the old
+			// certificate brings the phone back without anyone touching it.
+			ok, _ := e.retryWait(ctx, notEnrolledRecheck)
+			return true, ok
+		}
+	}
+	return false, true
+}
+
 // enroll asks the control plane where this phone's meshnet is, until it gets an
-// answer that says to run or the engine stops.
+// answer that says to run or the engine stops. A self-hosted server needs no
+// asking: it is the address the phone joined.
 func (e *engine) enroll(ctx context.Context) (meshenroll.Enrollment, bool) {
+	if p := e.profile; p != nil {
+		return meshenroll.Enrollment{Enabled: true, CoordAddr: p.Server}, true
+	}
 	backoff := minBackoff
 	for {
 		tok := e.c.bearer()
@@ -290,7 +377,15 @@ func (e *engine) enroll(ctx context.Context) (meshenroll.Enrollment, bool) {
 // session is one coordinator connection: register, then apply netmaps until
 // the stream ends.
 func (e *engine) session(ctx context.Context, enr meshenroll.Enrollment, priv mesh.PrivateKey, st settings, dp *mesh.WGDatapath) error {
-	conn, err := meshenroll.DialCoord(enr.CoordAddr, e.c.cfg.CoordPlaintext)
+	coordTrust, authKey := e.c.coordTrust(), e.c.bearer()
+	if p := e.profile; p != nil {
+		coordTrust, authKey = p.Trust, e.c.authKey()
+	}
+	tlsCfg, err := coordTrust.TLS(enr.CoordAddr)
+	if err != nil {
+		return fmt.Errorf("coordinator trust: %w", err)
+	}
+	conn, err := meshenroll.DialCoord(enr.CoordAddr, tlsCfg)
 	if err != nil {
 		return fmt.Errorf("coordinator dial: %w", err)
 	}
@@ -299,8 +394,9 @@ func (e *engine) session(ctx context.Context, enr meshenroll.Enrollment, priv me
 	ctrl := &mesh.Controller{
 		Coord:    mesh.NewCoordClient(conn),
 		Datapath: dp,
+		Reauth:   e.reauth,
 		Params: mesh.RegisterParams{
-			AuthKey:     e.c.bearer(),
+			AuthKey:     authKey,
 			NodeKey:     priv.Public(),
 			NodePrivate: priv,
 			Name:        st.DeviceName,
@@ -328,7 +424,7 @@ func (e *engine) session(ctx context.Context, enr meshenroll.Enrollment, priv me
 	go func() {
 		for ctx.Err() == nil {
 			if overlay := dp.Snapshot().Overlay; overlay != "" {
-				e.c.rememberSelf(enr.OrgID, overlay)
+				e.c.rememberSelf(e.selfKey(enr.OrgID), overlay)
 				e.mu.Lock()
 				if e.ctrl == ctrl && e.state == stateConnecting {
 					e.state, e.lastErr = stateConnected, ""
@@ -348,6 +444,16 @@ func (e *engine) session(ctx context.Context, enr meshenroll.Enrollment, priv me
 		}
 	}()
 	return ctrl.Run(ctx)
+}
+
+// coordTrust is how the coordinator's certificate is checked. calabi.net's is
+// signed by the CA compiled into the core; a development stack may run its
+// coordinator without TLS (config coord_plaintext).
+func (c *Core) coordTrust() trust.Config {
+	if c.cfg.CoordPlaintext {
+		return trust.Config{Mode: trust.Plaintext}
+	}
+	return trust.Config{Mode: trust.Platform}
 }
 
 // refreshBearer is the RefreshGate's renew function: a fresh access token for
@@ -380,6 +486,10 @@ type meshStatus struct {
 	ExitNode     string     `json:"exit_node,omitempty"`
 	AcceptRoutes bool       `json:"accept_routes"`
 	Peers        []meshPeer `json:"peers"`
+	// CertPresented is what a self-hosted server presents instead of CertPinned,
+	// in state cert_changed: the two fingerprints the app puts side by side.
+	CertPresented string `json:"cert_presented,omitempty"`
+	CertPinned    string `json:"cert_pinned,omitempty"`
 }
 
 // meshPeer is one device this phone can reach, as the live datapath sees it.
@@ -411,6 +521,12 @@ func (e *engine) status() meshStatus {
 		State: e.state, Error: e.lastErr,
 		Name: e.settings.DeviceName, ExitNode: e.settings.ExitNode, AcceptRoutes: e.settings.AcceptRoutes,
 		Relay: e.enr.RelayAddr, Peers: []meshPeer{},
+	}
+	if e.state == stateCertChanged && e.profile != nil {
+		st.CertPresented = e.presented
+		if len(e.profile.Trust.Pins) > 0 {
+			st.CertPinned = e.profile.Trust.Pins[0]
+		}
 	}
 	dp, ctrl := e.dp, e.ctrl
 	e.mu.Unlock()

@@ -17,6 +17,10 @@ import (
 // clear refusal and its reconnect loop can't quietly rejoin the mesh.
 var ErrNodeDisabled = errors.New("core: node is disabled")
 
+// ErrNodeSignedOut refuses re-registration by proof alone for a node whose
+// device signed out (Node.SignedOut): it has to enroll with an auth key again.
+var ErrNodeSignedOut = errors.New("core: node signed out; enroll with an auth key")
+
 // Coordinator is the deployment-agnostic brain. It is constructed by the wire_*.go
 // seam with either self-hosted (in-memory/file) or platform (DB/tenant) stores and
 // is the SAME code the self-hosted coordinator ships.
@@ -34,10 +38,13 @@ type Coordinator struct {
 	// (dev/tests). Checked only when admitting a genuinely NEW node.
 	Quota NodeQuota
 	// ACL is the writable per-meshnet ACL store the console editor reads/writes
-	// (MESH.8e-2). Nil on the self-hosted build (its single ACL is a file), where
-	// the admin ACL endpoints report NotImplemented. When set, it is normally the
-	// SAME store ACLFilter reads for netmap filtering, so a saved edit takes
-	// effect on the next netmap push (the admin surface bumps after a write).
+	// (MESH.8e-2). wire() always sets it — the DB store with a DSN, the
+	// in-memory one without — so a self-hosted coordinator accepts ACL edits
+	// too, and a meshnet's saved doc then takes precedence over
+	// CALABI_COORD_POLICY_FILE (see ACLFilter). Nil (tests only) makes the admin
+	// ACL endpoints report NotImplemented. When set, it is normally the SAME
+	// store ACLFilter reads for netmap filtering, so a saved edit takes effect on
+	// the next netmap push (the admin surface bumps after a write).
 	ACL ACLStore
 	// Settings holds per-meshnet switches (device approval). Nil = defaults only.
 	Settings SettingsStore
@@ -56,6 +63,23 @@ type Coordinator struct {
 	// Relays is the registry of relays each ORG runs itself (R2, relay.go). Nil =
 	// no self-hosted relays; every meshnet then sees exactly the platform map.
 	Relays RelayStore
+	// AuthKeys is where a self-hosted coordinator keeps the auth keys it mints
+	// (authkeys.go), for the admin API to create, list and revoke them. Nil on
+	// a coordinator whose credentials come from an identity service.
+	AuthKeys AuthKeyStore
+	// Tunnels and TunnelUsage keep what self-hosted daemons report about the
+	// reverse tunnels they serve (tunnels.go), for the phone. Nil on the
+	// platform, where tunnels live in tunnel-svc; TunnelUsage is also nil on a
+	// self-hosted coordinator without a database, which then reports usage as
+	// unavailable.
+	Tunnels     TunnelStore
+	TunnelUsage TunnelUsageStore
+	// ListenerTLS is what the gRPC listener devices dial serves, as the admin
+	// API reports it (GET /admin/tls).
+	ListenerTLS ListenerTLS
+	// Edges is where a self-hosted coordinator's nodes serve tunnels
+	// (edgeaccess.go). Nil = none known.
+	Edges EdgeDirectory
 	// Services is the registry of what each node OFFERS (declared by a person in
 	// the console, never discovered from the node). Nil = no registry.
 	Services ServiceStore
@@ -155,6 +179,14 @@ type RegisterInput struct {
 	// unique stand-in prefix, because it expects them to collide with consumers'
 	// own LANs. A request, like the claim above; see Node.AliasedRoutes.
 	AliasedRoutes []netip.Prefix
+	// EnrolledBy is Identity.Principal of the auth key this enrollment used.
+	EnrolledBy string
+	// Reauth marks a re-registration by proof of the node key alone
+	// (node_reauth): Meshnet, Tags and OwnerUserID are the node's stored ones,
+	// passed through, and EnrolledBy is ignored. It never creates a node — a
+	// node deleted between the challenge and here stays deleted — and it is
+	// refused for a node that signed out.
+	Reauth bool
 	// Auth (auth_key verification, meshnet + tag resolution) happens in the RPC
 	// layer BEFORE calling Register — the core trusts the resolved Identity.
 }
@@ -209,6 +241,15 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 			}
 			return nil, ErrNodeDisabled
 		}
+		if in.Reauth && existing.SignedOut {
+			return nil, ErrNodeSignedOut
+		}
+		if !in.Reauth {
+			// An auth key: it decides who the node enrolled as, and it is what
+			// undoes a sign-out.
+			existing.EnrolledBy = in.EnrolledBy
+			existing.SignedOut = false
+		}
 		existing.HostName = in.Name
 		if !existing.NamePinned {
 			// An admin rename wins over the node's hostname: without this guard the
@@ -219,12 +260,16 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 			existing.Name = dedupeNodeName(in.Name, namesInMeshnet(peers, existing.ID))
 		}
 		existing.DiscoKey = in.DiscoKey
-		if !existing.TagsPinned {
+		// Tags and owner come from the auth key, so a re-registration by proof
+		// alone has nothing to refresh them from: it keeps what the node has.
+		if !existing.TagsPinned && !in.Reauth {
 			// Tags come from the (stable) auth key; refresh on re-enroll. An admin's
 			// tags win, or the next daemon restart would erase them.
 			existing.Tags = in.Tags
 		}
-		existing.OwnerUserID = in.OwnerUserID
+		if !in.Reauth {
+			existing.OwnerUserID = in.OwnerUserID
+		}
 		// Non-empty only. The daemon reports "" whenever it has no Publish-side
 		// registration YET — a fresh install whose mesh session comes up before
 		// the device row exists, or one whose creds file momentarily won't load.
@@ -286,6 +331,12 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 			c.Logger.Info("node re-registered", "node_id", stored.ID, "meshnet", stored.Meshnet, "overlay", stored.Overlay)
 		}
 		return stored, nil
+	}
+	// Re-registration by proof alone only ever finds a node. The RPC layer
+	// looked it up before issuing the challenge; if it is gone now (deleted in
+	// between), creating it here would undo the delete with no auth key at all.
+	if in.Reauth {
+		return nil, ErrNodeNotFound
 	}
 	// Quota gate: a genuinely NEW node counts against the meshnet's cap
 	// (re-enrollment above is always exempt — it reuses an existing slot). A
@@ -353,6 +404,7 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 		DiscoKey:         in.DiscoKey,
 		Tags:             in.Tags,
 		OwnerUserID:      in.OwnerUserID,
+		EnrolledBy:       in.EnrolledBy,
 		AdvertisedRoutes: in.AdvertisedRoutes,
 		// Nothing approved unless the meshnet auto-approves, and even then not
 		// what a peer already publishes — that waits for an admin (MESH-1).
@@ -717,6 +769,13 @@ func (c *Coordinator) DeleteNode(ctx context.Context, t MeshnetID, nodeID int64)
 	}
 	if err := c.Nodes.Delete(ctx, nodeID); err != nil {
 		return fmt.Errorf("core: delete node: %w", err)
+	}
+	// Its tunnels are gone with it; the traffic they carried stays counted in
+	// the months it happened in.
+	if c.Tunnels != nil {
+		if err := c.Tunnels.DeleteTunnelsOf(ctx, nodeID); err != nil && c.Logger != nil {
+			c.Logger.Warn("node deleted but forgetting its tunnels failed", "node_id", nodeID, "err", err)
+		}
 	}
 	// Only now is the address safe to reuse. A failure here leaks one address
 	// until the next restart re-warms the pool from the surviving nodes, which
@@ -1098,4 +1157,22 @@ func (c *Coordinator) aliasBudgetOf(ctx context.Context, t MeshnetID) int {
 		return DefaultAliasAddrBudget
 	}
 	return s.AliasAddrBudget
+}
+
+// SelfHosted reports whether this coordinator's credentials are its own (a key
+// file, minted keys) rather than an identity service's. Only then does it answer
+// device-facing reads like ListNodes itself: on the platform, who may see which
+// device is decided by the platform's API.
+func (c *Coordinator) SelfHosted() bool { return c.AuthKeys != nil }
+
+// MeshnetNodes lists a meshnet's nodes with their confirmed services attached.
+func (c *Coordinator) MeshnetNodes(ctx context.Context, t MeshnetID) ([]*Node, error) {
+	return c.nodesWithServices(ctx, t)
+}
+
+// SignOut records that a node's device signed out (Node.SignedOut): it keeps
+// its record, address and seat, and may come back only by enrolling with an
+// auth key.
+func (c *Coordinator) SignOut(ctx context.Context, nodeID int64) error {
+	return c.Nodes.SetSignedOut(ctx, nodeID, true)
 }

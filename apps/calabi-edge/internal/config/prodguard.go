@@ -9,21 +9,16 @@ import (
 // prodguard.go — refuse to run a PRODUCTION edge in a degraded posture
 // (full-oss-plan F0.2, the edge half of coord's cmd/calabi-coord/prodguard.go).
 //
-// The edge's fallbacks are deliberate and correct for their intended use: no
-// identity-svc means "verify clients against the static accepted_tokens table"
-// (that IS standalone/self-hosted mode), and a relay that does not require grants
-// is how the fleet was rolled out before R0′ was switched on. What makes them
-// dangerous is that nothing distinguishes "I meant this" from "my control plane
-// vanished and I silently became a simpler, more trusting server" — and once
-// the source is public, that distinction is exactly what an attacker probes.
+// The edge's fallbacks are deliberate and correct for their intended use: a
+// relay that does not require grants is how the fleet was rolled out before R0′
+// was switched on. What makes them dangerous is that nothing distinguishes "I
+// meant this" from "my control plane vanished and I silently became a simpler,
+// more trusting server" — and once the source is public, that distinction is
+// exactly what an attacker probes.
 //
-// PlaceholderToken below is the sharpest case: it ships in Default(), so an
-// edge that never had its config filled in accepts a token printed in the
-// public repository.
-
-// PlaceholderToken is the self-describing dev credential in Default(). It must
-// never authenticate anything in production.
-const PlaceholderToken = "dev-token-please-change"
+// (There used to be a sharper case: a demo token in Default(), printed in the
+// public tree, accepted by any edge run without a config file. The static token
+// table it lived in is gone —
 
 // IsProduction reports whether this process claims a production deployment.
 // Same signal as coord: CALABI_ENV, set in the compose file itself so a
@@ -49,27 +44,16 @@ func (c Config) ValidateProductionPosture() error {
 	}
 	var bad []string
 
-	// 1. Client authentication. In platform mode with no identity-svc and no
-	// bff-edge, wirePlatform leaves the verifier nil and the core falls back to
-	// the static YAML table — i.e. the edge stops asking the control plane who
-	// a client is.
+	// 1. No control plane where one was meant. A platform-mode node without
+	// bff-edge verifies nobody against identity-svc; for a node serving tunnels
+	// ValidateClientAuth already refuses it, and this names it for a relay too.
 	if !c.IsStandaloneMode() && !c.MultiRegion.IsBFFEdge() {
-		bad = append(bad, "platform mode without a bff-edge connection: since every edge reaches the control "+
-			"plane through bff-edge (F3 step 2b), clients here would be authenticated against the static "+
-			"accepted_tokens table instead of identity-svc (set multi_region, or say mode: standalone if "+
-			"that is the intent)")
+		bad = append(bad, "platform mode without a bff-edge connection: every edge reaches the control plane "+
+			"through bff-edge (F3 step 2b), so nothing here would check who a client is (set multi_region, or "+
+			"say mode: standalone with the coordinator's key if this node belongs to a self-hosted coordinator)")
 	}
 
-	// 2. The shipped placeholder credential, in ANY mode — a standalone edge
-	// carrying it is just as open as a platform one.
-	for i, t := range c.AcceptedTokens {
-		if strings.TrimSpace(t.Token) == PlaceholderToken {
-			bad = append(bad, fmt.Sprintf("accepted_tokens[%d] is still the shipped placeholder %q, "+
-				"which is published in the open-source tree: anyone can authenticate as tenant %q", i, PlaceholderToken, t.TenantID))
-		}
-	}
-
-	// 3. A platform relay that accepts ungranted clients. kind=platform means
+	// 2. A platform relay that accepts ungranted clients. kind=platform means
 	// coord advertises this node in the PLATFORM DERP map, so without grant
 	// verification it relays for anyone who finds it — traffic that is neither
 	// attributable to an org nor stoppable when one is over quota.

@@ -762,3 +762,77 @@ export interface UpdatePolicy {
   // 0 = they may not hold it at all.
   max_defer_days: number;
 }
+
+// ---- a self-hosted server (GET /v1/selfhosted) ------------------------------
+
+// The coordinator this device joined, as the local daemon reports it.
+// cert_presented / cert_pinned: it now presents a certificate its saved trust
+// refuses — a person compares it with what the server prints.
+export interface SelfHostedPart {
+  server: string;
+  trust?: "system" | "pin" | "ca" | "plaintext";
+  pins?: string[];
+  cert_presented?: string;
+  cert_pinned?: string;
+}
+
+// Why this device's tunnels are or are not up. The edge, its certificate and
+// the sign-in all come from the coordinator (docs/runbook/self-hosted-server-plan.md).
+export type SelfHostedEdgeState =
+  | "connected"
+  | "connecting"
+  | "no_edge"
+  | "awaiting_approval"
+  | "needs_invite"
+  | "disabled"
+  | "not_joined";
+
+export interface SelfHostedStatus {
+  // "platform": the calabi.net daemon (can_join says whether it may switch).
+  // "self_hosted": the local daemon.
+  mode: "platform" | "self_hosted";
+  can_join?: boolean;
+  reason?: string;
+  // Local daemon only. managed: the config is the console's own; can_leave:
+  // it may also switch back to calabi.net.
+  managed?: boolean;
+  can_leave?: boolean;
+  config_path?: string;
+  tunnels?: number;
+  mesh?: SelfHostedPart & {
+    state: "connected" | "connecting" | "paused" | "off" | "cert_changed" | "needs_invite" | "disabled";
+    node_id?: number;
+    reauth?: boolean;
+  };
+  // The edge the coordinator names for this device's tunnels; present once
+  // joined. server is missing until the coordinator has named one.
+  edge?: { server?: string; connected: boolean; state: SelfHostedEdgeState; error?: string };
+}
+
+export interface SelfHostedJoin {
+  mesh: { link?: string; server?: string; key?: string; pin?: string; plaintext?: boolean };
+  replace?: boolean;
+}
+
+export interface SelfHostedTunnel {
+  id: number;
+  name: string;
+  type: string;
+  public_addr: string;
+  local_addr: string;
+  status: string; // online | pending | offline (offline whenever its device is)
+  node_id: number;
+  node_name: string;
+  node_online: boolean;
+  traffic_30d: number;
+  first_seen: string;
+  reported_at?: string;
+}
+
+export interface SelfHostedUsage {
+  unavailable?: string; // "no_database": the coordinator keeps no traffic
+  relay_not_recorded?: boolean;
+  month?: { tunnel_bytes: number; relay_bytes: number; from: string; to: string };
+  days: { start: string; bytes: number }[];
+  devices: { used: number; disabled: number; limit: number };
+}

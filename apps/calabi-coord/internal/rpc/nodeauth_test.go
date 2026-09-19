@@ -14,18 +14,18 @@ func TestChallengeIsSingleUseAndBoundToItsMeshnet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("issue: %v", err)
 	}
-	if _, ok := s.takeChallenge(id, 2); ok {
+	if _, ok := s.takeChallenge(id, 2, 0); ok {
 		t.Fatal("a challenge issued to meshnet 1 was accepted for meshnet 2")
 	}
 	// The failed attempt above burned it.
-	if _, ok := s.takeChallenge(id, 1); ok {
+	if _, ok := s.takeChallenge(id, 1, 0); ok {
 		t.Fatal("a challenge survived a failed use")
 	}
 	id2, _, _ := s.issueChallenge(1)
-	if _, ok := s.takeChallenge(id2, 1); !ok {
+	if _, ok := s.takeChallenge(id2, 1, 0); !ok {
 		t.Fatal("a fresh challenge was refused")
 	}
-	if _, ok := s.takeChallenge(id2, 1); ok {
+	if _, ok := s.takeChallenge(id2, 1, 0); ok {
 		t.Fatal("a challenge was accepted twice")
 	}
 }
@@ -36,7 +36,7 @@ func TestChallengeExpires(t *testing.T) {
 	s.now = func() time.Time { return now }
 	id, _, _ := s.issueChallenge(1)
 	now = now.Add(challengeTTL + time.Second)
-	if _, ok := s.takeChallenge(id, 1); ok {
+	if _, ok := s.takeChallenge(id, 1, 0); ok {
 		t.Fatal("an expired challenge was accepted")
 	}
 }
@@ -95,7 +95,7 @@ func TestPendingChallengeCountReleasedOnUse(t *testing.T) {
 		if err != nil {
 			t.Fatalf("issue %d: %v", i, err)
 		}
-		if _, ok := s.takeChallenge(id, 1); !ok {
+		if _, ok := s.takeChallenge(id, 1, 0); !ok {
 			t.Fatalf("take %d: refused", i)
 		}
 	}

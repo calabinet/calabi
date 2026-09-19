@@ -312,6 +312,34 @@ func (mnc *MeshNodeCreate) SetNillableDisabled(b *bool) *MeshNodeCreate {
 	return mnc
 }
 
+// SetEnrolledBy sets the "enrolled_by" field.
+func (mnc *MeshNodeCreate) SetEnrolledBy(s string) *MeshNodeCreate {
+	mnc.mutation.SetEnrolledBy(s)
+	return mnc
+}
+
+// SetNillableEnrolledBy sets the "enrolled_by" field if the given value is not nil.
+func (mnc *MeshNodeCreate) SetNillableEnrolledBy(s *string) *MeshNodeCreate {
+	if s != nil {
+		mnc.SetEnrolledBy(*s)
+	}
+	return mnc
+}
+
+// SetSignedOut sets the "signed_out" field.
+func (mnc *MeshNodeCreate) SetSignedOut(b bool) *MeshNodeCreate {
+	mnc.mutation.SetSignedOut(b)
+	return mnc
+}
+
+// SetNillableSignedOut sets the "signed_out" field if the given value is not nil.
+func (mnc *MeshNodeCreate) SetNillableSignedOut(b *bool) *MeshNodeCreate {
+	if b != nil {
+		mnc.SetSignedOut(*b)
+	}
+	return mnc
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (mnc *MeshNodeCreate) SetCreatedAt(t time.Time) *MeshNodeCreate {
 	mnc.mutation.SetCreatedAt(t)
@@ -451,6 +479,14 @@ func (mnc *MeshNodeCreate) defaults() {
 		v := meshnode.DefaultDisabled
 		mnc.mutation.SetDisabled(v)
 	}
+	if _, ok := mnc.mutation.EnrolledBy(); !ok {
+		v := meshnode.DefaultEnrolledBy
+		mnc.mutation.SetEnrolledBy(v)
+	}
+	if _, ok := mnc.mutation.SignedOut(); !ok {
+		v := meshnode.DefaultSignedOut
+		mnc.mutation.SetSignedOut(v)
+	}
 	if _, ok := mnc.mutation.CreatedAt(); !ok {
 		v := meshnode.DefaultCreatedAt()
 		mnc.mutation.SetCreatedAt(v)
@@ -530,6 +566,12 @@ func (mnc *MeshNodeCreate) check() error {
 	}
 	if _, ok := mnc.mutation.Disabled(); !ok {
 		return &ValidationError{Name: "disabled", err: errors.New(`ent: missing required field "MeshNode.disabled"`)}
+	}
+	if _, ok := mnc.mutation.EnrolledBy(); !ok {
+		return &ValidationError{Name: "enrolled_by", err: errors.New(`ent: missing required field "MeshNode.enrolled_by"`)}
+	}
+	if _, ok := mnc.mutation.SignedOut(); !ok {
+		return &ValidationError{Name: "signed_out", err: errors.New(`ent: missing required field "MeshNode.signed_out"`)}
 	}
 	if _, ok := mnc.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "MeshNode.created_at"`)}
@@ -650,6 +692,14 @@ func (mnc *MeshNodeCreate) createSpec() (*MeshNode, *sqlgraph.CreateSpec) {
 	if value, ok := mnc.mutation.Disabled(); ok {
 		_spec.SetField(meshnode.FieldDisabled, field.TypeBool, value)
 		_node.Disabled = value
+	}
+	if value, ok := mnc.mutation.EnrolledBy(); ok {
+		_spec.SetField(meshnode.FieldEnrolledBy, field.TypeString, value)
+		_node.EnrolledBy = value
+	}
+	if value, ok := mnc.mutation.SignedOut(); ok {
+		_spec.SetField(meshnode.FieldSignedOut, field.TypeBool, value)
+		_node.SignedOut = value
 	}
 	if value, ok := mnc.mutation.CreatedAt(); ok {
 		_spec.SetField(meshnode.FieldCreatedAt, field.TypeTime, value)

@@ -89,6 +89,16 @@ func Path(v string) predicate.MeshConnRecord {
 	return predicate.MeshConnRecord(sql.FieldEQ(FieldPath, v))
 }
 
+// RelayBytesTx applies equality check predicate on the "relay_bytes_tx" field. It's identical to RelayBytesTxEQ.
+func RelayBytesTx(v int64) predicate.MeshConnRecord {
+	return predicate.MeshConnRecord(sql.FieldEQ(FieldRelayBytesTx, v))
+}
+
+// RelayBytesRx applies equality check predicate on the "relay_bytes_rx" field. It's identical to RelayBytesRxEQ.
+func RelayBytesRx(v int64) predicate.MeshConnRecord {
+	return predicate.MeshConnRecord(sql.FieldEQ(FieldRelayBytesRx, v))
+}
+
 // UpdatedAt applies equality check predicate on the "updated_at" field. It's identical to UpdatedAtEQ.
 func UpdatedAt(v time.Time) predicate.MeshConnRecord {
 	return predicate.MeshConnRecord(sql.FieldEQ(FieldUpdatedAt, v))
@@ -397,6 +407,86 @@ func PathEqualFold(v string) predicate.MeshConnRecord {
 // PathContainsFold applies the ContainsFold predicate on the "path" field.
 func PathContainsFold(v string) predicate.MeshConnRecord {
 	return predicate.MeshConnRecord(sql.FieldContainsFold(FieldPath, v))
+}
+
+// RelayBytesTxEQ applies the EQ predicate on the "relay_bytes_tx" field.
+func RelayBytesTxEQ(v int64) predicate.MeshConnRecord {
+	return predicate.MeshConnRecord(sql.FieldEQ(FieldRelayBytesTx, v))
+}
+
+// RelayBytesTxNEQ applies the NEQ predicate on the "relay_bytes_tx" field.
+func RelayBytesTxNEQ(v int64) predicate.MeshConnRecord {
+	return predicate.MeshConnRecord(sql.FieldNEQ(FieldRelayBytesTx, v))
+}
+
+// RelayBytesTxIn applies the In predicate on the "relay_bytes_tx" field.
+func RelayBytesTxIn(vs ...int64) predicate.MeshConnRecord {
+	return predicate.MeshConnRecord(sql.FieldIn(FieldRelayBytesTx, vs...))
+}
+
+// RelayBytesTxNotIn applies the NotIn predicate on the "relay_bytes_tx" field.
+func RelayBytesTxNotIn(vs ...int64) predicate.MeshConnRecord {
+	return predicate.MeshConnRecord(sql.FieldNotIn(FieldRelayBytesTx, vs...))
+}
+
+// RelayBytesTxGT applies the GT predicate on the "relay_bytes_tx" field.
+func RelayBytesTxGT(v int64) predicate.MeshConnRecord {
+	return predicate.MeshConnRecord(sql.FieldGT(FieldRelayBytesTx, v))
+}
+
+// RelayBytesTxGTE applies the GTE predicate on the "relay_bytes_tx" field.
+func RelayBytesTxGTE(v int64) predicate.MeshConnRecord {
+	return predicate.MeshConnRecord(sql.FieldGTE(FieldRelayBytesTx, v))
+}
+
+// RelayBytesTxLT applies the LT predicate on the "relay_bytes_tx" field.
+func RelayBytesTxLT(v int64) predicate.MeshConnRecord {
+	return predicate.MeshConnRecord(sql.FieldLT(FieldRelayBytesTx, v))
+}
+
+// RelayBytesTxLTE applies the LTE predicate on the "relay_bytes_tx" field.
+func RelayBytesTxLTE(v int64) predicate.MeshConnRecord {
+	return predicate.MeshConnRecord(sql.FieldLTE(FieldRelayBytesTx, v))
+}
+
+// RelayBytesRxEQ applies the EQ predicate on the "relay_bytes_rx" field.
+func RelayBytesRxEQ(v int64) predicate.MeshConnRecord {
+	return predicate.MeshConnRecord(sql.FieldEQ(FieldRelayBytesRx, v))
+}
+
+// RelayBytesRxNEQ applies the NEQ predicate on the "relay_bytes_rx" field.
+func RelayBytesRxNEQ(v int64) predicate.MeshConnRecord {
+	return predicate.MeshConnRecord(sql.FieldNEQ(FieldRelayBytesRx, v))
+}
+
+// RelayBytesRxIn applies the In predicate on the "relay_bytes_rx" field.
+func RelayBytesRxIn(vs ...int64) predicate.MeshConnRecord {
+	return predicate.MeshConnRecord(sql.FieldIn(FieldRelayBytesRx, vs...))
+}
+
+// RelayBytesRxNotIn applies the NotIn predicate on the "relay_bytes_rx" field.
+func RelayBytesRxNotIn(vs ...int64) predicate.MeshConnRecord {
+	return predicate.MeshConnRecord(sql.FieldNotIn(FieldRelayBytesRx, vs...))
+}
+
+// RelayBytesRxGT applies the GT predicate on the "relay_bytes_rx" field.
+func RelayBytesRxGT(v int64) predicate.MeshConnRecord {
+	return predicate.MeshConnRecord(sql.FieldGT(FieldRelayBytesRx, v))
+}
+
+// RelayBytesRxGTE applies the GTE predicate on the "relay_bytes_rx" field.
+func RelayBytesRxGTE(v int64) predicate.MeshConnRecord {
+	return predicate.MeshConnRecord(sql.FieldGTE(FieldRelayBytesRx, v))
+}
+
+// RelayBytesRxLT applies the LT predicate on the "relay_bytes_rx" field.
+func RelayBytesRxLT(v int64) predicate.MeshConnRecord {
+	return predicate.MeshConnRecord(sql.FieldLT(FieldRelayBytesRx, v))
+}
+
+// RelayBytesRxLTE applies the LTE predicate on the "relay_bytes_rx" field.
+func RelayBytesRxLTE(v int64) predicate.MeshConnRecord {
+	return predicate.MeshConnRecord(sql.FieldLTE(FieldRelayBytesRx, v))
 }
 
 // UpdatedAtEQ applies the EQ predicate on the "updated_at" field.

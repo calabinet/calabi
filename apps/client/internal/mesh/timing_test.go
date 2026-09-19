@@ -12,12 +12,15 @@ import (
 // A desktop session must keep running at exactly the cadence it always had:
 // Timing exists for phones, not to retune the fleet.
 func TestDesktopTimingIsTheShippedCadence(t *testing.T) {
+	// TunnelReport is new (2026-09); it runs only when the daemon has tunnels
+	// to report to a self-hosted coordinator.
 	want := Timing{
 		DiscoProbe:          5 * time.Second,
 		EndpointReport:      60 * time.Second,
 		HomeProbe:           5 * time.Minute,
 		ConnReport:          5 * time.Minute,
 		ServiceHealth:       time.Minute,
+		TunnelReport:        5 * time.Minute,
 		WakeDetect:          true,
 		PersistentKeepalive: 25 * time.Second,
 	}
@@ -74,7 +77,8 @@ func TestSessionTimingSetsThePeerKeepalive(t *testing.T) {
 // A zero interval turns a loop off: it returns at once instead of ticking (and
 // instead of panicking in time.NewTicker, which refuses a zero duration).
 func TestZeroIntervalLoopsReturnAtOnce(t *testing.T) {
-	c := &Controller{Timing: &Timing{}, Logger: slog.Default()}
+	c := &Controller{Timing: &Timing{}, Logger: slog.Default(), Coord: &CoordClient{},
+		Tunnels: NewTunnelMeter(func() []TunnelState { return nil })}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // only reached if a loop did NOT return on its own
 
@@ -82,6 +86,7 @@ func TestZeroIntervalLoopsReturnAtOnce(t *testing.T) {
 		"endpoint report": func() { c.endpointReportLoop(ctx, 1, nil) },
 		"home probe":      func() { c.homeProbeLoop(ctx, 1, nil) },
 		"disco probe":     func() { (&discoProber{}).run(ctx, 0, c.peers) },
+		"tunnel report":   func() { c.tunnelReportLoop(ctx) },
 	} {
 		done := make(chan struct{})
 		go func() { defer close(done); loop() }()

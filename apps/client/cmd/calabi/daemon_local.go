@@ -22,12 +22,14 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/calabi/calabi/apps/client/internal/creds"
 	"github.com/calabi/calabi/apps/client/internal/localweb"
+	"github.com/calabi/calabi/apps/client/internal/mesh"
 	"github.com/calabi/calabi/apps/client/internal/probe"
 	cruntime "github.com/calabi/calabi/apps/client/internal/runtime"
 	"github.com/calabi/calabi/apps/client/internal/session"
@@ -53,39 +55,23 @@ func daemonIsLocal(args []string) bool {
 
 // localConfig is the on-disk YAML schema for the local supervisor daemon —
 // the self-hosted analogue of ngrok.yml.
+//
+// It says nothing about the edge: a device gets the edge, its certificate and
+// its sign-in from the self-hosted coordinator it joined. The settings that used to name
+// the edge are refused in a hand-written file (removedEdgeKeys).
 type localConfig struct {
-	// Server is the edge control endpoint (host:port). Falls back to
-	// CALABI_SERVER, then defaultServer.
-	//
-	// All top-level optionals carry omitempty: the console can rewrite this file
-	// (persist()), and without omitempty yaml.Marshal would inject every empty
-	// field — so a config with just `token:` would gain a spurious `token_env: ""`
-	// (plus `insecure: false`, `ca_file: ""`) on the first save. omitempty keeps
-	// the round-trip faithful: only fields you actually set are written back.
-	Server string `yaml:"server,omitempty"`
-	// Token is the bearer sent to the edge — the only auth field a user needs.
-	// Either a literal secret, or `${ENV_VAR}` to read it from the environment
-	// (e.g. `token: ${CALABI_TOKEN}`) so the secret stays out of the file. Empty
-	// falls back to the resolveToken() chain (CALABI_TOKEN / creds / defaultToken).
-	Token string `yaml:"token,omitempty"`
-	// TokenEnv is the deprecated predecessor of `token: ${ENV_VAR}` — it named an
-	// env var to read the token from. Still parsed so older configs keep working
-	// (the YAML decoder rejects unknown keys), but no longer documented. Prefer
-	// the `token: ${ENV_VAR}` form.
-	TokenEnv string `yaml:"token_env,omitempty"`
-	// Insecure skips TLS verification of the edge control cert (dev / a
-	// self-signed standalone edge). OR'd with CALABI_INSECURE.
-	Insecure bool `yaml:"insecure,omitempty"`
-	// CAFile is a PEM CA bundle used to verify the edge control cert.
-	// Falls back to CALABI_EDGE_CA_FILE.
-	CAFile string `yaml:"ca_file,omitempty"`
 	// Tunnels has no omitempty: an empty list persists as `tunnels: []`, which is
 	// a valid "connect, create tunnels in the console" config worth keeping explicit.
 	Tunnels []localTunnelConfig `yaml:"tunnels"`
-	// Mesh is the optional mesh (WireGuard) block. Absent/disabled = the
-	// daemon supervises tunnels only. See daemon_local_mesh.go.
+	// Mesh is the self-hosted coordinator this device joined, and its mesh
+	// (WireGuard) settings. No coordinator: not joined, nothing to dial.
+	// daemon_local_mesh.go.
 	Mesh meshConfig `yaml:"mesh,omitempty"`
 }
+
+// removedEdgeKeys are the top-level settings that named the edge and how to
+// sign in to it, before the coordinator did.
+var removedEdgeKeys = []string{"server", "token", "token_env", "insecure", "ca_file", "trust", "pins"}
 
 // localTunnelConfig is one tunnel in the local config.
 type localTunnelConfig struct {
@@ -124,12 +110,13 @@ type localSecurityConfig struct {
 	File string `yaml:"security_file"`
 }
 
-// runLocalDaemon is the entry point for `calabi daemon --local`.
+// runLocalDaemon is the entry point for `calabi daemon --local`, and for the
+// daemon of a machine the console connected to a self-hosted server.
 func runLocalDaemon(args []string) int {
 	fs := flag.NewFlagSet("daemon --local", flag.ContinueOnError)
 	_ = fs.Bool("local", false, "run the local supervisor daemon (this flag)")
 	configPath := fs.String("config", envOr("CALABI_DAEMON_CONFIG", ""),
-		"path to the local tunnels YAML config")
+		"path to the local tunnels YAML config (default: the one the console manages, in the data directory)")
 	statusAddr := registerStatusAddrFlag(fs)
 	if err := fs.Parse(reorderArgs(args, valueFlagsOf(fs))); err != nil {
 		return 2
@@ -139,12 +126,22 @@ func runLocalDaemon(args []string) int {
 		fmt.Fprintln(os.Stderr, "calabi daemon --local:", saErr)
 		return 2
 	}
-	if *configPath == "" {
-		fmt.Fprintln(os.Stderr, "calabi daemon --local: missing --config <tunnels.yaml>")
-		return 2
+	// No --config: the console's own file — what a machine connected to a self-hosted server from the console
+	// runs, and what an unconfigured one starts from. It used to be an error.
+	managed := *configPath == ""
+	if managed {
+		*configPath = managedConfigPath()
+	}
+	// Held in this mode by the command line or the environment: the console
+	// cannot switch this process to calabi.net.
+	forced := os.Getenv("CALABI_MODE") != ""
+	for _, a := range args {
+		if a == "--local" || a == "-local" {
+			forced = true
+		}
 	}
 
-	cfg, err := loadLocalConfig(*configPath)
+	cfg, dropped, err := loadLocalConfigOrEmpty(*configPath, managed)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "calabi daemon --local:", err)
 		return 1
@@ -156,11 +153,14 @@ func runLocalDaemon(args []string) int {
 	if statusWarning != "" {
 		logger.Warn("console: " + statusWarning)
 	}
-	defer func() {
-		if h := loggingHub(); h != nil {
-			_ = h.Close()
+	if len(dropped) > 0 {
+		// The console wrote them, when a device had to be told its edge.
+		logger.Warn("dropped settings this client no longer reads: the edge and how to sign in to it come from the self-hosted server this device joined",
+			"settings", strings.Join(dropped, ", "), "config", *configPath)
+		if err := writeLocalConfig(*configPath, *cfg); err != nil {
+			logger.Warn("could not rewrite the config without them", "err", err)
 		}
-	}()
+	}
 
 	// Single-instance lock, shared with the platform daemon — only one calabi
 	// daemon of either flavour may run per machine (they'd otherwise compete
@@ -172,11 +172,6 @@ func runLocalDaemon(args []string) int {
 		return 3
 	}
 	defer lock.Release()
-
-	server := cfg.Server
-	if server == "" {
-		server = envOr("CALABI_SERVER", defaultServer)
-	}
 
 	// Build the tunnel plan once: stable ids (config index) + normalized local
 	// addr + bcrypt'd security blob. Invalid entries are dropped with a log so
@@ -192,13 +187,13 @@ func runLocalDaemon(args []string) int {
 		logger.Warn("local-token mint failed", "err", err)
 	}
 
-	state := status.New(version, server)
+	state := status.New(version, "")
 	insp := newDaemonInspector()
 
 	// The supervisor owns the mutable tunnel plan + reconcile signal and persists
 	// console edits back to the YAML. It is the source of truth for both the
 	// reconnect loop (which tunnels to register) and localweb (list + writes).
-	sv := newLocalSupervisor(logger, *cfg, *configPath, planned, server)
+	sv := newLocalSupervisor(logger, *cfg, *configPath, planned)
 
 	// Local traffic meter: the standalone substitute for metering-svc. Persists
 	// per-day byte totals next to the pidfile so the console's today / month
@@ -215,51 +210,47 @@ func runLocalDaemon(args []string) int {
 	health := probe.New(logger)
 	health.SetSource(stateProbeSource{state: state})
 
+	// Mesh (WireGuard): the runner is rebuilt whenever the console changes its
+	// settings, so the API is handed the holder; started below with a context.
+	// This daemon's tunnels are reported to a self-hosted coordinator for the
+	// meshnet's phones and consoles; the meter outlives every runner.
+	meshL := newLocalMesh(logger, sv, managed, mesh.NewTunnelMeter(func() []mesh.TunnelState { return sv.tunnelStates(state) }))
+	sh := &localSelfHosted{logger: logger, sv: sv, mesh: meshL, state: state, managed: managed, forced: forced}
+
 	// Local console: serve the embedded SPA + a LOCAL /v1/* API (no bff-console)
 	// with plain-browser access allowed. The SPA renders in standalone (its
 	// /v1/me reports plan.code="standalone"); create / delete / edit-security
 	// write through the supervisor (live reconcile + YAML persistence).
 	// internal/localweb +
-	// Mesh (WireGuard): build the runner now (not started) so the local
-	// API can serve its status; it's launched below once we have a signal context.
-	var meshR *meshRunner
-	if cfg.Mesh.Enabled {
-		if cfg.Mesh.complete() {
-			meshR = newMeshRunner(logger, cfg.Mesh)
-		} else {
-			logger.Warn("mesh: enabled but coord/relay/auth_key incomplete — not starting it")
-		}
-	}
-	var meshSrc localweb.MeshSource
-	if meshR != nil {
-		meshSrc = meshR // avoid a non-nil interface wrapping a nil *meshRunner
-	}
-
 	lw := localweb.New(localweb.Config{
 		Lister:    sv,
 		Writer:    sv,
 		Inspector: insp,
 		Usage:     meter,
 		Health:    health,
-		Mesh:      meshSrc,
-		Server:    server,
+		Mesh:      meshL,
+		EdgeAddr:  sv.edgeAddr,
 	})
-	console := startLocalConsole(logger, state, func(mux *http.ServeMux) {
+	ctx, cancel := withSignalContext()
+	defer cancel()
+	console, consoleDone := startDaemonConsole(ctx, logger, state, func(mux *http.ServeMux) {
 		lw.Register(mux)
 		mux.HandleFunc("/v1/usage/mesh", meshMeter.handleMeshUsage)
+		sh.register(mux)
 	})
+	// Registered after cancel's defer, so it runs first: cancel, then wait for
+	// the listener to go (daemon_restart.go).
+	defer func() {
+		cancel()
+		<-consoleDone
+	}()
 	if console == "" {
 		console = "http://" + envOr("CALABI_STATUS_ADDR", defaultStatusAddr)
 	}
 
-	ctx, cancel := withSignalContext()
-	defer cancel()
 	go meter.run(ctx, state, 5*time.Second)
 	go meshMeter.run(ctx, func() []meshPeerBytes {
-		if meshR == nil {
-			return nil
-		}
-		st := meshR.MeshStatus()
+		st := meshL.MeshStatus()
 		out := make([]meshPeerBytes, 0, len(st.Peers))
 		for _, p := range st.Peers {
 			out = append(out, meshPeerBytes{Key: p.PublicKey, Bytes: p.RxBytes + p.TxBytes, Path: p.Path})
@@ -270,16 +261,20 @@ func runLocalDaemon(args []string) int {
 
 	// Mesh (WireGuard): bring the node onto its meshnet in the background
 	// alongside the tunnels. Stopped on shutdown before the daemon returns.
-	if meshR != nil {
-		meshR.Start(ctx)
-		defer meshR.Stop()
-		logger.Info("mesh started", "coord", cfg.Mesh.Coord, "relay", cfg.Mesh.Relay)
-	}
+	meshL.Start(ctx)
+	defer meshL.Stop()
 
 	logger.Info("local daemon starting",
-		"server", server, "tunnels", len(planned),
-		"config", *configPath, "pidfile", lock.Path(),
+		"coord", cfg.Mesh.Coord, "tunnels", len(planned),
+		"config", *configPath, "managed", managed, "pidfile", lock.Path(),
 		"console", console)
+	if !meshL.joined() {
+		// Nothing to dial: the edge is the one the coordinator names.
+		logger.Info("not connected to a self-hosted server yet — connect one in the console", "console", console)
+		<-ctx.Done()
+		logger.Info("local daemon stopped")
+		return 0
+	}
 	if len(planned) == 0 {
 		logger.Info("no tunnels configured — add them in the console", "console", console)
 	}
@@ -292,10 +287,11 @@ func runLocalDaemon(args []string) int {
 	const maxBackoff = 30 * time.Second
 	backoff := minBackoff
 	for ctx.Err() == nil {
-		connected, runErr := runLocalSession(ctx, logger, sv, server, state, insp)
+		connected, runErr := runLocalSession(ctx, logger, sv, meshL.read, meshL.nodeKey, state, insp)
 		if ctx.Err() != nil {
 			break
 		}
+		sv.setEdgeErr(runErr)
 		if connected {
 			backoff = minBackoff
 			logger.Info("session ended; reconnecting", "err", runErr)
@@ -305,6 +301,10 @@ func runLocalDaemon(args []string) int {
 		select {
 		case <-ctx.Done():
 		case <-time.After(backoff):
+		case <-sv.retryNow:
+			// The coordinator's new certificate was just confirmed in the console.
+			backoff = minBackoff
+			continue
 		}
 		if !connected {
 			backoff *= 2
@@ -376,46 +376,42 @@ func planTunnels(logger *slog.Logger, tcs []localTunnelConfig) []plannedTunnel {
 	return out
 }
 
-// runLocalSession does one dial → handshake → reconcile-loop cycle. The initial
-// reconcile registers the whole plan; thereafter it re-reconciles whenever a
-// console write nudges sv.reconcileCh (register added / close removed /
+// runLocalSession does one fetch → dial → handshake → reconcile-loop cycle.
+// The coordinator names the edge and its certificate and signs this device's
+// grant (read: over the live mesh session, or a view session with the mesh
+// off); the node key answers the edge's challenge. The initial reconcile
+// registers the whole plan; thereafter it re-reconciles whenever a console
+// write nudges sv.reconcileCh (register added / close removed /
 // close+re-register policy-changed tunnels), all on this one goroutine so the
 // registration ordering is race-free. Returns (hadLiveTunnel, runErr).
-func runLocalSession(ctx context.Context, logger *slog.Logger, sv *localSupervisor, server string, state *status.State, insp *daemonInspector) (bool, error) {
-	// A standalone edge is self-signed: verifying its control cert needs the
-	// edge's own CA, which a self-hoster often hasn't wired up. So default to
-	// skipping verification (with a loud warning) rather than hard-failing — and
-	// if a CA file IS configured but unreadable (e.g. a stale CALABI_EDGE_CA_FILE
-	// pointing at a dev path), warn and skip instead of refusing to connect.
-	// Pin the edge by setting a readable `ca_file` (or CALABI_EDGE_CA_FILE).
-	caFile := firstNonEmpty(sv.base.CAFile, envOr("CALABI_EDGE_CA_FILE", ""))
-	insecure := sv.base.Insecure || envBool("CALABI_INSECURE", defaultInsecure)
-	if !insecure {
-		if caFile == "" {
-			logger.Warn("no edge CA configured — skipping TLS verification of the self-signed edge; set ca_file to verify")
-			insecure = true
-		} else if _, statErr := os.Stat(caFile); statErr != nil {
-			// Keep the path OUT of the WARN: it's typically an absolutized
-			// CALABI_EDGE_CA_FILE that would leak the operator's filesystem
-			// layout (e.g. a dev cert path) into logs that may be shared. The
-			// guidance needs no path; troubleshooting can read it at debug level.
-			logger.Warn("edge CA file not found — skipping TLS verification; set a readable ca_file / CALABI_EDGE_CA_FILE to verify")
-			logger.Debug("edge CA file stat failed", "ca_file", caFile, "err", statErr)
-			insecure, caFile = true, ""
-		}
+func runLocalSession(ctx context.Context, logger *slog.Logger, sv *localSupervisor, read coordReader, nodeKey func() (mesh.PrivateKey, error), state *status.State, insp *daemonInspector) (bool, error) {
+	fctx, fcancel := context.WithTimeout(ctx, 20*time.Second)
+	acc, err := fetchEdgeAccess(fctx, read)
+	fcancel()
+	if err != nil {
+		return false, fmt.Errorf("edge access: %w", err)
 	}
-
-	mux, err := transport.Dial(transport.DialOptions{
-		Addr:       server,
-		Insecure:   insecure,
-		CACertFile: caFile,
-	})
+	if len(acc.Edges) == 0 {
+		return false, errNoEdge
+	}
+	edge := acc.Edges[0]
+	sv.setEdgeAddr(edge.Addr)
+	state.SetServer(edge.Addr)
+	key, err := nodeKey()
+	if err != nil {
+		return false, fmt.Errorf("device key: %w", err)
+	}
+	opts, err := edgeDialOptions(edge)
+	if err != nil {
+		return false, err
+	}
+	mux, err := transport.Dial(opts)
 	if err != nil {
 		return false, fmt.Errorf("dial: %w", err)
 	}
 
-	cli := session.New(logger, mux, resolveLocalToken(&sv.base), "daemon-local")
-	cli.SetDeviceID(resolveDeviceID()) // 0 on a standalone client (never registered)
+	cli := session.New(logger, mux, "", "daemon-local")
+	cli.SetDeviceCredential(deviceCredential(acc.Grant, key))
 	cli.AttachTracker(state)
 	cli.AttachInspector(insp) // powers /v1/inspect/* in the local console
 
@@ -423,11 +419,13 @@ func runLocalSession(ctx context.Context, logger *slog.Logger, sv *localSupervis
 		mux.Close()
 		return false, fmt.Errorf("handshake: %w", err)
 	}
+	sv.setEdgeErr(nil)
 
 	// Session-scoped context so we can tear the Run loop down if every tunnel
 	// fails to register (otherwise Run would block until a natural drop).
 	sctx, scancel := context.WithCancel(ctx)
 	defer scancel()
+	go keepGrantFresh(sctx, logger, cli, read, acc.Expiry)
 
 	reg := newLocalRegistry()
 	runErrCh := make(chan error, 1)
@@ -437,7 +435,7 @@ func runLocalSession(ctx context.Context, logger *slog.Logger, sv *localSupervis
 	go func() { runErrCh <- cli.Run(sctx, reg.resolve) }()
 
 	// Initial registration: reg is empty, so every planned tunnel is "new".
-	sv.reconcile(sctx, logger, cli, reg, state, server)
+	sv.reconcile(sctx, logger, cli, reg, state)
 	planned := len(sv.snapshot())
 	if planned > 0 && reg.count() == 0 && sctx.Err() == nil {
 		// Had tunnels to register and every one failed — drop and back off
@@ -461,7 +459,7 @@ func runLocalSession(ctx context.Context, logger *slog.Logger, sv *localSupervis
 			return established, runErr
 		case <-sv.reconcileCh:
 			// A console write changed the plan — apply the diff live.
-			sv.reconcile(sctx, logger, cli, reg, state, server)
+			sv.reconcile(sctx, logger, cli, reg, state)
 		}
 	}
 }
@@ -555,60 +553,66 @@ func (r *localRegistry) proxyIDs() []string {
 }
 
 // loadLocalConfig reads + parses the YAML config (strict: unknown keys error
-// so a typo'd field doesn't silently disable a policy).
+// so a typo'd field doesn't silently disable a policy). A file that still names
+// the edge (removedEdgeKeys) is refused: those settings would otherwise look
+// like they still did something.
 func loadLocalConfig(path string) (*localConfig, error) {
+	cfg, removed, err := readLocalConfig(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(removed) > 0 {
+		return nil, fmt.Errorf("config %s sets %s, which this client no longer reads: a device gets its edge, and how to sign in to it, "+
+			"from the self-hosted server it joined (calabi join <invite>) — remove them", path, strings.Join(removed, ", "))
+	}
+	return cfg, nil
+}
+
+// readLocalConfig is loadLocalConfig that sets the removed edge settings aside
+// and names them instead of refusing the file: the console's own file, which
+// the console wrote them into, is rewritten without them.
+func readLocalConfig(path string) (*localConfig, []string, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read config %s: %w", path, err)
+		return nil, nil, fmt.Errorf("read config %s: %w", path, err)
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		return nil, nil, fmt.Errorf("parse config %s: %w", path, err)
+	}
+	removed := stripRemovedEdgeKeys(&doc)
+	if len(removed) > 0 {
+		if raw, err = yaml.Marshal(&doc); err != nil {
+			return nil, nil, fmt.Errorf("parse config %s: %w", path, err)
+		}
 	}
 	var cfg localConfig
 	dec := yaml.NewDecoder(strings.NewReader(string(raw)))
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("parse config %s: %w", path, err)
+		return nil, nil, fmt.Errorf("parse config %s: %w", path, err)
 	}
-	return &cfg, nil
+	return &cfg, removed, nil
 }
 
-// resolveLocalToken picks the bearer for the edge:
-//
-//	token (a literal, or ${ENV_VAR} to read from the environment)
-//	  > token_env (deprecated)
-//	  > the usual resolveToken() chain (CALABI_TOKEN / creds / defaultToken)
-//
-// The single `token` field is all a user needs — put the secret inline, or write
-// `token: ${CALABI_TOKEN}` to keep it out of the file. How it's read is our
-// concern, not the user's; token_env stays only for older configs.
-func resolveLocalToken(cfg *localConfig) string {
-	if t := strings.TrimSpace(cfg.Token); t != "" {
-		if env, ok := tokenEnvRef(t); ok {
-			if v := os.Getenv(env); v != "" {
-				return v
-			}
-			// Referenced var unset/empty → fall through to the chain below
-			// rather than sending the literal "${VAR}" as the token.
-		} else {
-			return t
-		}
+// stripRemovedEdgeKeys takes removedEdgeKeys out of the document's top level
+// and returns the ones it found.
+func stripRemovedEdgeKeys(doc *yaml.Node) []string {
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
+		return nil
 	}
-	if cfg.TokenEnv != "" { // deprecated; superseded by token: ${ENV_VAR}
-		if v := os.Getenv(cfg.TokenEnv); v != "" {
-			return v
+	m := doc.Content[0]
+	var removed []string
+	kept := m.Content[:0]
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if k := m.Content[i].Value; slices.Contains(removedEdgeKeys, k) {
+			removed = append(removed, k)
+			continue
 		}
+		kept = append(kept, m.Content[i], m.Content[i+1])
 	}
-	return resolveToken()
-}
-
-// tokenEnvRef reports whether s is an env-var reference of the form ${NAME} and
-// returns NAME. Only the whole-string brace form counts, so a literal token that
-// merely contains a '$' is never partially interpolated (tokens are opaque).
-func tokenEnvRef(s string) (string, bool) {
-	if strings.HasPrefix(s, "${") && strings.HasSuffix(s, "}") {
-		if name := strings.TrimSpace(s[2 : len(s)-1]); name != "" {
-			return name, true
-		}
-	}
-	return "", false
+	m.Content = kept
+	return removed
 }
 
 // validateLocalUpstream enforces that a tunnel forwards to a LOCAL/intranet

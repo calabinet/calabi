@@ -24,9 +24,11 @@ func TestTheFallbackNoticeFiresOnADifferentPortNotADifferentSpelling(t *testing.
 		{"v6 wildcard for a bare port", "[::]:7400", ":7400", false},
 		{"actually fell back", "0.0.0.0:7401", "0.0.0.0:7400", true},
 		{"fell back on loopback", "127.0.0.1:7402", "127.0.0.1:7400", true},
+		// CALABI_STATUS_ADDR=127.0.0.1:0 asks for any port (tests, scripts).
+		{"any port was asked for", "127.0.0.1:60785", "127.0.0.1:0", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := boundPort(tc.bound) != boundPort(tc.requested)
+			got := fellBack(tc.bound, tc.requested)
 			if got != tc.wantNotice {
 				t.Fatalf("bound %q vs requested %q: notice=%v, want %v",
 					tc.bound, tc.requested, got, tc.wantNotice)

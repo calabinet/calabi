@@ -123,7 +123,72 @@ func (a *Authenticator) Resolve(ctx context.Context, authKey string) (core.Ident
 			"org", org, "actor", owner, "scopes", scopesFromRoles(resp.GetRoles()))
 		return core.Identity{}, core.ErrAuthDenied
 	}
-	return core.Identity{Meshnet: core.MeshnetID(org), UserID: owner}, nil
+	return core.Identity{Meshnet: core.MeshnetID(org), UserID: owner, Principal: principalFor(resp)}, nil
+}
+
+// principalFor names what a validated credential is, in the form Reauthorize
+// takes back: the person for a login token, the key for an API key. identity-svc
+// puts an API key's id in its roles as "apikey:<id>"; one that predates that
+// yields "", and a node enrolled with it has to present its credential again
+// rather than come back by proof alone.
+func principalFor(resp *pb.ValidateTokenResponse) string {
+	if uid := resp.GetUserId(); uid > 0 {
+		return "user:" + strconv.FormatInt(uid, 10)
+	}
+	if id := idFromRoles(resp.GetRoles(), "apikey:"); id > 0 {
+		return "apikey:" + strconv.FormatInt(id, 10)
+	}
+	return ""
+}
+
+// Spend has nothing to count: a platform credential is a login or an API key,
+// not a key with a number of uses.
+func (a *Authenticator) Spend(context.Context, string) (func(), error) { return func() {}, nil }
+
+// enrollmentChecker is the call Reauthorize makes. Separate from RPC so a client
+// that only validates tokens (a test fake, an older contract) still builds, and
+// is refused at Reauthorize rather than trusted.
+type enrollmentChecker interface {
+	CheckEnrollment(ctx context.Context, in *pb.CheckEnrollmentRequest, opts ...grpc.CallOption) (*pb.CheckEnrollmentResponse, error)
+}
+
+// Reauthorize asks identity-svc whether the principal a node enrolled as still
+// admits it to the org — the check a login token or an API key used to get on
+// every reconnect, now that an enrolled node can come back without presenting
+// one. Fails closed, like
+// Resolve: an error or an unknown principal refuses, and the node falls back to
+// enrolling with its credential.
+func (a *Authenticator) Reauthorize(ctx context.Context, meshnet core.MeshnetID, principal string) error {
+	kind, idText, _ := strings.Cut(principal, ":")
+	id, err := strconv.ParseInt(idText, 10, 64)
+	if err != nil || id <= 0 {
+		return core.ErrAuthDenied
+	}
+	req := &pb.CheckEnrollmentRequest{OrgId: int64(meshnet)}
+	switch kind {
+	case "user":
+		req.UserId = id
+	case "apikey":
+		req.ApiKeyId = id
+	default:
+		return core.ErrAuthDenied
+	}
+	checker, ok := a.client.(enrollmentChecker)
+	if !ok {
+		return fmt.Errorf("identity: this client cannot re-check an enrollment")
+	}
+	ctx, cancel := context.WithTimeout(ctx, a.timeout)
+	defer cancel()
+	resp, err := checker.CheckEnrollment(ctx, req)
+	if err != nil {
+		a.logger.Warn("identity enrollment check failed; refusing re-registration", "org", meshnet, "principal", principal, "err", err)
+		return fmt.Errorf("identity check enrollment: %w", err)
+	}
+	if !resp.GetValid() {
+		a.logger.Info("re-registration refused: enrollment no longer valid", "org", meshnet, "principal", principal, "reason", resp.GetReason())
+		return core.ErrAuthDenied
+	}
+	return nil
 }
 
 // scopesFromRoles pulls the "scopes:a,b" element out of identity-svc's role
@@ -154,10 +219,14 @@ func hasWriteScope(roles []string) bool {
 // returns the org id, or 0 if absent. Mirrors calabi-edge's identity client.
 // actorFromRoles pulls "actor:<id>" (the human who minted an api-key) out of
 // identity-svc's role strings. 0 when absent.
-func actorFromRoles(roles []string) int64 {
+func actorFromRoles(roles []string) int64 { return idFromRoles(roles, "actor:") }
+
+// idFromRoles pulls the first "<prefix><id>" element out of identity-svc's role
+// strings. 0 when absent.
+func idFromRoles(roles []string, prefix string) int64 {
 	for _, r := range roles {
 		for _, kv := range strings.Fields(r) {
-			if v, ok := strings.CutPrefix(kv, "actor:"); ok {
+			if v, ok := strings.CutPrefix(kv, prefix); ok {
 				if id, err := strconv.ParseInt(v, 10, 64); err == nil {
 					return id
 				}

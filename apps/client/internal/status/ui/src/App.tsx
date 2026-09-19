@@ -16,6 +16,7 @@ import TunnelNew from "./pages/TunnelNew";
 import Mesh from "./pages/Mesh";
 import Logs from "./pages/Logs";
 import Login from "./pages/Login";
+import Connect from "./pages/Connect";
 import Settings from "./pages/Settings";
 import Tools from "./pages/Tools";
 
@@ -31,6 +32,10 @@ export default function App() {
     <ConsoleLockGate>
       <Routes>
         <Route path="login" element={<Login />} />
+        {/* Outside the gate like login: reached from the sign-in page, before
+            there is any account — and from a self-hosted console to add or
+            change a server. */}
+        <Route path="connect" element={<Connect />} />
         <Route
           element={
             <AuthGate>

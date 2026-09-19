@@ -130,6 +130,10 @@ type HelloAck struct {
 	Features            []string      `json:"features,omitempty"`
 	HeartbeatIntervalMs uint32        `json:"heartbeat_interval_ms"`
 	ConfigEpoch         uint64        `json:"config_epoch"`
+	// AuthChallenge is set by an edge that accepts devices by a coordinator
+	// grant (a self-hosted edge): meshproto.EdgeChallenge, fresh for this
+	// connection. The client answers it in AuthRequest.Proof.
+	AuthChallenge []byte `json:"auth_challenge,omitempty"`
 }
 
 // ---- 0x03 AUTH ---------------------------------------------------------
@@ -144,6 +148,22 @@ type AuthRequest struct {
 	// Optional and untrusted: the edge uses it only for live-presence tracking.
 	// 0 = unknown.
 	DeviceID int64 `json:"device_id,omitempty"`
+	// Grant and Proof are the credential for an edge that sent an
+	// AuthChallenge, instead of Token: the coordinator's signed grant
+	// (meshproto.RelayGrant) and meshproto.SealEdgeProof over the challenge
+	// with the node key the grant names.
+	Grant []byte `json:"grant,omitempty"`
+	Proof []byte `json:"proof,omitempty"`
+}
+
+// ---- 0x05 AUTH_REFRESH -------------------------------------------------
+
+// AuthRefresh renews an established session's grant. It must name the same
+// node key as the grant the session authenticated with, which the session
+// proved on this connection. No reply on success; a refused grant ends the
+// session with an ERROR frame.
+type AuthRefresh struct {
+	Grant []byte `json:"grant"`
 }
 
 // ---- 0x04 AUTH_RESP ----------------------------------------------------

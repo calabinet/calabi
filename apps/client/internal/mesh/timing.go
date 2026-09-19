@@ -31,6 +31,9 @@ type Timing struct {
 	ConnReport time.Duration
 	// ServiceHealth re-checks the services this node declares.
 	ServiceHealth time.Duration
+	// TunnelReport re-reports the tunnels this daemon serves (Controller.Tunnels)
+	// with their traffic. A change to the list is reported sooner.
+	TunnelReport time.Duration
 	// WakeDetect watches the clock for a suspend the OS did not announce.
 	WakeDetect bool
 	// PersistentKeepalive is WireGuard's per-peer keepalive. It holds NAT
@@ -47,6 +50,7 @@ func DesktopTiming() Timing {
 		HomeProbe:           homeProbeInterval,
 		ConnReport:          connReportInterval,
 		ServiceHealth:       serviceHealthInterval,
+		TunnelReport:        tunnelReportInterval,
 		WakeDetect:          true,
 		PersistentKeepalive: meshKeepalive,
 	}

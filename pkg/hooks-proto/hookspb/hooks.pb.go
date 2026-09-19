@@ -436,6 +436,123 @@ func (x *RelayEndpoint) GetStunPort() int32 {
 	return 0
 }
 
+// CheckEnrollmentRequest names an enrollment: the org and who enrolled.
+type CheckEnrollmentRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	OrgId int64                  `protobuf:"varint,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	// A person, enrolled with their login: still an active account and still a
+	// member of the org.
+	UserId int64 `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// An API key: still exists, not revoked, not expired, still the org's.
+	ApiKeyId      int64 `protobuf:"varint,3,opt,name=api_key_id,json=apiKeyId,proto3" json:"api_key_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckEnrollmentRequest) Reset() {
+	*x = CheckEnrollmentRequest{}
+	mi := &file_hookspb_hooks_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckEnrollmentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckEnrollmentRequest) ProtoMessage() {}
+
+func (x *CheckEnrollmentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_hookspb_hooks_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckEnrollmentRequest.ProtoReflect.Descriptor instead.
+func (*CheckEnrollmentRequest) Descriptor() ([]byte, []int) {
+	return file_hookspb_hooks_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *CheckEnrollmentRequest) GetOrgId() int64 {
+	if x != nil {
+		return x.OrgId
+	}
+	return 0
+}
+
+func (x *CheckEnrollmentRequest) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *CheckEnrollmentRequest) GetApiKeyId() int64 {
+	if x != nil {
+		return x.ApiKeyId
+	}
+	return 0
+}
+
+type CheckEnrollmentResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Valid bool                   `protobuf:"varint,1,opt,name=valid,proto3" json:"valid,omitempty"`
+	// Why not, for the coordinator's log. Empty when valid.
+	Reason        string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckEnrollmentResponse) Reset() {
+	*x = CheckEnrollmentResponse{}
+	mi := &file_hookspb_hooks_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckEnrollmentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckEnrollmentResponse) ProtoMessage() {}
+
+func (x *CheckEnrollmentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_hookspb_hooks_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckEnrollmentResponse.ProtoReflect.Descriptor instead.
+func (*CheckEnrollmentResponse) Descriptor() ([]byte, []int) {
+	return file_hookspb_hooks_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *CheckEnrollmentResponse) GetValid() bool {
+	if x != nil {
+		return x.Valid
+	}
+	return false
+}
+
+func (x *CheckEnrollmentResponse) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 // [mirrors calabi.v1.control_plane.CheckAdmitRequest]
 type CheckAdmitRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -455,7 +572,7 @@ type CheckAdmitRequest struct {
 
 func (x *CheckAdmitRequest) Reset() {
 	*x = CheckAdmitRequest{}
-	mi := &file_hookspb_hooks_proto_msgTypes[6]
+	mi := &file_hookspb_hooks_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -467,7 +584,7 @@ func (x *CheckAdmitRequest) String() string {
 func (*CheckAdmitRequest) ProtoMessage() {}
 
 func (x *CheckAdmitRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hookspb_hooks_proto_msgTypes[6]
+	mi := &file_hookspb_hooks_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -480,7 +597,7 @@ func (x *CheckAdmitRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckAdmitRequest.ProtoReflect.Descriptor instead.
 func (*CheckAdmitRequest) Descriptor() ([]byte, []int) {
-	return file_hookspb_hooks_proto_rawDescGZIP(), []int{6}
+	return file_hookspb_hooks_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *CheckAdmitRequest) GetOrgId() int64 {
@@ -541,7 +658,7 @@ type CheckAdmitResponse struct {
 
 func (x *CheckAdmitResponse) Reset() {
 	*x = CheckAdmitResponse{}
-	mi := &file_hookspb_hooks_proto_msgTypes[7]
+	mi := &file_hookspb_hooks_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -553,7 +670,7 @@ func (x *CheckAdmitResponse) String() string {
 func (*CheckAdmitResponse) ProtoMessage() {}
 
 func (x *CheckAdmitResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hookspb_hooks_proto_msgTypes[7]
+	mi := &file_hookspb_hooks_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -566,7 +683,7 @@ func (x *CheckAdmitResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckAdmitResponse.ProtoReflect.Descriptor instead.
 func (*CheckAdmitResponse) Descriptor() ([]byte, []int) {
-	return file_hookspb_hooks_proto_rawDescGZIP(), []int{7}
+	return file_hookspb_hooks_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *CheckAdmitResponse) GetAllowed() bool {
@@ -613,7 +730,7 @@ type ListDeniedOrgsRequest struct {
 
 func (x *ListDeniedOrgsRequest) Reset() {
 	*x = ListDeniedOrgsRequest{}
-	mi := &file_hookspb_hooks_proto_msgTypes[8]
+	mi := &file_hookspb_hooks_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -625,7 +742,7 @@ func (x *ListDeniedOrgsRequest) String() string {
 func (*ListDeniedOrgsRequest) ProtoMessage() {}
 
 func (x *ListDeniedOrgsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hookspb_hooks_proto_msgTypes[8]
+	mi := &file_hookspb_hooks_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -638,7 +755,7 @@ func (x *ListDeniedOrgsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDeniedOrgsRequest.ProtoReflect.Descriptor instead.
 func (*ListDeniedOrgsRequest) Descriptor() ([]byte, []int) {
-	return file_hookspb_hooks_proto_rawDescGZIP(), []int{8}
+	return file_hookspb_hooks_proto_rawDescGZIP(), []int{10}
 }
 
 // [mirrors calabi.v1.control_plane.ListDeniedOrgsResponse]
@@ -651,7 +768,7 @@ type ListDeniedOrgsResponse struct {
 
 func (x *ListDeniedOrgsResponse) Reset() {
 	*x = ListDeniedOrgsResponse{}
-	mi := &file_hookspb_hooks_proto_msgTypes[9]
+	mi := &file_hookspb_hooks_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -663,7 +780,7 @@ func (x *ListDeniedOrgsResponse) String() string {
 func (*ListDeniedOrgsResponse) ProtoMessage() {}
 
 func (x *ListDeniedOrgsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hookspb_hooks_proto_msgTypes[9]
+	mi := &file_hookspb_hooks_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -676,7 +793,7 @@ func (x *ListDeniedOrgsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDeniedOrgsResponse.ProtoReflect.Descriptor instead.
 func (*ListDeniedOrgsResponse) Descriptor() ([]byte, []int) {
-	return file_hookspb_hooks_proto_rawDescGZIP(), []int{9}
+	return file_hookspb_hooks_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ListDeniedOrgsResponse) GetOrgIds() []int64 {
@@ -699,7 +816,7 @@ type ReportRelayUsageRequest struct {
 
 func (x *ReportRelayUsageRequest) Reset() {
 	*x = ReportRelayUsageRequest{}
-	mi := &file_hookspb_hooks_proto_msgTypes[10]
+	mi := &file_hookspb_hooks_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -711,7 +828,7 @@ func (x *ReportRelayUsageRequest) String() string {
 func (*ReportRelayUsageRequest) ProtoMessage() {}
 
 func (x *ReportRelayUsageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hookspb_hooks_proto_msgTypes[10]
+	mi := &file_hookspb_hooks_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -724,7 +841,7 @@ func (x *ReportRelayUsageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportRelayUsageRequest.ProtoReflect.Descriptor instead.
 func (*ReportRelayUsageRequest) Descriptor() ([]byte, []int) {
-	return file_hookspb_hooks_proto_rawDescGZIP(), []int{10}
+	return file_hookspb_hooks_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ReportRelayUsageRequest) GetSamples() []*RelayUsageSample {
@@ -755,7 +872,7 @@ type RelayUsageSample struct {
 
 func (x *RelayUsageSample) Reset() {
 	*x = RelayUsageSample{}
-	mi := &file_hookspb_hooks_proto_msgTypes[11]
+	mi := &file_hookspb_hooks_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -767,7 +884,7 @@ func (x *RelayUsageSample) String() string {
 func (*RelayUsageSample) ProtoMessage() {}
 
 func (x *RelayUsageSample) ProtoReflect() protoreflect.Message {
-	mi := &file_hookspb_hooks_proto_msgTypes[11]
+	mi := &file_hookspb_hooks_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -780,7 +897,7 @@ func (x *RelayUsageSample) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RelayUsageSample.ProtoReflect.Descriptor instead.
 func (*RelayUsageSample) Descriptor() ([]byte, []int) {
-	return file_hookspb_hooks_proto_rawDescGZIP(), []int{11}
+	return file_hookspb_hooks_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *RelayUsageSample) GetOrgId() int64 {
@@ -829,7 +946,7 @@ type ReportRelayUsageResponse struct {
 
 func (x *ReportRelayUsageResponse) Reset() {
 	*x = ReportRelayUsageResponse{}
-	mi := &file_hookspb_hooks_proto_msgTypes[12]
+	mi := &file_hookspb_hooks_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -841,7 +958,7 @@ func (x *ReportRelayUsageResponse) String() string {
 func (*ReportRelayUsageResponse) ProtoMessage() {}
 
 func (x *ReportRelayUsageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hookspb_hooks_proto_msgTypes[12]
+	mi := &file_hookspb_hooks_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -854,7 +971,7 @@ func (x *ReportRelayUsageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportRelayUsageResponse.ProtoReflect.Descriptor instead.
 func (*ReportRelayUsageResponse) Descriptor() ([]byte, []int) {
-	return file_hookspb_hooks_proto_rawDescGZIP(), []int{12}
+	return file_hookspb_hooks_proto_rawDescGZIP(), []int{14}
 }
 
 var File_hookspb_hooks_proto protoreflect.FileDescriptor
@@ -890,7 +1007,15 @@ const file_hookspb_hooks_proto_rawDesc = "" +
 	"\x06region\x18\x01 \x01(\tR\x06region\x12\x12\n" +
 	"\x04host\x18\x02 \x01(\tR\x04host\x12\x1b\n" +
 	"\tderp_port\x18\x03 \x01(\x05R\bderpPort\x12\x1b\n" +
-	"\tstun_port\x18\x04 \x01(\x05R\bstunPort\"\xae\x01\n" +
+	"\tstun_port\x18\x04 \x01(\x05R\bstunPort\"f\n" +
+	"\x16CheckEnrollmentRequest\x12\x15\n" +
+	"\x06org_id\x18\x01 \x01(\x03R\x05orgId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x1c\n" +
+	"\n" +
+	"api_key_id\x18\x03 \x01(\x03R\bapiKeyId\"G\n" +
+	"\x17CheckEnrollmentResponse\x12\x14\n" +
+	"\x05valid\x18\x01 \x01(\bR\x05valid\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xae\x01\n" +
 	"\x11CheckAdmitRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\x03R\x05orgId\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x14\n" +
@@ -916,10 +1041,11 @@ const file_hookspb_hooks_proto_rawDesc = "" +
 	"\x02ts\x18\x03 \x01(\x03R\x02ts\x12\x19\n" +
 	"\bbytes_in\x18\x04 \x01(\x03R\abytesIn\x12\x1b\n" +
 	"\tbytes_out\x18\x05 \x01(\x03R\bbytesOut\"\x1a\n" +
-	"\x18ReportRelayUsageResponse2\xde\x01\n" +
+	"\x18ReportRelayUsageResponse2\xc4\x02\n" +
 	"\rIdentityHooks\x12^\n" +
 	"\rValidateToken\x12%.calabi.v1.hooks.ValidateTokenRequest\x1a&.calabi.v1.hooks.ValidateTokenResponse\x12m\n" +
-	"\x12ListRelayEndpoints\x12*.calabi.v1.hooks.ListRelayEndpointsRequest\x1a+.calabi.v1.hooks.ListRelayEndpointsResponse2c\n" +
+	"\x12ListRelayEndpoints\x12*.calabi.v1.hooks.ListRelayEndpointsRequest\x1a+.calabi.v1.hooks.ListRelayEndpointsResponse\x12d\n" +
+	"\x0fCheckEnrollment\x12'.calabi.v1.hooks.CheckEnrollmentRequest\x1a(.calabi.v1.hooks.CheckEnrollmentResponse2c\n" +
 	"\n" +
 	"QuotaHooks\x12U\n" +
 	"\n" +
@@ -940,7 +1066,7 @@ func file_hookspb_hooks_proto_rawDescGZIP() []byte {
 	return file_hookspb_hooks_proto_rawDescData
 }
 
-var file_hookspb_hooks_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_hookspb_hooks_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_hookspb_hooks_proto_goTypes = []any{
 	(*ValidateTokenRequest)(nil),       // 0: calabi.v1.hooks.ValidateTokenRequest
 	(*ValidateTokenResponse)(nil),      // 1: calabi.v1.hooks.ValidateTokenResponse
@@ -948,32 +1074,36 @@ var file_hookspb_hooks_proto_goTypes = []any{
 	(*ListRelayEndpointsRequest)(nil),  // 3: calabi.v1.hooks.ListRelayEndpointsRequest
 	(*ListRelayEndpointsResponse)(nil), // 4: calabi.v1.hooks.ListRelayEndpointsResponse
 	(*RelayEndpoint)(nil),              // 5: calabi.v1.hooks.RelayEndpoint
-	(*CheckAdmitRequest)(nil),          // 6: calabi.v1.hooks.CheckAdmitRequest
-	(*CheckAdmitResponse)(nil),         // 7: calabi.v1.hooks.CheckAdmitResponse
-	(*ListDeniedOrgsRequest)(nil),      // 8: calabi.v1.hooks.ListDeniedOrgsRequest
-	(*ListDeniedOrgsResponse)(nil),     // 9: calabi.v1.hooks.ListDeniedOrgsResponse
-	(*ReportRelayUsageRequest)(nil),    // 10: calabi.v1.hooks.ReportRelayUsageRequest
-	(*RelayUsageSample)(nil),           // 11: calabi.v1.hooks.RelayUsageSample
-	(*ReportRelayUsageResponse)(nil),   // 12: calabi.v1.hooks.ReportRelayUsageResponse
-	(*timestamppb.Timestamp)(nil),      // 13: google.protobuf.Timestamp
+	(*CheckEnrollmentRequest)(nil),     // 6: calabi.v1.hooks.CheckEnrollmentRequest
+	(*CheckEnrollmentResponse)(nil),    // 7: calabi.v1.hooks.CheckEnrollmentResponse
+	(*CheckAdmitRequest)(nil),          // 8: calabi.v1.hooks.CheckAdmitRequest
+	(*CheckAdmitResponse)(nil),         // 9: calabi.v1.hooks.CheckAdmitResponse
+	(*ListDeniedOrgsRequest)(nil),      // 10: calabi.v1.hooks.ListDeniedOrgsRequest
+	(*ListDeniedOrgsResponse)(nil),     // 11: calabi.v1.hooks.ListDeniedOrgsResponse
+	(*ReportRelayUsageRequest)(nil),    // 12: calabi.v1.hooks.ReportRelayUsageRequest
+	(*RelayUsageSample)(nil),           // 13: calabi.v1.hooks.RelayUsageSample
+	(*ReportRelayUsageResponse)(nil),   // 14: calabi.v1.hooks.ReportRelayUsageResponse
+	(*timestamppb.Timestamp)(nil),      // 15: google.protobuf.Timestamp
 }
 var file_hookspb_hooks_proto_depIdxs = []int32{
-	13, // 0: calabi.v1.hooks.ValidateTokenResponse.expires_at:type_name -> google.protobuf.Timestamp
+	15, // 0: calabi.v1.hooks.ValidateTokenResponse.expires_at:type_name -> google.protobuf.Timestamp
 	2,  // 1: calabi.v1.hooks.ValidateTokenResponse.error:type_name -> calabi.v1.hooks.ErrorDetail
 	5,  // 2: calabi.v1.hooks.ListRelayEndpointsResponse.items:type_name -> calabi.v1.hooks.RelayEndpoint
-	11, // 3: calabi.v1.hooks.ReportRelayUsageRequest.samples:type_name -> calabi.v1.hooks.RelayUsageSample
+	13, // 3: calabi.v1.hooks.ReportRelayUsageRequest.samples:type_name -> calabi.v1.hooks.RelayUsageSample
 	0,  // 4: calabi.v1.hooks.IdentityHooks.ValidateToken:input_type -> calabi.v1.hooks.ValidateTokenRequest
 	3,  // 5: calabi.v1.hooks.IdentityHooks.ListRelayEndpoints:input_type -> calabi.v1.hooks.ListRelayEndpointsRequest
-	6,  // 6: calabi.v1.hooks.QuotaHooks.CheckAdmit:input_type -> calabi.v1.hooks.CheckAdmitRequest
-	8,  // 7: calabi.v1.hooks.BillingHooks.ListDeniedOrgs:input_type -> calabi.v1.hooks.ListDeniedOrgsRequest
-	10, // 8: calabi.v1.hooks.BillingHooks.ReportRelayUsage:input_type -> calabi.v1.hooks.ReportRelayUsageRequest
-	1,  // 9: calabi.v1.hooks.IdentityHooks.ValidateToken:output_type -> calabi.v1.hooks.ValidateTokenResponse
-	4,  // 10: calabi.v1.hooks.IdentityHooks.ListRelayEndpoints:output_type -> calabi.v1.hooks.ListRelayEndpointsResponse
-	7,  // 11: calabi.v1.hooks.QuotaHooks.CheckAdmit:output_type -> calabi.v1.hooks.CheckAdmitResponse
-	9,  // 12: calabi.v1.hooks.BillingHooks.ListDeniedOrgs:output_type -> calabi.v1.hooks.ListDeniedOrgsResponse
-	12, // 13: calabi.v1.hooks.BillingHooks.ReportRelayUsage:output_type -> calabi.v1.hooks.ReportRelayUsageResponse
-	9,  // [9:14] is the sub-list for method output_type
-	4,  // [4:9] is the sub-list for method input_type
+	6,  // 6: calabi.v1.hooks.IdentityHooks.CheckEnrollment:input_type -> calabi.v1.hooks.CheckEnrollmentRequest
+	8,  // 7: calabi.v1.hooks.QuotaHooks.CheckAdmit:input_type -> calabi.v1.hooks.CheckAdmitRequest
+	10, // 8: calabi.v1.hooks.BillingHooks.ListDeniedOrgs:input_type -> calabi.v1.hooks.ListDeniedOrgsRequest
+	12, // 9: calabi.v1.hooks.BillingHooks.ReportRelayUsage:input_type -> calabi.v1.hooks.ReportRelayUsageRequest
+	1,  // 10: calabi.v1.hooks.IdentityHooks.ValidateToken:output_type -> calabi.v1.hooks.ValidateTokenResponse
+	4,  // 11: calabi.v1.hooks.IdentityHooks.ListRelayEndpoints:output_type -> calabi.v1.hooks.ListRelayEndpointsResponse
+	7,  // 12: calabi.v1.hooks.IdentityHooks.CheckEnrollment:output_type -> calabi.v1.hooks.CheckEnrollmentResponse
+	9,  // 13: calabi.v1.hooks.QuotaHooks.CheckAdmit:output_type -> calabi.v1.hooks.CheckAdmitResponse
+	11, // 14: calabi.v1.hooks.BillingHooks.ListDeniedOrgs:output_type -> calabi.v1.hooks.ListDeniedOrgsResponse
+	14, // 15: calabi.v1.hooks.BillingHooks.ReportRelayUsage:output_type -> calabi.v1.hooks.ReportRelayUsageResponse
+	10, // [10:16] is the sub-list for method output_type
+	4,  // [4:10] is the sub-list for method input_type
 	4,  // [4:4] is the sub-list for extension type_name
 	4,  // [4:4] is the sub-list for extension extendee
 	0,  // [0:4] is the sub-list for field type_name
@@ -990,7 +1120,7 @@ func file_hookspb_hooks_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_hookspb_hooks_proto_rawDesc), len(file_hookspb_hooks_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   3,
 		},

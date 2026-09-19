@@ -214,10 +214,37 @@ func runDaemon(args []string) int {
 	// the client is in standalone mode — it runs a self-hosted multi-tunnel
 	// runner from a YAML config instead of the platform-sync daemon below.
 	// See daemon_local.go +
-	if daemonIsLocal(args) {
-		return runLocalDaemon(args)
+	//
+	// In a loop: the console can switch between the two (daemon_restart.go).
+	// The log hub outlives the switch, so a switch reads as one log.
+	defer func() {
+		if hub := loggingGetHub(); hub != nil {
+			_ = hub.Close()
+		}
+	}()
+	startedLocal := daemonIsLocal(args)
+	for {
+		local := daemonIsLocal(args)
+		modeArgs := args
+		if local != startedLocal {
+			modeArgs = argsForMode(args)
+		}
+		var code int
+		if local {
+			code = runLocalDaemon(modeArgs)
+		} else {
+			code = runPlatformDaemon(modeArgs)
+		}
+		if !takeDaemonRestart() {
+			return code
+		}
+		slog.Info("daemon: starting again for the other mode", "was_local", local, "now_local", daemonIsLocal(args))
 	}
+}
 
+// runPlatformDaemon is the platform-sync daemon: sign-in, bff-console, the
+// platform's edges and meshnet.
+func runPlatformDaemon(args []string) int {
 	fs := flag.NewFlagSet("daemon", flag.ContinueOnError)
 	name := fs.String("name", "daemon", "client name shown in dashboard")
 	// preferred edge region. Empty = no preference (use CALABI_SERVER /
@@ -264,11 +291,6 @@ func runDaemon(args []string) int {
 	if statusWarning != "" {
 		logger.Warn("mesh/console: " + statusWarning)
 	}
-	defer func() {
-		if hub := loggingGetHub(); hub != nil {
-			_ = hub.Close()
-		}
-	}()
 
 	// persist --edge-region into creds before lock so the next
 	// daemon run (cold restart) picks it up without the flag. Doing
@@ -599,17 +621,25 @@ func runDaemon(args []string) int {
 	// Local in BOTH deployments — mesh isn't metered server-side per machine — so
 	// it's registered on the status mux here rather than proxied like tunnel usage.
 	meshMeter := newMeshUsageMeter(filepath.Join(filepath.Dir(lock.Path()), "mesh-usage.json"))
+	// The way from the sign-in page to a self-hosted server.
+	selfHosted := &platformSelfHosted{logger: logger, agentMode: agentMode}
 	attachAPI := func(mux *http.ServeMux) {
 		apiServer.Register(mux)
 		mux.HandleFunc("/v1/usage/mesh", meshMeter.handleMeshUsage)
+		selfHosted.register(mux)
 	}
-	consoleURL := startStatusPageWithAPI(logger, state, attachAPI)
+	ctx, cancel := withSignalContext()
+	defer cancel()
+	consoleURL, consoleDone := startDaemonConsole(ctx, logger, state, attachAPI)
+	// Registered after cancel's defer, so it runs first: cancel, then wait for
+	// the listener to go.
+	defer func() {
+		cancel()
+		<-consoleDone
+	}()
 	if consoleURL == "" {
 		consoleURL = "http://" + envOr("CALABI_STATUS_ADDR", defaultStatusAddr)
 	}
-
-	ctx, cancel := withSignalContext()
-	defer cancel()
 
 	// start the health monitor loop in the background.
 	go healthMon.Run(ctx)

@@ -107,6 +107,12 @@ type RegisterNodeRequest struct {
 	// false would make every un-upgraded machine claim, positively, that it
 	// accepts connections. Absent means unknown; the console shows nothing.
 	BlockIncoming *bool `protobuf:"varint,14,opt,name=block_incoming,json=blockIncoming,proto3,oneof" json:"block_incoming,omitempty"`
+	// Re-registration by proof alone (capability node_reauth): auth_key empty and
+	// this set to the node id an earlier RegisterNode returned. The challenge must
+	// be one issued for this node. The node keeps the meshnet, tags and owner it
+	// enrolled with; nothing is taken from the request that an auth key would
+	// have decided.
+	NodeId        int64 `protobuf:"varint,15,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -237,6 +243,13 @@ func (x *RegisterNodeRequest) GetBlockIncoming() bool {
 		return *x.BlockIncoming
 	}
 	return false
+}
+
+func (x *RegisterNodeRequest) GetNodeId() int64 {
+	if x != nil {
+		return x.NodeId
+	}
+	return 0
 }
 
 // DeclaredService is one entry of RegisterNodeRequest.declared_services.
@@ -410,9 +423,15 @@ func (x *RegisterNodeResponse) GetSessionToken() string {
 
 type GetRegisterChallengeRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The auth key RegisterNode will present. Required, so an anonymous caller
-	// cannot make the coordinator hold challenge state.
-	AuthKey       string `protobuf:"bytes,1,opt,name=auth_key,json=authKey,proto3" json:"auth_key,omitempty"`
+	// The auth key RegisterNode will present, so an anonymous caller cannot make
+	// the coordinator hold challenge state.
+	AuthKey string `protobuf:"bytes,1,opt,name=auth_key,json=authKey,proto3" json:"auth_key,omitempty"`
+	// Re-registration by proof alone (capability node_reauth): no auth_key, and
+	// instead the node this device already is. The challenge is issued only when
+	// both name an existing, enabled, not signed-out node, and it is bound to that
+	// node.
+	NodeId        int64  `protobuf:"varint,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	NodeKey       string `protobuf:"bytes,3,opt,name=node_key,json=nodeKey,proto3" json:"node_key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -454,6 +473,1304 @@ func (x *GetRegisterChallengeRequest) GetAuthKey() string {
 	return ""
 }
 
+func (x *GetRegisterChallengeRequest) GetNodeId() int64 {
+	if x != nil {
+		return x.NodeId
+	}
+	return 0
+}
+
+func (x *GetRegisterChallengeRequest) GetNodeKey() string {
+	if x != nil {
+		return x.NodeKey
+	}
+	return ""
+}
+
+type SignOutRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionToken  string                 `protobuf:"bytes,1,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SignOutRequest) Reset() {
+	*x = SignOutRequest{}
+	mi := &file_meshpb_coord_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SignOutRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SignOutRequest) ProtoMessage() {}
+
+func (x *SignOutRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SignOutRequest.ProtoReflect.Descriptor instead.
+func (*SignOutRequest) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *SignOutRequest) GetSessionToken() string {
+	if x != nil {
+		return x.SessionToken
+	}
+	return ""
+}
+
+type SignOutResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SignOutResponse) Reset() {
+	*x = SignOutResponse{}
+	mi := &file_meshpb_coord_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SignOutResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SignOutResponse) ProtoMessage() {}
+
+func (x *SignOutResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SignOutResponse.ProtoReflect.Descriptor instead.
+func (*SignOutResponse) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{5}
+}
+
+type ListNodesRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// A live session's token, or a view token (OpenViewSession).
+	SessionToken  string `protobuf:"bytes,1,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListNodesRequest) Reset() {
+	*x = ListNodesRequest{}
+	mi := &file_meshpb_coord_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListNodesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListNodesRequest) ProtoMessage() {}
+
+func (x *ListNodesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListNodesRequest.ProtoReflect.Descriptor instead.
+func (*ListNodesRequest) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ListNodesRequest) GetSessionToken() string {
+	if x != nil {
+		return x.SessionToken
+	}
+	return ""
+}
+
+type ListNodesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Nodes         []*NodeInfo            `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListNodesResponse) Reset() {
+	*x = ListNodesResponse{}
+	mi := &file_meshpb_coord_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListNodesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListNodesResponse) ProtoMessage() {}
+
+func (x *ListNodesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListNodesResponse.ProtoReflect.Descriptor instead.
+func (*ListNodesResponse) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ListNodesResponse) GetNodes() []*NodeInfo {
+	if x != nil {
+		return x.Nodes
+	}
+	return nil
+}
+
+// NodeInfo is one device as a list shows it.
+type NodeInfo struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name        string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Os          string                 `protobuf:"bytes,3,opt,name=os,proto3" json:"os,omitempty"`
+	OverlayAddr string                 `protobuf:"bytes,4,opt,name=overlay_addr,json=overlayAddr,proto3" json:"overlay_addr,omitempty"`
+	// Holds a live connection to the coordinator right now.
+	Online   bool `protobuf:"varint,5,opt,name=online,proto3" json:"online,omitempty"`
+	Disabled bool `protobuf:"varint,6,opt,name=disabled,proto3" json:"disabled,omitempty"`
+	// False while the meshnet requires device approval and nobody has given it.
+	Approved bool `protobuf:"varint,7,opt,name=approved,proto3" json:"approved,omitempty"`
+	// Only services an admin confirmed.
+	Services []*PeerService `protobuf:"bytes,8,rep,name=services,proto3" json:"services,omitempty"`
+	// Subnet routes it may carry; "0.0.0.0/0" makes it an exit device.
+	ApprovedRoutes []string `protobuf:"bytes,9,rep,name=approved_routes,json=approvedRoutes,proto3" json:"approved_routes,omitempty"`
+	LastSeenUnix   int64    `protobuf:"varint,10,opt,name=last_seen_unix,json=lastSeenUnix,proto3" json:"last_seen_unix,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *NodeInfo) Reset() {
+	*x = NodeInfo{}
+	mi := &file_meshpb_coord_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NodeInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NodeInfo) ProtoMessage() {}
+
+func (x *NodeInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NodeInfo.ProtoReflect.Descriptor instead.
+func (*NodeInfo) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *NodeInfo) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *NodeInfo) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *NodeInfo) GetOs() string {
+	if x != nil {
+		return x.Os
+	}
+	return ""
+}
+
+func (x *NodeInfo) GetOverlayAddr() string {
+	if x != nil {
+		return x.OverlayAddr
+	}
+	return ""
+}
+
+func (x *NodeInfo) GetOnline() bool {
+	if x != nil {
+		return x.Online
+	}
+	return false
+}
+
+func (x *NodeInfo) GetDisabled() bool {
+	if x != nil {
+		return x.Disabled
+	}
+	return false
+}
+
+func (x *NodeInfo) GetApproved() bool {
+	if x != nil {
+		return x.Approved
+	}
+	return false
+}
+
+func (x *NodeInfo) GetServices() []*PeerService {
+	if x != nil {
+		return x.Services
+	}
+	return nil
+}
+
+func (x *NodeInfo) GetApprovedRoutes() []string {
+	if x != nil {
+		return x.ApprovedRoutes
+	}
+	return nil
+}
+
+func (x *NodeInfo) GetLastSeenUnix() int64 {
+	if x != nil {
+		return x.LastSeenUnix
+	}
+	return 0
+}
+
+// TunnelReport is one tunnel as the node's daemon serves it right now.
+type TunnelReport struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The name in the daemon's configuration; unique on the node, and what the
+	// coordinator keeps the tunnel's identity by from one report to the next.
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// "http", "https", "tcp", "udp" or "sni".
+	Type string `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	// Where visitors reach it: a host name for http, https and sni; host:port for
+	// tcp and udp. Empty until its edge has assigned one.
+	PublicAddr string `protobuf:"bytes,3,opt,name=public_addr,json=publicAddr,proto3" json:"public_addr,omitempty"`
+	// What the daemon forwards to, host:port.
+	LocalAddr string `protobuf:"bytes,4,opt,name=local_addr,json=localAddr,proto3" json:"local_addr,omitempty"`
+	// "online" (its edge serves it), "pending" (registering with the edge) or
+	// "offline" (the daemon is not connected to its edge).
+	Status string `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
+	// Bytes since this node's last ACCEPTED report: from visitors to the local
+	// service, and back. The daemon keeps counting until a report is accepted, so
+	// a failed one delays the bytes rather than losing them.
+	BytesIn       int64 `protobuf:"varint,6,opt,name=bytes_in,json=bytesIn,proto3" json:"bytes_in,omitempty"`
+	BytesOut      int64 `protobuf:"varint,7,opt,name=bytes_out,json=bytesOut,proto3" json:"bytes_out,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TunnelReport) Reset() {
+	*x = TunnelReport{}
+	mi := &file_meshpb_coord_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TunnelReport) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TunnelReport) ProtoMessage() {}
+
+func (x *TunnelReport) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TunnelReport.ProtoReflect.Descriptor instead.
+func (*TunnelReport) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *TunnelReport) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *TunnelReport) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *TunnelReport) GetPublicAddr() string {
+	if x != nil {
+		return x.PublicAddr
+	}
+	return ""
+}
+
+func (x *TunnelReport) GetLocalAddr() string {
+	if x != nil {
+		return x.LocalAddr
+	}
+	return ""
+}
+
+func (x *TunnelReport) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *TunnelReport) GetBytesIn() int64 {
+	if x != nil {
+		return x.BytesIn
+	}
+	return 0
+}
+
+func (x *TunnelReport) GetBytesOut() int64 {
+	if x != nil {
+		return x.BytesOut
+	}
+	return 0
+}
+
+type ReportTunnelsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionToken  string                 `protobuf:"bytes,1,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	Tunnels       []*TunnelReport        `protobuf:"bytes,2,rep,name=tunnels,proto3" json:"tunnels,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportTunnelsRequest) Reset() {
+	*x = ReportTunnelsRequest{}
+	mi := &file_meshpb_coord_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportTunnelsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportTunnelsRequest) ProtoMessage() {}
+
+func (x *ReportTunnelsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportTunnelsRequest.ProtoReflect.Descriptor instead.
+func (*ReportTunnelsRequest) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ReportTunnelsRequest) GetSessionToken() string {
+	if x != nil {
+		return x.SessionToken
+	}
+	return ""
+}
+
+func (x *ReportTunnelsRequest) GetTunnels() []*TunnelReport {
+	if x != nil {
+		return x.Tunnels
+	}
+	return nil
+}
+
+type ReportTunnelsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportTunnelsResponse) Reset() {
+	*x = ReportTunnelsResponse{}
+	mi := &file_meshpb_coord_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportTunnelsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportTunnelsResponse) ProtoMessage() {}
+
+func (x *ReportTunnelsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportTunnelsResponse.ProtoReflect.Descriptor instead.
+func (*ReportTunnelsResponse) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{11}
+}
+
+type ListTunnelsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// A live session's token, or a view token (OpenViewSession).
+	SessionToken  string `protobuf:"bytes,1,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTunnelsRequest) Reset() {
+	*x = ListTunnelsRequest{}
+	mi := &file_meshpb_coord_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTunnelsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTunnelsRequest) ProtoMessage() {}
+
+func (x *ListTunnelsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTunnelsRequest.ProtoReflect.Descriptor instead.
+func (*ListTunnelsRequest) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ListTunnelsRequest) GetSessionToken() string {
+	if x != nil {
+		return x.SessionToken
+	}
+	return ""
+}
+
+type ListTunnelsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tunnels       []*TunnelInfo          `protobuf:"bytes,1,rep,name=tunnels,proto3" json:"tunnels,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTunnelsResponse) Reset() {
+	*x = ListTunnelsResponse{}
+	mi := &file_meshpb_coord_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTunnelsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTunnelsResponse) ProtoMessage() {}
+
+func (x *ListTunnelsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTunnelsResponse.ProtoReflect.Descriptor instead.
+func (*ListTunnelsResponse) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ListTunnelsResponse) GetTunnels() []*TunnelInfo {
+	if x != nil {
+		return x.Tunnels
+	}
+	return nil
+}
+
+// TunnelInfo is one tunnel as a list shows it.
+type TunnelInfo struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Stable for as long as its node keeps reporting a tunnel by this name.
+	Id       int64  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	NodeId   int64  `protobuf:"varint,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	NodeName string `protobuf:"bytes,3,opt,name=node_name,json=nodeName,proto3" json:"node_name,omitempty"`
+	// The node holds a live connection to the coordinator. When it does not, what
+	// it last reported may no longer be true: a list shows the tunnel offline.
+	NodeOnline bool   `protobuf:"varint,4,opt,name=node_online,json=nodeOnline,proto3" json:"node_online,omitempty"`
+	Name       string `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
+	Type       string `protobuf:"bytes,6,opt,name=type,proto3" json:"type,omitempty"`
+	PublicAddr string `protobuf:"bytes,7,opt,name=public_addr,json=publicAddr,proto3" json:"public_addr,omitempty"`
+	LocalAddr  string `protobuf:"bytes,8,opt,name=local_addr,json=localAddr,proto3" json:"local_addr,omitempty"`
+	Status     string `protobuf:"bytes,9,opt,name=status,proto3" json:"status,omitempty"`
+	// Bytes both ways over the last 30 days. 0 when this coordinator keeps no
+	// traffic records (see GetUsageResponse.unavailable).
+	Traffic_30D int64 `protobuf:"varint,10,opt,name=traffic_30d,json=traffic30d,proto3" json:"traffic_30d,omitempty"`
+	// When the node first reported a tunnel by this name, and last reported at all.
+	FirstSeenUnix int64 `protobuf:"varint,11,opt,name=first_seen_unix,json=firstSeenUnix,proto3" json:"first_seen_unix,omitempty"`
+	ReportedUnix  int64 `protobuf:"varint,12,opt,name=reported_unix,json=reportedUnix,proto3" json:"reported_unix,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TunnelInfo) Reset() {
+	*x = TunnelInfo{}
+	mi := &file_meshpb_coord_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TunnelInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TunnelInfo) ProtoMessage() {}
+
+func (x *TunnelInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TunnelInfo.ProtoReflect.Descriptor instead.
+func (*TunnelInfo) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *TunnelInfo) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *TunnelInfo) GetNodeId() int64 {
+	if x != nil {
+		return x.NodeId
+	}
+	return 0
+}
+
+func (x *TunnelInfo) GetNodeName() string {
+	if x != nil {
+		return x.NodeName
+	}
+	return ""
+}
+
+func (x *TunnelInfo) GetNodeOnline() bool {
+	if x != nil {
+		return x.NodeOnline
+	}
+	return false
+}
+
+func (x *TunnelInfo) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *TunnelInfo) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *TunnelInfo) GetPublicAddr() string {
+	if x != nil {
+		return x.PublicAddr
+	}
+	return ""
+}
+
+func (x *TunnelInfo) GetLocalAddr() string {
+	if x != nil {
+		return x.LocalAddr
+	}
+	return ""
+}
+
+func (x *TunnelInfo) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *TunnelInfo) GetTraffic_30D() int64 {
+	if x != nil {
+		return x.Traffic_30D
+	}
+	return 0
+}
+
+func (x *TunnelInfo) GetFirstSeenUnix() int64 {
+	if x != nil {
+		return x.FirstSeenUnix
+	}
+	return 0
+}
+
+func (x *TunnelInfo) GetReportedUnix() int64 {
+	if x != nil {
+		return x.ReportedUnix
+	}
+	return 0
+}
+
+type GetUsageRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// A live session's token, or a view token (OpenViewSession).
+	SessionToken string `protobuf:"bytes,1,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	// The viewer's IANA time zone ("America/New_York"): the days and the month
+	// are the viewer's, since a self-hosted server has no billing month to follow.
+	// Empty or unknown = UTC.
+	TimeZone string `protobuf:"bytes,2,opt,name=time_zone,json=timeZone,proto3" json:"time_zone,omitempty"`
+	// How many days, today included: 1 to 31, default 7.
+	Days          int32 `protobuf:"varint,3,opt,name=days,proto3" json:"days,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetUsageRequest) Reset() {
+	*x = GetUsageRequest{}
+	mi := &file_meshpb_coord_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetUsageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetUsageRequest) ProtoMessage() {}
+
+func (x *GetUsageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetUsageRequest.ProtoReflect.Descriptor instead.
+func (*GetUsageRequest) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *GetUsageRequest) GetSessionToken() string {
+	if x != nil {
+		return x.SessionToken
+	}
+	return ""
+}
+
+func (x *GetUsageRequest) GetTimeZone() string {
+	if x != nil {
+		return x.TimeZone
+	}
+	return ""
+}
+
+func (x *GetUsageRequest) GetDays() int32 {
+	if x != nil {
+		return x.Days
+	}
+	return 0
+}
+
+type GetUsageResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Traffic: absent when this coordinator keeps no traffic records, and then
+	// unavailable says why ("no_database"). A usage view shows that, not zeros.
+	Month       *UsageMonth `protobuf:"bytes,1,opt,name=month,proto3" json:"month,omitempty"`
+	Days        []*UsageDay `protobuf:"bytes,2,rep,name=days,proto3" json:"days,omitempty"`
+	Unavailable string      `protobuf:"bytes,3,opt,name=unavailable,proto3" json:"unavailable,omitempty"`
+	// True when relayed traffic is not recorded (connection records switched off):
+	// the figures are the tunnels alone.
+	RelayNotRecorded bool `protobuf:"varint,4,opt,name=relay_not_recorded,json=relayNotRecorded,proto3" json:"relay_not_recorded,omitempty"`
+	// Devices: in use (not disabled), disabled, and the most there may be
+	// (-1 = no limit).
+	DevicesUsed     int64 `protobuf:"varint,5,opt,name=devices_used,json=devicesUsed,proto3" json:"devices_used,omitempty"`
+	DevicesDisabled int64 `protobuf:"varint,6,opt,name=devices_disabled,json=devicesDisabled,proto3" json:"devices_disabled,omitempty"`
+	DevicesLimit    int64 `protobuf:"varint,7,opt,name=devices_limit,json=devicesLimit,proto3" json:"devices_limit,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *GetUsageResponse) Reset() {
+	*x = GetUsageResponse{}
+	mi := &file_meshpb_coord_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetUsageResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetUsageResponse) ProtoMessage() {}
+
+func (x *GetUsageResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetUsageResponse.ProtoReflect.Descriptor instead.
+func (*GetUsageResponse) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *GetUsageResponse) GetMonth() *UsageMonth {
+	if x != nil {
+		return x.Month
+	}
+	return nil
+}
+
+func (x *GetUsageResponse) GetDays() []*UsageDay {
+	if x != nil {
+		return x.Days
+	}
+	return nil
+}
+
+func (x *GetUsageResponse) GetUnavailable() string {
+	if x != nil {
+		return x.Unavailable
+	}
+	return ""
+}
+
+func (x *GetUsageResponse) GetRelayNotRecorded() bool {
+	if x != nil {
+		return x.RelayNotRecorded
+	}
+	return false
+}
+
+func (x *GetUsageResponse) GetDevicesUsed() int64 {
+	if x != nil {
+		return x.DevicesUsed
+	}
+	return 0
+}
+
+func (x *GetUsageResponse) GetDevicesDisabled() int64 {
+	if x != nil {
+		return x.DevicesDisabled
+	}
+	return 0
+}
+
+func (x *GetUsageResponse) GetDevicesLimit() int64 {
+	if x != nil {
+		return x.DevicesLimit
+	}
+	return 0
+}
+
+// UsageMonth is the viewer's current calendar month, [from, to).
+type UsageMonth struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	FromUnix    int64                  `protobuf:"varint,1,opt,name=from_unix,json=fromUnix,proto3" json:"from_unix,omitempty"`
+	ToUnix      int64                  `protobuf:"varint,2,opt,name=to_unix,json=toUnix,proto3" json:"to_unix,omitempty"`
+	TunnelBytes int64                  `protobuf:"varint,3,opt,name=tunnel_bytes,json=tunnelBytes,proto3" json:"tunnel_bytes,omitempty"`
+	// Mesh traffic this server's relays carried, counted once: as its sender
+	// reported it.
+	RelayBytes    int64 `protobuf:"varint,4,opt,name=relay_bytes,json=relayBytes,proto3" json:"relay_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UsageMonth) Reset() {
+	*x = UsageMonth{}
+	mi := &file_meshpb_coord_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UsageMonth) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UsageMonth) ProtoMessage() {}
+
+func (x *UsageMonth) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UsageMonth.ProtoReflect.Descriptor instead.
+func (*UsageMonth) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *UsageMonth) GetFromUnix() int64 {
+	if x != nil {
+		return x.FromUnix
+	}
+	return 0
+}
+
+func (x *UsageMonth) GetToUnix() int64 {
+	if x != nil {
+		return x.ToUnix
+	}
+	return 0
+}
+
+func (x *UsageMonth) GetTunnelBytes() int64 {
+	if x != nil {
+		return x.TunnelBytes
+	}
+	return 0
+}
+
+func (x *UsageMonth) GetRelayBytes() int64 {
+	if x != nil {
+		return x.RelayBytes
+	}
+	return 0
+}
+
+// UsageDay is one of the viewer's days, oldest first; bytes = tunnels + relay.
+type UsageDay struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	StartUnix     int64                  `protobuf:"varint,1,opt,name=start_unix,json=startUnix,proto3" json:"start_unix,omitempty"`
+	Bytes         int64                  `protobuf:"varint,2,opt,name=bytes,proto3" json:"bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UsageDay) Reset() {
+	*x = UsageDay{}
+	mi := &file_meshpb_coord_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UsageDay) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UsageDay) ProtoMessage() {}
+
+func (x *UsageDay) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UsageDay.ProtoReflect.Descriptor instead.
+func (*UsageDay) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *UsageDay) GetStartUnix() int64 {
+	if x != nil {
+		return x.StartUnix
+	}
+	return 0
+}
+
+func (x *UsageDay) GetBytes() int64 {
+	if x != nil {
+		return x.Bytes
+	}
+	return 0
+}
+
+type OpenViewSessionRequest struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	NodeId  int64                  `protobuf:"varint,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	NodeKey string                 `protobuf:"bytes,2,opt,name=node_key,json=nodeKey,proto3" json:"node_key,omitempty"`
+	// From GetRegisterChallenge(node_id, node_key), answered like RegisterNode's.
+	ChallengeId   string `protobuf:"bytes,3,opt,name=challenge_id,json=challengeId,proto3" json:"challenge_id,omitempty"`
+	Proof         []byte `protobuf:"bytes,4,opt,name=proof,proto3" json:"proof,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OpenViewSessionRequest) Reset() {
+	*x = OpenViewSessionRequest{}
+	mi := &file_meshpb_coord_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpenViewSessionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpenViewSessionRequest) ProtoMessage() {}
+
+func (x *OpenViewSessionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpenViewSessionRequest.ProtoReflect.Descriptor instead.
+func (*OpenViewSessionRequest) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *OpenViewSessionRequest) GetNodeId() int64 {
+	if x != nil {
+		return x.NodeId
+	}
+	return 0
+}
+
+func (x *OpenViewSessionRequest) GetNodeKey() string {
+	if x != nil {
+		return x.NodeKey
+	}
+	return ""
+}
+
+func (x *OpenViewSessionRequest) GetChallengeId() string {
+	if x != nil {
+		return x.ChallengeId
+	}
+	return ""
+}
+
+func (x *OpenViewSessionRequest) GetProof() []byte {
+	if x != nil {
+		return x.Proof
+	}
+	return nil
+}
+
+type OpenViewSessionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ViewToken     string                 `protobuf:"bytes,1,opt,name=view_token,json=viewToken,proto3" json:"view_token,omitempty"`
+	ExpiresUnix   int64                  `protobuf:"varint,2,opt,name=expires_unix,json=expiresUnix,proto3" json:"expires_unix,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OpenViewSessionResponse) Reset() {
+	*x = OpenViewSessionResponse{}
+	mi := &file_meshpb_coord_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpenViewSessionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpenViewSessionResponse) ProtoMessage() {}
+
+func (x *OpenViewSessionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpenViewSessionResponse.ProtoReflect.Descriptor instead.
+func (*OpenViewSessionResponse) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *OpenViewSessionResponse) GetViewToken() string {
+	if x != nil {
+		return x.ViewToken
+	}
+	return ""
+}
+
+func (x *OpenViewSessionResponse) GetExpiresUnix() int64 {
+	if x != nil {
+		return x.ExpiresUnix
+	}
+	return 0
+}
+
+type GetEdgeAccessRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// A live session's token, or a view token (OpenViewSession).
+	SessionToken  string `protobuf:"bytes,1,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetEdgeAccessRequest) Reset() {
+	*x = GetEdgeAccessRequest{}
+	mi := &file_meshpb_coord_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetEdgeAccessRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetEdgeAccessRequest) ProtoMessage() {}
+
+func (x *GetEdgeAccessRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetEdgeAccessRequest.ProtoReflect.Descriptor instead.
+func (*GetEdgeAccessRequest) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *GetEdgeAccessRequest) GetSessionToken() string {
+	if x != nil {
+		return x.SessionToken
+	}
+	return ""
+}
+
+type GetEdgeAccessResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The edges this node may serve tunnels through. Empty when the coordinator
+	// knows of none.
+	Edges []*EdgeInfo `protobuf:"bytes,1,rep,name=edges,proto3" json:"edges,omitempty"`
+	// meshproto.RelayGrant, signed by the coordinator: the node presents it to the
+	// edge with a proof of its node key. Empty when the coordinator signs nothing.
+	Grant []byte `protobuf:"bytes,2,opt,name=grant,proto3" json:"grant,omitempty"`
+	// When the grant stops being accepted; ask again well before.
+	GrantExpiresUnix int64 `protobuf:"varint,3,opt,name=grant_expires_unix,json=grantExpiresUnix,proto3" json:"grant_expires_unix,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *GetEdgeAccessResponse) Reset() {
+	*x = GetEdgeAccessResponse{}
+	mi := &file_meshpb_coord_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetEdgeAccessResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetEdgeAccessResponse) ProtoMessage() {}
+
+func (x *GetEdgeAccessResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetEdgeAccessResponse.ProtoReflect.Descriptor instead.
+func (*GetEdgeAccessResponse) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *GetEdgeAccessResponse) GetEdges() []*EdgeInfo {
+	if x != nil {
+		return x.Edges
+	}
+	return nil
+}
+
+func (x *GetEdgeAccessResponse) GetGrant() []byte {
+	if x != nil {
+		return x.Grant
+	}
+	return nil
+}
+
+func (x *GetEdgeAccessResponse) GetGrantExpiresUnix() int64 {
+	if x != nil {
+		return x.GrantExpiresUnix
+	}
+	return 0
+}
+
+// EdgeInfo is one edge as a node dials it.
+type EdgeInfo struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// host:port of the edge's control listener, as devices reach it.
+	Addr string `protobuf:"bytes,1,opt,name=addr,proto3" json:"addr,omitempty"`
+	// SHA-256 of the certificate's public key (meshproto.CertPin), "sha256:…".
+	// Empty: check the certificate against the system's roots and the host name.
+	Pin           string `protobuf:"bytes,2,opt,name=pin,proto3" json:"pin,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EdgeInfo) Reset() {
+	*x = EdgeInfo{}
+	mi := &file_meshpb_coord_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EdgeInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EdgeInfo) ProtoMessage() {}
+
+func (x *EdgeInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EdgeInfo.ProtoReflect.Descriptor instead.
+func (*EdgeInfo) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *EdgeInfo) GetAddr() string {
+	if x != nil {
+		return x.Addr
+	}
+	return ""
+}
+
+func (x *EdgeInfo) GetPin() string {
+	if x != nil {
+		return x.Pin
+	}
+	return ""
+}
+
 type GetRegisterChallengeResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Names the challenge on the RegisterNode that answers it. Single use,
@@ -467,7 +1784,7 @@ type GetRegisterChallengeResponse struct {
 
 func (x *GetRegisterChallengeResponse) Reset() {
 	*x = GetRegisterChallengeResponse{}
-	mi := &file_meshpb_coord_proto_msgTypes[4]
+	mi := &file_meshpb_coord_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -479,7 +1796,7 @@ func (x *GetRegisterChallengeResponse) String() string {
 func (*GetRegisterChallengeResponse) ProtoMessage() {}
 
 func (x *GetRegisterChallengeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[4]
+	mi := &file_meshpb_coord_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -492,7 +1809,7 @@ func (x *GetRegisterChallengeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRegisterChallengeResponse.ProtoReflect.Descriptor instead.
 func (*GetRegisterChallengeResponse) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{4}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *GetRegisterChallengeResponse) GetChallengeId() string {
@@ -529,7 +1846,7 @@ type ServiceHealth struct {
 
 func (x *ServiceHealth) Reset() {
 	*x = ServiceHealth{}
-	mi := &file_meshpb_coord_proto_msgTypes[5]
+	mi := &file_meshpb_coord_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -541,7 +1858,7 @@ func (x *ServiceHealth) String() string {
 func (*ServiceHealth) ProtoMessage() {}
 
 func (x *ServiceHealth) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[5]
+	mi := &file_meshpb_coord_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -554,7 +1871,7 @@ func (x *ServiceHealth) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceHealth.ProtoReflect.Descriptor instead.
 func (*ServiceHealth) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{5}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ServiceHealth) GetName() string {
@@ -587,10 +1904,10 @@ func (x *ServiceHealth) GetChecked() bool {
 
 type UpdateNodeDeclarationsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Authenticated the same way RegisterNode is: the auth key resolves to the
-	// meshnet, and node_key selects the node WITHIN it. A key that resolves to a
-	// different meshnet therefore cannot reach this node at all.
-	AuthKey          string             `protobuf:"bytes,1,opt,name=auth_key,json=authKey,proto3" json:"auth_key,omitempty"`
+	// Not read by the coordinator; session_token (below) authorizes this call.
+	AuthKey string `protobuf:"bytes,1,opt,name=auth_key,json=authKey,proto3" json:"auth_key,omitempty"`
+	// Optional. When set it must be the node the session belongs to, otherwise
+	// the call is refused with PermissionDenied.
 	NodeKey          string             `protobuf:"bytes,2,opt,name=node_key,json=nodeKey,proto3" json:"node_key,omitempty"`
 	DeclaredServices []*DeclaredService `protobuf:"bytes,3,rep,name=declared_services,json=declaredServices,proto3" json:"declared_services,omitempty"`
 	// Empty means "no change", not "clear it". A node reports "" both when it has
@@ -616,7 +1933,7 @@ type UpdateNodeDeclarationsRequest struct {
 
 func (x *UpdateNodeDeclarationsRequest) Reset() {
 	*x = UpdateNodeDeclarationsRequest{}
-	mi := &file_meshpb_coord_proto_msgTypes[6]
+	mi := &file_meshpb_coord_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -628,7 +1945,7 @@ func (x *UpdateNodeDeclarationsRequest) String() string {
 func (*UpdateNodeDeclarationsRequest) ProtoMessage() {}
 
 func (x *UpdateNodeDeclarationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[6]
+	mi := &file_meshpb_coord_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -641,7 +1958,7 @@ func (x *UpdateNodeDeclarationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateNodeDeclarationsRequest.ProtoReflect.Descriptor instead.
 func (*UpdateNodeDeclarationsRequest) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{6}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *UpdateNodeDeclarationsRequest) GetAuthKey() string {
@@ -702,7 +2019,7 @@ type UpdateNodeDeclarationsResponse struct {
 
 func (x *UpdateNodeDeclarationsResponse) Reset() {
 	*x = UpdateNodeDeclarationsResponse{}
-	mi := &file_meshpb_coord_proto_msgTypes[7]
+	mi := &file_meshpb_coord_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -714,7 +2031,7 @@ func (x *UpdateNodeDeclarationsResponse) String() string {
 func (*UpdateNodeDeclarationsResponse) ProtoMessage() {}
 
 func (x *UpdateNodeDeclarationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[7]
+	mi := &file_meshpb_coord_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -727,7 +2044,7 @@ func (x *UpdateNodeDeclarationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateNodeDeclarationsResponse.ProtoReflect.Descriptor instead.
 func (*UpdateNodeDeclarationsResponse) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{7}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *UpdateNodeDeclarationsResponse) GetNodeId() int64 {
@@ -764,7 +2081,7 @@ type ConnSample struct {
 
 func (x *ConnSample) Reset() {
 	*x = ConnSample{}
-	mi := &file_meshpb_coord_proto_msgTypes[8]
+	mi := &file_meshpb_coord_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -776,7 +2093,7 @@ func (x *ConnSample) String() string {
 func (*ConnSample) ProtoMessage() {}
 
 func (x *ConnSample) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[8]
+	mi := &file_meshpb_coord_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -789,7 +2106,7 @@ func (x *ConnSample) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConnSample.ProtoReflect.Descriptor instead.
 func (*ConnSample) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{8}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ConnSample) GetPeerNodeKey() string {
@@ -847,7 +2164,7 @@ type ReportConnectionsRequest struct {
 
 func (x *ReportConnectionsRequest) Reset() {
 	*x = ReportConnectionsRequest{}
-	mi := &file_meshpb_coord_proto_msgTypes[9]
+	mi := &file_meshpb_coord_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -859,7 +2176,7 @@ func (x *ReportConnectionsRequest) String() string {
 func (*ReportConnectionsRequest) ProtoMessage() {}
 
 func (x *ReportConnectionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[9]
+	mi := &file_meshpb_coord_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -872,7 +2189,7 @@ func (x *ReportConnectionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportConnectionsRequest.ProtoReflect.Descriptor instead.
 func (*ReportConnectionsRequest) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{9}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ReportConnectionsRequest) GetSessionToken() string {
@@ -908,7 +2225,7 @@ type ReportConnectionsResponse struct {
 
 func (x *ReportConnectionsResponse) Reset() {
 	*x = ReportConnectionsResponse{}
-	mi := &file_meshpb_coord_proto_msgTypes[10]
+	mi := &file_meshpb_coord_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -920,7 +2237,7 @@ func (x *ReportConnectionsResponse) String() string {
 func (*ReportConnectionsResponse) ProtoMessage() {}
 
 func (x *ReportConnectionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[10]
+	mi := &file_meshpb_coord_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -933,7 +2250,7 @@ func (x *ReportConnectionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportConnectionsResponse.ProtoReflect.Descriptor instead.
 func (*ReportConnectionsResponse) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{10}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ReportConnectionsResponse) GetStored() int32 {
@@ -955,7 +2272,7 @@ type ReportServiceHealthRequest struct {
 
 func (x *ReportServiceHealthRequest) Reset() {
 	*x = ReportServiceHealthRequest{}
-	mi := &file_meshpb_coord_proto_msgTypes[11]
+	mi := &file_meshpb_coord_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -967,7 +2284,7 @@ func (x *ReportServiceHealthRequest) String() string {
 func (*ReportServiceHealthRequest) ProtoMessage() {}
 
 func (x *ReportServiceHealthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[11]
+	mi := &file_meshpb_coord_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -980,7 +2297,7 @@ func (x *ReportServiceHealthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportServiceHealthRequest.ProtoReflect.Descriptor instead.
 func (*ReportServiceHealthRequest) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{11}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ReportServiceHealthRequest) GetNodeId() int64 {
@@ -1012,7 +2329,7 @@ type ReportServiceHealthResponse struct {
 
 func (x *ReportServiceHealthResponse) Reset() {
 	*x = ReportServiceHealthResponse{}
-	mi := &file_meshpb_coord_proto_msgTypes[12]
+	mi := &file_meshpb_coord_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1024,7 +2341,7 @@ func (x *ReportServiceHealthResponse) String() string {
 func (*ReportServiceHealthResponse) ProtoMessage() {}
 
 func (x *ReportServiceHealthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[12]
+	mi := &file_meshpb_coord_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1037,7 +2354,7 @@ func (x *ReportServiceHealthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportServiceHealthResponse.ProtoReflect.Descriptor instead.
 func (*ReportServiceHealthResponse) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{12}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{32}
 }
 
 type PullNetMapRequest struct {
@@ -1052,7 +2369,7 @@ type PullNetMapRequest struct {
 
 func (x *PullNetMapRequest) Reset() {
 	*x = PullNetMapRequest{}
-	mi := &file_meshpb_coord_proto_msgTypes[13]
+	mi := &file_meshpb_coord_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1064,7 +2381,7 @@ func (x *PullNetMapRequest) String() string {
 func (*PullNetMapRequest) ProtoMessage() {}
 
 func (x *PullNetMapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[13]
+	mi := &file_meshpb_coord_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1077,7 +2394,7 @@ func (x *PullNetMapRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PullNetMapRequest.ProtoReflect.Descriptor instead.
 func (*PullNetMapRequest) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{13}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *PullNetMapRequest) GetNodeId() int64 {
@@ -1190,7 +2507,7 @@ type NetMap struct {
 
 func (x *NetMap) Reset() {
 	*x = NetMap{}
-	mi := &file_meshpb_coord_proto_msgTypes[14]
+	mi := &file_meshpb_coord_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1202,7 +2519,7 @@ func (x *NetMap) String() string {
 func (*NetMap) ProtoMessage() {}
 
 func (x *NetMap) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[14]
+	mi := &file_meshpb_coord_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1215,7 +2532,7 @@ func (x *NetMap) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NetMap.ProtoReflect.Descriptor instead.
 func (*NetMap) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{14}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *NetMap) GetSelf() *Peer {
@@ -1311,7 +2628,7 @@ type SubnetAlias struct {
 
 func (x *SubnetAlias) Reset() {
 	*x = SubnetAlias{}
-	mi := &file_meshpb_coord_proto_msgTypes[15]
+	mi := &file_meshpb_coord_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1323,7 +2640,7 @@ func (x *SubnetAlias) String() string {
 func (*SubnetAlias) ProtoMessage() {}
 
 func (x *SubnetAlias) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[15]
+	mi := &file_meshpb_coord_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1336,7 +2653,7 @@ func (x *SubnetAlias) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubnetAlias.ProtoReflect.Descriptor instead.
 func (*SubnetAlias) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{15}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *SubnetAlias) GetAlias() string {
@@ -1365,7 +2682,7 @@ type FilterRule struct {
 
 func (x *FilterRule) Reset() {
 	*x = FilterRule{}
-	mi := &file_meshpb_coord_proto_msgTypes[16]
+	mi := &file_meshpb_coord_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1377,7 +2694,7 @@ func (x *FilterRule) String() string {
 func (*FilterRule) ProtoMessage() {}
 
 func (x *FilterRule) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[16]
+	mi := &file_meshpb_coord_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1390,7 +2707,7 @@ func (x *FilterRule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FilterRule.ProtoReflect.Descriptor instead.
 func (*FilterRule) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{16}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *FilterRule) GetSrcCidrs() []string {
@@ -1420,7 +2737,7 @@ type PortRange struct {
 
 func (x *PortRange) Reset() {
 	*x = PortRange{}
-	mi := &file_meshpb_coord_proto_msgTypes[17]
+	mi := &file_meshpb_coord_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1432,7 +2749,7 @@ func (x *PortRange) String() string {
 func (*PortRange) ProtoMessage() {}
 
 func (x *PortRange) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[17]
+	mi := &file_meshpb_coord_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1445,7 +2762,7 @@ func (x *PortRange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PortRange.ProtoReflect.Descriptor instead.
 func (*PortRange) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{17}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *PortRange) GetFirst() uint32 {
@@ -1507,7 +2824,7 @@ type Peer struct {
 
 func (x *Peer) Reset() {
 	*x = Peer{}
-	mi := &file_meshpb_coord_proto_msgTypes[18]
+	mi := &file_meshpb_coord_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1519,7 +2836,7 @@ func (x *Peer) String() string {
 func (*Peer) ProtoMessage() {}
 
 func (x *Peer) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[18]
+	mi := &file_meshpb_coord_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1532,7 +2849,7 @@ func (x *Peer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Peer.ProtoReflect.Descriptor instead.
 func (*Peer) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{18}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *Peer) GetNodeId() int64 {
@@ -1618,7 +2935,7 @@ type PeerService struct {
 
 func (x *PeerService) Reset() {
 	*x = PeerService{}
-	mi := &file_meshpb_coord_proto_msgTypes[19]
+	mi := &file_meshpb_coord_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1630,7 +2947,7 @@ func (x *PeerService) String() string {
 func (*PeerService) ProtoMessage() {}
 
 func (x *PeerService) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[19]
+	mi := &file_meshpb_coord_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1643,7 +2960,7 @@ func (x *PeerService) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerService.ProtoReflect.Descriptor instead.
 func (*PeerService) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{19}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *PeerService) GetName() string {
@@ -1676,7 +2993,7 @@ type DERPMap struct {
 
 func (x *DERPMap) Reset() {
 	*x = DERPMap{}
-	mi := &file_meshpb_coord_proto_msgTypes[20]
+	mi := &file_meshpb_coord_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1688,7 +3005,7 @@ func (x *DERPMap) String() string {
 func (*DERPMap) ProtoMessage() {}
 
 func (x *DERPMap) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[20]
+	mi := &file_meshpb_coord_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1701,7 +3018,7 @@ func (x *DERPMap) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DERPMap.ProtoReflect.Descriptor instead.
 func (*DERPMap) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{20}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *DERPMap) GetRegions() []*DERPRegion {
@@ -1721,7 +3038,7 @@ type DERPRegion struct {
 
 func (x *DERPRegion) Reset() {
 	*x = DERPRegion{}
-	mi := &file_meshpb_coord_proto_msgTypes[21]
+	mi := &file_meshpb_coord_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1733,7 +3050,7 @@ func (x *DERPRegion) String() string {
 func (*DERPRegion) ProtoMessage() {}
 
 func (x *DERPRegion) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[21]
+	mi := &file_meshpb_coord_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1746,7 +3063,7 @@ func (x *DERPRegion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DERPRegion.ProtoReflect.Descriptor instead.
 func (*DERPRegion) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{21}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *DERPRegion) GetCode() string {
@@ -1774,7 +3091,7 @@ type DERPNode struct {
 
 func (x *DERPNode) Reset() {
 	*x = DERPNode{}
-	mi := &file_meshpb_coord_proto_msgTypes[22]
+	mi := &file_meshpb_coord_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1786,7 +3103,7 @@ func (x *DERPNode) String() string {
 func (*DERPNode) ProtoMessage() {}
 
 func (x *DERPNode) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[22]
+	mi := &file_meshpb_coord_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1799,7 +3116,7 @@ func (x *DERPNode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DERPNode.ProtoReflect.Descriptor instead.
 func (*DERPNode) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{22}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *DERPNode) GetHostName() string {
@@ -1841,7 +3158,7 @@ type ReportEndpointsRequest struct {
 
 func (x *ReportEndpointsRequest) Reset() {
 	*x = ReportEndpointsRequest{}
-	mi := &file_meshpb_coord_proto_msgTypes[23]
+	mi := &file_meshpb_coord_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1853,7 +3170,7 @@ func (x *ReportEndpointsRequest) String() string {
 func (*ReportEndpointsRequest) ProtoMessage() {}
 
 func (x *ReportEndpointsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[23]
+	mi := &file_meshpb_coord_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1866,7 +3183,7 @@ func (x *ReportEndpointsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportEndpointsRequest.ProtoReflect.Descriptor instead.
 func (*ReportEndpointsRequest) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{23}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ReportEndpointsRequest) GetNodeId() int64 {
@@ -1905,7 +3222,7 @@ type ReportEndpointsResponse struct {
 
 func (x *ReportEndpointsResponse) Reset() {
 	*x = ReportEndpointsResponse{}
-	mi := &file_meshpb_coord_proto_msgTypes[24]
+	mi := &file_meshpb_coord_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1917,7 +3234,7 @@ func (x *ReportEndpointsResponse) String() string {
 func (*ReportEndpointsResponse) ProtoMessage() {}
 
 func (x *ReportEndpointsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[24]
+	mi := &file_meshpb_coord_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1930,14 +3247,14 @@ func (x *ReportEndpointsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportEndpointsResponse.ProtoReflect.Descriptor instead.
 func (*ReportEndpointsResponse) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{24}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{44}
 }
 
 var File_meshpb_coord_proto protoreflect.FileDescriptor
 
 const file_meshpb_coord_proto_rawDesc = "" +
 	"\n" +
-	"\x12meshpb/coord.proto\x12\x0ecalabi.mesh.v1\"\xb5\x04\n" +
+	"\x12meshpb/coord.proto\x12\x0ecalabi.mesh.v1\"\xce\x04\n" +
 	"\x13RegisterNodeRequest\x12\x19\n" +
 	"\bnode_key\x18\x01 \x01(\tR\anodeKey\x12\x1b\n" +
 	"\tdisco_key\x18\x02 \x01(\tR\bdiscoKey\x12\x12\n" +
@@ -1953,7 +3270,8 @@ const file_meshpb_coord_proto_rawDesc = "" +
 	"\fchallenge_id\x18\v \x01(\tR\vchallengeId\x12%\n" +
 	"\x0eregister_proof\x18\f \x01(\fR\rregisterProof\x12\x0e\n" +
 	"\x02os\x18\r \x01(\tR\x02os\x12*\n" +
-	"\x0eblock_incoming\x18\x0e \x01(\bH\x00R\rblockIncoming\x88\x01\x01B\x11\n" +
+	"\x0eblock_incoming\x18\x0e \x01(\bH\x00R\rblockIncoming\x88\x01\x01\x12\x17\n" +
+	"\anode_id\x18\x0f \x01(\x03R\x06nodeIdB\x11\n" +
 	"\x0f_block_incoming\"{\n" +
 	"\x0fDeclaredService\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
@@ -1966,9 +3284,108 @@ const file_meshpb_coord_proto_rawDesc = "" +
 	"\foverlay_addr\x18\x02 \x01(\tR\voverlayAddr\x12)\n" +
 	"\x10protocol_version\x18\x03 \x01(\rR\x0fprotocolVersion\x12\"\n" +
 	"\fcapabilities\x18\x04 \x03(\tR\fcapabilities\x12#\n" +
-	"\rsession_token\x18\x05 \x01(\tR\fsessionToken\"8\n" +
+	"\rsession_token\x18\x05 \x01(\tR\fsessionToken\"l\n" +
 	"\x1bGetRegisterChallengeRequest\x12\x19\n" +
-	"\bauth_key\x18\x01 \x01(\tR\aauthKey\"_\n" +
+	"\bauth_key\x18\x01 \x01(\tR\aauthKey\x12\x17\n" +
+	"\anode_id\x18\x02 \x01(\x03R\x06nodeId\x12\x19\n" +
+	"\bnode_key\x18\x03 \x01(\tR\anodeKey\"5\n" +
+	"\x0eSignOutRequest\x12#\n" +
+	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\"\x11\n" +
+	"\x0fSignOutResponse\"7\n" +
+	"\x10ListNodesRequest\x12#\n" +
+	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\"C\n" +
+	"\x11ListNodesResponse\x12.\n" +
+	"\x05nodes\x18\x01 \x03(\v2\x18.calabi.mesh.v1.NodeInfoR\x05nodes\"\xb9\x02\n" +
+	"\bNodeInfo\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x0e\n" +
+	"\x02os\x18\x03 \x01(\tR\x02os\x12!\n" +
+	"\foverlay_addr\x18\x04 \x01(\tR\voverlayAddr\x12\x16\n" +
+	"\x06online\x18\x05 \x01(\bR\x06online\x12\x1a\n" +
+	"\bdisabled\x18\x06 \x01(\bR\bdisabled\x12\x1a\n" +
+	"\bapproved\x18\a \x01(\bR\bapproved\x127\n" +
+	"\bservices\x18\b \x03(\v2\x1b.calabi.mesh.v1.PeerServiceR\bservices\x12'\n" +
+	"\x0fapproved_routes\x18\t \x03(\tR\x0eapprovedRoutes\x12$\n" +
+	"\x0elast_seen_unix\x18\n" +
+	" \x01(\x03R\flastSeenUnix\"\xc6\x01\n" +
+	"\fTunnelReport\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12\x1f\n" +
+	"\vpublic_addr\x18\x03 \x01(\tR\n" +
+	"publicAddr\x12\x1d\n" +
+	"\n" +
+	"local_addr\x18\x04 \x01(\tR\tlocalAddr\x12\x16\n" +
+	"\x06status\x18\x05 \x01(\tR\x06status\x12\x19\n" +
+	"\bbytes_in\x18\x06 \x01(\x03R\abytesIn\x12\x1b\n" +
+	"\tbytes_out\x18\a \x01(\x03R\bbytesOut\"s\n" +
+	"\x14ReportTunnelsRequest\x12#\n" +
+	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x126\n" +
+	"\atunnels\x18\x02 \x03(\v2\x1c.calabi.mesh.v1.TunnelReportR\atunnels\"\x17\n" +
+	"\x15ReportTunnelsResponse\"9\n" +
+	"\x12ListTunnelsRequest\x12#\n" +
+	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\"K\n" +
+	"\x13ListTunnelsResponse\x124\n" +
+	"\atunnels\x18\x01 \x03(\v2\x1a.calabi.mesh.v1.TunnelInfoR\atunnels\"\xe1\x02\n" +
+	"\n" +
+	"TunnelInfo\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x17\n" +
+	"\anode_id\x18\x02 \x01(\x03R\x06nodeId\x12\x1b\n" +
+	"\tnode_name\x18\x03 \x01(\tR\bnodeName\x12\x1f\n" +
+	"\vnode_online\x18\x04 \x01(\bR\n" +
+	"nodeOnline\x12\x12\n" +
+	"\x04name\x18\x05 \x01(\tR\x04name\x12\x12\n" +
+	"\x04type\x18\x06 \x01(\tR\x04type\x12\x1f\n" +
+	"\vpublic_addr\x18\a \x01(\tR\n" +
+	"publicAddr\x12\x1d\n" +
+	"\n" +
+	"local_addr\x18\b \x01(\tR\tlocalAddr\x12\x16\n" +
+	"\x06status\x18\t \x01(\tR\x06status\x12\x1f\n" +
+	"\vtraffic_30d\x18\n" +
+	" \x01(\x03R\n" +
+	"traffic30d\x12&\n" +
+	"\x0ffirst_seen_unix\x18\v \x01(\x03R\rfirstSeenUnix\x12#\n" +
+	"\rreported_unix\x18\f \x01(\x03R\freportedUnix\"g\n" +
+	"\x0fGetUsageRequest\x12#\n" +
+	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x12\x1b\n" +
+	"\ttime_zone\x18\x02 \x01(\tR\btimeZone\x12\x12\n" +
+	"\x04days\x18\x03 \x01(\x05R\x04days\"\xb5\x02\n" +
+	"\x10GetUsageResponse\x120\n" +
+	"\x05month\x18\x01 \x01(\v2\x1a.calabi.mesh.v1.UsageMonthR\x05month\x12,\n" +
+	"\x04days\x18\x02 \x03(\v2\x18.calabi.mesh.v1.UsageDayR\x04days\x12 \n" +
+	"\vunavailable\x18\x03 \x01(\tR\vunavailable\x12,\n" +
+	"\x12relay_not_recorded\x18\x04 \x01(\bR\x10relayNotRecorded\x12!\n" +
+	"\fdevices_used\x18\x05 \x01(\x03R\vdevicesUsed\x12)\n" +
+	"\x10devices_disabled\x18\x06 \x01(\x03R\x0fdevicesDisabled\x12#\n" +
+	"\rdevices_limit\x18\a \x01(\x03R\fdevicesLimit\"\x86\x01\n" +
+	"\n" +
+	"UsageMonth\x12\x1b\n" +
+	"\tfrom_unix\x18\x01 \x01(\x03R\bfromUnix\x12\x17\n" +
+	"\ato_unix\x18\x02 \x01(\x03R\x06toUnix\x12!\n" +
+	"\ftunnel_bytes\x18\x03 \x01(\x03R\vtunnelBytes\x12\x1f\n" +
+	"\vrelay_bytes\x18\x04 \x01(\x03R\n" +
+	"relayBytes\"?\n" +
+	"\bUsageDay\x12\x1d\n" +
+	"\n" +
+	"start_unix\x18\x01 \x01(\x03R\tstartUnix\x12\x14\n" +
+	"\x05bytes\x18\x02 \x01(\x03R\x05bytes\"\x85\x01\n" +
+	"\x16OpenViewSessionRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\x03R\x06nodeId\x12\x19\n" +
+	"\bnode_key\x18\x02 \x01(\tR\anodeKey\x12!\n" +
+	"\fchallenge_id\x18\x03 \x01(\tR\vchallengeId\x12\x14\n" +
+	"\x05proof\x18\x04 \x01(\fR\x05proof\"[\n" +
+	"\x17OpenViewSessionResponse\x12\x1d\n" +
+	"\n" +
+	"view_token\x18\x01 \x01(\tR\tviewToken\x12!\n" +
+	"\fexpires_unix\x18\x02 \x01(\x03R\vexpiresUnix\";\n" +
+	"\x14GetEdgeAccessRequest\x12#\n" +
+	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\"\x8b\x01\n" +
+	"\x15GetEdgeAccessResponse\x12.\n" +
+	"\x05edges\x18\x01 \x03(\v2\x18.calabi.mesh.v1.EdgeInfoR\x05edges\x12\x14\n" +
+	"\x05grant\x18\x02 \x01(\fR\x05grant\x12,\n" +
+	"\x12grant_expires_unix\x18\x03 \x01(\x03R\x10grantExpiresUnix\"0\n" +
+	"\bEdgeInfo\x12\x12\n" +
+	"\x04addr\x18\x01 \x01(\tR\x04addr\x12\x10\n" +
+	"\x03pin\x18\x02 \x01(\tR\x03pin\"_\n" +
 	"\x1cGetRegisterChallengeResponse\x12!\n" +
 	"\fchallenge_id\x18\x01 \x01(\tR\vchallengeId\x12\x1c\n" +
 	"\tchallenge\x18\x02 \x01(\fR\tchallenge\"s\n" +
@@ -2069,10 +3486,18 @@ const file_meshpb_coord_proto_rawDesc = "" +
 	"\vhome_region\x18\x03 \x01(\tR\n" +
 	"homeRegion\x12#\n" +
 	"\rsession_token\x18\x06 \x01(\tR\fsessionTokenJ\x04\b\x04\x10\x05J\x04\b\x05\x10\x06R\bauth_keyR\bnode_key\"\x19\n" +
-	"\x17ReportEndpointsResponse2\xdd\x05\n" +
+	"\x17ReportEndpointsResponse2\xc2\n" +
+	"\n" +
 	"\vCoordinator\x12Y\n" +
 	"\fRegisterNode\x12#.calabi.mesh.v1.RegisterNodeRequest\x1a$.calabi.mesh.v1.RegisterNodeResponse\x12q\n" +
-	"\x14GetRegisterChallenge\x12+.calabi.mesh.v1.GetRegisterChallengeRequest\x1a,.calabi.mesh.v1.GetRegisterChallengeResponse\x12I\n" +
+	"\x14GetRegisterChallenge\x12+.calabi.mesh.v1.GetRegisterChallengeRequest\x1a,.calabi.mesh.v1.GetRegisterChallengeResponse\x12J\n" +
+	"\aSignOut\x12\x1e.calabi.mesh.v1.SignOutRequest\x1a\x1f.calabi.mesh.v1.SignOutResponse\x12P\n" +
+	"\tListNodes\x12 .calabi.mesh.v1.ListNodesRequest\x1a!.calabi.mesh.v1.ListNodesResponse\x12\\\n" +
+	"\rReportTunnels\x12$.calabi.mesh.v1.ReportTunnelsRequest\x1a%.calabi.mesh.v1.ReportTunnelsResponse\x12V\n" +
+	"\vListTunnels\x12\".calabi.mesh.v1.ListTunnelsRequest\x1a#.calabi.mesh.v1.ListTunnelsResponse\x12M\n" +
+	"\bGetUsage\x12\x1f.calabi.mesh.v1.GetUsageRequest\x1a .calabi.mesh.v1.GetUsageResponse\x12b\n" +
+	"\x0fOpenViewSession\x12&.calabi.mesh.v1.OpenViewSessionRequest\x1a'.calabi.mesh.v1.OpenViewSessionResponse\x12\\\n" +
+	"\rGetEdgeAccess\x12$.calabi.mesh.v1.GetEdgeAccessRequest\x1a%.calabi.mesh.v1.GetEdgeAccessResponse\x12I\n" +
 	"\n" +
 	"PullNetMap\x12!.calabi.mesh.v1.PullNetMapRequest\x1a\x16.calabi.mesh.v1.NetMap0\x01\x12b\n" +
 	"\x0fReportEndpoints\x12&.calabi.mesh.v1.ReportEndpointsRequest\x1a'.calabi.mesh.v1.ReportEndpointsResponse\x12w\n" +
@@ -2092,68 +3517,109 @@ func file_meshpb_coord_proto_rawDescGZIP() []byte {
 	return file_meshpb_coord_proto_rawDescData
 }
 
-var file_meshpb_coord_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_meshpb_coord_proto_msgTypes = make([]protoimpl.MessageInfo, 45)
 var file_meshpb_coord_proto_goTypes = []any{
 	(*RegisterNodeRequest)(nil),            // 0: calabi.mesh.v1.RegisterNodeRequest
 	(*DeclaredService)(nil),                // 1: calabi.mesh.v1.DeclaredService
 	(*RegisterNodeResponse)(nil),           // 2: calabi.mesh.v1.RegisterNodeResponse
 	(*GetRegisterChallengeRequest)(nil),    // 3: calabi.mesh.v1.GetRegisterChallengeRequest
-	(*GetRegisterChallengeResponse)(nil),   // 4: calabi.mesh.v1.GetRegisterChallengeResponse
-	(*ServiceHealth)(nil),                  // 5: calabi.mesh.v1.ServiceHealth
-	(*UpdateNodeDeclarationsRequest)(nil),  // 6: calabi.mesh.v1.UpdateNodeDeclarationsRequest
-	(*UpdateNodeDeclarationsResponse)(nil), // 7: calabi.mesh.v1.UpdateNodeDeclarationsResponse
-	(*ConnSample)(nil),                     // 8: calabi.mesh.v1.ConnSample
-	(*ReportConnectionsRequest)(nil),       // 9: calabi.mesh.v1.ReportConnectionsRequest
-	(*ReportConnectionsResponse)(nil),      // 10: calabi.mesh.v1.ReportConnectionsResponse
-	(*ReportServiceHealthRequest)(nil),     // 11: calabi.mesh.v1.ReportServiceHealthRequest
-	(*ReportServiceHealthResponse)(nil),    // 12: calabi.mesh.v1.ReportServiceHealthResponse
-	(*PullNetMapRequest)(nil),              // 13: calabi.mesh.v1.PullNetMapRequest
-	(*NetMap)(nil),                         // 14: calabi.mesh.v1.NetMap
-	(*SubnetAlias)(nil),                    // 15: calabi.mesh.v1.SubnetAlias
-	(*FilterRule)(nil),                     // 16: calabi.mesh.v1.FilterRule
-	(*PortRange)(nil),                      // 17: calabi.mesh.v1.PortRange
-	(*Peer)(nil),                           // 18: calabi.mesh.v1.Peer
-	(*PeerService)(nil),                    // 19: calabi.mesh.v1.PeerService
-	(*DERPMap)(nil),                        // 20: calabi.mesh.v1.DERPMap
-	(*DERPRegion)(nil),                     // 21: calabi.mesh.v1.DERPRegion
-	(*DERPNode)(nil),                       // 22: calabi.mesh.v1.DERPNode
-	(*ReportEndpointsRequest)(nil),         // 23: calabi.mesh.v1.ReportEndpointsRequest
-	(*ReportEndpointsResponse)(nil),        // 24: calabi.mesh.v1.ReportEndpointsResponse
+	(*SignOutRequest)(nil),                 // 4: calabi.mesh.v1.SignOutRequest
+	(*SignOutResponse)(nil),                // 5: calabi.mesh.v1.SignOutResponse
+	(*ListNodesRequest)(nil),               // 6: calabi.mesh.v1.ListNodesRequest
+	(*ListNodesResponse)(nil),              // 7: calabi.mesh.v1.ListNodesResponse
+	(*NodeInfo)(nil),                       // 8: calabi.mesh.v1.NodeInfo
+	(*TunnelReport)(nil),                   // 9: calabi.mesh.v1.TunnelReport
+	(*ReportTunnelsRequest)(nil),           // 10: calabi.mesh.v1.ReportTunnelsRequest
+	(*ReportTunnelsResponse)(nil),          // 11: calabi.mesh.v1.ReportTunnelsResponse
+	(*ListTunnelsRequest)(nil),             // 12: calabi.mesh.v1.ListTunnelsRequest
+	(*ListTunnelsResponse)(nil),            // 13: calabi.mesh.v1.ListTunnelsResponse
+	(*TunnelInfo)(nil),                     // 14: calabi.mesh.v1.TunnelInfo
+	(*GetUsageRequest)(nil),                // 15: calabi.mesh.v1.GetUsageRequest
+	(*GetUsageResponse)(nil),               // 16: calabi.mesh.v1.GetUsageResponse
+	(*UsageMonth)(nil),                     // 17: calabi.mesh.v1.UsageMonth
+	(*UsageDay)(nil),                       // 18: calabi.mesh.v1.UsageDay
+	(*OpenViewSessionRequest)(nil),         // 19: calabi.mesh.v1.OpenViewSessionRequest
+	(*OpenViewSessionResponse)(nil),        // 20: calabi.mesh.v1.OpenViewSessionResponse
+	(*GetEdgeAccessRequest)(nil),           // 21: calabi.mesh.v1.GetEdgeAccessRequest
+	(*GetEdgeAccessResponse)(nil),          // 22: calabi.mesh.v1.GetEdgeAccessResponse
+	(*EdgeInfo)(nil),                       // 23: calabi.mesh.v1.EdgeInfo
+	(*GetRegisterChallengeResponse)(nil),   // 24: calabi.mesh.v1.GetRegisterChallengeResponse
+	(*ServiceHealth)(nil),                  // 25: calabi.mesh.v1.ServiceHealth
+	(*UpdateNodeDeclarationsRequest)(nil),  // 26: calabi.mesh.v1.UpdateNodeDeclarationsRequest
+	(*UpdateNodeDeclarationsResponse)(nil), // 27: calabi.mesh.v1.UpdateNodeDeclarationsResponse
+	(*ConnSample)(nil),                     // 28: calabi.mesh.v1.ConnSample
+	(*ReportConnectionsRequest)(nil),       // 29: calabi.mesh.v1.ReportConnectionsRequest
+	(*ReportConnectionsResponse)(nil),      // 30: calabi.mesh.v1.ReportConnectionsResponse
+	(*ReportServiceHealthRequest)(nil),     // 31: calabi.mesh.v1.ReportServiceHealthRequest
+	(*ReportServiceHealthResponse)(nil),    // 32: calabi.mesh.v1.ReportServiceHealthResponse
+	(*PullNetMapRequest)(nil),              // 33: calabi.mesh.v1.PullNetMapRequest
+	(*NetMap)(nil),                         // 34: calabi.mesh.v1.NetMap
+	(*SubnetAlias)(nil),                    // 35: calabi.mesh.v1.SubnetAlias
+	(*FilterRule)(nil),                     // 36: calabi.mesh.v1.FilterRule
+	(*PortRange)(nil),                      // 37: calabi.mesh.v1.PortRange
+	(*Peer)(nil),                           // 38: calabi.mesh.v1.Peer
+	(*PeerService)(nil),                    // 39: calabi.mesh.v1.PeerService
+	(*DERPMap)(nil),                        // 40: calabi.mesh.v1.DERPMap
+	(*DERPRegion)(nil),                     // 41: calabi.mesh.v1.DERPRegion
+	(*DERPNode)(nil),                       // 42: calabi.mesh.v1.DERPNode
+	(*ReportEndpointsRequest)(nil),         // 43: calabi.mesh.v1.ReportEndpointsRequest
+	(*ReportEndpointsResponse)(nil),        // 44: calabi.mesh.v1.ReportEndpointsResponse
 }
 var file_meshpb_coord_proto_depIdxs = []int32{
 	1,  // 0: calabi.mesh.v1.RegisterNodeRequest.declared_services:type_name -> calabi.mesh.v1.DeclaredService
-	1,  // 1: calabi.mesh.v1.UpdateNodeDeclarationsRequest.declared_services:type_name -> calabi.mesh.v1.DeclaredService
-	8,  // 2: calabi.mesh.v1.ReportConnectionsRequest.samples:type_name -> calabi.mesh.v1.ConnSample
-	5,  // 3: calabi.mesh.v1.ReportServiceHealthRequest.services:type_name -> calabi.mesh.v1.ServiceHealth
-	18, // 4: calabi.mesh.v1.NetMap.self:type_name -> calabi.mesh.v1.Peer
-	18, // 5: calabi.mesh.v1.NetMap.peers:type_name -> calabi.mesh.v1.Peer
-	20, // 6: calabi.mesh.v1.NetMap.derp_map:type_name -> calabi.mesh.v1.DERPMap
-	16, // 7: calabi.mesh.v1.NetMap.packet_filter:type_name -> calabi.mesh.v1.FilterRule
-	1,  // 8: calabi.mesh.v1.NetMap.self_services:type_name -> calabi.mesh.v1.DeclaredService
-	15, // 9: calabi.mesh.v1.NetMap.subnet_aliases:type_name -> calabi.mesh.v1.SubnetAlias
-	17, // 10: calabi.mesh.v1.FilterRule.dst_ports:type_name -> calabi.mesh.v1.PortRange
-	19, // 11: calabi.mesh.v1.Peer.services:type_name -> calabi.mesh.v1.PeerService
-	21, // 12: calabi.mesh.v1.DERPMap.regions:type_name -> calabi.mesh.v1.DERPRegion
-	22, // 13: calabi.mesh.v1.DERPRegion.nodes:type_name -> calabi.mesh.v1.DERPNode
-	0,  // 14: calabi.mesh.v1.Coordinator.RegisterNode:input_type -> calabi.mesh.v1.RegisterNodeRequest
-	3,  // 15: calabi.mesh.v1.Coordinator.GetRegisterChallenge:input_type -> calabi.mesh.v1.GetRegisterChallengeRequest
-	13, // 16: calabi.mesh.v1.Coordinator.PullNetMap:input_type -> calabi.mesh.v1.PullNetMapRequest
-	23, // 17: calabi.mesh.v1.Coordinator.ReportEndpoints:input_type -> calabi.mesh.v1.ReportEndpointsRequest
-	6,  // 18: calabi.mesh.v1.Coordinator.UpdateNodeDeclarations:input_type -> calabi.mesh.v1.UpdateNodeDeclarationsRequest
-	11, // 19: calabi.mesh.v1.Coordinator.ReportServiceHealth:input_type -> calabi.mesh.v1.ReportServiceHealthRequest
-	9,  // 20: calabi.mesh.v1.Coordinator.ReportConnections:input_type -> calabi.mesh.v1.ReportConnectionsRequest
-	2,  // 21: calabi.mesh.v1.Coordinator.RegisterNode:output_type -> calabi.mesh.v1.RegisterNodeResponse
-	4,  // 22: calabi.mesh.v1.Coordinator.GetRegisterChallenge:output_type -> calabi.mesh.v1.GetRegisterChallengeResponse
-	14, // 23: calabi.mesh.v1.Coordinator.PullNetMap:output_type -> calabi.mesh.v1.NetMap
-	24, // 24: calabi.mesh.v1.Coordinator.ReportEndpoints:output_type -> calabi.mesh.v1.ReportEndpointsResponse
-	7,  // 25: calabi.mesh.v1.Coordinator.UpdateNodeDeclarations:output_type -> calabi.mesh.v1.UpdateNodeDeclarationsResponse
-	12, // 26: calabi.mesh.v1.Coordinator.ReportServiceHealth:output_type -> calabi.mesh.v1.ReportServiceHealthResponse
-	10, // 27: calabi.mesh.v1.Coordinator.ReportConnections:output_type -> calabi.mesh.v1.ReportConnectionsResponse
-	21, // [21:28] is the sub-list for method output_type
-	14, // [14:21] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	8,  // 1: calabi.mesh.v1.ListNodesResponse.nodes:type_name -> calabi.mesh.v1.NodeInfo
+	39, // 2: calabi.mesh.v1.NodeInfo.services:type_name -> calabi.mesh.v1.PeerService
+	9,  // 3: calabi.mesh.v1.ReportTunnelsRequest.tunnels:type_name -> calabi.mesh.v1.TunnelReport
+	14, // 4: calabi.mesh.v1.ListTunnelsResponse.tunnels:type_name -> calabi.mesh.v1.TunnelInfo
+	17, // 5: calabi.mesh.v1.GetUsageResponse.month:type_name -> calabi.mesh.v1.UsageMonth
+	18, // 6: calabi.mesh.v1.GetUsageResponse.days:type_name -> calabi.mesh.v1.UsageDay
+	23, // 7: calabi.mesh.v1.GetEdgeAccessResponse.edges:type_name -> calabi.mesh.v1.EdgeInfo
+	1,  // 8: calabi.mesh.v1.UpdateNodeDeclarationsRequest.declared_services:type_name -> calabi.mesh.v1.DeclaredService
+	28, // 9: calabi.mesh.v1.ReportConnectionsRequest.samples:type_name -> calabi.mesh.v1.ConnSample
+	25, // 10: calabi.mesh.v1.ReportServiceHealthRequest.services:type_name -> calabi.mesh.v1.ServiceHealth
+	38, // 11: calabi.mesh.v1.NetMap.self:type_name -> calabi.mesh.v1.Peer
+	38, // 12: calabi.mesh.v1.NetMap.peers:type_name -> calabi.mesh.v1.Peer
+	40, // 13: calabi.mesh.v1.NetMap.derp_map:type_name -> calabi.mesh.v1.DERPMap
+	36, // 14: calabi.mesh.v1.NetMap.packet_filter:type_name -> calabi.mesh.v1.FilterRule
+	1,  // 15: calabi.mesh.v1.NetMap.self_services:type_name -> calabi.mesh.v1.DeclaredService
+	35, // 16: calabi.mesh.v1.NetMap.subnet_aliases:type_name -> calabi.mesh.v1.SubnetAlias
+	37, // 17: calabi.mesh.v1.FilterRule.dst_ports:type_name -> calabi.mesh.v1.PortRange
+	39, // 18: calabi.mesh.v1.Peer.services:type_name -> calabi.mesh.v1.PeerService
+	41, // 19: calabi.mesh.v1.DERPMap.regions:type_name -> calabi.mesh.v1.DERPRegion
+	42, // 20: calabi.mesh.v1.DERPRegion.nodes:type_name -> calabi.mesh.v1.DERPNode
+	0,  // 21: calabi.mesh.v1.Coordinator.RegisterNode:input_type -> calabi.mesh.v1.RegisterNodeRequest
+	3,  // 22: calabi.mesh.v1.Coordinator.GetRegisterChallenge:input_type -> calabi.mesh.v1.GetRegisterChallengeRequest
+	4,  // 23: calabi.mesh.v1.Coordinator.SignOut:input_type -> calabi.mesh.v1.SignOutRequest
+	6,  // 24: calabi.mesh.v1.Coordinator.ListNodes:input_type -> calabi.mesh.v1.ListNodesRequest
+	10, // 25: calabi.mesh.v1.Coordinator.ReportTunnels:input_type -> calabi.mesh.v1.ReportTunnelsRequest
+	12, // 26: calabi.mesh.v1.Coordinator.ListTunnels:input_type -> calabi.mesh.v1.ListTunnelsRequest
+	15, // 27: calabi.mesh.v1.Coordinator.GetUsage:input_type -> calabi.mesh.v1.GetUsageRequest
+	19, // 28: calabi.mesh.v1.Coordinator.OpenViewSession:input_type -> calabi.mesh.v1.OpenViewSessionRequest
+	21, // 29: calabi.mesh.v1.Coordinator.GetEdgeAccess:input_type -> calabi.mesh.v1.GetEdgeAccessRequest
+	33, // 30: calabi.mesh.v1.Coordinator.PullNetMap:input_type -> calabi.mesh.v1.PullNetMapRequest
+	43, // 31: calabi.mesh.v1.Coordinator.ReportEndpoints:input_type -> calabi.mesh.v1.ReportEndpointsRequest
+	26, // 32: calabi.mesh.v1.Coordinator.UpdateNodeDeclarations:input_type -> calabi.mesh.v1.UpdateNodeDeclarationsRequest
+	31, // 33: calabi.mesh.v1.Coordinator.ReportServiceHealth:input_type -> calabi.mesh.v1.ReportServiceHealthRequest
+	29, // 34: calabi.mesh.v1.Coordinator.ReportConnections:input_type -> calabi.mesh.v1.ReportConnectionsRequest
+	2,  // 35: calabi.mesh.v1.Coordinator.RegisterNode:output_type -> calabi.mesh.v1.RegisterNodeResponse
+	24, // 36: calabi.mesh.v1.Coordinator.GetRegisterChallenge:output_type -> calabi.mesh.v1.GetRegisterChallengeResponse
+	5,  // 37: calabi.mesh.v1.Coordinator.SignOut:output_type -> calabi.mesh.v1.SignOutResponse
+	7,  // 38: calabi.mesh.v1.Coordinator.ListNodes:output_type -> calabi.mesh.v1.ListNodesResponse
+	11, // 39: calabi.mesh.v1.Coordinator.ReportTunnels:output_type -> calabi.mesh.v1.ReportTunnelsResponse
+	13, // 40: calabi.mesh.v1.Coordinator.ListTunnels:output_type -> calabi.mesh.v1.ListTunnelsResponse
+	16, // 41: calabi.mesh.v1.Coordinator.GetUsage:output_type -> calabi.mesh.v1.GetUsageResponse
+	20, // 42: calabi.mesh.v1.Coordinator.OpenViewSession:output_type -> calabi.mesh.v1.OpenViewSessionResponse
+	22, // 43: calabi.mesh.v1.Coordinator.GetEdgeAccess:output_type -> calabi.mesh.v1.GetEdgeAccessResponse
+	34, // 44: calabi.mesh.v1.Coordinator.PullNetMap:output_type -> calabi.mesh.v1.NetMap
+	44, // 45: calabi.mesh.v1.Coordinator.ReportEndpoints:output_type -> calabi.mesh.v1.ReportEndpointsResponse
+	27, // 46: calabi.mesh.v1.Coordinator.UpdateNodeDeclarations:output_type -> calabi.mesh.v1.UpdateNodeDeclarationsResponse
+	32, // 47: calabi.mesh.v1.Coordinator.ReportServiceHealth:output_type -> calabi.mesh.v1.ReportServiceHealthResponse
+	30, // 48: calabi.mesh.v1.Coordinator.ReportConnections:output_type -> calabi.mesh.v1.ReportConnectionsResponse
+	35, // [35:49] is the sub-list for method output_type
+	21, // [21:35] is the sub-list for method input_type
+	21, // [21:21] is the sub-list for extension type_name
+	21, // [21:21] is the sub-list for extension extendee
+	0,  // [0:21] is the sub-list for field type_name
 }
 
 func init() { file_meshpb_coord_proto_init() }
@@ -2162,14 +3628,14 @@ func file_meshpb_coord_proto_init() {
 		return
 	}
 	file_meshpb_coord_proto_msgTypes[0].OneofWrappers = []any{}
-	file_meshpb_coord_proto_msgTypes[6].OneofWrappers = []any{}
+	file_meshpb_coord_proto_msgTypes[26].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meshpb_coord_proto_rawDesc), len(file_meshpb_coord_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   25,
+			NumMessages:   45,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

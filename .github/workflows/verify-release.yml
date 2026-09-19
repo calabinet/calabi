@@ -10,7 +10,7 @@
 # This repo used to build its own release binaries on a tag (GoReleaser). It no
 # longer does, deliberately. Those artifacts carried the same version number as
 # the official download but different bytes — no version stamp, control-plane
-# defaults pointing at localhost, a placeholder edge CA — and "two different
+# defaults pointing at localhost, the development edge CA — and "two different
 # files both called calabi 1.7.0" is exactly the confusion the build manifest
 # exists to prevent.
 #

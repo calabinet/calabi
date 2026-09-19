@@ -19,6 +19,7 @@ import {
   TeamOutlined,
   ThunderboltOutlined,
   TranslationOutlined,
+  DisconnectOutlined,
 } from "@ant-design/icons";
 import {
   Avatar,
@@ -38,6 +39,7 @@ import { useMemo } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import Logo from "./Logo";
+import { SelfHostedBanners, serverHost, useLeaveSelfHosted, useSelfHosted } from "./SelfHosted";
 import type {
   AccountMe,
   EdgeAffinity,
@@ -115,6 +117,9 @@ export default function Layout() {
   // Hide the logout + region switcher; the org switcher and BYOI egress toggle
   // already hide themselves on the empty /v1/orgs + owned_total:0 stubs.
   const standalone = me?.plan?.code === "standalone";
+  // What a self-hosted console is connected to, and leaving it.
+  const { data: selfHosted } = useSelfHosted(standalone);
+  const leaveSelfHosted = useLeaveSelfHosted();
   // Agent mode: the daemon runs on a pinned API-key identity. The daemon 403s
   // sign-in / sign-out / org-switch (IDENTITY changes), so those affordances are
   // hidden + a pinned-identity chip is shown. The region + egress (BYOI) switchers
@@ -735,8 +740,9 @@ export default function Layout() {
               // A key minted before creator attribution existed has nobody to
               // name. Say "Agent" rather than invent a person: the org is on
               // the top bar, and a wrong name is worse than a missing one.
-              const username =
-                email.split("@")[0] || (agentMode ? t("serviceMode.agentTag") : "user");
+              const username = standalone
+                ? serverHost(selfHosted) || t("selfHosted.cardTitle")
+                : email.split("@")[0] || (agentMode ? t("serviceMode.agentTag") : "user");
               const planName = me.plan?.code ? planLabel(me.plan.code) : "";
               const langStyle = (k: LangCode) => ({
                 display: "inline-flex" as const,
@@ -752,6 +758,26 @@ export default function Layout() {
                   placement="topLeft"
                   menu={{
                     items: [
+                      // A self-hosted console has no account: it names the
+                      // server instead, and offers to leave it.
+                      ...(standalone
+                        ? [
+                            {
+                              key: "server",
+                              label: (
+                                <span style={{ color: "#64748b", fontSize: 12 }}>
+                                  {serverHost(selfHosted)
+                                    ? t("selfHosted.connectedTo", { server: serverHost(selfHosted) })
+                                    : t("selfHosted.notConnectedTitle")}
+                                </span>
+                              ),
+                              disabled: true,
+                            },
+                          ]
+                        : []),
+                      ...(standalone
+                        ? []
+                        : [
                       {
                         key: "email",
                         label: (
@@ -790,7 +816,8 @@ export default function Layout() {
                         ),
                         disabled: true,
                       },
-                      { type: "divider" },
+                          ]),
+                      { type: "divider" as const },
                       {
                         key: "language",
                         icon: <TranslationOutlined />,
@@ -812,6 +839,18 @@ export default function Layout() {
                             i18n.changeLanguage(lang.code),
                         })),
                       },
+                      ...(standalone && selfHosted?.can_leave && selfHosted.mesh
+                        ? [
+                            { type: "divider" as const },
+                            {
+                              key: "leave",
+                              icon: <DisconnectOutlined />,
+                              danger: true,
+                              label: t("selfHosted.leave"),
+                              onClick: () => leaveSelfHosted.confirm(selfHosted),
+                            },
+                          ]
+                        : []),
                       ...(standalone || agentMode
                         ? []
                         : [
@@ -1046,6 +1085,7 @@ export default function Layout() {
             overflow: "auto",
           }}
         >
+          {standalone && <SelfHostedBanners />}
           <Outlet />
         </Content>
       </AntLayout>

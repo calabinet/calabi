@@ -30,6 +30,7 @@ import TrafficChart from "../components/TrafficChart";
 import { freshRate, useCounterRate } from "../hooks/use-counter-rate";
 import { useMemberQuota } from "../lib/memberQuota";
 import DailyTrafficChart from "../components/DailyTrafficChart";
+import { SelfHostedUsageCard } from "../components/SelfHosted";
 import { UpdateTag } from "../components/UpdateNotice";
 import {
   notify,
@@ -516,6 +517,10 @@ export default function Overview() {
           </Card>
         </Col>
       </Row>
+
+      {/* Self-hosted: the whole network's traffic this month, from the
+          coordinator (tunnels + relay, in this browser's calendar). */}
+      {me?.plan?.code === "standalone" && <SelfHostedUsageCard />}
 
       {/* Bottom row absorbs remaining vertical space. The chart grows
           to whatever's left; the info card is fixed-width and packs

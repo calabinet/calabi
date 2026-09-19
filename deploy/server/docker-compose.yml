@@ -1,0 +1,118 @@
+# A self-hosted Calabi server: the coordinator and the edge, on one machine.
+#
+#   cp .env.example .env      # fill in the three values
+#   docker compose up -d
+#   docker compose exec coord calabi-coord invite --note "my laptop"
+#
+# The invite link is how a device joins (`calabi join "<link>"`, or the client's
+# console → Connect to a self-hosted server). Joining is the sign-in: the
+# coordinator then names this edge to the device and signs the grant the edge
+# takes, so the device's tunnels and its mesh work from that one step.
+#
+#   coord   the coordinator (7012/tcp): devices, addresses, ACLs, invites; signs grants
+#   edge    tunnels (7443/tcp; 80/tcp, 443/tcp; 20000–20999 tcp and udp)
+#           and the mesh relay (3340/tcp, 3478/udp)
+#
+# Open all of those ports to the internet (README.md has the table). The
+# coordinator's admin ports (9122, 9500) listen on 127.0.0.1 only.
+#
+# Both use the host's network: the edge hands out TCP and UDP ports from
+# 20000–20999 for tunnels, and publishing a thousand ports through Docker's proxy
+# is not practical.
+#
+# Runs with Docker Compose or podman compose.
+
+name: calabi
+
+services:
+  coord:
+    image: calabinet/calabi-coord:${CALABI_VERSION:-latest}
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      # Production: refuse to start on any fail-open fallback (see the image's
+      # docs). The device registry is SQLite in the coord-data volume.
+      CALABI_ENV: production
+      CALABI_COORD_NODE_QUOTA: ${CALABI_DEVICE_LIMIT:-0}
+      # Devices reach the coordinator here; invite links carry it.
+      CALABI_COORD_GRPC_ADDR: ":7012"
+      CALABI_COORD_PUBLIC_ADDR: ${CALABI_PUBLIC_HOST:?set CALABI_PUBLIC_HOST in .env}:7012
+      # Health/metrics and the admin API (invites, keys) stay on this machine.
+      CALABI_COORD_ADMIN_ADDR: 127.0.0.1:9122
+      CALABI_COORD_MESH_ADMIN_ADDR: 127.0.0.1:9500
+      CALABI_COORD_MESH_ADMIN_TOKEN: ${CALABI_ADMIN_TOKEN:?set CALABI_ADMIN_TOKEN in .env}
+      # The edge below: devices dial it at the public address; the coordinator
+      # reads its certificate here and tells devices its fingerprint, again every
+      # minute, so an edge that renews its certificate is followed.
+      CALABI_COORD_EDGE_ADDR: ${CALABI_PUBLIC_HOST}:7443
+      CALABI_COORD_EDGE_PROBE_ADDR: 127.0.0.1:7443
+      # The edge's relay, for the mesh.
+      CALABI_COORD_DERP_ADDR: ${CALABI_PUBLIC_HOST}:3340
+      CALABI_COORD_DERP_STUN_PORT: "3478"
+      # The public half of the key the coordinator signs grants with, for the
+      # edge. The private half stays in /data (coord-grant.key).
+      CALABI_COORD_GRANT_PUBKEY_FILE: /export/coord.pub
+      CALABI_TZ: ${CALABI_TZ:-UTC}
+    volumes:
+      # The device registry, the grant key and the coordinator's certificate.
+      # Losing it means every device joins again.
+      - coord-data:/data
+      - coord-public:/export
+
+  edge:
+    image: calabinet/calabi-edge:${CALABI_VERSION:-latest}
+    restart: unless-stopped
+    network_mode: host
+    # Root, to bind 80 and 443, with every capability dropped except that one.
+    user: "0:0"
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    environment:
+      CALABI_ENV: production
+      TZ: ${CALABI_TZ:-UTC}
+      CALABI_TZ: ${CALABI_TZ:-UTC}
+    volumes:
+      # The edge's own certificate (its fingerprint is what devices pin) and
+      # the self-signed one it serves HTTPS with.
+      - edge-state:/var/lib/calabi-edge
+      # The coordinator's public key; the edge waits for it on first start.
+      - coord-public:/coord:ro
+    # The edge's settings, from .env: written to a file as the container starts
+    # (the edge takes its settings from a file only), then the edge runs on it.
+    # Plain shell rather than a compose `configs:` entry, so Docker Compose and
+    # podman compose alike run it; a changed .env changes this command, and
+    # `up -d` creates the edge again.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        cat > /tmp/edge.yaml <<'EOF'
+        node_label: ${CALABI_NODE_NAME:-calabi-server}
+        mode: standalone
+        role: both
+        # Devices get in with grants the coordinator signs, for tunnels and relay alike.
+        coord_pubkey_file: /coord/coord.pub
+        base_domain: "${CALABI_TUNNEL_DOMAIN:-}"
+        state:
+          dir: /var/lib/calabi-edge
+        control:
+          addr: ":7443"
+        http:
+          addr: ":80"
+        https:
+          addr: ":443"
+        relay:
+          derp_port: 3340
+          stun_port: 3478
+          label: ${CALABI_NODE_NAME:-calabi-server}
+        admin:
+          addr: 127.0.0.1:9101
+        log:
+          level: info
+          format: text
+        EOF
+        exec /usr/local/bin/app -config /tmp/edge.yaml
+
+volumes:
+  coord-data: {}
+  coord-public: {}
+  edge-state: {}

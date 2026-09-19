@@ -56,8 +56,9 @@ func New(coord *core.Coordinator, notif Notifier, logger *slog.Logger) http.Hand
 	mux.HandleFunc("POST /admin/meshnets/{id}/nodes/{nodeID}/tags", h.setTags)
 	mux.HandleFunc("POST /admin/nodes/{id}/disable", h.setDisabled(true))
 	mux.HandleFunc("POST /admin/nodes/{id}/enable", h.setDisabled(false))
-	// Per-org ACL editor (MESH.8e-2). NotImplemented when the build has no
-	// writable ACL store (self-hosted — its ACL is a file).
+	// Per-org ACL editor (MESH.8e-2). Every wired coordinator has a writable ACL
+	// store, self-hosted included; a saved doc overrides CALABI_COORD_POLICY_FILE
+	// for that meshnet. NotImplemented only when Coordinator.ACL is nil.
 	mux.HandleFunc("GET /admin/meshnets/{id}/acl", h.getACL)
 	mux.HandleFunc("PUT /admin/meshnets/{id}/acl", h.putACL)
 	// Pre-save impact + "why can/can't A reach B" (MESH.8e-3).
@@ -83,6 +84,12 @@ func New(coord *core.Coordinator, notif Notifier, logger *slog.Logger) http.Hand
 	mux.HandleFunc("POST /admin/meshnets/{id}/relays/{relayID}/enable", h.setRelayEnabled(true))
 	mux.HandleFunc("POST /admin/meshnets/{id}/relays/{relayID}/disable", h.setRelayEnabled(false))
 	mux.HandleFunc("DELETE /admin/meshnets/{id}/relays/{relayID}", h.deleteRelay)
+	// Auth keys a self-hosted coordinator mints (invites, authkeys.go). 404 on a
+	// coordinator whose credentials come from an identity service.
+	mux.HandleFunc("GET /admin/tls", h.listenerTLS)
+	mux.HandleFunc("GET /admin/meshnets/{id}/authkeys", h.listAuthKeys)
+	mux.HandleFunc("POST /admin/meshnets/{id}/authkeys", h.createAuthKey)
+	mux.HandleFunc("DELETE /admin/meshnets/{id}/authkeys/{keyID}", h.revokeAuthKey)
 	return mux
 }
 

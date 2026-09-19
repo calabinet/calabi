@@ -9,6 +9,7 @@ require (
 	github.com/lib/pq v1.12.3
 	google.golang.org/grpc v1.82.1
 	modernc.org/sqlite v1.59.0
+	rsc.io/qr v0.2.0
 )
 
 require (

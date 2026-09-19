@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/calabi/calabi/apps/client/internal/hostnet"
@@ -49,6 +50,15 @@ type Controller struct {
 	Datapath Datapath
 	DNS      DNSSink // optional MagicDNS record sink
 	Params   RegisterParams
+	// Reauth, if set, lets this session come back by proof of the node key
+	// alone when an earlier one learned it may, and records what this one
+	// learns. It outlives the Controller (see ReauthState). nil = always enroll
+	// with Params.AuthKey, as before.
+	Reauth *ReauthState
+	// Tunnels, if set, are the reverse tunnels this daemon serves, reported to a
+	// self-hosted coordinator for the meshnet's phones (tunnelreport.go). It
+	// outlives the Controller, like Reauth. nil = report none.
+	Tunnels *TunnelMeter
 	// ExitNode, if set, is the local exit-node selection (peer name or overlay
 	// IP) whose default route this node adopts (MESH.7b). Resolved against each
 	// netmap; the datapath installs the full-tunnel routes only for that peer.
@@ -129,6 +139,10 @@ type Controller struct {
 	netChangedOnce sync.Once
 	netChanged     chan struct{}
 
+	// registered is set once this session's Register has been accepted: the
+	// coordinator knows the node and Coord carries a live session token.
+	registered atomic.Bool
+
 	// reportEvery overrides endpointReportInterval when non-zero. Same-package
 	// tests set it before Run so the loop can be watched in milliseconds; the
 	// daemon never touches it. A field rather than a mutable package var, so
@@ -203,11 +217,15 @@ func (c *Controller) Run(ctx context.Context) error {
 	// registerParams, not c.Params: a mid-session UpdateDeclarations may have
 	// revised the declarations, and a re-registration that sent the session's
 	// original ones would quietly roll the user's edit back.
-	reg, err := c.Coord.Register(ctx, c.registerParams())
+	params := c.registerParams()
+	c.Reauth.apply(&params)
+	reg, err := c.Coord.Register(ctx, params)
 	if err != nil {
-		return fmt.Errorf("mesh: register: %w", err)
+		return fmt.Errorf("%w: %w", ErrRegister, err)
 	}
-	c.Logger.Info("mesh node registered", "node_id", reg.NodeID, "overlay", reg.Overlay)
+	c.Reauth.record(reg)
+	c.registered.Store(true)
+	c.Logger.Info("mesh node registered", "node_id", reg.NodeID, "overlay", reg.Overlay, "by_proof_alone", reg.Reauth)
 
 	// Open the direct-path UDP socket and advertise our candidate endpoints so
 	// peers can (from the probe slice on) reach us directly (MESH.4 B1/B2).
@@ -252,6 +270,9 @@ func (c *Controller) Run(ctx context.Context) error {
 	// Self-check the declared services and report what this machine actually
 	// observes (F3b). No-op when nothing is declared.
 	go c.serviceHealthLoop(ctx, reg.NodeID)
+	// The tunnels this daemon serves, for a self-hosted coordinator's phones.
+	// Relay-only sessions too: it needs the coordinator, not a direct path.
+	go c.tunnelReportLoop(ctx)
 
 	// Watch for the machine having been suspended. Every socket and NAT mapping
 	// this session holds is invalid on the far side of a sleep, and none of the
@@ -444,6 +465,10 @@ func (c *Controller) getHome() string {
 // region. Exported for the daemon's MeshStatus; safe before any measurement
 // (returns the coordinator's default, or "").
 func (c *Controller) HomeRegion() string { return c.getHome() }
+
+// Registered reports whether this session got as far as the coordinator
+// accepting its registration, so Coord can be read over.
+func (c *Controller) Registered() bool { return c.registered.Load() }
 
 // setHome records a newly measured home, returning true if it changed.
 func (c *Controller) setHome(region string) bool {

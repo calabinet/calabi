@@ -6,8 +6,8 @@ import (
 )
 
 // prodCfg is a healthy PLATFORM edge: the control plane reached through
-// bff-edge (the only way since F3 step 2b), real tokens, and a platform relay
-// that verifies grants — i.e. deploy/compose/edge/edge.yaml.
+// bff-edge (the only way since F3 step 2b) and a platform relay that verifies
+// grants — i.e. deploy/compose/edge/edge.yaml.
 func prodCfg() Config {
 	return Config{
 		Mode: "",
@@ -19,7 +19,6 @@ func prodCfg() Config {
 			ClientKey:   "/etc/calabi/edge-client.key",
 			CA:          "/etc/calabi/ca.crt",
 		},
-		AcceptedTokens: []TokenEntry{{Token: "a-real-secret", TenantID: "1"}},
 		Relay: RelayRole{
 			Kind:        "platform",
 			RequireAuth: true,
@@ -39,9 +38,9 @@ func TestProductionPostureAcceptsTheRealDeployment(t *testing.T) {
 }
 
 // TestProductionPostureIgnoredOutsideProduction: dev and self-hosted edges keep
-// every fallback, including the shipped placeholder token.
+// every fallback.
 func TestProductionPostureIgnoredOutsideProduction(t *testing.T) {
-	broken := Config{AcceptedTokens: []TokenEntry{{Token: PlaceholderToken}}}
+	broken := Config{Role: "both", Relay: RelayRole{Kind: "platform"}}
 	for _, env := range []string{"", "dev", "staging"} {
 		t.Run("CALABI_ENV="+env, func(t *testing.T) {
 			t.Setenv("CALABI_ENV", env)
@@ -59,14 +58,9 @@ func TestProductionPostureRejectsFailOpen(t *testing.T) {
 		wantMention string
 	}{
 		{
-			name:        "platform mode with no bff-edge falls back to static tokens",
+			name:        "platform mode with no bff-edge checks nobody",
 			mutate:      func(c *Config) { c.MultiRegion = MultiRegionConfig{} },
-			wantMention: "static accepted_tokens table",
-		},
-		{
-			name:        "the shipped placeholder credential",
-			mutate:      func(c *Config) { c.AcceptedTokens[0].Token = PlaceholderToken },
-			wantMention: PlaceholderToken,
+			wantMention: "platform mode without a bff-edge connection",
 		},
 		{
 			name:        "platform relay that does not verify grants",
@@ -91,8 +85,7 @@ func TestProductionPostureRejectsFailOpen(t *testing.T) {
 }
 
 // TestStandaloneIsAStatedIntent: a standalone edge legitimately has no control
-// plane, so the static-token fallback must NOT be reported for it — only the
-// placeholder credential is still refused.
+// plane, so the missing bff-edge must NOT be reported for it.
 func TestStandaloneIsAStatedIntent(t *testing.T) {
 	t.Setenv("CALABI_ENV", "production")
 	cfg := prodCfg()
@@ -100,11 +93,6 @@ func TestStandaloneIsAStatedIntent(t *testing.T) {
 	cfg.MultiRegion = MultiRegionConfig{}
 	if err := cfg.ValidateProductionPosture(); err != nil {
 		t.Fatalf("a standalone edge states its own intent and must pass: %v", err)
-	}
-
-	cfg.AcceptedTokens[0].Token = PlaceholderToken
-	if err := cfg.ValidateProductionPosture(); err == nil {
-		t.Fatal("a standalone edge carrying the published placeholder token is just as open; want an error")
 	}
 }
 
@@ -137,14 +125,13 @@ func TestProductionPostureReportsEveryProblem(t *testing.T) {
 	t.Setenv("CALABI_ENV", "production")
 	cfg := prodCfg()
 	cfg.MultiRegion = MultiRegionConfig{}
-	cfg.AcceptedTokens[0].Token = PlaceholderToken
 	cfg.Relay.RequireAuth = false
 
 	err := cfg.ValidateProductionPosture()
 	if err == nil {
 		t.Fatal("expected an error")
 	}
-	for _, want := range []string{"static accepted_tokens table", PlaceholderToken, "relay.require_auth", "3 fail-open"} {
+	for _, want := range []string{"platform mode without a bff-edge connection", "relay.require_auth", "2 fail-open"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("combined error is missing %q: %v", want, err)
 		}

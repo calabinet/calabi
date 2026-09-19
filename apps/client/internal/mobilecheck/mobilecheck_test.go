@@ -21,6 +21,8 @@ var mobilePackages = []string{
 	module + "/internal/creds",
 	module + "/internal/platform/bffclient",
 	module + "/internal/platform/meshenroll",
+	module + "/internal/trust",
+	module + "/internal/selfhosted",
 }
 
 // forbidden is checked against every transitive dependency. os/exec is the

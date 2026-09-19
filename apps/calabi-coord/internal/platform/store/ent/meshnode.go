@@ -61,6 +61,10 @@ type MeshNode struct {
 	Approved bool `json:"approved,omitempty"`
 	// admin kill switch (MESH.8b): dropped from netmaps + refused on re-register
 	Disabled bool `json:"disabled,omitempty"`
+	// principal of the auth key the node last enrolled with (user:<id> / apikey:<id>; empty for a self-hosted key); rechecked on re-registration by proof alone
+	EnrolledBy string `json:"enrolled_by,omitempty"`
+	// the device signed out: no re-registration by proof alone until it enrolls with an auth key again
+	SignedOut bool `json:"signed_out,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// LastSeen holds the value of the "last_seen" field.
@@ -73,11 +77,11 @@ func (*MeshNode) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case meshnode.FieldNamePinned, meshnode.FieldRoutesReviewed, meshnode.FieldBlockIncoming, meshnode.FieldTagsPinned, meshnode.FieldApproved, meshnode.FieldDisabled:
+		case meshnode.FieldNamePinned, meshnode.FieldRoutesReviewed, meshnode.FieldBlockIncoming, meshnode.FieldTagsPinned, meshnode.FieldApproved, meshnode.FieldDisabled, meshnode.FieldSignedOut:
 			values[i] = new(sql.NullBool)
 		case meshnode.FieldID, meshnode.FieldMeshnetID, meshnode.FieldOwnerUserID:
 			values[i] = new(sql.NullInt64)
-		case meshnode.FieldNodeKey, meshnode.FieldName, meshnode.FieldHostName, meshnode.FieldDiscoKey, meshnode.FieldOverlay, meshnode.FieldDerpHome, meshnode.FieldEndpointsJSON, meshnode.FieldAdvertisedRoutesJSON, meshnode.FieldApprovedRoutesJSON, meshnode.FieldAliasedRoutesJSON, meshnode.FieldRouteAliasesJSON, meshnode.FieldDeviceFingerprint, meshnode.FieldOs, meshnode.FieldTagsJSON:
+		case meshnode.FieldNodeKey, meshnode.FieldName, meshnode.FieldHostName, meshnode.FieldDiscoKey, meshnode.FieldOverlay, meshnode.FieldDerpHome, meshnode.FieldEndpointsJSON, meshnode.FieldAdvertisedRoutesJSON, meshnode.FieldApprovedRoutesJSON, meshnode.FieldAliasedRoutesJSON, meshnode.FieldRouteAliasesJSON, meshnode.FieldDeviceFingerprint, meshnode.FieldOs, meshnode.FieldTagsJSON, meshnode.FieldEnrolledBy:
 			values[i] = new(sql.NullString)
 		case meshnode.FieldCreatedAt, meshnode.FieldLastSeen:
 			values[i] = new(sql.NullTime)
@@ -235,6 +239,18 @@ func (mn *MeshNode) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				mn.Disabled = value.Bool
 			}
+		case meshnode.FieldEnrolledBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field enrolled_by", values[i])
+			} else if value.Valid {
+				mn.EnrolledBy = value.String
+			}
+		case meshnode.FieldSignedOut:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field signed_out", values[i])
+			} else if value.Valid {
+				mn.SignedOut = value.Bool
+			}
 		case meshnode.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -350,6 +366,12 @@ func (mn *MeshNode) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("disabled=")
 	builder.WriteString(fmt.Sprintf("%v", mn.Disabled))
+	builder.WriteString(", ")
+	builder.WriteString("enrolled_by=")
+	builder.WriteString(mn.EnrolledBy)
+	builder.WriteString(", ")
+	builder.WriteString("signed_out=")
+	builder.WriteString(fmt.Sprintf("%v", mn.SignedOut))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(mn.CreatedAt.Format(time.ANSIC))

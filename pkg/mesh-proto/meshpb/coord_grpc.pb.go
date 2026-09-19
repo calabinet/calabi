@@ -35,6 +35,13 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	Coordinator_RegisterNode_FullMethodName           = "/calabi.mesh.v1.Coordinator/RegisterNode"
 	Coordinator_GetRegisterChallenge_FullMethodName   = "/calabi.mesh.v1.Coordinator/GetRegisterChallenge"
+	Coordinator_SignOut_FullMethodName                = "/calabi.mesh.v1.Coordinator/SignOut"
+	Coordinator_ListNodes_FullMethodName              = "/calabi.mesh.v1.Coordinator/ListNodes"
+	Coordinator_ReportTunnels_FullMethodName          = "/calabi.mesh.v1.Coordinator/ReportTunnels"
+	Coordinator_ListTunnels_FullMethodName            = "/calabi.mesh.v1.Coordinator/ListTunnels"
+	Coordinator_GetUsage_FullMethodName               = "/calabi.mesh.v1.Coordinator/GetUsage"
+	Coordinator_OpenViewSession_FullMethodName        = "/calabi.mesh.v1.Coordinator/OpenViewSession"
+	Coordinator_GetEdgeAccess_FullMethodName          = "/calabi.mesh.v1.Coordinator/GetEdgeAccess"
 	Coordinator_PullNetMap_FullMethodName             = "/calabi.mesh.v1.Coordinator/PullNetMap"
 	Coordinator_ReportEndpoints_FullMethodName        = "/calabi.mesh.v1.Coordinator/ReportEndpoints"
 	Coordinator_UpdateNodeDeclarations_FullMethodName = "/calabi.mesh.v1.Coordinator/UpdateNodeDeclarations"
@@ -61,6 +68,46 @@ type CoordinatorClient interface {
 	// which DEVICE it is, so knowing a node key - public within an org - is no
 	// longer enough to enroll it or take its record over.
 	GetRegisterChallenge(ctx context.Context, in *GetRegisterChallengeRequest, opts ...grpc.CallOption) (*GetRegisterChallengeResponse, error)
+	// SignOut ends this node's ability to re-register by proof alone (node_reauth,
+	// see RegisterNodeRequest.node_id): until it next enrolls with an auth key, the
+	// coordinator refuses to take it back on its node key. The node's record, its
+	// overlay address and its seat stay. Called on sign-out, best effort.
+	SignOut(ctx context.Context, in *SignOutRequest, opts ...grpc.CallOption) (*SignOutResponse, error)
+	// ListNodes lists the caller's meshnet — every device, reachable from the
+	// caller or not, with whether it is online — for a self-hosted coordinator's
+	// own apps: the phone's device list. A coordinator whose credentials come
+	// from an identity service answers PermissionDenied: there, device lists are
+	// served by the platform's API, which is where who may see what is decided.
+	ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error)
+	// ReportTunnels uploads the reverse tunnels this node's daemon serves, for a
+	// self-hosted coordinator's apps: the whole current list, which replaces the one reported before, and
+	// the bytes each tunnel carried since the node's last accepted report.
+	// Information only — a tunnel grants nothing in the mesh, so nothing here
+	// needs approving. PermissionDenied on a coordinator whose credentials come
+	// from an identity service: the platform keeps its tunnels in its own services.
+	ReportTunnels(ctx context.Context, in *ReportTunnelsRequest, opts ...grpc.CallOption) (*ReportTunnelsResponse, error)
+	// ListTunnels lists what every node of the caller's meshnet last reported
+	// with ReportTunnels. Self-hosted only, like ListNodes.
+	ListTunnels(ctx context.Context, in *ListTunnelsRequest, opts ...grpc.CallOption) (*ListTunnelsResponse, error)
+	// GetUsage is the traffic the caller's meshnet sent through this server —
+	// its tunnels, and mesh traffic its relays carried; a direct path never
+	// touches the server — plus its device count. Self-hosted only.
+	GetUsage(ctx context.Context, in *GetUsageRequest, opts ...grpc.CallOption) (*GetUsageResponse, error)
+	// OpenViewSession proves the node key exactly as RegisterNode does (a
+	// challenge from GetRegisterChallenge with node_id and node_key, no auth key),
+	// and returns a token that ListNodes, ListTunnels and GetUsage accept for a
+	// few minutes. It neither replaces the node's live session nor makes it
+	// online: it is how a phone shows its server while it is not connected.
+	// Self-hosted only.
+	OpenViewSession(ctx context.Context, in *OpenViewSessionRequest, opts ...grpc.CallOption) (*OpenViewSessionResponse, error)
+	// GetEdgeAccess is what a node needs to serve tunnels through this server's
+	// edge: where the edge is, how
+	// to trust its certificate, and a grant the edge accepts — the same signed,
+	// short-lived statement relays accept, since one calabi-edge is both. Takes a
+	// live session's token or a view token, so a device whose mesh is switched off
+	// still serves tunnels. A disabled, signed-out or deleted node gets nothing.
+	// Self-hosted only.
+	GetEdgeAccess(ctx context.Context, in *GetEdgeAccessRequest, opts ...grpc.CallOption) (*GetEdgeAccessResponse, error)
 	// PullNetMap is a long-lived server stream. The coordinator pushes a fresh
 	// NetMap whenever topology or ACL changes, so the node reprograms its
 	// WireGuard peers live without reconnecting.
@@ -157,6 +204,76 @@ func (c *coordinatorClient) GetRegisterChallenge(ctx context.Context, in *GetReg
 	return out, nil
 }
 
+func (c *coordinatorClient) SignOut(ctx context.Context, in *SignOutRequest, opts ...grpc.CallOption) (*SignOutResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SignOutResponse)
+	err := c.cc.Invoke(ctx, Coordinator_SignOut_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coordinatorClient) ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListNodesResponse)
+	err := c.cc.Invoke(ctx, Coordinator_ListNodes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coordinatorClient) ReportTunnels(ctx context.Context, in *ReportTunnelsRequest, opts ...grpc.CallOption) (*ReportTunnelsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportTunnelsResponse)
+	err := c.cc.Invoke(ctx, Coordinator_ReportTunnels_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coordinatorClient) ListTunnels(ctx context.Context, in *ListTunnelsRequest, opts ...grpc.CallOption) (*ListTunnelsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListTunnelsResponse)
+	err := c.cc.Invoke(ctx, Coordinator_ListTunnels_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coordinatorClient) GetUsage(ctx context.Context, in *GetUsageRequest, opts ...grpc.CallOption) (*GetUsageResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUsageResponse)
+	err := c.cc.Invoke(ctx, Coordinator_GetUsage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coordinatorClient) OpenViewSession(ctx context.Context, in *OpenViewSessionRequest, opts ...grpc.CallOption) (*OpenViewSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OpenViewSessionResponse)
+	err := c.cc.Invoke(ctx, Coordinator_OpenViewSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coordinatorClient) GetEdgeAccess(ctx context.Context, in *GetEdgeAccessRequest, opts ...grpc.CallOption) (*GetEdgeAccessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetEdgeAccessResponse)
+	err := c.cc.Invoke(ctx, Coordinator_GetEdgeAccess_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *coordinatorClient) PullNetMap(ctx context.Context, in *PullNetMapRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[NetMap], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &Coordinator_ServiceDesc.Streams[0], Coordinator_PullNetMap_FullMethodName, cOpts...)
@@ -235,6 +352,46 @@ type CoordinatorServer interface {
 	// which DEVICE it is, so knowing a node key - public within an org - is no
 	// longer enough to enroll it or take its record over.
 	GetRegisterChallenge(context.Context, *GetRegisterChallengeRequest) (*GetRegisterChallengeResponse, error)
+	// SignOut ends this node's ability to re-register by proof alone (node_reauth,
+	// see RegisterNodeRequest.node_id): until it next enrolls with an auth key, the
+	// coordinator refuses to take it back on its node key. The node's record, its
+	// overlay address and its seat stay. Called on sign-out, best effort.
+	SignOut(context.Context, *SignOutRequest) (*SignOutResponse, error)
+	// ListNodes lists the caller's meshnet — every device, reachable from the
+	// caller or not, with whether it is online — for a self-hosted coordinator's
+	// own apps: the phone's device list. A coordinator whose credentials come
+	// from an identity service answers PermissionDenied: there, device lists are
+	// served by the platform's API, which is where who may see what is decided.
+	ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error)
+	// ReportTunnels uploads the reverse tunnels this node's daemon serves, for a
+	// self-hosted coordinator's apps: the whole current list, which replaces the one reported before, and
+	// the bytes each tunnel carried since the node's last accepted report.
+	// Information only — a tunnel grants nothing in the mesh, so nothing here
+	// needs approving. PermissionDenied on a coordinator whose credentials come
+	// from an identity service: the platform keeps its tunnels in its own services.
+	ReportTunnels(context.Context, *ReportTunnelsRequest) (*ReportTunnelsResponse, error)
+	// ListTunnels lists what every node of the caller's meshnet last reported
+	// with ReportTunnels. Self-hosted only, like ListNodes.
+	ListTunnels(context.Context, *ListTunnelsRequest) (*ListTunnelsResponse, error)
+	// GetUsage is the traffic the caller's meshnet sent through this server —
+	// its tunnels, and mesh traffic its relays carried; a direct path never
+	// touches the server — plus its device count. Self-hosted only.
+	GetUsage(context.Context, *GetUsageRequest) (*GetUsageResponse, error)
+	// OpenViewSession proves the node key exactly as RegisterNode does (a
+	// challenge from GetRegisterChallenge with node_id and node_key, no auth key),
+	// and returns a token that ListNodes, ListTunnels and GetUsage accept for a
+	// few minutes. It neither replaces the node's live session nor makes it
+	// online: it is how a phone shows its server while it is not connected.
+	// Self-hosted only.
+	OpenViewSession(context.Context, *OpenViewSessionRequest) (*OpenViewSessionResponse, error)
+	// GetEdgeAccess is what a node needs to serve tunnels through this server's
+	// edge: where the edge is, how
+	// to trust its certificate, and a grant the edge accepts — the same signed,
+	// short-lived statement relays accept, since one calabi-edge is both. Takes a
+	// live session's token or a view token, so a device whose mesh is switched off
+	// still serves tunnels. A disabled, signed-out or deleted node gets nothing.
+	// Self-hosted only.
+	GetEdgeAccess(context.Context, *GetEdgeAccessRequest) (*GetEdgeAccessResponse, error)
 	// PullNetMap is a long-lived server stream. The coordinator pushes a fresh
 	// NetMap whenever topology or ACL changes, so the node reprograms its
 	// WireGuard peers live without reconnecting.
@@ -317,6 +474,27 @@ func (UnimplementedCoordinatorServer) RegisterNode(context.Context, *RegisterNod
 func (UnimplementedCoordinatorServer) GetRegisterChallenge(context.Context, *GetRegisterChallengeRequest) (*GetRegisterChallengeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRegisterChallenge not implemented")
 }
+func (UnimplementedCoordinatorServer) SignOut(context.Context, *SignOutRequest) (*SignOutResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SignOut not implemented")
+}
+func (UnimplementedCoordinatorServer) ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNodes not implemented")
+}
+func (UnimplementedCoordinatorServer) ReportTunnels(context.Context, *ReportTunnelsRequest) (*ReportTunnelsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportTunnels not implemented")
+}
+func (UnimplementedCoordinatorServer) ListTunnels(context.Context, *ListTunnelsRequest) (*ListTunnelsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListTunnels not implemented")
+}
+func (UnimplementedCoordinatorServer) GetUsage(context.Context, *GetUsageRequest) (*GetUsageResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetUsage not implemented")
+}
+func (UnimplementedCoordinatorServer) OpenViewSession(context.Context, *OpenViewSessionRequest) (*OpenViewSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method OpenViewSession not implemented")
+}
+func (UnimplementedCoordinatorServer) GetEdgeAccess(context.Context, *GetEdgeAccessRequest) (*GetEdgeAccessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetEdgeAccess not implemented")
+}
 func (UnimplementedCoordinatorServer) PullNetMap(*PullNetMapRequest, grpc.ServerStreamingServer[NetMap]) error {
 	return status.Error(codes.Unimplemented, "method PullNetMap not implemented")
 }
@@ -385,6 +563,132 @@ func _Coordinator_GetRegisterChallenge_Handler(srv interface{}, ctx context.Cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CoordinatorServer).GetRegisterChallenge(ctx, req.(*GetRegisterChallengeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Coordinator_SignOut_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SignOutRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoordinatorServer).SignOut(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Coordinator_SignOut_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoordinatorServer).SignOut(ctx, req.(*SignOutRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Coordinator_ListNodes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListNodesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoordinatorServer).ListNodes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Coordinator_ListNodes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoordinatorServer).ListNodes(ctx, req.(*ListNodesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Coordinator_ReportTunnels_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportTunnelsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoordinatorServer).ReportTunnels(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Coordinator_ReportTunnels_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoordinatorServer).ReportTunnels(ctx, req.(*ReportTunnelsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Coordinator_ListTunnels_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTunnelsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoordinatorServer).ListTunnels(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Coordinator_ListTunnels_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoordinatorServer).ListTunnels(ctx, req.(*ListTunnelsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Coordinator_GetUsage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUsageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoordinatorServer).GetUsage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Coordinator_GetUsage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoordinatorServer).GetUsage(ctx, req.(*GetUsageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Coordinator_OpenViewSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpenViewSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoordinatorServer).OpenViewSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Coordinator_OpenViewSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoordinatorServer).OpenViewSession(ctx, req.(*OpenViewSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Coordinator_GetEdgeAccess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEdgeAccessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoordinatorServer).GetEdgeAccess(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Coordinator_GetEdgeAccess_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoordinatorServer).GetEdgeAccess(ctx, req.(*GetEdgeAccessRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -486,6 +790,34 @@ var Coordinator_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRegisterChallenge",
 			Handler:    _Coordinator_GetRegisterChallenge_Handler,
+		},
+		{
+			MethodName: "SignOut",
+			Handler:    _Coordinator_SignOut_Handler,
+		},
+		{
+			MethodName: "ListNodes",
+			Handler:    _Coordinator_ListNodes_Handler,
+		},
+		{
+			MethodName: "ReportTunnels",
+			Handler:    _Coordinator_ReportTunnels_Handler,
+		},
+		{
+			MethodName: "ListTunnels",
+			Handler:    _Coordinator_ListTunnels_Handler,
+		},
+		{
+			MethodName: "GetUsage",
+			Handler:    _Coordinator_GetUsage_Handler,
+		},
+		{
+			MethodName: "OpenViewSession",
+			Handler:    _Coordinator_OpenViewSession_Handler,
+		},
+		{
+			MethodName: "GetEdgeAccess",
+			Handler:    _Coordinator_GetEdgeAccess_Handler,
 		},
 		{
 			MethodName: "ReportEndpoints",

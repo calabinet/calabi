@@ -14,11 +14,14 @@ import (
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/coordsetting"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshacl"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshaclrevision"
+	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshauthkey"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshconnrecord"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshnode"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshrelay"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshservice"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshsetting"
+	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshtunnel"
+	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshtunnelusage"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/predicate"
 )
 
@@ -34,11 +37,14 @@ const (
 	TypeCoordSetting    = "CoordSetting"
 	TypeMeshACL         = "MeshACL"
 	TypeMeshACLRevision = "MeshACLRevision"
+	TypeMeshAuthKey     = "MeshAuthKey"
 	TypeMeshConnRecord  = "MeshConnRecord"
 	TypeMeshNode        = "MeshNode"
 	TypeMeshRelay       = "MeshRelay"
 	TypeMeshService     = "MeshService"
 	TypeMeshSetting     = "MeshSetting"
+	TypeMeshTunnel      = "MeshTunnel"
+	TypeMeshTunnelUsage = "MeshTunnelUsage"
 )
 
 // CoordSettingMutation represents an operation that mutates the CoordSetting nodes in the graph.
@@ -1469,29 +1475,988 @@ func (m *MeshACLRevisionMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown MeshACLRevision edge %s", name)
 }
 
+// MeshAuthKeyMutation represents an operation that mutates the MeshAuthKey nodes in the graph.
+type MeshAuthKeyMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	meshnet_id    *int64
+	addmeshnet_id *int64
+	hash          *string
+	prefix        *string
+	tags_json     *string
+	max_uses      *int
+	addmax_uses   *int
+	uses          *int
+	adduses       *int
+	expires_at    *time.Time
+	revoked_at    *time.Time
+	note          *string
+	created_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*MeshAuthKey, error)
+	predicates    []predicate.MeshAuthKey
+}
+
+var _ ent.Mutation = (*MeshAuthKeyMutation)(nil)
+
+// meshauthkeyOption allows management of the mutation configuration using functional options.
+type meshauthkeyOption func(*MeshAuthKeyMutation)
+
+// newMeshAuthKeyMutation creates new mutation for the MeshAuthKey entity.
+func newMeshAuthKeyMutation(c config, op Op, opts ...meshauthkeyOption) *MeshAuthKeyMutation {
+	m := &MeshAuthKeyMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeMeshAuthKey,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withMeshAuthKeyID sets the ID field of the mutation.
+func withMeshAuthKeyID(id int) meshauthkeyOption {
+	return func(m *MeshAuthKeyMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *MeshAuthKey
+		)
+		m.oldValue = func(ctx context.Context) (*MeshAuthKey, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().MeshAuthKey.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withMeshAuthKey sets the old MeshAuthKey of the mutation.
+func withMeshAuthKey(node *MeshAuthKey) meshauthkeyOption {
+	return func(m *MeshAuthKeyMutation) {
+		m.oldValue = func(context.Context) (*MeshAuthKey, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m MeshAuthKeyMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m MeshAuthKeyMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *MeshAuthKeyMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *MeshAuthKeyMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().MeshAuthKey.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetMeshnetID sets the "meshnet_id" field.
+func (m *MeshAuthKeyMutation) SetMeshnetID(i int64) {
+	m.meshnet_id = &i
+	m.addmeshnet_id = nil
+}
+
+// MeshnetID returns the value of the "meshnet_id" field in the mutation.
+func (m *MeshAuthKeyMutation) MeshnetID() (r int64, exists bool) {
+	v := m.meshnet_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMeshnetID returns the old "meshnet_id" field's value of the MeshAuthKey entity.
+// If the MeshAuthKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshAuthKeyMutation) OldMeshnetID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMeshnetID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMeshnetID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMeshnetID: %w", err)
+	}
+	return oldValue.MeshnetID, nil
+}
+
+// AddMeshnetID adds i to the "meshnet_id" field.
+func (m *MeshAuthKeyMutation) AddMeshnetID(i int64) {
+	if m.addmeshnet_id != nil {
+		*m.addmeshnet_id += i
+	} else {
+		m.addmeshnet_id = &i
+	}
+}
+
+// AddedMeshnetID returns the value that was added to the "meshnet_id" field in this mutation.
+func (m *MeshAuthKeyMutation) AddedMeshnetID() (r int64, exists bool) {
+	v := m.addmeshnet_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetMeshnetID resets all changes to the "meshnet_id" field.
+func (m *MeshAuthKeyMutation) ResetMeshnetID() {
+	m.meshnet_id = nil
+	m.addmeshnet_id = nil
+}
+
+// SetHash sets the "hash" field.
+func (m *MeshAuthKeyMutation) SetHash(s string) {
+	m.hash = &s
+}
+
+// Hash returns the value of the "hash" field in the mutation.
+func (m *MeshAuthKeyMutation) Hash() (r string, exists bool) {
+	v := m.hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHash returns the old "hash" field's value of the MeshAuthKey entity.
+// If the MeshAuthKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshAuthKeyMutation) OldHash(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHash: %w", err)
+	}
+	return oldValue.Hash, nil
+}
+
+// ResetHash resets all changes to the "hash" field.
+func (m *MeshAuthKeyMutation) ResetHash() {
+	m.hash = nil
+}
+
+// SetPrefix sets the "prefix" field.
+func (m *MeshAuthKeyMutation) SetPrefix(s string) {
+	m.prefix = &s
+}
+
+// Prefix returns the value of the "prefix" field in the mutation.
+func (m *MeshAuthKeyMutation) Prefix() (r string, exists bool) {
+	v := m.prefix
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPrefix returns the old "prefix" field's value of the MeshAuthKey entity.
+// If the MeshAuthKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshAuthKeyMutation) OldPrefix(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPrefix is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPrefix requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPrefix: %w", err)
+	}
+	return oldValue.Prefix, nil
+}
+
+// ResetPrefix resets all changes to the "prefix" field.
+func (m *MeshAuthKeyMutation) ResetPrefix() {
+	m.prefix = nil
+}
+
+// SetTagsJSON sets the "tags_json" field.
+func (m *MeshAuthKeyMutation) SetTagsJSON(s string) {
+	m.tags_json = &s
+}
+
+// TagsJSON returns the value of the "tags_json" field in the mutation.
+func (m *MeshAuthKeyMutation) TagsJSON() (r string, exists bool) {
+	v := m.tags_json
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTagsJSON returns the old "tags_json" field's value of the MeshAuthKey entity.
+// If the MeshAuthKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshAuthKeyMutation) OldTagsJSON(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTagsJSON is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTagsJSON requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTagsJSON: %w", err)
+	}
+	return oldValue.TagsJSON, nil
+}
+
+// ResetTagsJSON resets all changes to the "tags_json" field.
+func (m *MeshAuthKeyMutation) ResetTagsJSON() {
+	m.tags_json = nil
+}
+
+// SetMaxUses sets the "max_uses" field.
+func (m *MeshAuthKeyMutation) SetMaxUses(i int) {
+	m.max_uses = &i
+	m.addmax_uses = nil
+}
+
+// MaxUses returns the value of the "max_uses" field in the mutation.
+func (m *MeshAuthKeyMutation) MaxUses() (r int, exists bool) {
+	v := m.max_uses
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMaxUses returns the old "max_uses" field's value of the MeshAuthKey entity.
+// If the MeshAuthKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshAuthKeyMutation) OldMaxUses(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMaxUses is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMaxUses requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMaxUses: %w", err)
+	}
+	return oldValue.MaxUses, nil
+}
+
+// AddMaxUses adds i to the "max_uses" field.
+func (m *MeshAuthKeyMutation) AddMaxUses(i int) {
+	if m.addmax_uses != nil {
+		*m.addmax_uses += i
+	} else {
+		m.addmax_uses = &i
+	}
+}
+
+// AddedMaxUses returns the value that was added to the "max_uses" field in this mutation.
+func (m *MeshAuthKeyMutation) AddedMaxUses() (r int, exists bool) {
+	v := m.addmax_uses
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetMaxUses resets all changes to the "max_uses" field.
+func (m *MeshAuthKeyMutation) ResetMaxUses() {
+	m.max_uses = nil
+	m.addmax_uses = nil
+}
+
+// SetUses sets the "uses" field.
+func (m *MeshAuthKeyMutation) SetUses(i int) {
+	m.uses = &i
+	m.adduses = nil
+}
+
+// Uses returns the value of the "uses" field in the mutation.
+func (m *MeshAuthKeyMutation) Uses() (r int, exists bool) {
+	v := m.uses
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUses returns the old "uses" field's value of the MeshAuthKey entity.
+// If the MeshAuthKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshAuthKeyMutation) OldUses(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUses is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUses requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUses: %w", err)
+	}
+	return oldValue.Uses, nil
+}
+
+// AddUses adds i to the "uses" field.
+func (m *MeshAuthKeyMutation) AddUses(i int) {
+	if m.adduses != nil {
+		*m.adduses += i
+	} else {
+		m.adduses = &i
+	}
+}
+
+// AddedUses returns the value that was added to the "uses" field in this mutation.
+func (m *MeshAuthKeyMutation) AddedUses() (r int, exists bool) {
+	v := m.adduses
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUses resets all changes to the "uses" field.
+func (m *MeshAuthKeyMutation) ResetUses() {
+	m.uses = nil
+	m.adduses = nil
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *MeshAuthKeyMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *MeshAuthKeyMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the MeshAuthKey entity.
+// If the MeshAuthKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshAuthKeyMutation) OldExpiresAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (m *MeshAuthKeyMutation) ClearExpiresAt() {
+	m.expires_at = nil
+	m.clearedFields[meshauthkey.FieldExpiresAt] = struct{}{}
+}
+
+// ExpiresAtCleared returns if the "expires_at" field was cleared in this mutation.
+func (m *MeshAuthKeyMutation) ExpiresAtCleared() bool {
+	_, ok := m.clearedFields[meshauthkey.FieldExpiresAt]
+	return ok
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *MeshAuthKeyMutation) ResetExpiresAt() {
+	m.expires_at = nil
+	delete(m.clearedFields, meshauthkey.FieldExpiresAt)
+}
+
+// SetRevokedAt sets the "revoked_at" field.
+func (m *MeshAuthKeyMutation) SetRevokedAt(t time.Time) {
+	m.revoked_at = &t
+}
+
+// RevokedAt returns the value of the "revoked_at" field in the mutation.
+func (m *MeshAuthKeyMutation) RevokedAt() (r time.Time, exists bool) {
+	v := m.revoked_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRevokedAt returns the old "revoked_at" field's value of the MeshAuthKey entity.
+// If the MeshAuthKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshAuthKeyMutation) OldRevokedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRevokedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRevokedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRevokedAt: %w", err)
+	}
+	return oldValue.RevokedAt, nil
+}
+
+// ClearRevokedAt clears the value of the "revoked_at" field.
+func (m *MeshAuthKeyMutation) ClearRevokedAt() {
+	m.revoked_at = nil
+	m.clearedFields[meshauthkey.FieldRevokedAt] = struct{}{}
+}
+
+// RevokedAtCleared returns if the "revoked_at" field was cleared in this mutation.
+func (m *MeshAuthKeyMutation) RevokedAtCleared() bool {
+	_, ok := m.clearedFields[meshauthkey.FieldRevokedAt]
+	return ok
+}
+
+// ResetRevokedAt resets all changes to the "revoked_at" field.
+func (m *MeshAuthKeyMutation) ResetRevokedAt() {
+	m.revoked_at = nil
+	delete(m.clearedFields, meshauthkey.FieldRevokedAt)
+}
+
+// SetNote sets the "note" field.
+func (m *MeshAuthKeyMutation) SetNote(s string) {
+	m.note = &s
+}
+
+// Note returns the value of the "note" field in the mutation.
+func (m *MeshAuthKeyMutation) Note() (r string, exists bool) {
+	v := m.note
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNote returns the old "note" field's value of the MeshAuthKey entity.
+// If the MeshAuthKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshAuthKeyMutation) OldNote(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNote is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNote requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNote: %w", err)
+	}
+	return oldValue.Note, nil
+}
+
+// ResetNote resets all changes to the "note" field.
+func (m *MeshAuthKeyMutation) ResetNote() {
+	m.note = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *MeshAuthKeyMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *MeshAuthKeyMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the MeshAuthKey entity.
+// If the MeshAuthKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshAuthKeyMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *MeshAuthKeyMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// Where appends a list predicates to the MeshAuthKeyMutation builder.
+func (m *MeshAuthKeyMutation) Where(ps ...predicate.MeshAuthKey) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the MeshAuthKeyMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *MeshAuthKeyMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.MeshAuthKey, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *MeshAuthKeyMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *MeshAuthKeyMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (MeshAuthKey).
+func (m *MeshAuthKeyMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *MeshAuthKeyMutation) Fields() []string {
+	fields := make([]string, 0, 10)
+	if m.meshnet_id != nil {
+		fields = append(fields, meshauthkey.FieldMeshnetID)
+	}
+	if m.hash != nil {
+		fields = append(fields, meshauthkey.FieldHash)
+	}
+	if m.prefix != nil {
+		fields = append(fields, meshauthkey.FieldPrefix)
+	}
+	if m.tags_json != nil {
+		fields = append(fields, meshauthkey.FieldTagsJSON)
+	}
+	if m.max_uses != nil {
+		fields = append(fields, meshauthkey.FieldMaxUses)
+	}
+	if m.uses != nil {
+		fields = append(fields, meshauthkey.FieldUses)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, meshauthkey.FieldExpiresAt)
+	}
+	if m.revoked_at != nil {
+		fields = append(fields, meshauthkey.FieldRevokedAt)
+	}
+	if m.note != nil {
+		fields = append(fields, meshauthkey.FieldNote)
+	}
+	if m.created_at != nil {
+		fields = append(fields, meshauthkey.FieldCreatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *MeshAuthKeyMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case meshauthkey.FieldMeshnetID:
+		return m.MeshnetID()
+	case meshauthkey.FieldHash:
+		return m.Hash()
+	case meshauthkey.FieldPrefix:
+		return m.Prefix()
+	case meshauthkey.FieldTagsJSON:
+		return m.TagsJSON()
+	case meshauthkey.FieldMaxUses:
+		return m.MaxUses()
+	case meshauthkey.FieldUses:
+		return m.Uses()
+	case meshauthkey.FieldExpiresAt:
+		return m.ExpiresAt()
+	case meshauthkey.FieldRevokedAt:
+		return m.RevokedAt()
+	case meshauthkey.FieldNote:
+		return m.Note()
+	case meshauthkey.FieldCreatedAt:
+		return m.CreatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *MeshAuthKeyMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case meshauthkey.FieldMeshnetID:
+		return m.OldMeshnetID(ctx)
+	case meshauthkey.FieldHash:
+		return m.OldHash(ctx)
+	case meshauthkey.FieldPrefix:
+		return m.OldPrefix(ctx)
+	case meshauthkey.FieldTagsJSON:
+		return m.OldTagsJSON(ctx)
+	case meshauthkey.FieldMaxUses:
+		return m.OldMaxUses(ctx)
+	case meshauthkey.FieldUses:
+		return m.OldUses(ctx)
+	case meshauthkey.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	case meshauthkey.FieldRevokedAt:
+		return m.OldRevokedAt(ctx)
+	case meshauthkey.FieldNote:
+		return m.OldNote(ctx)
+	case meshauthkey.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown MeshAuthKey field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MeshAuthKeyMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case meshauthkey.FieldMeshnetID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMeshnetID(v)
+		return nil
+	case meshauthkey.FieldHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHash(v)
+		return nil
+	case meshauthkey.FieldPrefix:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPrefix(v)
+		return nil
+	case meshauthkey.FieldTagsJSON:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTagsJSON(v)
+		return nil
+	case meshauthkey.FieldMaxUses:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMaxUses(v)
+		return nil
+	case meshauthkey.FieldUses:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUses(v)
+		return nil
+	case meshauthkey.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	case meshauthkey.FieldRevokedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRevokedAt(v)
+		return nil
+	case meshauthkey.FieldNote:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNote(v)
+		return nil
+	case meshauthkey.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MeshAuthKey field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *MeshAuthKeyMutation) AddedFields() []string {
+	var fields []string
+	if m.addmeshnet_id != nil {
+		fields = append(fields, meshauthkey.FieldMeshnetID)
+	}
+	if m.addmax_uses != nil {
+		fields = append(fields, meshauthkey.FieldMaxUses)
+	}
+	if m.adduses != nil {
+		fields = append(fields, meshauthkey.FieldUses)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *MeshAuthKeyMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case meshauthkey.FieldMeshnetID:
+		return m.AddedMeshnetID()
+	case meshauthkey.FieldMaxUses:
+		return m.AddedMaxUses()
+	case meshauthkey.FieldUses:
+		return m.AddedUses()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MeshAuthKeyMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case meshauthkey.FieldMeshnetID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMeshnetID(v)
+		return nil
+	case meshauthkey.FieldMaxUses:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMaxUses(v)
+		return nil
+	case meshauthkey.FieldUses:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUses(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MeshAuthKey numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *MeshAuthKeyMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(meshauthkey.FieldExpiresAt) {
+		fields = append(fields, meshauthkey.FieldExpiresAt)
+	}
+	if m.FieldCleared(meshauthkey.FieldRevokedAt) {
+		fields = append(fields, meshauthkey.FieldRevokedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *MeshAuthKeyMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *MeshAuthKeyMutation) ClearField(name string) error {
+	switch name {
+	case meshauthkey.FieldExpiresAt:
+		m.ClearExpiresAt()
+		return nil
+	case meshauthkey.FieldRevokedAt:
+		m.ClearRevokedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown MeshAuthKey nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *MeshAuthKeyMutation) ResetField(name string) error {
+	switch name {
+	case meshauthkey.FieldMeshnetID:
+		m.ResetMeshnetID()
+		return nil
+	case meshauthkey.FieldHash:
+		m.ResetHash()
+		return nil
+	case meshauthkey.FieldPrefix:
+		m.ResetPrefix()
+		return nil
+	case meshauthkey.FieldTagsJSON:
+		m.ResetTagsJSON()
+		return nil
+	case meshauthkey.FieldMaxUses:
+		m.ResetMaxUses()
+		return nil
+	case meshauthkey.FieldUses:
+		m.ResetUses()
+		return nil
+	case meshauthkey.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	case meshauthkey.FieldRevokedAt:
+		m.ResetRevokedAt()
+		return nil
+	case meshauthkey.FieldNote:
+		m.ResetNote()
+		return nil
+	case meshauthkey.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown MeshAuthKey field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *MeshAuthKeyMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *MeshAuthKeyMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *MeshAuthKeyMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *MeshAuthKeyMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *MeshAuthKeyMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *MeshAuthKeyMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *MeshAuthKeyMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown MeshAuthKey unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *MeshAuthKeyMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown MeshAuthKey edge %s", name)
+}
+
 // MeshConnRecordMutation represents an operation that mutates the MeshConnRecord nodes in the graph.
 type MeshConnRecordMutation struct {
 	config
-	op             Op
-	typ            string
-	id             *int
-	meshnet_id     *int64
-	addmeshnet_id  *int64
-	src_node_id    *int64
-	addsrc_node_id *int64
-	dst_node_id    *int64
-	adddst_node_id *int64
-	hour           *time.Time
-	bytes_tx       *int64
-	addbytes_tx    *int64
-	bytes_rx       *int64
-	addbytes_rx    *int64
-	_path          *string
-	updated_at     *time.Time
-	clearedFields  map[string]struct{}
-	done           bool
-	oldValue       func(context.Context) (*MeshConnRecord, error)
-	predicates     []predicate.MeshConnRecord
+	op                Op
+	typ               string
+	id                *int
+	meshnet_id        *int64
+	addmeshnet_id     *int64
+	src_node_id       *int64
+	addsrc_node_id    *int64
+	dst_node_id       *int64
+	adddst_node_id    *int64
+	hour              *time.Time
+	bytes_tx          *int64
+	addbytes_tx       *int64
+	bytes_rx          *int64
+	addbytes_rx       *int64
+	_path             *string
+	relay_bytes_tx    *int64
+	addrelay_bytes_tx *int64
+	relay_bytes_rx    *int64
+	addrelay_bytes_rx *int64
+	updated_at        *time.Time
+	clearedFields     map[string]struct{}
+	done              bool
+	oldValue          func(context.Context) (*MeshConnRecord, error)
+	predicates        []predicate.MeshConnRecord
 }
 
 var _ ent.Mutation = (*MeshConnRecordMutation)(nil)
@@ -1944,6 +2909,118 @@ func (m *MeshConnRecordMutation) ResetPath() {
 	m._path = nil
 }
 
+// SetRelayBytesTx sets the "relay_bytes_tx" field.
+func (m *MeshConnRecordMutation) SetRelayBytesTx(i int64) {
+	m.relay_bytes_tx = &i
+	m.addrelay_bytes_tx = nil
+}
+
+// RelayBytesTx returns the value of the "relay_bytes_tx" field in the mutation.
+func (m *MeshConnRecordMutation) RelayBytesTx() (r int64, exists bool) {
+	v := m.relay_bytes_tx
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRelayBytesTx returns the old "relay_bytes_tx" field's value of the MeshConnRecord entity.
+// If the MeshConnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshConnRecordMutation) OldRelayBytesTx(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRelayBytesTx is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRelayBytesTx requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRelayBytesTx: %w", err)
+	}
+	return oldValue.RelayBytesTx, nil
+}
+
+// AddRelayBytesTx adds i to the "relay_bytes_tx" field.
+func (m *MeshConnRecordMutation) AddRelayBytesTx(i int64) {
+	if m.addrelay_bytes_tx != nil {
+		*m.addrelay_bytes_tx += i
+	} else {
+		m.addrelay_bytes_tx = &i
+	}
+}
+
+// AddedRelayBytesTx returns the value that was added to the "relay_bytes_tx" field in this mutation.
+func (m *MeshConnRecordMutation) AddedRelayBytesTx() (r int64, exists bool) {
+	v := m.addrelay_bytes_tx
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRelayBytesTx resets all changes to the "relay_bytes_tx" field.
+func (m *MeshConnRecordMutation) ResetRelayBytesTx() {
+	m.relay_bytes_tx = nil
+	m.addrelay_bytes_tx = nil
+}
+
+// SetRelayBytesRx sets the "relay_bytes_rx" field.
+func (m *MeshConnRecordMutation) SetRelayBytesRx(i int64) {
+	m.relay_bytes_rx = &i
+	m.addrelay_bytes_rx = nil
+}
+
+// RelayBytesRx returns the value of the "relay_bytes_rx" field in the mutation.
+func (m *MeshConnRecordMutation) RelayBytesRx() (r int64, exists bool) {
+	v := m.relay_bytes_rx
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRelayBytesRx returns the old "relay_bytes_rx" field's value of the MeshConnRecord entity.
+// If the MeshConnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshConnRecordMutation) OldRelayBytesRx(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRelayBytesRx is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRelayBytesRx requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRelayBytesRx: %w", err)
+	}
+	return oldValue.RelayBytesRx, nil
+}
+
+// AddRelayBytesRx adds i to the "relay_bytes_rx" field.
+func (m *MeshConnRecordMutation) AddRelayBytesRx(i int64) {
+	if m.addrelay_bytes_rx != nil {
+		*m.addrelay_bytes_rx += i
+	} else {
+		m.addrelay_bytes_rx = &i
+	}
+}
+
+// AddedRelayBytesRx returns the value that was added to the "relay_bytes_rx" field in this mutation.
+func (m *MeshConnRecordMutation) AddedRelayBytesRx() (r int64, exists bool) {
+	v := m.addrelay_bytes_rx
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRelayBytesRx resets all changes to the "relay_bytes_rx" field.
+func (m *MeshConnRecordMutation) ResetRelayBytesRx() {
+	m.relay_bytes_rx = nil
+	m.addrelay_bytes_rx = nil
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (m *MeshConnRecordMutation) SetUpdatedAt(t time.Time) {
 	m.updated_at = &t
@@ -2014,7 +3091,7 @@ func (m *MeshConnRecordMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *MeshConnRecordMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 10)
 	if m.meshnet_id != nil {
 		fields = append(fields, meshconnrecord.FieldMeshnetID)
 	}
@@ -2035,6 +3112,12 @@ func (m *MeshConnRecordMutation) Fields() []string {
 	}
 	if m._path != nil {
 		fields = append(fields, meshconnrecord.FieldPath)
+	}
+	if m.relay_bytes_tx != nil {
+		fields = append(fields, meshconnrecord.FieldRelayBytesTx)
+	}
+	if m.relay_bytes_rx != nil {
+		fields = append(fields, meshconnrecord.FieldRelayBytesRx)
 	}
 	if m.updated_at != nil {
 		fields = append(fields, meshconnrecord.FieldUpdatedAt)
@@ -2061,6 +3144,10 @@ func (m *MeshConnRecordMutation) Field(name string) (ent.Value, bool) {
 		return m.BytesRx()
 	case meshconnrecord.FieldPath:
 		return m.Path()
+	case meshconnrecord.FieldRelayBytesTx:
+		return m.RelayBytesTx()
+	case meshconnrecord.FieldRelayBytesRx:
+		return m.RelayBytesRx()
 	case meshconnrecord.FieldUpdatedAt:
 		return m.UpdatedAt()
 	}
@@ -2086,6 +3173,10 @@ func (m *MeshConnRecordMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldBytesRx(ctx)
 	case meshconnrecord.FieldPath:
 		return m.OldPath(ctx)
+	case meshconnrecord.FieldRelayBytesTx:
+		return m.OldRelayBytesTx(ctx)
+	case meshconnrecord.FieldRelayBytesRx:
+		return m.OldRelayBytesRx(ctx)
 	case meshconnrecord.FieldUpdatedAt:
 		return m.OldUpdatedAt(ctx)
 	}
@@ -2146,6 +3237,20 @@ func (m *MeshConnRecordMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetPath(v)
 		return nil
+	case meshconnrecord.FieldRelayBytesTx:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRelayBytesTx(v)
+		return nil
+	case meshconnrecord.FieldRelayBytesRx:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRelayBytesRx(v)
+		return nil
 	case meshconnrecord.FieldUpdatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -2176,6 +3281,12 @@ func (m *MeshConnRecordMutation) AddedFields() []string {
 	if m.addbytes_rx != nil {
 		fields = append(fields, meshconnrecord.FieldBytesRx)
 	}
+	if m.addrelay_bytes_tx != nil {
+		fields = append(fields, meshconnrecord.FieldRelayBytesTx)
+	}
+	if m.addrelay_bytes_rx != nil {
+		fields = append(fields, meshconnrecord.FieldRelayBytesRx)
+	}
 	return fields
 }
 
@@ -2194,6 +3305,10 @@ func (m *MeshConnRecordMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedBytesTx()
 	case meshconnrecord.FieldBytesRx:
 		return m.AddedBytesRx()
+	case meshconnrecord.FieldRelayBytesTx:
+		return m.AddedRelayBytesTx()
+	case meshconnrecord.FieldRelayBytesRx:
+		return m.AddedRelayBytesRx()
 	}
 	return nil, false
 }
@@ -2237,6 +3352,20 @@ func (m *MeshConnRecordMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddBytesRx(v)
+		return nil
+	case meshconnrecord.FieldRelayBytesTx:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRelayBytesTx(v)
+		return nil
+	case meshconnrecord.FieldRelayBytesRx:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRelayBytesRx(v)
 		return nil
 	}
 	return fmt.Errorf("unknown MeshConnRecord numeric field %s", name)
@@ -2285,6 +3414,12 @@ func (m *MeshConnRecordMutation) ResetField(name string) error {
 		return nil
 	case meshconnrecord.FieldPath:
 		m.ResetPath()
+		return nil
+	case meshconnrecord.FieldRelayBytesTx:
+		m.ResetRelayBytesTx()
+		return nil
+	case meshconnrecord.FieldRelayBytesRx:
+		m.ResetRelayBytesRx()
 		return nil
 	case meshconnrecord.FieldUpdatedAt:
 		m.ResetUpdatedAt()
@@ -2371,6 +3506,8 @@ type MeshNodeMutation struct {
 	tags_json              *string
 	approved               *bool
 	disabled               *bool
+	enrolled_by            *string
+	signed_out             *bool
 	created_at             *time.Time
 	last_seen              *time.Time
 	clearedFields          map[string]struct{}
@@ -3322,6 +4459,78 @@ func (m *MeshNodeMutation) ResetDisabled() {
 	m.disabled = nil
 }
 
+// SetEnrolledBy sets the "enrolled_by" field.
+func (m *MeshNodeMutation) SetEnrolledBy(s string) {
+	m.enrolled_by = &s
+}
+
+// EnrolledBy returns the value of the "enrolled_by" field in the mutation.
+func (m *MeshNodeMutation) EnrolledBy() (r string, exists bool) {
+	v := m.enrolled_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnrolledBy returns the old "enrolled_by" field's value of the MeshNode entity.
+// If the MeshNode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshNodeMutation) OldEnrolledBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnrolledBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnrolledBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnrolledBy: %w", err)
+	}
+	return oldValue.EnrolledBy, nil
+}
+
+// ResetEnrolledBy resets all changes to the "enrolled_by" field.
+func (m *MeshNodeMutation) ResetEnrolledBy() {
+	m.enrolled_by = nil
+}
+
+// SetSignedOut sets the "signed_out" field.
+func (m *MeshNodeMutation) SetSignedOut(b bool) {
+	m.signed_out = &b
+}
+
+// SignedOut returns the value of the "signed_out" field in the mutation.
+func (m *MeshNodeMutation) SignedOut() (r bool, exists bool) {
+	v := m.signed_out
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSignedOut returns the old "signed_out" field's value of the MeshNode entity.
+// If the MeshNode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshNodeMutation) OldSignedOut(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSignedOut is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSignedOut requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSignedOut: %w", err)
+	}
+	return oldValue.SignedOut, nil
+}
+
+// ResetSignedOut resets all changes to the "signed_out" field.
+func (m *MeshNodeMutation) ResetSignedOut() {
+	m.signed_out = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *MeshNodeMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -3428,7 +4637,7 @@ func (m *MeshNodeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *MeshNodeMutation) Fields() []string {
-	fields := make([]string, 0, 24)
+	fields := make([]string, 0, 26)
 	if m.meshnet_id != nil {
 		fields = append(fields, meshnode.FieldMeshnetID)
 	}
@@ -3495,6 +4704,12 @@ func (m *MeshNodeMutation) Fields() []string {
 	if m.disabled != nil {
 		fields = append(fields, meshnode.FieldDisabled)
 	}
+	if m.enrolled_by != nil {
+		fields = append(fields, meshnode.FieldEnrolledBy)
+	}
+	if m.signed_out != nil {
+		fields = append(fields, meshnode.FieldSignedOut)
+	}
 	if m.created_at != nil {
 		fields = append(fields, meshnode.FieldCreatedAt)
 	}
@@ -3553,6 +4768,10 @@ func (m *MeshNodeMutation) Field(name string) (ent.Value, bool) {
 		return m.Approved()
 	case meshnode.FieldDisabled:
 		return m.Disabled()
+	case meshnode.FieldEnrolledBy:
+		return m.EnrolledBy()
+	case meshnode.FieldSignedOut:
+		return m.SignedOut()
 	case meshnode.FieldCreatedAt:
 		return m.CreatedAt()
 	case meshnode.FieldLastSeen:
@@ -3610,6 +4829,10 @@ func (m *MeshNodeMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldApproved(ctx)
 	case meshnode.FieldDisabled:
 		return m.OldDisabled(ctx)
+	case meshnode.FieldEnrolledBy:
+		return m.OldEnrolledBy(ctx)
+	case meshnode.FieldSignedOut:
+		return m.OldSignedOut(ctx)
 	case meshnode.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case meshnode.FieldLastSeen:
@@ -3777,6 +5000,20 @@ func (m *MeshNodeMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDisabled(v)
 		return nil
+	case meshnode.FieldEnrolledBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnrolledBy(v)
+		return nil
+	case meshnode.FieldSignedOut:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSignedOut(v)
+		return nil
 	case meshnode.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -3941,6 +5178,12 @@ func (m *MeshNodeMutation) ResetField(name string) error {
 		return nil
 	case meshnode.FieldDisabled:
 		m.ResetDisabled()
+		return nil
+	case meshnode.FieldEnrolledBy:
+		m.ResetEnrolledBy()
+		return nil
+	case meshnode.FieldSignedOut:
+		m.ResetSignedOut()
 		return nil
 	case meshnode.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -6329,4 +7572,1562 @@ func (m *MeshSettingMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *MeshSettingMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown MeshSetting edge %s", name)
+}
+
+// MeshTunnelMutation represents an operation that mutates the MeshTunnel nodes in the graph.
+type MeshTunnelMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	meshnet_id    *int64
+	addmeshnet_id *int64
+	node_id       *int64
+	addnode_id    *int64
+	name          *string
+	_type         *string
+	public_addr   *string
+	local_addr    *string
+	status        *string
+	first_seen    *time.Time
+	reported_at   *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*MeshTunnel, error)
+	predicates    []predicate.MeshTunnel
+}
+
+var _ ent.Mutation = (*MeshTunnelMutation)(nil)
+
+// meshtunnelOption allows management of the mutation configuration using functional options.
+type meshtunnelOption func(*MeshTunnelMutation)
+
+// newMeshTunnelMutation creates new mutation for the MeshTunnel entity.
+func newMeshTunnelMutation(c config, op Op, opts ...meshtunnelOption) *MeshTunnelMutation {
+	m := &MeshTunnelMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeMeshTunnel,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withMeshTunnelID sets the ID field of the mutation.
+func withMeshTunnelID(id int) meshtunnelOption {
+	return func(m *MeshTunnelMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *MeshTunnel
+		)
+		m.oldValue = func(ctx context.Context) (*MeshTunnel, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().MeshTunnel.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withMeshTunnel sets the old MeshTunnel of the mutation.
+func withMeshTunnel(node *MeshTunnel) meshtunnelOption {
+	return func(m *MeshTunnelMutation) {
+		m.oldValue = func(context.Context) (*MeshTunnel, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m MeshTunnelMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m MeshTunnelMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *MeshTunnelMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *MeshTunnelMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().MeshTunnel.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetMeshnetID sets the "meshnet_id" field.
+func (m *MeshTunnelMutation) SetMeshnetID(i int64) {
+	m.meshnet_id = &i
+	m.addmeshnet_id = nil
+}
+
+// MeshnetID returns the value of the "meshnet_id" field in the mutation.
+func (m *MeshTunnelMutation) MeshnetID() (r int64, exists bool) {
+	v := m.meshnet_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMeshnetID returns the old "meshnet_id" field's value of the MeshTunnel entity.
+// If the MeshTunnel object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshTunnelMutation) OldMeshnetID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMeshnetID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMeshnetID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMeshnetID: %w", err)
+	}
+	return oldValue.MeshnetID, nil
+}
+
+// AddMeshnetID adds i to the "meshnet_id" field.
+func (m *MeshTunnelMutation) AddMeshnetID(i int64) {
+	if m.addmeshnet_id != nil {
+		*m.addmeshnet_id += i
+	} else {
+		m.addmeshnet_id = &i
+	}
+}
+
+// AddedMeshnetID returns the value that was added to the "meshnet_id" field in this mutation.
+func (m *MeshTunnelMutation) AddedMeshnetID() (r int64, exists bool) {
+	v := m.addmeshnet_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetMeshnetID resets all changes to the "meshnet_id" field.
+func (m *MeshTunnelMutation) ResetMeshnetID() {
+	m.meshnet_id = nil
+	m.addmeshnet_id = nil
+}
+
+// SetNodeID sets the "node_id" field.
+func (m *MeshTunnelMutation) SetNodeID(i int64) {
+	m.node_id = &i
+	m.addnode_id = nil
+}
+
+// NodeID returns the value of the "node_id" field in the mutation.
+func (m *MeshTunnelMutation) NodeID() (r int64, exists bool) {
+	v := m.node_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNodeID returns the old "node_id" field's value of the MeshTunnel entity.
+// If the MeshTunnel object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshTunnelMutation) OldNodeID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNodeID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNodeID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNodeID: %w", err)
+	}
+	return oldValue.NodeID, nil
+}
+
+// AddNodeID adds i to the "node_id" field.
+func (m *MeshTunnelMutation) AddNodeID(i int64) {
+	if m.addnode_id != nil {
+		*m.addnode_id += i
+	} else {
+		m.addnode_id = &i
+	}
+}
+
+// AddedNodeID returns the value that was added to the "node_id" field in this mutation.
+func (m *MeshTunnelMutation) AddedNodeID() (r int64, exists bool) {
+	v := m.addnode_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetNodeID resets all changes to the "node_id" field.
+func (m *MeshTunnelMutation) ResetNodeID() {
+	m.node_id = nil
+	m.addnode_id = nil
+}
+
+// SetName sets the "name" field.
+func (m *MeshTunnelMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *MeshTunnelMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the MeshTunnel entity.
+// If the MeshTunnel object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshTunnelMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *MeshTunnelMutation) ResetName() {
+	m.name = nil
+}
+
+// SetType sets the "type" field.
+func (m *MeshTunnelMutation) SetType(s string) {
+	m._type = &s
+}
+
+// GetType returns the value of the "type" field in the mutation.
+func (m *MeshTunnelMutation) GetType() (r string, exists bool) {
+	v := m._type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldType returns the old "type" field's value of the MeshTunnel entity.
+// If the MeshTunnel object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshTunnelMutation) OldType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldType: %w", err)
+	}
+	return oldValue.Type, nil
+}
+
+// ResetType resets all changes to the "type" field.
+func (m *MeshTunnelMutation) ResetType() {
+	m._type = nil
+}
+
+// SetPublicAddr sets the "public_addr" field.
+func (m *MeshTunnelMutation) SetPublicAddr(s string) {
+	m.public_addr = &s
+}
+
+// PublicAddr returns the value of the "public_addr" field in the mutation.
+func (m *MeshTunnelMutation) PublicAddr() (r string, exists bool) {
+	v := m.public_addr
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPublicAddr returns the old "public_addr" field's value of the MeshTunnel entity.
+// If the MeshTunnel object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshTunnelMutation) OldPublicAddr(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPublicAddr is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPublicAddr requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPublicAddr: %w", err)
+	}
+	return oldValue.PublicAddr, nil
+}
+
+// ResetPublicAddr resets all changes to the "public_addr" field.
+func (m *MeshTunnelMutation) ResetPublicAddr() {
+	m.public_addr = nil
+}
+
+// SetLocalAddr sets the "local_addr" field.
+func (m *MeshTunnelMutation) SetLocalAddr(s string) {
+	m.local_addr = &s
+}
+
+// LocalAddr returns the value of the "local_addr" field in the mutation.
+func (m *MeshTunnelMutation) LocalAddr() (r string, exists bool) {
+	v := m.local_addr
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLocalAddr returns the old "local_addr" field's value of the MeshTunnel entity.
+// If the MeshTunnel object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshTunnelMutation) OldLocalAddr(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLocalAddr is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLocalAddr requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLocalAddr: %w", err)
+	}
+	return oldValue.LocalAddr, nil
+}
+
+// ResetLocalAddr resets all changes to the "local_addr" field.
+func (m *MeshTunnelMutation) ResetLocalAddr() {
+	m.local_addr = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *MeshTunnelMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *MeshTunnelMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the MeshTunnel entity.
+// If the MeshTunnel object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshTunnelMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *MeshTunnelMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetFirstSeen sets the "first_seen" field.
+func (m *MeshTunnelMutation) SetFirstSeen(t time.Time) {
+	m.first_seen = &t
+}
+
+// FirstSeen returns the value of the "first_seen" field in the mutation.
+func (m *MeshTunnelMutation) FirstSeen() (r time.Time, exists bool) {
+	v := m.first_seen
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFirstSeen returns the old "first_seen" field's value of the MeshTunnel entity.
+// If the MeshTunnel object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshTunnelMutation) OldFirstSeen(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFirstSeen is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFirstSeen requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFirstSeen: %w", err)
+	}
+	return oldValue.FirstSeen, nil
+}
+
+// ResetFirstSeen resets all changes to the "first_seen" field.
+func (m *MeshTunnelMutation) ResetFirstSeen() {
+	m.first_seen = nil
+}
+
+// SetReportedAt sets the "reported_at" field.
+func (m *MeshTunnelMutation) SetReportedAt(t time.Time) {
+	m.reported_at = &t
+}
+
+// ReportedAt returns the value of the "reported_at" field in the mutation.
+func (m *MeshTunnelMutation) ReportedAt() (r time.Time, exists bool) {
+	v := m.reported_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReportedAt returns the old "reported_at" field's value of the MeshTunnel entity.
+// If the MeshTunnel object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshTunnelMutation) OldReportedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReportedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReportedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReportedAt: %w", err)
+	}
+	return oldValue.ReportedAt, nil
+}
+
+// ResetReportedAt resets all changes to the "reported_at" field.
+func (m *MeshTunnelMutation) ResetReportedAt() {
+	m.reported_at = nil
+}
+
+// Where appends a list predicates to the MeshTunnelMutation builder.
+func (m *MeshTunnelMutation) Where(ps ...predicate.MeshTunnel) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the MeshTunnelMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *MeshTunnelMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.MeshTunnel, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *MeshTunnelMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *MeshTunnelMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (MeshTunnel).
+func (m *MeshTunnelMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *MeshTunnelMutation) Fields() []string {
+	fields := make([]string, 0, 9)
+	if m.meshnet_id != nil {
+		fields = append(fields, meshtunnel.FieldMeshnetID)
+	}
+	if m.node_id != nil {
+		fields = append(fields, meshtunnel.FieldNodeID)
+	}
+	if m.name != nil {
+		fields = append(fields, meshtunnel.FieldName)
+	}
+	if m._type != nil {
+		fields = append(fields, meshtunnel.FieldType)
+	}
+	if m.public_addr != nil {
+		fields = append(fields, meshtunnel.FieldPublicAddr)
+	}
+	if m.local_addr != nil {
+		fields = append(fields, meshtunnel.FieldLocalAddr)
+	}
+	if m.status != nil {
+		fields = append(fields, meshtunnel.FieldStatus)
+	}
+	if m.first_seen != nil {
+		fields = append(fields, meshtunnel.FieldFirstSeen)
+	}
+	if m.reported_at != nil {
+		fields = append(fields, meshtunnel.FieldReportedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *MeshTunnelMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case meshtunnel.FieldMeshnetID:
+		return m.MeshnetID()
+	case meshtunnel.FieldNodeID:
+		return m.NodeID()
+	case meshtunnel.FieldName:
+		return m.Name()
+	case meshtunnel.FieldType:
+		return m.GetType()
+	case meshtunnel.FieldPublicAddr:
+		return m.PublicAddr()
+	case meshtunnel.FieldLocalAddr:
+		return m.LocalAddr()
+	case meshtunnel.FieldStatus:
+		return m.Status()
+	case meshtunnel.FieldFirstSeen:
+		return m.FirstSeen()
+	case meshtunnel.FieldReportedAt:
+		return m.ReportedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *MeshTunnelMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case meshtunnel.FieldMeshnetID:
+		return m.OldMeshnetID(ctx)
+	case meshtunnel.FieldNodeID:
+		return m.OldNodeID(ctx)
+	case meshtunnel.FieldName:
+		return m.OldName(ctx)
+	case meshtunnel.FieldType:
+		return m.OldType(ctx)
+	case meshtunnel.FieldPublicAddr:
+		return m.OldPublicAddr(ctx)
+	case meshtunnel.FieldLocalAddr:
+		return m.OldLocalAddr(ctx)
+	case meshtunnel.FieldStatus:
+		return m.OldStatus(ctx)
+	case meshtunnel.FieldFirstSeen:
+		return m.OldFirstSeen(ctx)
+	case meshtunnel.FieldReportedAt:
+		return m.OldReportedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown MeshTunnel field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MeshTunnelMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case meshtunnel.FieldMeshnetID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMeshnetID(v)
+		return nil
+	case meshtunnel.FieldNodeID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNodeID(v)
+		return nil
+	case meshtunnel.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case meshtunnel.FieldType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetType(v)
+		return nil
+	case meshtunnel.FieldPublicAddr:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPublicAddr(v)
+		return nil
+	case meshtunnel.FieldLocalAddr:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLocalAddr(v)
+		return nil
+	case meshtunnel.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case meshtunnel.FieldFirstSeen:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFirstSeen(v)
+		return nil
+	case meshtunnel.FieldReportedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReportedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MeshTunnel field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *MeshTunnelMutation) AddedFields() []string {
+	var fields []string
+	if m.addmeshnet_id != nil {
+		fields = append(fields, meshtunnel.FieldMeshnetID)
+	}
+	if m.addnode_id != nil {
+		fields = append(fields, meshtunnel.FieldNodeID)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *MeshTunnelMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case meshtunnel.FieldMeshnetID:
+		return m.AddedMeshnetID()
+	case meshtunnel.FieldNodeID:
+		return m.AddedNodeID()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MeshTunnelMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case meshtunnel.FieldMeshnetID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMeshnetID(v)
+		return nil
+	case meshtunnel.FieldNodeID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddNodeID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MeshTunnel numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *MeshTunnelMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *MeshTunnelMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *MeshTunnelMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown MeshTunnel nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *MeshTunnelMutation) ResetField(name string) error {
+	switch name {
+	case meshtunnel.FieldMeshnetID:
+		m.ResetMeshnetID()
+		return nil
+	case meshtunnel.FieldNodeID:
+		m.ResetNodeID()
+		return nil
+	case meshtunnel.FieldName:
+		m.ResetName()
+		return nil
+	case meshtunnel.FieldType:
+		m.ResetType()
+		return nil
+	case meshtunnel.FieldPublicAddr:
+		m.ResetPublicAddr()
+		return nil
+	case meshtunnel.FieldLocalAddr:
+		m.ResetLocalAddr()
+		return nil
+	case meshtunnel.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case meshtunnel.FieldFirstSeen:
+		m.ResetFirstSeen()
+		return nil
+	case meshtunnel.FieldReportedAt:
+		m.ResetReportedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown MeshTunnel field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *MeshTunnelMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *MeshTunnelMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *MeshTunnelMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *MeshTunnelMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *MeshTunnelMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *MeshTunnelMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *MeshTunnelMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown MeshTunnel unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *MeshTunnelMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown MeshTunnel edge %s", name)
+}
+
+// MeshTunnelUsageMutation represents an operation that mutates the MeshTunnelUsage nodes in the graph.
+type MeshTunnelUsageMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	meshnet_id    *int64
+	addmeshnet_id *int64
+	node_id       *int64
+	addnode_id    *int64
+	name          *string
+	hour          *time.Time
+	bytes_in      *int64
+	addbytes_in   *int64
+	bytes_out     *int64
+	addbytes_out  *int64
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*MeshTunnelUsage, error)
+	predicates    []predicate.MeshTunnelUsage
+}
+
+var _ ent.Mutation = (*MeshTunnelUsageMutation)(nil)
+
+// meshtunnelusageOption allows management of the mutation configuration using functional options.
+type meshtunnelusageOption func(*MeshTunnelUsageMutation)
+
+// newMeshTunnelUsageMutation creates new mutation for the MeshTunnelUsage entity.
+func newMeshTunnelUsageMutation(c config, op Op, opts ...meshtunnelusageOption) *MeshTunnelUsageMutation {
+	m := &MeshTunnelUsageMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeMeshTunnelUsage,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withMeshTunnelUsageID sets the ID field of the mutation.
+func withMeshTunnelUsageID(id int) meshtunnelusageOption {
+	return func(m *MeshTunnelUsageMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *MeshTunnelUsage
+		)
+		m.oldValue = func(ctx context.Context) (*MeshTunnelUsage, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().MeshTunnelUsage.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withMeshTunnelUsage sets the old MeshTunnelUsage of the mutation.
+func withMeshTunnelUsage(node *MeshTunnelUsage) meshtunnelusageOption {
+	return func(m *MeshTunnelUsageMutation) {
+		m.oldValue = func(context.Context) (*MeshTunnelUsage, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m MeshTunnelUsageMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m MeshTunnelUsageMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *MeshTunnelUsageMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *MeshTunnelUsageMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().MeshTunnelUsage.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetMeshnetID sets the "meshnet_id" field.
+func (m *MeshTunnelUsageMutation) SetMeshnetID(i int64) {
+	m.meshnet_id = &i
+	m.addmeshnet_id = nil
+}
+
+// MeshnetID returns the value of the "meshnet_id" field in the mutation.
+func (m *MeshTunnelUsageMutation) MeshnetID() (r int64, exists bool) {
+	v := m.meshnet_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMeshnetID returns the old "meshnet_id" field's value of the MeshTunnelUsage entity.
+// If the MeshTunnelUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshTunnelUsageMutation) OldMeshnetID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMeshnetID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMeshnetID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMeshnetID: %w", err)
+	}
+	return oldValue.MeshnetID, nil
+}
+
+// AddMeshnetID adds i to the "meshnet_id" field.
+func (m *MeshTunnelUsageMutation) AddMeshnetID(i int64) {
+	if m.addmeshnet_id != nil {
+		*m.addmeshnet_id += i
+	} else {
+		m.addmeshnet_id = &i
+	}
+}
+
+// AddedMeshnetID returns the value that was added to the "meshnet_id" field in this mutation.
+func (m *MeshTunnelUsageMutation) AddedMeshnetID() (r int64, exists bool) {
+	v := m.addmeshnet_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetMeshnetID resets all changes to the "meshnet_id" field.
+func (m *MeshTunnelUsageMutation) ResetMeshnetID() {
+	m.meshnet_id = nil
+	m.addmeshnet_id = nil
+}
+
+// SetNodeID sets the "node_id" field.
+func (m *MeshTunnelUsageMutation) SetNodeID(i int64) {
+	m.node_id = &i
+	m.addnode_id = nil
+}
+
+// NodeID returns the value of the "node_id" field in the mutation.
+func (m *MeshTunnelUsageMutation) NodeID() (r int64, exists bool) {
+	v := m.node_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNodeID returns the old "node_id" field's value of the MeshTunnelUsage entity.
+// If the MeshTunnelUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshTunnelUsageMutation) OldNodeID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNodeID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNodeID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNodeID: %w", err)
+	}
+	return oldValue.NodeID, nil
+}
+
+// AddNodeID adds i to the "node_id" field.
+func (m *MeshTunnelUsageMutation) AddNodeID(i int64) {
+	if m.addnode_id != nil {
+		*m.addnode_id += i
+	} else {
+		m.addnode_id = &i
+	}
+}
+
+// AddedNodeID returns the value that was added to the "node_id" field in this mutation.
+func (m *MeshTunnelUsageMutation) AddedNodeID() (r int64, exists bool) {
+	v := m.addnode_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetNodeID resets all changes to the "node_id" field.
+func (m *MeshTunnelUsageMutation) ResetNodeID() {
+	m.node_id = nil
+	m.addnode_id = nil
+}
+
+// SetName sets the "name" field.
+func (m *MeshTunnelUsageMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *MeshTunnelUsageMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the MeshTunnelUsage entity.
+// If the MeshTunnelUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshTunnelUsageMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *MeshTunnelUsageMutation) ResetName() {
+	m.name = nil
+}
+
+// SetHour sets the "hour" field.
+func (m *MeshTunnelUsageMutation) SetHour(t time.Time) {
+	m.hour = &t
+}
+
+// Hour returns the value of the "hour" field in the mutation.
+func (m *MeshTunnelUsageMutation) Hour() (r time.Time, exists bool) {
+	v := m.hour
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHour returns the old "hour" field's value of the MeshTunnelUsage entity.
+// If the MeshTunnelUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshTunnelUsageMutation) OldHour(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHour is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHour requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHour: %w", err)
+	}
+	return oldValue.Hour, nil
+}
+
+// ResetHour resets all changes to the "hour" field.
+func (m *MeshTunnelUsageMutation) ResetHour() {
+	m.hour = nil
+}
+
+// SetBytesIn sets the "bytes_in" field.
+func (m *MeshTunnelUsageMutation) SetBytesIn(i int64) {
+	m.bytes_in = &i
+	m.addbytes_in = nil
+}
+
+// BytesIn returns the value of the "bytes_in" field in the mutation.
+func (m *MeshTunnelUsageMutation) BytesIn() (r int64, exists bool) {
+	v := m.bytes_in
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBytesIn returns the old "bytes_in" field's value of the MeshTunnelUsage entity.
+// If the MeshTunnelUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshTunnelUsageMutation) OldBytesIn(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBytesIn is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBytesIn requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBytesIn: %w", err)
+	}
+	return oldValue.BytesIn, nil
+}
+
+// AddBytesIn adds i to the "bytes_in" field.
+func (m *MeshTunnelUsageMutation) AddBytesIn(i int64) {
+	if m.addbytes_in != nil {
+		*m.addbytes_in += i
+	} else {
+		m.addbytes_in = &i
+	}
+}
+
+// AddedBytesIn returns the value that was added to the "bytes_in" field in this mutation.
+func (m *MeshTunnelUsageMutation) AddedBytesIn() (r int64, exists bool) {
+	v := m.addbytes_in
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBytesIn resets all changes to the "bytes_in" field.
+func (m *MeshTunnelUsageMutation) ResetBytesIn() {
+	m.bytes_in = nil
+	m.addbytes_in = nil
+}
+
+// SetBytesOut sets the "bytes_out" field.
+func (m *MeshTunnelUsageMutation) SetBytesOut(i int64) {
+	m.bytes_out = &i
+	m.addbytes_out = nil
+}
+
+// BytesOut returns the value of the "bytes_out" field in the mutation.
+func (m *MeshTunnelUsageMutation) BytesOut() (r int64, exists bool) {
+	v := m.bytes_out
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBytesOut returns the old "bytes_out" field's value of the MeshTunnelUsage entity.
+// If the MeshTunnelUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshTunnelUsageMutation) OldBytesOut(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBytesOut is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBytesOut requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBytesOut: %w", err)
+	}
+	return oldValue.BytesOut, nil
+}
+
+// AddBytesOut adds i to the "bytes_out" field.
+func (m *MeshTunnelUsageMutation) AddBytesOut(i int64) {
+	if m.addbytes_out != nil {
+		*m.addbytes_out += i
+	} else {
+		m.addbytes_out = &i
+	}
+}
+
+// AddedBytesOut returns the value that was added to the "bytes_out" field in this mutation.
+func (m *MeshTunnelUsageMutation) AddedBytesOut() (r int64, exists bool) {
+	v := m.addbytes_out
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBytesOut resets all changes to the "bytes_out" field.
+func (m *MeshTunnelUsageMutation) ResetBytesOut() {
+	m.bytes_out = nil
+	m.addbytes_out = nil
+}
+
+// Where appends a list predicates to the MeshTunnelUsageMutation builder.
+func (m *MeshTunnelUsageMutation) Where(ps ...predicate.MeshTunnelUsage) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the MeshTunnelUsageMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *MeshTunnelUsageMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.MeshTunnelUsage, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *MeshTunnelUsageMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *MeshTunnelUsageMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (MeshTunnelUsage).
+func (m *MeshTunnelUsageMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *MeshTunnelUsageMutation) Fields() []string {
+	fields := make([]string, 0, 6)
+	if m.meshnet_id != nil {
+		fields = append(fields, meshtunnelusage.FieldMeshnetID)
+	}
+	if m.node_id != nil {
+		fields = append(fields, meshtunnelusage.FieldNodeID)
+	}
+	if m.name != nil {
+		fields = append(fields, meshtunnelusage.FieldName)
+	}
+	if m.hour != nil {
+		fields = append(fields, meshtunnelusage.FieldHour)
+	}
+	if m.bytes_in != nil {
+		fields = append(fields, meshtunnelusage.FieldBytesIn)
+	}
+	if m.bytes_out != nil {
+		fields = append(fields, meshtunnelusage.FieldBytesOut)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *MeshTunnelUsageMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case meshtunnelusage.FieldMeshnetID:
+		return m.MeshnetID()
+	case meshtunnelusage.FieldNodeID:
+		return m.NodeID()
+	case meshtunnelusage.FieldName:
+		return m.Name()
+	case meshtunnelusage.FieldHour:
+		return m.Hour()
+	case meshtunnelusage.FieldBytesIn:
+		return m.BytesIn()
+	case meshtunnelusage.FieldBytesOut:
+		return m.BytesOut()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *MeshTunnelUsageMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case meshtunnelusage.FieldMeshnetID:
+		return m.OldMeshnetID(ctx)
+	case meshtunnelusage.FieldNodeID:
+		return m.OldNodeID(ctx)
+	case meshtunnelusage.FieldName:
+		return m.OldName(ctx)
+	case meshtunnelusage.FieldHour:
+		return m.OldHour(ctx)
+	case meshtunnelusage.FieldBytesIn:
+		return m.OldBytesIn(ctx)
+	case meshtunnelusage.FieldBytesOut:
+		return m.OldBytesOut(ctx)
+	}
+	return nil, fmt.Errorf("unknown MeshTunnelUsage field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MeshTunnelUsageMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case meshtunnelusage.FieldMeshnetID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMeshnetID(v)
+		return nil
+	case meshtunnelusage.FieldNodeID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNodeID(v)
+		return nil
+	case meshtunnelusage.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case meshtunnelusage.FieldHour:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHour(v)
+		return nil
+	case meshtunnelusage.FieldBytesIn:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBytesIn(v)
+		return nil
+	case meshtunnelusage.FieldBytesOut:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBytesOut(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MeshTunnelUsage field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *MeshTunnelUsageMutation) AddedFields() []string {
+	var fields []string
+	if m.addmeshnet_id != nil {
+		fields = append(fields, meshtunnelusage.FieldMeshnetID)
+	}
+	if m.addnode_id != nil {
+		fields = append(fields, meshtunnelusage.FieldNodeID)
+	}
+	if m.addbytes_in != nil {
+		fields = append(fields, meshtunnelusage.FieldBytesIn)
+	}
+	if m.addbytes_out != nil {
+		fields = append(fields, meshtunnelusage.FieldBytesOut)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *MeshTunnelUsageMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case meshtunnelusage.FieldMeshnetID:
+		return m.AddedMeshnetID()
+	case meshtunnelusage.FieldNodeID:
+		return m.AddedNodeID()
+	case meshtunnelusage.FieldBytesIn:
+		return m.AddedBytesIn()
+	case meshtunnelusage.FieldBytesOut:
+		return m.AddedBytesOut()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MeshTunnelUsageMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case meshtunnelusage.FieldMeshnetID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMeshnetID(v)
+		return nil
+	case meshtunnelusage.FieldNodeID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddNodeID(v)
+		return nil
+	case meshtunnelusage.FieldBytesIn:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBytesIn(v)
+		return nil
+	case meshtunnelusage.FieldBytesOut:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBytesOut(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MeshTunnelUsage numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *MeshTunnelUsageMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *MeshTunnelUsageMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *MeshTunnelUsageMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown MeshTunnelUsage nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *MeshTunnelUsageMutation) ResetField(name string) error {
+	switch name {
+	case meshtunnelusage.FieldMeshnetID:
+		m.ResetMeshnetID()
+		return nil
+	case meshtunnelusage.FieldNodeID:
+		m.ResetNodeID()
+		return nil
+	case meshtunnelusage.FieldName:
+		m.ResetName()
+		return nil
+	case meshtunnelusage.FieldHour:
+		m.ResetHour()
+		return nil
+	case meshtunnelusage.FieldBytesIn:
+		m.ResetBytesIn()
+		return nil
+	case meshtunnelusage.FieldBytesOut:
+		m.ResetBytesOut()
+		return nil
+	}
+	return fmt.Errorf("unknown MeshTunnelUsage field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *MeshTunnelUsageMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *MeshTunnelUsageMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *MeshTunnelUsageMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *MeshTunnelUsageMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *MeshTunnelUsageMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *MeshTunnelUsageMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *MeshTunnelUsageMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown MeshTunnelUsage unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *MeshTunnelUsageMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown MeshTunnelUsage edge %s", name)
 }

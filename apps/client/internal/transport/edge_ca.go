@@ -8,12 +8,13 @@ import (
 	"os"
 )
 
-// embeddedEdgeCA is the platform edge-CA root certificate, compiled into
-// the binary. Production builds replace certs/edge-ca.pem with the real
-// cert-svc edge-CA root (PUBLIC cert only — never the private key); the
-// checked-in placeholder carries no certificate so OSS / dev builds still
-// compile. Without a real embedded root, verification falls back to
-// CALABI_EDGE_CA_FILE (dev), and fails closed if neither is present.
+// embeddedEdgeCA is the edge-CA root certificate compiled into the binary.
+// The tree — private and public alike — carries the DEV edge CA
+// (CN=calabi-dev-edge-ca), so every source build embeds that. Release builds
+// swap in calabi.net's cert-svc edge-CA root (PUBLIC cert only — never the
+// private key) and put the dev one back afterwards. CALABI_EDGE_CA_FILE adds
+// a root on top of whichever is embedded; with an emptied certs/edge-ca.pem it
+// is the only trust, and verification fails closed without it.
 //
 //go:embed certs/edge-ca.pem
 var embeddedEdgeCA []byte
@@ -26,12 +27,17 @@ var embeddedEdgeCA []byte
 // coord presents an edge-CA-signed server cert (calabi-coord CALABI_COORD_TLS_*), and
 // this build needs no extra trust distribution to verify it.
 func EdgeRootCAs() (*x509.CertPool, error) {
-	return edgeRootCAs(os.Getenv("CALABI_EDGE_CA_FILE"))
+	return edgeRootCAs(embeddedEdgeCA, os.Getenv("CALABI_EDGE_CA_FILE"))
 }
 
 // edgeRootCAs builds the trust pool used to verify the edge :7443 control
 // listener: the embedded platform root plus an optional extra CA file
 // (CALABI_EDGE_CA_FILE — a dev/override hook).
+//
+// The embedded root comes in as a parameter (production passes
+// embeddedEdgeCA) because no build we ship lacks one — the tree carries the
+// dev CA and releases swap in the real root — so the no-embedded-root
+// branches below are reachable only by a test handing in an empty root.
 //
 // The embedded root is the canonical trust now that the dev *and* release
 // CAs are compiled in, so CALABI_EDGE_CA_FILE is redundant in normal use.
@@ -39,16 +45,16 @@ func EdgeRootCAs() (*x509.CertPool, error) {
 // root is present: a stale env var (e.g. a relative dev path that no longer
 // resolves under the binary's cwd) must not break a binary that already has
 // working trust. We only hard-fail on the extra file when it's the sole
-// source of trust (an OSS placeholder build with no embedded cert), or when
+// source of trust (a build whose certs/edge-ca.pem was emptied), or when
 // the file is actually present but malformed (no PEM certs) — that's a real
 // misconfiguration worth surfacing.
 //
 // Fails closed overall: if nothing yields a usable certificate it errors
 // rather than returning an empty pool (which TLS would treat as "verify
 // against system roots" — wrong for an internally-signed edge cert).
-func edgeRootCAs(extraFile string) (*x509.CertPool, error) {
+func edgeRootCAs(embeddedPEM []byte, extraFile string) (*x509.CertPool, error) {
 	pool := x509.NewCertPool()
-	embedded := len(embeddedEdgeCA) > 0 && pool.AppendCertsFromPEM(embeddedEdgeCA)
+	embedded := len(embeddedPEM) > 0 && pool.AppendCertsFromPEM(embeddedPEM)
 	added := embedded
 	if extraFile != "" {
 		pem, err := os.ReadFile(extraFile)

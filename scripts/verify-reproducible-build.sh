@@ -184,8 +184,9 @@ echo
 while IFS="$(printf '\t')" read -r group platform binary want ldflags archive; do
   [ -n "${group:-}" ] || continue
   case "$group" in
-    client) src="$TREE/apps/client";      cmd="./cmd/calabi" ;;
-    edge)   src="$TREE/apps/calabi-edge"; cmd="./cmd/calabi-edge" ;;
+    client) src="$TREE/apps/client";       cmd="./cmd/calabi" ;;
+    edge)   src="$TREE/apps/calabi-edge";  cmd="./cmd/calabi-edge" ;;
+    coord)  src="$TREE/apps/calabi-coord"; cmd="./cmd/calabi-coord" ;;
     *)      echo "  SKIP $archive - unknown component '$group'"; skip=$((skip+1)); continue ;;
   esac
   if [ ! -d "$src" ]; then

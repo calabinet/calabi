@@ -27,29 +27,60 @@ func (c *Core) routes() http.Handler {
 	mux.HandleFunc("GET /v1/state", c.handleState)
 	mux.HandleFunc("POST /v1/auth/login", c.handleLogin)
 	mux.HandleFunc("POST /v1/auth/logout", c.handleLogout)
-	mux.HandleFunc("GET /v1/me", c.proxyTo("/v1/account/me"))
-	mux.HandleFunc("GET /v1/orgs", c.proxyTo("/v1/orgs"))
-	mux.HandleFunc("POST /v1/orgs/switch", c.handleOrgSwitch)
-	mux.HandleFunc("GET /v1/mesh/nodes", c.proxyTo("/v1/mesh/nodes"))
+	// A self-hosted server instead of calabi.net (selfhosted.go). While joined
+	// to one, the routes below that ask calabi.net either ask the server or
+	// answer that there is nothing there.
+	mux.HandleFunc("POST /v1/selfhosted/probe", c.handleProbe)
+	mux.HandleFunc("POST /v1/selfhosted/join", c.handleJoin)
+	mux.HandleFunc("POST /v1/selfhosted/trust", c.handleTrust)
+	mux.HandleFunc("GET /v1/me", c.onPlatform(c.proxyTo("/v1/account/me"), jsonBody(`{"role":""}`)))
+	mux.HandleFunc("GET /v1/orgs", c.onPlatform(c.proxyTo("/v1/orgs"), jsonBody(`{"items":[]}`)))
+	mux.HandleFunc("POST /v1/orgs/switch", c.onPlatform(c.handleOrgSwitch, notOnSelfHosted))
+	mux.HandleFunc("GET /v1/mesh/nodes", c.onPlatform(c.proxyTo("/v1/mesh/nodes"), c.handleSelfHostedNodes))
 	mux.HandleFunc("GET /v1/mesh", c.handleMesh)
-	mux.HandleFunc("GET /v1/mesh/replaceable", c.handleReplaceable)
-	mux.HandleFunc("POST /v1/mesh/replace", c.handleReplace)
-	mux.HandleFunc("GET /v1/usage/overview", c.handleUsageOverview)
+	mux.HandleFunc("GET /v1/mesh/replaceable", c.onPlatform(c.handleReplaceable, jsonBody(`{"items":[]}`)))
+	mux.HandleFunc("POST /v1/mesh/replace", c.onPlatform(c.handleReplace, notOnSelfHosted))
+	mux.HandleFunc("GET /v1/usage/overview", c.onPlatform(c.handleUsageOverview, c.handleSelfHostedUsage))
 	// Tunnels are read-only on a phone. The list rows
 	// carry everything the detail screen shows, so there is no single-tunnel
 	// route. Each access-log read writes an audit event upstream: the app loads
 	// it when asked, never on a timer.
-	mux.HandleFunc("GET /v1/tunnels", c.proxyTo("/v1/tunnels"))
-	mux.HandleFunc("GET /v1/tunnels/{id}/access", c.proxyByID("/v1/tunnels/%d/access"))
+	mux.HandleFunc("GET /v1/tunnels", c.onPlatform(c.proxyTo("/v1/tunnels"), c.handleSelfHostedTunnels))
+	mux.HandleFunc("GET /v1/tunnels/{id}/access", c.onPlatform(c.proxyByID("/v1/tunnels/%d/access"), notOnSelfHosted))
 	mux.HandleFunc("GET /v1/settings", c.handleGetSettings)
 	mux.HandleFunc("PUT /v1/settings", c.handlePutSettings)
 	mux.HandleFunc("GET /v1/logs", c.handleLogs)
 	return mux
 }
 
+// onPlatform routes to platform while signed in to calabi.net and to selfHosted
+// while joined to a self-hosted server.
+func (c *Core) onPlatform(platform, selfHosted http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if c.selfHosted() != nil {
+			selfHosted(w, r)
+			return
+		}
+		platform(w, r)
+	}
+}
+
+func jsonBody(body string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) { writeRaw(w, http.StatusOK, []byte(body)) }
+}
+
+// notOnSelfHosted answers what only calabi.net has.
+func notOnSelfHosted(w http.ResponseWriter, _ *http.Request) {
+	joinError(w, http.StatusNotFound, "not_on_self_hosted", "not available on a self-hosted server", nil)
+}
+
 // state is GET /v1/state: what the app needs to decide which screen to show.
 type state struct {
-	SignedIn    bool   `json:"signed_in"`
+	SignedIn bool `json:"signed_in"`
+	// Mode is "platform" or "self_hosted" while signed in, "" otherwise;
+	// Server is the self-hosted server's address.
+	Mode        string `json:"mode,omitempty"`
+	Server      string `json:"server,omitempty"`
 	Email       string `json:"email,omitempty"`
 	UserID      int64  `json:"user_id,omitempty"`
 	ActiveOrgID int64  `json:"active_org_id,omitempty"`
@@ -61,8 +92,11 @@ type state struct {
 func (c *Core) handleState(w http.ResponseWriter, _ *http.Request) {
 	cfg, _ := creds.Load()
 	st := state{Connected: c.currentEngine() != nil}
-	if cfg != nil && cfg.AccessToken != "" {
-		st.SignedIn = true
+	switch p := c.selfHosted(); {
+	case p != nil:
+		st.SignedIn, st.Mode, st.Server = true, "self_hosted", p.Server
+	case cfg != nil && cfg.AccessToken != "":
+		st.SignedIn, st.Mode = true, "platform"
 		st.Email, st.UserID, st.ActiveOrgID = cfg.User.Email, cfg.User.ID, cfg.ActiveOrgID
 	}
 	writeJSON(w, http.StatusOK, st)
@@ -137,6 +171,13 @@ func (c *Core) handleLogin(w http.ResponseWriter, r *http.Request) {
 // handleLogout leaves the meshnet, revokes the session and forgets it. The
 // revoke is best-effort: being offline must not keep the user signed in.
 func (c *Core) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if p := c.selfHosted(); p != nil {
+		// The mesh key stays, as below: joining the same server again is the
+		// same device.
+		c.signOutSelfHosted(r.Context(), p)
+		writeJSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
+		return
+	}
 	c.Disconnect()
 	cfg, _ := creds.Load()
 	if cfg != nil && cfg.AccessToken != "" {

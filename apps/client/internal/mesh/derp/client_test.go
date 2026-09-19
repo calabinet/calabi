@@ -18,6 +18,19 @@ func key(b byte) meshproto.NodeKey {
 	return k
 }
 
+// readSkippingPings reads the next frame that is not a Ping. Every link writes
+// one at dial and one behind each auth proof to learn when the relay admits it
+// (Client.Ready); a relay discards them before the proof and answers them after,
+// and these fakes, reading one expected frame at a time, just step over them.
+func readSkippingPings(conn net.Conn) (meshproto.DERPFrameType, []byte, error) {
+	for {
+		typ, payload, err := meshproto.ReadDERPFrame(conn)
+		if err != nil || typ != meshproto.DERPFramePing {
+			return typ, payload, err
+		}
+	}
+}
+
 // startRelay listens on a loopback port, accepts one client, verifies its
 // ClientInfo carries wantKey, then runs handler(conn) playing the relay side.
 func startRelay(t *testing.T, wantKey meshproto.NodeKey, handler func(net.Conn)) string {
@@ -56,7 +69,7 @@ func TestClientSend(t *testing.T) {
 	}
 	gotCh := make(chan sent, 1)
 	addr := startRelay(t, keyA, func(conn net.Conn) {
-		typ, payload, err := meshproto.ReadDERPFrame(conn)
+		typ, payload, err := readSkippingPings(conn)
 		if err != nil || typ != meshproto.DERPFrameSendPacket {
 			return
 		}

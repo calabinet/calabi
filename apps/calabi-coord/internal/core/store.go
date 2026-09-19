@@ -53,6 +53,9 @@ type NodeStore interface {
 	// SetDisabled flips a node's admin kill switch (MESH.8b). Returns
 	// ErrNodeNotFound for an unknown id.
 	SetDisabled(ctx context.Context, id int64, disabled bool) error
+	// SetSignedOut records a device's sign-out (Node.SignedOut). Returns
+	// ErrNodeNotFound for an unknown id.
+	SetSignedOut(ctx context.Context, id int64, signedOut bool) error
 }
 
 // PolicyStore compiles a meshnet's ACL into the peer set a given node may reach.

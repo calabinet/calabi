@@ -8,7 +8,6 @@ import (
 
 	"github.com/calabi/calabi/apps/client/internal/session"
 	"github.com/calabi/calabi/apps/client/internal/status"
-	"github.com/calabi/calabi/apps/client/internal/transport"
 	proto "github.com/calabi/calabi/pkg/protocol"
 )
 
@@ -59,28 +58,17 @@ func runSNI(args []string) int {
 	// device id the row is stored with client_id = 0 and the console can show
 	// neither which machine it runs on nor whether that machine is up.
 	ensureDeviceRegistered(logger)
-	// CALABI_SERVER (or a baked default, if this build has one), else ask the
-	// control plane which edge to dial — the same picker the daemon uses.
-	edgeAddr := requireEdgeAddr(logger, "sni")
-	if edgeAddr == "" {
-		return 2
+	// calabi.net: CALABI_SERVER (or a baked default, if this build has one),
+	// else the edge the control plane names — the same picker the daemon uses.
+	// Self-hosted: the edge the coordinator this device joined names.
+	edge, code := openOneShotEdge(logger, "sni")
+	if edge == nil {
+		return code
 	}
-	logger.Info("connecting",
-		"server", edgeAddr,
-		"local", localAddr, "domain", *domain)
+	defer edge.Close()
+	edgeAddr := edge.addr
 
-	mux, err := transport.Dial(transport.DialOptions{
-		Addr:       edgeAddr,
-		Insecure:   envBool("CALABI_INSECURE", defaultInsecure),
-		CACertFile: envOr("CALABI_EDGE_CA_FILE", ""),
-	})
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi: dial:", err)
-		return 1
-	}
-
-	cli := session.New(logger, mux, resolveToken(), *name)
-	cli.SetDeviceID(resolveDeviceID())
+	cli := edge.newSession(logger, *name)
 
 	state := status.New(version, edgeAddr)
 	cli.AttachTracker(state)
@@ -93,6 +81,7 @@ func runSNI(args []string) int {
 		fmt.Fprintln(os.Stderr, "calabi: handshake:", err)
 		return 1
 	}
+	edge.keepFresh(ctx, logger, cli)
 
 	tun := session.Tunnel{
 		Name:               *name,

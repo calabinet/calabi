@@ -18,7 +18,9 @@ func prodEnv(t *testing.T, calabiEnv, identity, allowNoAuth, quotaAddr, nodeQuot
 		t.Setenv(p+"_MESH_ADMIN_ALLOW_NOAUTH", "")
 		t.Setenv(p+"_QUOTA_ADDR", "")
 		t.Setenv(p+"_NODE_QUOTA", "")
+		t.Setenv(p+"_DB_DSN", "")
 	}
+	t.Setenv("CALABI_DB_DSN", "")
 	t.Setenv("QUOTA_SVC_ADDR", "")
 	t.Setenv(envPrefix+"_IDENTITY_ADDR", identity)
 	t.Setenv(envPrefix+"_MESH_ADMIN_ALLOW_NOAUTH", allowNoAuth)
@@ -90,6 +92,16 @@ func TestProductionPostureRejectsFailOpen(t *testing.T) {
 				t.Errorf("error does not name the offending setting %q: %v", c.wantMention, err)
 			}
 		})
+	}
+}
+
+// A self-hosted coordinator with a database needs no key file: its devices join
+// with keys it mints, and the built-in key is off (devStaticAuth).
+func TestProductionPostureAcceptsADatabaseAsTheAuthSource(t *testing.T) {
+	prodEnv(t, "production", "", "", "", "0")
+	t.Setenv(envPrefix+"_DB_DSN", "sqlite:./coord.db")
+	if err := checkProductionPosture(); err != nil {
+		t.Fatalf("a coordinator with a database was refused: %v", err)
 	}
 }
 

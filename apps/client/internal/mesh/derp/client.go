@@ -9,6 +9,7 @@
 package derp
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -103,7 +104,40 @@ type Client struct {
 	// the sample on the floor: the round trip was measured every 15s and then
 	// discarded on every machine running the default configuration.
 	rttMicros atomic.Int64
+
+	// dialedAt and lived time the link: lived is set once, when the read loop
+	// exits. Both on the monotonic clock — see Lifetime.
+	dialedAt time.Time
+	lived    atomic.Int64
+
+	// challenged is set when the relay first asks this link to authenticate, and
+	// answered holds the grant the latest challenge was answered with. The pool
+	// reads them off a link the relay hung up on: a relay that challenged a link
+	// and closed it at once refused that grant, which is not the same event as a
+	// relay restarting under an established link. See Challenged.
+	challenged atomic.Bool
+	answered   atomic.Pointer[[]byte]
+
+	// ready is closed once the relay has shown it carries this link's packets:
+	// the first Pong or relayed packet. A relay that challenges the link discards
+	// every frame before the proof and registers the node only after it
+	// pkg/relay's authenticate), so a frame sent the moment Dial returns goes
+	// nowhere — a node's first WireGuard handshake did, and waited out its
+	// 5-second retry. A Ping written right behind the proof is answered only once
+	// the link is admitted; one that never challenges answers the Ping written at
+	// dial. A relay that answers neither is taken as ready after readyFallback,
+	// which is how every link was treated before.
+	ready     chan struct{}
+	readyOnce sync.Once
 }
+
+// readyPingPayload marks the Pings that ask "admitted yet?", so their Pongs are
+// not timed as a keepalive's round trip.
+var readyPingPayload = []byte("calready")
+
+// readyFallback is how long a link waits for its first Pong before it is taken
+// as ready anyway. A var so a test need not wait it out.
+var readyFallback = 2 * time.Second
 
 // Dial connects to the relay at addr (host:port), announces self via ClientInfo,
 // and starts the read loop. onRecv may be nil (drop inbound). The caller owns
@@ -136,11 +170,48 @@ func Dial(ctx context.Context, addr string, self meshproto.NodeKey, auth Auth, o
 		logger.Info("derp: kernel send buffer pinned", "addr", addr, "bytes", pol.pinned, "env", sendSockBufEnv)
 	}
 	c := &Client{self: self, auth: auth, conn: conn, onRecv: onRecv, logger: logger,
-		closed: make(chan struct{}), sendq: newSendQueue(), sndbuf: ctl, pinnedBuf: pol.pinned}
+		closed: make(chan struct{}), sendq: newSendQueue(), sndbuf: ctl, pinnedBuf: pol.pinned,
+		dialedAt: time.Now()}
 	c.lastRx.Store(time.Now().UnixNano()) // a fresh link counts as just-heard-from
+	c.ready = make(chan struct{})
 	go c.readLoop()
 	go c.sendq.run(conn, &c.wmu, c.closed, ctl)
+	c.askReady()
+	fallback := readyFallback // read here, not in the goroutine: a test may change it
+	go func() {
+		t := time.NewTimer(fallback)
+		defer t.Stop()
+		select {
+		case <-c.ready:
+		case <-c.closed:
+		case <-t.C:
+			c.markReady()
+		}
+	}()
 	return c, nil
+}
+
+// Ready is closed once the relay carries this link's packets (see ready).
+func (c *Client) Ready() <-chan struct{} { return c.ready }
+
+// IsReady reports whether Ready is closed.
+func (c *Client) IsReady() bool {
+	select {
+	case <-c.ready:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *Client) markReady() { c.readyOnce.Do(func() { close(c.ready) }) }
+
+// askReady writes a Ping whose Pong says the relay is carrying this link. Best
+// effort: a link that cannot write has worse problems, and the fallback covers it.
+func (c *Client) askReady() {
+	c.wmu.Lock()
+	defer c.wmu.Unlock()
+	_ = meshproto.WriteDERPFrame(c.conn, meshproto.DERPFramePing, readyPingPayload)
 }
 
 // Send relays ciphertext to dst via the relay. Best-effort: the relay drops it
@@ -237,6 +308,29 @@ func (c *Client) Close() error { return c.conn.Close() }
 // Done is closed when the read loop has exited (link dead).
 func (c *Client) Done() <-chan struct{} { return c.closed }
 
+// Lifetime is how long the link has been up: from Dial until its read loop
+// exited, or until now while it is still running. Measured on the monotonic
+// clock, so a wall-clock step (NTP, a suspend) cannot make a link look younger
+// or older than it was.
+func (c *Client) Lifetime() time.Duration {
+	select {
+	case <-c.closed:
+		return time.Duration(c.lived.Load())
+	default:
+		return time.Since(c.dialedAt)
+	}
+}
+
+// Challenged reports whether the relay has asked this link to authenticate, and
+// the grant the most recent challenge was answered with (nil when the link had
+// none to present, or could not answer at all).
+func (c *Client) Challenged() (answeredWith []byte, challenged bool) {
+	if g := c.answered.Load(); g != nil {
+		answeredWith = *g
+	}
+	return answeredWith, c.challenged.Load()
+}
+
 // answerChallenge proves possession of the node key and presents whatever grant
 // the node holds right now (R0'). A node with no private key configured stays
 // silent rather than sending a proof that cannot verify — the relay closes the
@@ -257,13 +351,22 @@ func (c *Client) answerChallenge(payload []byte) error {
 	if err != nil {
 		return err
 	}
+	c.answered.Store(&grant)
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
-	return meshproto.WriteDERPFrame(c.conn, meshproto.DERPFrameAuthProof, proof)
+	if err := meshproto.WriteDERPFrame(c.conn, meshproto.DERPFrameAuthProof, proof); err != nil {
+		return err
+	}
+	// Right behind the proof: its Pong comes back only once the relay has
+	// admitted the link (see ready).
+	return meshproto.WriteDERPFrame(c.conn, meshproto.DERPFramePing, readyPingPayload)
 }
 
 func (c *Client) readLoop() {
-	defer close(c.closed)
+	defer func() {
+		c.lived.Store(int64(time.Since(c.dialedAt))) // before close: Lifetime reads it after Done
+		close(c.closed)
+	}()
 	for {
 		typ, payload, err := meshproto.ReadDERPFrame(c.conn)
 		if err != nil {
@@ -276,15 +379,21 @@ func (c *Client) readLoop() {
 			if err != nil {
 				continue
 			}
+			c.markReady() // only a registered node is sent packets
 			if c.onRecv != nil {
 				c.onRecv(src, ciphertext)
 			}
 		case meshproto.DERPFramePong:
+			c.markReady()
+			if bytes.Equal(payload, readyPingPayload) {
+				continue // the "admitted yet?" Ping's answer, not a keepalive's
+			}
 			// Keepalive ack. It also carries a running leg probe's samples when one
 			// is installed (probe.go); with none, this is a single atomic load.
 			c.observePong(payload)
 			c.observeKeepalivePong()
 		case meshproto.DERPFrameAuthChallenge:
+			c.challenged.Store(true)
 			if err := c.answerChallenge(payload); err != nil {
 				// Not fatal here: the relay decides what an unanswered challenge
 				// costs (it closes the link), and saying so once in the log is more

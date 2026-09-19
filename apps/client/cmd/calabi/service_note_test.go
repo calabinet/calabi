@@ -19,6 +19,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/kardianos/service"
 )
@@ -150,5 +151,54 @@ func TestInstalledServiceNote(t *testing.T) {
 	// ways forward, and there is nothing running for a daemon to be "second" to.
 	if got, want := installedServiceNote(service.StatusStopped, nil, true), serviceNote(service.StatusStopped); got != want {
 		t.Errorf("stopped service note = %q, want exactly %q", got, want)
+	}
+}
+
+// `calabi join` on a computer with a calabi service: the service is another
+// client, with its own data. join used to print login's note, which says to
+// start a stopped service — and a tester did, starting the computer's platform
+// client instead of anything on the server just joined.
+func TestJoinServiceNoteNeverSendsYouToTheService(t *testing.T) {
+	for _, st := range []service.Status{service.StatusStopped, service.StatusRunning, service.StatusUnknown} {
+		note := joinServiceNote(st)
+		if strings.Contains(note, "daemon start") {
+			t.Errorf("status %v: the join note offers to start the service: %q", st, note)
+		}
+		for _, want := range []string{"separate client", "does not reach it", "calabi daemon", "Settings → Connect"} {
+			if !strings.Contains(note, want) {
+				t.Errorf("status %v: the join note does not say %q: %q", st, want, note)
+			}
+		}
+	}
+}
+
+// After `calabi daemon start` the console address is looked for where a service
+// keeps its data — the machine-wide dir included — and never reported as being
+// next to THIS copy of calabi, which need not be the service's.
+func TestDaemonStartLooksWhereTheServiceKeepsItsData(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("the machine-wide dir is fixed outside Windows")
+	}
+	programData := t.TempDir()
+	t.Setenv("ProgramData", programData)
+	sys := filepath.Join(programData, "Calabi")
+	if err := os.MkdirAll(sys, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if err := os.WriteFile(filepath.Join(sys, consoleURLFile), []byte("http://127.0.0.1:7400\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(t, func() { printConsoleHint(start) })
+	if !strings.Contains(out, "console: http://127.0.0.1:7400") {
+		t.Fatalf("printConsoleHint = %q, want the address the service wrote in the machine-wide dir", out)
+	}
+
+	if err := os.Remove(filepath.Join(sys, consoleURLFile)); err != nil {
+		t.Fatal(err)
+	}
+	out = captureStdout(t, func() { printConsoleHint(time.Now()) })
+	if dir := exeDir(); dir != "" && strings.Contains(out, dir) {
+		t.Fatalf("printConsoleHint = %q, names this copy's directory %s", out, dir)
 	}
 }

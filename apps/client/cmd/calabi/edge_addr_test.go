@@ -159,26 +159,6 @@ func TestRequireEdgeAddrBakedDefaultStillWins(t *testing.T) {
 	}
 }
 
-// Standalone has no control plane. Asking one anyway would report a network
-// failure for a question that should never have been asked.
-func TestRequireEdgeAddrStandaloneDoesNotAsk(t *testing.T) {
-	d := newEdgeDirectory(t, edge(41, "edge-sfo.example.com:7443", "us-west"))
-	releaseBuild(t, d)
-	signedIn(t, &creds.Config{Mode: clientModeStandalone})
-
-	var got string
-	msg := captureStderr(t, func() { got = requireEdgeAddr(setupLogger(), "http") })
-	if got != "" {
-		t.Fatalf("requireEdgeAddr = %q, want \"\" — standalone has no control plane", got)
-	}
-	if n := d.calls.Load(); n != 0 {
-		t.Fatalf("/v1/edges was called %d time(s) from a standalone client", n)
-	}
-	if !strings.Contains(msg, "CALABI_SERVER") || !strings.Contains(msg, "standalone") {
-		t.Fatalf("message should name standalone and the variable that fixes it, got:\n%s", msg)
-	}
-}
-
 // No credential means no discovery AND no handshake. The message has to say
 // "sign in", not "lookup failed" — the second sends people to check their DNS.
 func TestRequireEdgeAddrWithoutCredentialsSaysSignIn(t *testing.T) {

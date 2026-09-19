@@ -1,7 +1,9 @@
 package mesh
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"net"
 	"strconv"
@@ -51,6 +53,52 @@ type relayPool struct {
 	txDroppedGone uint64
 	// txBlockedGone does the same for the writers' blocked time.
 	txBlockedGone time.Duration
+	// refusals holds, per relay address, a relay that has been turning this device
+	// away, so the lazy dial paths sit out a growing hold instead of re-dialing it
+	// every sweep. See relayHungUp.
+	refusals map[string]*relayRefusal
+	// onLinkUp, when set, is told each time a link comes up. The bind holds the
+	// packets it could not send for want of one (meshBind.hold) and sends them
+	// then.
+	onLinkUp func(addr string)
+}
+
+// errNoRelayLink is Send's answer when no relay link can take the packet yet:
+// the home link is still being dialed, held off after a refusal, or there is no
+// home relay at all. It used to be net.ErrClosed, which nothing had done and
+// which WireGuard printed as "use of closed network connection" at the start of
+// every self-hosted device, whose home relay comes with the first netmap.
+var errNoRelayLink = errors.New("mesh: no relay link is up yet")
+
+// relayRefusal is what the pool remembers about a relay that keeps turning this
+// device away. Dropped once that relay answers a keepalive again.
+type relayRefusal struct {
+	times int       // consecutive refusals
+	until time.Time // lazy dials to this relay wait until then
+	grant []byte    // the grant it turned away most recently
+	// grants counts the DIFFERENT grants it has turned away in this run. One means
+	// only the grant the device had when the refusals began has been tried; more
+	// means a newer grant was refused as well. See worthTrying.
+	grants int
+}
+
+// worthTrying reports whether grant g might get a different answer from this
+// relay than the grant it last refused, and so deserves a dial without waiting
+// out the hold.
+//
+// The coordinator signs a fresh grant into every netmap it sends: at least every
+// 15 minutes, and on every change in the mesh. A device that has just got its
+// coordinator back needs its first fresh grant tried at once — not after minutes
+// of a hold its lapsed grant earned. But a relay refusing the device for a reason
+// a fresh grant doesn't change (a scope that doesn't cover that relay) would,
+// under a rule of "any new grant", be re-dialed as often as netmaps arrive. So:
+// while the relay has refused only one grant, any other grant is worth a try;
+// once it has refused a newer one as well, only a grant with different terms is.
+func (r *relayRefusal) worthTrying(g []byte) bool {
+	if bytes.Equal(g, r.grant) {
+		return false
+	}
+	return r.grants <= 1 || !sameGrantTerms(r.grant, g)
 }
 
 // relayDialTimeout bounds one background relay dial.
@@ -66,6 +114,11 @@ const (
 	// long enough not to churn a link over one lost packet, short enough that a
 	// machine coming out of standby is back on the meshnet in under a minute.
 	relayDeadAfter = 45 * time.Second
+	// relayRefusalMaxHold caps the hold on a relay that keeps refusing this
+	// device, in keepalive intervals: 15s, 30s, 1m, 2m, 4m, then every 5m for as
+	// long as the refusals last. Capped, never stopped — a failure that could heal
+	// on its own is asked about less often, not given up on.
+	relayRefusalMaxHold = 20
 )
 
 // relayKeepalivePing is the payload every keepalive carries. The contents are
@@ -90,6 +143,7 @@ func newRelayPoolTimed(self meshproto.NodeKey, priv [meshproto.KeyLen]byte, onRe
 		stop:      make(chan struct{}),
 		clients:   make(map[string]*derp.Client),
 		dialing:   make(map[string]bool),
+		refusals:  make(map[string]*relayRefusal),
 	}
 	go p.keepalive()
 	return p
@@ -123,7 +177,8 @@ func (p *relayPool) keepalive() {
 // sweep pings every link, reaps the ones that have gone quiet, and makes sure the
 // home link is up. Reaping only removes the link — the next Send re-dials — but
 // the HOME link is re-dialed here, because that is the one peers need this node
-// to be listening on even while it is sending nothing itself.
+// to be listening on even while it is sending nothing itself. (Unless the home
+// relay has been refusing this device: then the re-dial waits out its hold.)
 func (p *relayPool) sweep() {
 	p.mu.Lock()
 	if p.closed {
@@ -135,24 +190,49 @@ func (p *relayPool) sweep() {
 		links[addr] = c
 	}
 	home := p.home
+	var answered map[string]*derp.Client // links that may end a refusal; only tracked while there is one
+	if len(p.refusals) > 0 {
+		answered = make(map[string]*derp.Client)
+	}
 	p.mu.Unlock()
 
 	for addr, c := range links {
 		switch {
 		case linkDone(c):
-			p.reap(addr, c, "relay closed the link")
+			p.relayHungUp(addr, c)
 		case c.Idle() > p.deadAfter:
 			p.reap(addr, c, "no frame from the relay within the deadline")
 		default:
 			if err := c.Ping(relayKeepalivePing); err != nil {
 				p.reap(addr, c, "keepalive write failed")
+			} else if answered != nil && c.RTT() > 0 {
+				answered[addr] = c
 			}
 		}
 	}
 
 	p.mu.Lock()
+	// A relay that has answered a keepalive has let this device in: it only
+	// starts forwarding (Pong included) once the device has authenticated. That,
+	// not a link merely staying open, is what ends a run of refusals.
+	type readmission struct {
+		addr     string
+		refusals int
+	}
+	var readmitted []readmission
+	for addr, c := range answered {
+		if r := p.refusals[addr]; r != nil && p.clients[addr] == c {
+			delete(p.refusals, addr)
+			readmitted = append(readmitted, readmission{addr, r.times})
+		}
+	}
 	redial := home != "" && !p.closed && p.clients[home] == nil
 	p.mu.Unlock()
+	if p.logger != nil {
+		for _, r := range readmitted {
+			p.logger.Info("mesh: relay accepted this device again", "relay", r.addr, "after_refusals", r.refusals)
+		}
+	}
 	if redial {
 		p.dial(home)
 	}
@@ -175,6 +255,10 @@ func linkDone(c *derp.Client) bool {
 // Proving that one link at a time through the sweep would cost the user a
 // black-holed meshnet for the length of a sweep — on the one occasion when a
 // human is sitting there watching it.
+//
+// For the same reason the home re-dial here ignores a refusal hold (relayHungUp):
+// a resume or a network change always gets its immediate attempt. If the relay
+// still refuses, the hold carries on from where it was.
 func (p *relayPool) ResetLinks() {
 	p.mu.Lock()
 	if p.closed {
@@ -193,7 +277,7 @@ func (p *relayPool) ResetLinks() {
 		p.logger.Info("mesh: relay links reset after resume; re-dialing", "links", len(clients))
 	}
 	if home != "" {
-		p.dial(home)
+		p.dialNow(home)
 	}
 }
 
@@ -201,10 +285,46 @@ func (p *relayPool) ResetLinks() {
 // netmap. Links read it lazily (derp.Auth.Grant is a function) so a relay that
 // re-challenges an hours-old link gets the CURRENT grant, not the one that link
 // was dialed with.
+//
+// A new grant also ends the hold on a relay that has been refusing this device,
+// if it stands a chance there (worthTrying), and the home relay is then re-dialed
+// on the spot.
 func (p *relayPool) SetGrant(g []byte) {
 	p.mu.Lock()
+	if bytes.Equal(g, p.grant) {
+		p.mu.Unlock()
+		return
+	}
 	p.grant = g
+	redialHome := false
+	for addr, r := range p.refusals {
+		if !r.worthTrying(g) {
+			continue
+		}
+		r.until = time.Time{}
+		if addr == p.home && p.clients[addr] == nil {
+			redialHome = true
+		}
+	}
+	home := p.home
 	p.mu.Unlock()
+	if redialHome {
+		p.dial(home)
+	}
+}
+
+// sameGrantTerms reports whether two grants say the same thing apart from their
+// expiry: same node, org and scope. Parsed without verifying — nothing here is an
+// access decision, only a guess at whether a relay's answer could change. Two
+// blobs that don't parse count as the same (there is nothing to tell them apart
+// by); one that parses and one that doesn't, as different.
+func sameGrantTerms(a, b []byte) bool {
+	ga, errA := meshproto.ParseRelayGrant(a)
+	gb, errB := meshproto.ParseRelayGrant(b)
+	if errA != nil || errB != nil {
+		return errA != nil && errB != nil
+	}
+	return ga.Node.Equal(gb.Node) && ga.Meshnet == gb.Meshnet && ga.Scope == gb.Scope
 }
 
 // auth is what every link this pool dials presents when challenged.
@@ -236,10 +356,42 @@ func (p *relayPool) DialHome(ctx context.Context, addr string) error {
 		return err
 	}
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	p.clients[addr] = c
 	p.home = addr
+	p.mu.Unlock()
+	go p.whenAdmitted(addr, c)
 	return nil
+}
+
+// whenAdmitted waits for the relay to admit a new link (derp.Client.Ready), then
+// says so and tells onLinkUp. Until then clientFor does not send on it: a relay
+// that authenticates discards what arrives before the proof.
+func (p *relayPool) whenAdmitted(addr string, c *derp.Client) {
+	select {
+	case <-c.Ready():
+	case <-c.Done():
+		return
+	}
+	p.mu.Lock()
+	current := p.clients[addr] == c
+	up := p.onLinkUp
+	p.mu.Unlock()
+	if !current {
+		return
+	}
+	if p.logger != nil {
+		p.logger.Info("mesh relay link up", "relay", addr)
+	}
+	if up != nil {
+		up(addr)
+	}
+}
+
+// setOnLinkUp registers the callback told of every link that comes up.
+func (p *relayPool) setOnLinkUp(f func(addr string)) {
+	p.mu.Lock()
+	p.onLinkUp = f
+	p.mu.Unlock()
 }
 
 // Send relays one packet to dst via the relay at addr — the peer's home relay.
@@ -250,7 +402,13 @@ func (p *relayPool) DialHome(ctx context.Context, addr string) error {
 func (p *relayPool) Send(addr string, dst meshproto.NodeKey, ciphertext []byte) error {
 	c, use := p.clientFor(addr)
 	if c == nil {
-		return net.ErrClosed
+		p.mu.Lock()
+		closed := p.closed
+		p.mu.Unlock()
+		if closed {
+			return net.ErrClosed
+		}
+		return errNoRelayLink
 	}
 	if err := c.Send(dst, ciphertext); err != nil {
 		p.drop(use, c)
@@ -271,7 +429,8 @@ func (p *relayPool) clientFor(addr string) (*derp.Client, string) {
 	if addr == "" {
 		addr = p.home
 	}
-	if c := p.clients[addr]; c != nil {
+	c := p.clients[addr]
+	if c != nil && c.IsReady() {
 		p.mu.Unlock()
 		return c, addr
 	}
@@ -279,7 +438,14 @@ func (p *relayPool) clientFor(addr string) (*derp.Client, string) {
 	hc := p.clients[home]
 	p.mu.Unlock()
 
-	p.dial(addr) // background; this packet takes the home link
+	if c == nil {
+		p.dial(addr) // background; this packet takes the home link
+	}
+	// A link the relay has not admitted yet carries nothing (see whenAdmitted):
+	// the send is held until it is, rather than lost.
+	if hc != nil && !hc.IsReady() {
+		hc = nil
+	}
 	return hc, home
 }
 
@@ -293,17 +459,9 @@ func (p *relayPool) drop(addr string, c *derp.Client) { p.reap(addr, c, "send fa
 // frame from the relay" is a path problem and "relay closed the link" is not.
 func (p *relayPool) reap(addr string, c *derp.Client, reason string) {
 	p.mu.Lock()
-	if p.clients[addr] == c {
-		// Carry the link's drop tally forward before losing the handle to it, or
-		// the reported total drops back to whatever the replacement link has sent.
-		p.txDroppedGone += c.TxDropped()
-		p.txBlockedGone += c.TxBlocked()
-		delete(p.clients, addr)
-	} else {
-		c = nil
-	}
+	removed := p.removeLocked(addr, c)
 	p.mu.Unlock()
-	if c != nil {
+	if removed {
 		_ = c.Close()
 		if p.logger != nil {
 			p.logger.Warn("mesh: relay link dropped; will re-dial", "relay", addr, "reason", reason)
@@ -311,14 +469,125 @@ func (p *relayPool) reap(addr string, c *derp.Client, reason string) {
 	}
 }
 
+// removeLocked takes c out of the pool if it is still the link for addr. False
+// means a newer dial has already replaced it. Caller holds p.mu.
+func (p *relayPool) removeLocked(addr string, c *derp.Client) bool {
+	if p.clients[addr] != c {
+		return false
+	}
+	// Carry the link's drop tally forward before losing the handle to it, or the
+	// reported total drops back to whatever the replacement link has sent.
+	p.txDroppedGone += c.TxDropped()
+	p.txBlockedGone += c.TxBlocked()
+	delete(p.clients, addr)
+	return true
+}
+
+// relayHungUp handles a link the relay itself closed.
+//
+// Usually that is an ordinary disconnect — a relay restarting, or dropping an
+// hours-old link whose grant has run out — and the link is re-dialed at once.
+// But a relay that challenged the link and hung up before it had lived one
+// keepalive interval has refused this device: the grant it was shown has expired
+// (the device was deleted on the coordinator, or has been cut off from it for
+// over an hour), or doesn't cover that relay. Re-dialing every sweep changes
+// nothing, and costs the relay a connection and a WARN every 15 seconds for as
+// long as the device runs. So the relay is held off for a growing interval
+// (refusalHold) and asked again when the hold runs out or a new grant arrives
+// (SetGrant).
+//
+// The call rests on what the relay did, not on this machine's reading of the
+// grant's expiry: a device whose clock is off would read a live grant as dead,
+// or a dead one as live. The expiry only goes into the log.
+//
+// A hang-up with no challenge is not a refusal. That is a relay — or a TCP proxy
+// in front of one — closing connections while it restarts, and holding off there
+// would slow down the very recovery the sweep and ResetLinks exist to make fast.
+func (p *relayPool) relayHungUp(addr string, c *derp.Client) {
+	grant, challenged := c.Challenged()
+	if !challenged || c.Lifetime() >= p.pingEvery {
+		p.reap(addr, c, "relay closed the link")
+		return
+	}
+	p.mu.Lock()
+	if !p.removeLocked(addr, c) {
+		p.mu.Unlock()
+		return
+	}
+	r := p.refusals[addr]
+	switch {
+	case r == nil:
+		r = &relayRefusal{grants: 1}
+		p.refusals[addr] = r
+	case !bytes.Equal(grant, r.grant):
+		r.grants++
+	}
+	r.times++
+	r.grant = grant
+	hold := p.refusalHold(r.times)
+	r.until = time.Now().Add(hold)
+	// A netmap may have landed while this link was being turned away, leaving the
+	// device with a newer grant than the one refused. If that one stands a chance
+	// here, the sweep re-dials with it straight away.
+	retryNow := r.worthTrying(p.grant)
+	if retryNow {
+		r.until = time.Time{}
+	}
+	times := r.times
+	p.mu.Unlock()
+	_ = c.Close()
+	if p.logger == nil {
+		return
+	}
+	if retryNow {
+		p.logger.Info("mesh: relay turned away a grant this device has since replaced; re-dialing with the current one",
+			"relay", addr, "refusals", times)
+		return
+	}
+	args := []any{"relay", addr, "refusals", times, "retry_in", hold.String()}
+	if g, err := meshproto.ParseRelayGrant(grant); err == nil {
+		args = append(args, "grant_expires", g.Expiry.Format(time.RFC3339))
+	}
+	p.logger.Warn("mesh: relay turned this device away; holding off before re-dialing", args...)
+}
+
+// refusalHold is how long lazy dials wait after the n-th refusal in a row: one
+// keepalive interval, doubling, capped at relayRefusalMaxHold intervals.
+func (p *relayPool) refusalHold(n int) time.Duration {
+	hold, most := p.pingEvery, p.pingEvery*relayRefusalMaxHold
+	for i := 1; i < n && hold < most; i++ {
+		hold *= 2
+	}
+	return min(hold, most)
+}
+
+// heldLocked reports whether lazy dials to addr are still sitting out a refusal
+// hold. The last half interval is let off: the sweep that re-dials home runs on a
+// pingEvery grid, and a hold that ran out a hair after a tick would otherwise
+// cost a whole extra interval. Caller holds p.mu.
+func (p *relayPool) heldLocked(addr string) bool {
+	r := p.refusals[addr]
+	return r != nil && time.Until(r.until) > p.pingEvery/2
+}
+
 // dial opens a link in the background (idempotent per address). A failure is
 // logged, not retried on a timer: the next send through that relay tries again.
-func (p *relayPool) dial(addr string) {
+//
+// A relay that is refusing this device is not dialed until its hold runs out —
+// whoever asks, the sweep, a send or a netmap. A plain dial failure (connection
+// refused while a relay restarts) never starts a hold: the relay has said nothing
+// about this device, and the retry costs it nothing.
+func (p *relayPool) dial(addr string) { p.startDial(addr, false) }
+
+// dialNow is dial past any refusal hold. Only ResetLinks uses it.
+func (p *relayPool) dialNow(addr string) { p.startDial(addr, true) }
+
+func (p *relayPool) startDial(addr string, pastHold bool) {
 	if addr == "" {
 		return
 	}
 	p.mu.Lock()
-	if p.closed || p.clients[addr] != nil || p.dialing[addr] {
+	if p.closed || p.clients[addr] != nil || p.dialing[addr] || (!pastHold && p.heldLocked(addr)) {
 		p.mu.Unlock()
 		return
 	}
@@ -345,9 +614,7 @@ func (p *relayPool) dial(addr string) {
 		}
 		p.clients[addr] = c
 		p.mu.Unlock()
-		if p.logger != nil {
-			p.logger.Info("mesh relay link up", "relay", addr)
-		}
+		p.whenAdmitted(addr, c)
 	}()
 }
 
@@ -368,10 +635,25 @@ func (p *relayPool) Reconcile(selfRelay string, peerRelays []string) {
 // setHome points the node at the relay its own home region resolves to. The
 // switch only happens once that link is actually up: until then the previous home
 // keeps carrying traffic (and keeps receiving, which is what peers still expect).
+//
+// A node that has no home yet — it started without a relay address, and this is
+// the first netmap — takes addr at once, the way DialHome records its address
+// before the dial succeeds: there is no previous link to keep traffic on, and
+// until p.home is set nothing re-dials it (the sweep, a resume, the send path
+// all go by p.home).
 func (p *relayPool) setHome(addr string) {
 	p.mu.Lock()
 	if p.closed || p.home == addr {
 		p.mu.Unlock()
+		return
+	}
+	if p.home == "" {
+		p.home = addr
+		p.mu.Unlock()
+		if p.logger != nil {
+			p.logger.Info("mesh home relay taken from the coordinator's relay map", "relay", addr)
+		}
+		p.dial(addr)
 		return
 	}
 	if p.clients[addr] != nil {

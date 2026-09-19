@@ -19,6 +19,13 @@ const ProtocolVersion uint32 = 2
 // add e.g. CapHolePunch, CapMagicDNS, CapSubnetRoutes.
 type Capability string
 
+// CapNodeReauth: once enrolled, a node may register again by proving it holds
+// its node key, without presenting the auth key it enrolled with
+// (GetRegisterChallengeRequest.node_id / RegisterNodeRequest.node_id). A node
+// must see it in the coordinator's answer before it relies on it — above all
+// before it forgets an auth key.
+const CapNodeReauth Capability = "node_reauth"
+
 // Capabilities is the set a peer advertises. Intersection = the working subset.
 type Capabilities []Capability
 

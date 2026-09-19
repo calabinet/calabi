@@ -34,6 +34,54 @@ service Coordinator {
   // longer enough to enroll it or take its record over.
   rpc GetRegisterChallenge(GetRegisterChallengeRequest) returns (GetRegisterChallengeResponse);
 
+  // SignOut ends this node's ability to re-register by proof alone (node_reauth,
+  // see RegisterNodeRequest.node_id): until it next enrolls with an auth key, the
+  // coordinator refuses to take it back on its node key. The node's record, its
+  // overlay address and its seat stay. Called on sign-out, best effort.
+  rpc SignOut(SignOutRequest) returns (SignOutResponse);
+
+  // ListNodes lists the caller's meshnet — every device, reachable from the
+  // caller or not, with whether it is online — for a self-hosted coordinator's
+  // own apps: the phone's device list. A coordinator whose credentials come
+  // from an identity service answers PermissionDenied: there, device lists are
+  // served by the platform's API, which is where who may see what is decided.
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+
+  // ReportTunnels uploads the reverse tunnels this node's daemon serves, for a
+  // self-hosted coordinator's apps (docs/runbook/self-hosted-sign-in-plan.md
+  // §五): the whole current list, which replaces the one reported before, and
+  // the bytes each tunnel carried since the node's last accepted report.
+  // Information only — a tunnel grants nothing in the mesh, so nothing here
+  // needs approving. PermissionDenied on a coordinator whose credentials come
+  // from an identity service: the platform keeps its tunnels in its own services.
+  rpc ReportTunnels(ReportTunnelsRequest) returns (ReportTunnelsResponse);
+
+  // ListTunnels lists what every node of the caller's meshnet last reported
+  // with ReportTunnels. Self-hosted only, like ListNodes.
+  rpc ListTunnels(ListTunnelsRequest) returns (ListTunnelsResponse);
+
+  // GetUsage is the traffic the caller's meshnet sent through this server —
+  // its tunnels, and mesh traffic its relays carried; a direct path never
+  // touches the server — plus its device count. Self-hosted only.
+  rpc GetUsage(GetUsageRequest) returns (GetUsageResponse);
+
+  // OpenViewSession proves the node key exactly as RegisterNode does (a
+  // challenge from GetRegisterChallenge with node_id and node_key, no auth key),
+  // and returns a token that ListNodes, ListTunnels and GetUsage accept for a
+  // few minutes. It neither replaces the node's live session nor makes it
+  // online: it is how a phone shows its server while it is not connected.
+  // Self-hosted only.
+  rpc OpenViewSession(OpenViewSessionRequest) returns (OpenViewSessionResponse);
+
+  // GetEdgeAccess is what a node needs to serve tunnels through this server's
+  // edge (docs/runbook/self-hosted-server-plan.md §3.1): where the edge is, how
+  // to trust its certificate, and a grant the edge accepts — the same signed,
+  // short-lived statement relays accept, since one calabi-edge is both. Takes a
+  // live session's token or a view token, so a device whose mesh is switched off
+  // still serves tunnels. A disabled, signed-out or deleted node gets nothing.
+  // Self-hosted only.
+  rpc GetEdgeAccess(GetEdgeAccessRequest) returns (GetEdgeAccessResponse);
+
   // PullNetMap is a long-lived server stream. The coordinator pushes a fresh
   // NetMap whenever topology or ACL changes, so the node reprograms its
   // WireGuard peers live without reconnecting.
@@ -178,6 +226,12 @@ message RegisterNodeRequest {
   // false would make every un-upgraded machine claim, positively, that it
   // accepts connections. Absent means unknown; the console shows nothing.
   optional bool block_incoming = 14;
+  // Re-registration by proof alone (capability node_reauth): auth_key empty and
+  // this set to the node id an earlier RegisterNode returned. The challenge must
+  // be one issued for this node. The node keeps the meshnet, tags and owner it
+  // enrolled with; nothing is taken from the request that an auth key would
+  // have decided.
+  int64 node_id = 15;
 }
 
 // DeclaredService is one entry of RegisterNodeRequest.declared_services.
@@ -214,9 +268,189 @@ message RegisterNodeResponse {
 }
 
 message GetRegisterChallengeRequest {
-  // The auth key RegisterNode will present. Required, so an anonymous caller
-  // cannot make the coordinator hold challenge state.
+  // The auth key RegisterNode will present, so an anonymous caller cannot make
+  // the coordinator hold challenge state.
   string auth_key = 1;
+  // Re-registration by proof alone (capability node_reauth): no auth_key, and
+  // instead the node this device already is. The challenge is issued only when
+  // both name an existing, enabled, not signed-out node, and it is bound to that
+  // node. See docs/runbook/self-hosted-sign-in-plan.md §四.
+  int64 node_id = 2;
+  string node_key = 3;
+}
+
+message SignOutRequest {
+  string session_token = 1;
+}
+
+message SignOutResponse {}
+
+message ListNodesRequest {
+  // A live session's token, or a view token (OpenViewSession).
+  string session_token = 1;
+}
+
+message ListNodesResponse {
+  repeated NodeInfo nodes = 1;
+}
+
+// NodeInfo is one device as a list shows it.
+message NodeInfo {
+  int64 id = 1;
+  string name = 2;
+  string os = 3;
+  string overlay_addr = 4;
+  // Holds a live connection to the coordinator right now.
+  bool online = 5;
+  bool disabled = 6;
+  // False while the meshnet requires device approval and nobody has given it.
+  bool approved = 7;
+  // Only services an admin confirmed.
+  repeated PeerService services = 8;
+  // Subnet routes it may carry; "0.0.0.0/0" makes it an exit device.
+  repeated string approved_routes = 9;
+  int64 last_seen_unix = 10;
+}
+
+// TunnelReport is one tunnel as the node's daemon serves it right now.
+message TunnelReport {
+  // The name in the daemon's configuration; unique on the node, and what the
+  // coordinator keeps the tunnel's identity by from one report to the next.
+  string name = 1;
+  // "http", "https", "tcp", "udp" or "sni".
+  string type = 2;
+  // Where visitors reach it: a host name for http, https and sni; host:port for
+  // tcp and udp. Empty until its edge has assigned one.
+  string public_addr = 3;
+  // What the daemon forwards to, host:port.
+  string local_addr = 4;
+  // "online" (its edge serves it), "pending" (registering with the edge) or
+  // "offline" (the daemon is not connected to its edge).
+  string status = 5;
+  // Bytes since this node's last ACCEPTED report: from visitors to the local
+  // service, and back. The daemon keeps counting until a report is accepted, so
+  // a failed one delays the bytes rather than losing them.
+  int64 bytes_in = 6;
+  int64 bytes_out = 7;
+}
+
+message ReportTunnelsRequest {
+  string session_token = 1;
+  repeated TunnelReport tunnels = 2;
+}
+
+message ReportTunnelsResponse {}
+
+message ListTunnelsRequest {
+  // A live session's token, or a view token (OpenViewSession).
+  string session_token = 1;
+}
+
+message ListTunnelsResponse {
+  repeated TunnelInfo tunnels = 1;
+}
+
+// TunnelInfo is one tunnel as a list shows it.
+message TunnelInfo {
+  // Stable for as long as its node keeps reporting a tunnel by this name.
+  int64 id = 1;
+  int64 node_id = 2;
+  string node_name = 3;
+  // The node holds a live connection to the coordinator. When it does not, what
+  // it last reported may no longer be true: a list shows the tunnel offline.
+  bool node_online = 4;
+  string name = 5;
+  string type = 6;
+  string public_addr = 7;
+  string local_addr = 8;
+  string status = 9;
+  // Bytes both ways over the last 30 days. 0 when this coordinator keeps no
+  // traffic records (see GetUsageResponse.unavailable).
+  int64 traffic_30d = 10;
+  // When the node first reported a tunnel by this name, and last reported at all.
+  int64 first_seen_unix = 11;
+  int64 reported_unix = 12;
+}
+
+message GetUsageRequest {
+  // A live session's token, or a view token (OpenViewSession).
+  string session_token = 1;
+  // The viewer's IANA time zone ("America/New_York"): the days and the month
+  // are the viewer's, since a self-hosted server has no billing month to follow.
+  // Empty or unknown = UTC.
+  string time_zone = 2;
+  // How many days, today included: 1 to 31, default 7.
+  int32 days = 3;
+}
+
+message GetUsageResponse {
+  // Traffic: absent when this coordinator keeps no traffic records, and then
+  // unavailable says why ("no_database"). A usage view shows that, not zeros.
+  UsageMonth month = 1;
+  repeated UsageDay days = 2;
+  string unavailable = 3;
+  // True when relayed traffic is not recorded (connection records switched off):
+  // the figures are the tunnels alone.
+  bool relay_not_recorded = 4;
+  // Devices: in use (not disabled), disabled, and the most there may be
+  // (-1 = no limit).
+  int64 devices_used = 5;
+  int64 devices_disabled = 6;
+  int64 devices_limit = 7;
+}
+
+// UsageMonth is the viewer's current calendar month, [from, to).
+message UsageMonth {
+  int64 from_unix = 1;
+  int64 to_unix = 2;
+  int64 tunnel_bytes = 3;
+  // Mesh traffic this server's relays carried, counted once: as its sender
+  // reported it.
+  int64 relay_bytes = 4;
+}
+
+// UsageDay is one of the viewer's days, oldest first; bytes = tunnels + relay.
+message UsageDay {
+  int64 start_unix = 1;
+  int64 bytes = 2;
+}
+
+message OpenViewSessionRequest {
+  int64 node_id = 1;
+  string node_key = 2;
+  // From GetRegisterChallenge(node_id, node_key), answered like RegisterNode's.
+  string challenge_id = 3;
+  bytes proof = 4;
+}
+
+message OpenViewSessionResponse {
+  string view_token = 1;
+  int64 expires_unix = 2;
+}
+
+message GetEdgeAccessRequest {
+  // A live session's token, or a view token (OpenViewSession).
+  string session_token = 1;
+}
+
+message GetEdgeAccessResponse {
+  // The edges this node may serve tunnels through. Empty when the coordinator
+  // knows of none.
+  repeated EdgeInfo edges = 1;
+  // meshproto.RelayGrant, signed by the coordinator: the node presents it to the
+  // edge with a proof of its node key. Empty when the coordinator signs nothing.
+  bytes grant = 2;
+  // When the grant stops being accepted; ask again well before.
+  int64 grant_expires_unix = 3;
+}
+
+// EdgeInfo is one edge as a node dials it.
+message EdgeInfo {
+  // host:port of the edge's control listener, as devices reach it.
+  string addr = 1;
+  // SHA-256 of the certificate's public key (meshproto.CertPin), "sha256:…".
+  // Empty: check the certificate against the system's roots and the host name.
+  string pin = 2;
 }
 
 message GetRegisterChallengeResponse {
@@ -243,10 +477,10 @@ message ServiceHealth {
 }
 
 message UpdateNodeDeclarationsRequest {
-  // Authenticated the same way RegisterNode is: the auth key resolves to the
-  // meshnet, and node_key selects the node WITHIN it. A key that resolves to a
-  // different meshnet therefore cannot reach this node at all.
+  // Not read by the coordinator; session_token (below) authorizes this call.
   string auth_key = 1;
+  // Optional. When set it must be the node the session belongs to, otherwise
+  // the call is refused with PermissionDenied.
   string node_key = 2;
   repeated DeclaredService declared_services = 3;
   // Empty means "no change", not "clear it". A node reports "" both when it has

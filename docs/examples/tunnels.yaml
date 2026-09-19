@@ -1,33 +1,38 @@
-# Example config for the Calabi LOCAL supervisor daemon (standalone):
+# Example config for the Calabi local daemon on a device of your own server:
 #
 #   calabi daemon --config tunnels.yaml
 #
-# One process establishes every tunnel below against YOUR edge, applies each
-# tunnel's security policy locally (passwords are bcrypt-hashed before they
-# leave this machine), and auto-reconnects on drop. No account / control plane
-# is involved — this is the open-source, standalone runner.
+# The device joins your server's coordinator, and the coordinator names the edge
+# the tunnels below run on and signs this device's way in: nothing here names
+# the edge. The simplest start needs no file at all — `calabi join <invite>`,
+# then manage tunnels in the console, which keeps its own config. Write a file
+# like this one when the tunnels should come from a file you keep (a server, a
+# fleet provisioned the same way).
 #
-# The `security:` blocks are enforced by your edge for each tunnel: IP allow/deny
-# and HTTP Basic auth. (Rate limiting, header rewrite, and the OAuth login wall
-# are platform-only — ignored by the Community Edition.) Passwords are
-# bcrypt-hashed on this machine before they're sent.
+# One process establishes every tunnel below, applies each tunnel's security
+# policy locally (passwords are bcrypt-hashed before they leave this machine),
+# and auto-reconnects on drop.
+#
+# Your edge enforces each tunnel's `security:` block: IP allow/deny on every
+# tunnel type, and on HTTP tunnels Basic auth, rate limiting, header rewrite and
+# the OAuth login wall. Passwords are bcrypt-hashed on this machine before
+# they're sent.
 
-# Your edge control endpoint (host:port). Falls back to CALABI_SERVER.
-server: edge.example.com:7443
-
-# Bearer token the edge accepts (one of its `accepted_tokens`). Put it inline,
-# or write ${ENV_VAR} to read it from the environment and keep the secret out of
-# the file:
-token: ${CALABI_TOKEN}
-# token: tk_xxx           # or just paste the literal token here
-
-# Skip TLS verification of the edge control cert. Use for a self-signed /
-# dev standalone edge; OR'd with CALABI_INSECURE. Omit it entirely to verify.
-# insecure: true
-# ca_file: /etc/calabi/edge-ca.pem   # verify the edge cert against this CA
+# Your server's coordinator.
+mesh:
+  coord: coord.example.com:7012
+  # How its certificate is checked: the fingerprint `calabi-coord fingerprint`
+  # prints on the server (or `trust: system` for a publicly trusted certificate).
+  trust: pin
+  pins: ["sha256:0000000000000000000000000000000000000000000000000000000000000000"]
+  # A key from `calabi-coord authkey create` (reusable for a fleet). It is used
+  # the first time only: afterwards the device comes back by its own key.
+  auth_key: ck_replace_me
+  # Also join the mesh (WireGuard) — tunnels work either way.
+  # enabled: true
 
 # `tunnels:` may be empty (`tunnels: []`) or omitted entirely — the daemon still
-# connects to the edge and serves the local console at http://127.0.0.1:7400,
+# joins, connects to the edge and serves the local console at http://127.0.0.1:7400,
 # where you can create / delete tunnels and edit their security live (changes are
 # written back to this file). The entries below are optional examples.
 tunnels:
@@ -39,8 +44,7 @@ tunnels:
     security:
       ip_allow: ["10.0.0.0/8", "203.0.113.4"]
       basic_auth: ["admin:s3cret", "ops:hunter2"]   # bcrypt-hashed locally
-      # Rate limiting, header rewrite, and the OAuth login wall are platform-only
-      # and ignored by the Community Edition — IP allow/deny + Basic auth apply.
+      # Also: rate, set_header / del_header, oauth_* — see docs/self-hosting.md.
 
   # Raw TCP tunnel (e.g. SSH) on a fixed edge port. L4 tunnels accept IP rules
   # only — basic_auth is HTTP-only and rejected here.

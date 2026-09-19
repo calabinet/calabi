@@ -127,6 +127,25 @@ func serviceNote(st service.Status) string {
 	}
 }
 
+// joinServiceNote is what `calabi join` says when this computer has a calabi
+// service installed. The service is another client with its own data: the join
+// does not reach it, and starting it would not use the join. serviceNote, which
+// join used to print, is written for login and says to start the service when
+// it is stopped — which starts that OTHER client.
+func joinServiceNote(st service.Status) string {
+	state := "installed"
+	switch st {
+	case service.StatusRunning:
+		state = "installed and running"
+	case service.StatusStopped:
+		state = "installed but not running"
+	}
+	return "  this computer also has a calabi service (" + state + "). It is a separate client\n" +
+		"  with its own sign-in: this join does not reach it, and starting it does not use this join.\n" +
+		"  to use this join:  calabi daemon   (in this shell; keep it open)\n" +
+		"  to put the service on this server instead: join from its console (Settings → Connect)"
+}
+
 // reportDaemonStatus prints `calabi daemon status` from the service manager's
 // answer (st, err). published is the console URL the service last wrote, if this
 // shell can read it; candidates are where to look for a console when it cannot.
@@ -559,19 +578,29 @@ func awaitConsoleURL(since time.Time, timeout time.Duration) string {
 // per-user data dir (creds.DataDir), and `calabi login` needs THAT one — asking
 // the port instead would read back whichever client happens to hold :7400.
 func awaitConsoleURLIn(dir string, since time.Time, timeout time.Duration) string {
-	if dir == "" {
-		return ""
-	}
-	p := filepath.Join(dir, consoleURLFile)
+	return awaitConsoleURLInAny([]string{dir}, since, timeout)
+}
+
+// awaitConsoleURLInAny is awaitConsoleURLIn over several candidate data dirs:
+// the first fresh value in any of them, else a stale one.
+func awaitConsoleURLInAny(dirs []string, since time.Time, timeout time.Duration) string {
 	deadline := time.Now().Add(timeout)
 	var stale string
 	for {
-		if b, err := os.ReadFile(p); err == nil {
-			if u := strings.TrimSpace(string(b)); u != "" {
-				if fi, e2 := os.Stat(p); e2 == nil && fi.ModTime().After(since.Add(-3*time.Second)) {
-					return u // fresh — this run's bind
+		for _, dir := range dirs {
+			if dir == "" {
+				continue
+			}
+			p := filepath.Join(dir, consoleURLFile)
+			if b, err := os.ReadFile(p); err == nil {
+				if u := strings.TrimSpace(string(b)); u != "" {
+					if fi, e2 := os.Stat(p); e2 == nil && fi.ModTime().After(since.Add(-3*time.Second)) {
+						return u // fresh — this run's bind
+					}
+					if stale == "" {
+						stale = u
+					}
 				}
-				stale = u
 			}
 		}
 		if time.Now().After(deadline) {
@@ -581,16 +610,18 @@ func awaitConsoleURLIn(dir string, since time.Time, timeout time.Duration) strin
 	}
 }
 
-// printConsoleHint prints the console URL after a start, or a fallback pointing
-// at the service log when the daemon hasn't published it yet.
+// printConsoleHint prints the console URL after a start, or that it is still
+// coming when the daemon hasn't published it yet. It looks where a service keeps
+// its data — next to its exe, or the machine-wide dir — and the service's exe
+// need not be this one: `calabi daemon start` run from another copy starts the
+// INSTALLED service, and this copy's directory used to be named as where its log
+// would be.
 func printConsoleHint(since time.Time) {
-	if url := awaitConsoleURL(since, 5*time.Second); url != "" {
+	if url := awaitConsoleURLInAny([]string{exeDir(), creds.SystemDataDir()}, since, 5*time.Second); url != "" {
 		fmt.Println("  console: " + url)
 		return
 	}
-	if dir := exeDir(); dir != "" {
-		fmt.Printf("  console: starting — the address will appear in the service log under %s\n", dir)
-	}
+	fmt.Println("  console: starting — `calabi daemon status` shows its address in a moment")
 }
 
 // buildService wraps the kardianos service.Config + program shim.

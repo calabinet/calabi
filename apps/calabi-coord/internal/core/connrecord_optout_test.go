@@ -55,6 +55,16 @@ func (m *memConnRecords) PurgeConnRecordsOf(_ context.Context, t MeshnetID) (int
 	return n, nil
 }
 
+func (m *memConnRecords) RelayBytesByHour(_ context.Context, t MeshnetID, from, to time.Time) (map[time.Time]int64, error) {
+	out := map[time.Time]int64{}
+	for _, r := range m.rows {
+		if r.MeshnetID == t && !r.Hour.Before(from) && r.Hour.Before(to) {
+			out[r.Hour] += r.RelayBytesTx
+		}
+	}
+	return out, nil
+}
+
 // failingSettings answers every read with an error.
 type failingSettings struct{ SettingsStore }
 

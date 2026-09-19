@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"runtime"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -70,6 +71,13 @@ type RegisterParams struct {
 	// coordinator records them pending and an admin confirms them in the console
 	// before any ACL "svc:" rule matches.
 	Services []DeclaredService
+	// NodeID and Reauth: this device already is node NodeID, and its coordinator
+	// offered CapNodeReauth, so Register first comes back by proof of the node
+	// key alone, without AuthKey.
+	// If the coordinator refuses that, Register falls back to AuthKey — unless
+	// there is none, or the node is disabled. Set from a ReauthState.
+	NodeID int64
+	Reauth bool
 }
 
 // DeclaredService is one entry of RegisterParams.Services.
@@ -91,10 +99,36 @@ type Registration struct {
 	NodeID          int64
 	Overlay         netip.Addr
 	ProtocolVersion uint32
+	// Capabilities is what the coordinator agreed to, of what this client asked
+	// for (clientCapabilities).
+	Capabilities meshproto.Capabilities
+	// Reauth says this registration was by proof alone, without the auth key.
+	Reauth bool
 }
 
+// clientCapabilities is what this client asks the coordinator for.
+var clientCapabilities = []string{string(meshproto.CapNodeReauth)}
+
 // Register enrolls the node and returns its mesh identity (id + overlay addr).
+//
+// With p.Reauth and p.NodeID it first re-registers by proof of the node key
+// alone. A refusal falls back to enrolling with p.AuthKey, except when there is
+// no key to fall back on, or when the node is disabled (PermissionDenied: a key
+// would be refused too). The error returned is then the re-registration's, so
+// the caller can tell "enroll again" (NotFound, FailedPrecondition,
+// Unauthenticated) from "try later" (Unavailable).
 func (c *CoordClient) Register(ctx context.Context, p RegisterParams) (Registration, error) {
+	if p.Reauth && p.NodeID != 0 {
+		reg, err := c.register(ctx, p, true)
+		if err == nil || p.AuthKey == "" || status.Code(err) == codes.PermissionDenied {
+			return reg, err
+		}
+	}
+	return c.register(ctx, p, false)
+}
+
+// register is one registration: with the auth key, or (reauth) by proof alone.
+func (c *CoordClient) register(ctx context.Context, p RegisterParams, reauth bool) (Registration, error) {
 	// Without the private key there is nothing to prove possession with, and a
 	// mismatched one would only be refused by the coordinator a round trip later
 	// with a less useful error.
@@ -106,6 +140,7 @@ func (c *CoordClient) Register(ctx context.Context, p RegisterParams) (Registrat
 		NodeKey:           p.NodeKey.String(),
 		Name:              p.Name,
 		ProtocolVersion:   meshproto.ProtocolVersion,
+		Capabilities:      clientCapabilities,
 		DeviceFingerprint: p.DeviceFingerprint,
 		// runtime.GOOS, not a config field: this has to be the truth about the
 		// running binary, and a value an operator could set would only ever be
@@ -130,7 +165,10 @@ func (c *CoordClient) Register(ctx context.Context, p RegisterParams) (Registrat
 			Name: s.Name, Proto: s.Proto, Port: uint32(s.Port), Target: s.Target, Note: s.Note,
 		})
 	}
-	if err := c.attachProof(ctx, req, p); err != nil {
+	if reauth {
+		req.AuthKey, req.NodeId = "", p.NodeID
+	}
+	if err := c.attachProof(ctx, req, p, reauth); err != nil {
 		return Registration{}, err
 	}
 	resp, err := c.rpc.RegisterNode(ctx, req)
@@ -140,7 +178,10 @@ func (c *CoordClient) Register(ctx context.Context, p RegisterParams) (Registrat
 	c.sessMu.Lock()
 	c.session = resp.GetSessionToken()
 	c.sessMu.Unlock()
-	reg := Registration{NodeID: resp.GetNodeId(), ProtocolVersion: resp.GetProtocolVersion()}
+	reg := Registration{NodeID: resp.GetNodeId(), ProtocolVersion: resp.GetProtocolVersion(), Reauth: reauth}
+	for _, cap := range resp.GetCapabilities() {
+		reg.Capabilities = append(reg.Capabilities, meshproto.Capability(cap))
+	}
 	if oa := resp.GetOverlayAddr(); oa != "" {
 		addr, err := netip.ParseAddr(oa)
 		if err != nil {
@@ -149,6 +190,18 @@ func (c *CoordClient) Register(ctx context.Context, p RegisterParams) (Registrat
 		reg.Overlay = addr
 	}
 	return reg, nil
+}
+
+// SignOut tells the coordinator this device signed out: it will not take the
+// node back by proof alone until the device enrolls with an auth key again. The
+// session ends with it.
+func (c *CoordClient) SignOut(ctx context.Context) error {
+	tok := c.sessionToken()
+	if tok == "" {
+		return errors.New("mesh: sign out: not registered")
+	}
+	_, err := c.rpc.SignOut(ctx, &meshpb.SignOutRequest{SessionToken: tok})
+	return err
 }
 
 // sessionToken is the session the node registered into ("" before Register).
@@ -167,9 +220,17 @@ func (c *CoordClient) sessionToken() string {
 // an attacker can force - in production the coordinator is reached over TLS
 // verified against the embedded CA, so only the real coordinator can answer, and
 // a real coordinator new enough to check refuses an unproven registration.
-func (c *CoordClient) attachProof(ctx context.Context, req *meshpb.RegisterNodeRequest, p RegisterParams) error {
-	chr, err := c.rpc.GetRegisterChallenge(ctx, &meshpb.GetRegisterChallengeRequest{AuthKey: p.AuthKey})
-	if status.Code(err) == codes.Unimplemented {
+//
+// A re-registration by proof alone (reauth) asks for a challenge bound to the
+// node instead of presenting the key, and has no such fallback: a coordinator
+// without challenges never offered node_reauth.
+func (c *CoordClient) attachProof(ctx context.Context, req *meshpb.RegisterNodeRequest, p RegisterParams, reauth bool) error {
+	chReq := &meshpb.GetRegisterChallengeRequest{AuthKey: p.AuthKey}
+	if reauth {
+		chReq = &meshpb.GetRegisterChallengeRequest{NodeId: p.NodeID, NodeKey: p.NodeKey.String()}
+	}
+	chr, err := c.rpc.GetRegisterChallenge(ctx, chReq)
+	if status.Code(err) == codes.Unimplemented && !reauth {
 		return nil
 	}
 	if err != nil {
@@ -306,4 +367,80 @@ func (c *CoordClient) UpdateDeclarations(ctx context.Context, p RegisterParams) 
 		return err
 	}
 	return nil
+}
+
+// NodeInfo is one device of the meshnet as ListNodes reports it.
+type NodeInfo struct {
+	ID             int64
+	Name           string
+	OS             string
+	Overlay        string
+	Online         bool
+	Disabled       bool
+	Approved       bool
+	Services       []PeerService
+	ApprovedRoutes []string
+	LastSeen       time.Time
+}
+
+// ListNodes lists this node's meshnet, every device in it, from a self-hosted
+// coordinator. A coordinator backed by an identity service refuses it
+// (PermissionDenied): there the platform's API serves device lists.
+func (c *CoordClient) ListNodes(ctx context.Context) ([]NodeInfo, error) {
+	resp, err := c.rpc.ListNodes(ctx, &meshpb.ListNodesRequest{SessionToken: c.sessionToken()})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]NodeInfo, 0, len(resp.GetNodes()))
+	for _, n := range resp.GetNodes() {
+		info := NodeInfo{
+			ID: n.GetId(), Name: n.GetName(), OS: n.GetOs(), Overlay: n.GetOverlayAddr(),
+			Online: n.GetOnline(), Disabled: n.GetDisabled(), Approved: n.GetApproved(),
+			ApprovedRoutes: n.GetApprovedRoutes(),
+		}
+		if s := n.GetLastSeenUnix(); s > 0 {
+			info.LastSeen = time.Unix(s, 0)
+		}
+		for _, sv := range n.GetServices() {
+			info.Services = append(info.Services, PeerService{Name: sv.GetName(), Proto: sv.GetProto(), Port: int(sv.GetPort())})
+		}
+		out = append(out, info)
+	}
+	return out, nil
+}
+
+// EdgeTarget is one edge a self-hosted coordinator names for tunnels.
+type EdgeTarget struct {
+	// Addr is host:port of the edge's control listener.
+	Addr string
+	// Pin is meshproto.CertPin of the edge's certificate. Empty: check it
+	// against the system's roots and the host name.
+	Pin string
+}
+
+// EdgeAccess is where this node serves tunnels and the grant it signs in to
+// the edge with.
+type EdgeAccess struct {
+	Edges []EdgeTarget
+	// Grant is the coordinator's signed grant; empty when it signs none.
+	Grant  []byte
+	Expiry time.Time
+}
+
+// GetEdgeAccess asks a self-hosted coordinator where this node serves tunnels,
+// and for a grant its edge accepts. Works on a view session too, so a device
+// whose mesh is off still serves tunnels.
+func (c *CoordClient) GetEdgeAccess(ctx context.Context) (EdgeAccess, error) {
+	resp, err := c.rpc.GetEdgeAccess(ctx, &meshpb.GetEdgeAccessRequest{SessionToken: c.sessionToken()})
+	if err != nil {
+		return EdgeAccess{}, err
+	}
+	out := EdgeAccess{Grant: resp.GetGrant()}
+	if s := resp.GetGrantExpiresUnix(); s > 0 {
+		out.Expiry = time.Unix(s, 0)
+	}
+	for _, e := range resp.GetEdges() {
+		out.Edges = append(out.Edges, EdgeTarget{Addr: e.GetAddr(), Pin: e.GetPin()})
+	}
+	return out, nil
 }

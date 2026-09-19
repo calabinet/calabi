@@ -209,7 +209,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/auth/rebind", s.agentBlock(s.requireLocalToken(s.handleAuthRebind)))
 
 	// Account / org context for the UI's header.
-	mux.HandleFunc("GET /v1/me", s.proxyGET("/v1/account/me"))
+	mux.HandleFunc("GET /v1/me", s.handleMe)
 	// Org switcher surface: list memberships + switch active Org.
 	// switch is a guarded write (local-token required) since it rotates
 	// the bearer in creds; the GET stays open (loopback bind).
@@ -1488,6 +1488,25 @@ func resolveBearer(agentMode bool) string {
 		return v
 	}
 	return ""
+}
+
+// handleMe is GET /v1/me: the account behind this daemon, from bff-console.
+//
+// With no credential at all the answer is known without asking: nobody is
+// signed in, and the page goes to sign-in. It used to be asked anyway, so a
+// machine that cannot reach calabi.net — someone who only ever connects to
+// their own server, or a network that blocks it — got "can't reach the Calabi
+// server" instead of the sign-in page, and with it no way to the
+// "connect to a self-hosted server" entry that lives there. A stored refresh token
+// counts as a credential: the proxy can turn it into an access token.
+func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+	if resolveBearer(s.cfg.AgentMode) == "" {
+		if c, _ := creds.Load(); c == nil || c.RefreshToken == "" {
+			writeError(w, http.StatusUnauthorized, "not signed in")
+			return
+		}
+	}
+	s.proxy(w, r, "GET", "/v1/account/me", nil)
 }
 
 // ---------------------------------------------------------------------------

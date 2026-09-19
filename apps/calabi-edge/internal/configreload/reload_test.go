@@ -14,20 +14,16 @@ import (
 	"github.com/calabi/calabi/apps/calabi-edge/internal/config"
 )
 
+// testCoordKey makes the test configs valid standalone edges: an edge with no
+// way to accept a client does not load at all, and a reload refused for THAT
+// reason would pass these tests for the wrong one.
+const testCoordKey = "xMqLvONWcTdghKQ4cwvVQ81FuXDj/0npFphl4BujbdA="
+
 // captureApplier records calls so tests can assert on them.
 type captureApplier struct {
-	mu          sync.Mutex
-	tokens      [][]config.TokenEntry
-	bases       []string
-	tokensCount atomic.Int32
-	basesCount  atomic.Int32
-}
-
-func (c *captureApplier) ApplyAcceptedTokens(t []config.TokenEntry) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.tokens = append(c.tokens, append([]config.TokenEntry(nil), t...))
-	c.tokensCount.Add(1)
+	mu         sync.Mutex
+	bases      []string
+	basesCount atomic.Int32
 }
 
 func (c *captureApplier) ApplyBaseDomain(b string) {
@@ -47,9 +43,10 @@ func writeConfig(t *testing.T, path, contents string) {
 func TestReloader_AppliesWhitelistedChanges(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "edge.yaml")
-	writeConfig(t, path, formatYAML("localtest.me", []config.TokenEntry{{Token: "tok1", TenantID: "a"}}))
+	writeConfig(t, path, formatYAML("localtest.me"))
 
-	initial, err := config.Load(path)
+	hermeticEnv(t)
+	initial, _, err := config.LoadEffective(path)
 	if err != nil {
 		t.Fatalf("initial load: %v", err)
 	}
@@ -63,16 +60,11 @@ func TestReloader_AppliesWhitelistedChanges(t *testing.T) {
 	// Give the watcher a moment to register.
 	time.Sleep(100 * time.Millisecond)
 
-	// Mutation: change base_domain + add a token. Both are whitelisted.
-	writeConfig(t, path, formatYAML("calabi.net", []config.TokenEntry{
-		{Token: "tok1", TenantID: "a"},
-		{Token: "tok2", TenantID: "b"},
-	}))
+	// Mutation: change base_domain, which is whitelisted.
+	writeConfig(t, path, formatYAML("calabi.net"))
 
-	if !waitFor(func() bool {
-		return ap.basesCount.Load() >= 1 && ap.tokensCount.Load() >= 1
-	}, 3*time.Second) {
-		t.Fatalf("applier never fired: tokens=%d bases=%d", ap.tokensCount.Load(), ap.basesCount.Load())
+	if !waitFor(func() bool { return ap.basesCount.Load() >= 1 }, 3*time.Second) {
+		t.Fatalf("applier never fired: bases=%d", ap.basesCount.Load())
 	}
 
 	ap.mu.Lock()
@@ -80,17 +72,18 @@ func TestReloader_AppliesWhitelistedChanges(t *testing.T) {
 	if got := ap.bases[len(ap.bases)-1]; got != "calabi.net" {
 		t.Fatalf("base_domain: got %q want calabi.net", got)
 	}
-	if len(ap.tokens) == 0 || len(ap.tokens[len(ap.tokens)-1]) != 2 {
-		t.Fatalf("accepted_tokens: %+v", ap.tokens)
-	}
 }
 
 func TestReloader_RefusesNonWhitelistedField(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "edge.yaml")
-	writeConfig(t, path, formatYAML("localtest.me", []config.TokenEntry{{Token: "tok1", TenantID: "a"}}))
+	writeConfig(t, path, formatYAML("localtest.me"))
 
-	initial, _ := config.Load(path)
+	hermeticEnv(t)
+	initial, _, err := config.LoadEffective(path)
+	if err != nil {
+		t.Fatalf("initial load: %v", err)
+	}
 	ap := &captureApplier{}
 	r := New(path, initial, ap, quietLogger())
 
@@ -101,7 +94,9 @@ func TestReloader_RefusesNonWhitelistedField(t *testing.T) {
 
 	// Mutation: change node_id (NOT whitelisted). Reload should be
 	// refused and the applier should NOT be called.
-	writeConfig(t, path, `node_id: changed-edge
+	writeConfig(t, path, `mode: standalone
+coord_pubkey: "`+testCoordKey+`"
+node_id: changed-edge
 region: test
 control:
   addr: ":7443"
@@ -110,9 +105,6 @@ http:
   base_domain: "localtest.me"
 admin:
   addr: ":9101"
-accepted_tokens:
-  - token: "tok1"
-    tenant_id: "a"
 log:
   level: info
   format: text
@@ -121,18 +113,15 @@ log:
 	// Wait past the debounce window + some slack.
 	time.Sleep(800 * time.Millisecond)
 
-	if ap.basesCount.Load() != 0 || ap.tokensCount.Load() != 0 {
-		t.Fatalf("applier fired despite non-whitelisted change: tokens=%d bases=%d",
-			ap.tokensCount.Load(), ap.basesCount.Load())
+	if ap.basesCount.Load() != 0 {
+		t.Fatalf("applier fired despite non-whitelisted change: bases=%d", ap.basesCount.Load())
 	}
 }
 
-func formatYAML(base string, tokens []config.TokenEntry) string {
-	tokStr := ""
-	for _, e := range tokens {
-		tokStr += "  - token: \"" + e.Token + "\"\n    tenant_id: \"" + e.TenantID + "\"\n"
-	}
-	return `node_id: test-edge
+func formatYAML(base string) string {
+	return `mode: standalone
+coord_pubkey: "` + testCoordKey + `"
+node_id: test-edge
 region: test
 control:
   addr: ":7443"
@@ -141,8 +130,7 @@ http:
   base_domain: "` + base + `"
 admin:
   addr: ":9101"
-accepted_tokens:
-` + tokStr + `log:
+log:
   level: info
   format: text
 `

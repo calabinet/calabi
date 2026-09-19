@@ -107,4 +107,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    // Scanning an invite's QR code without Google Play services (phones without
+    // them are common here). Apache-2.0; brings only com.google.zxing:core.
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 }

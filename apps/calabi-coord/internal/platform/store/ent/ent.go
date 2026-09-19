@@ -15,11 +15,14 @@ import (
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/coordsetting"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshacl"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshaclrevision"
+	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshauthkey"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshconnrecord"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshnode"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshrelay"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshservice"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshsetting"
+	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshtunnel"
+	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshtunnelusage"
 )
 
 // ent aliases to avoid import conflicts in user's code.
@@ -83,11 +86,14 @@ func checkColumn(table, column string) error {
 			coordsetting.Table:    coordsetting.ValidColumn,
 			meshacl.Table:         meshacl.ValidColumn,
 			meshaclrevision.Table: meshaclrevision.ValidColumn,
+			meshauthkey.Table:     meshauthkey.ValidColumn,
 			meshconnrecord.Table:  meshconnrecord.ValidColumn,
 			meshnode.Table:        meshnode.ValidColumn,
 			meshrelay.Table:       meshrelay.ValidColumn,
 			meshservice.Table:     meshservice.ValidColumn,
 			meshsetting.Table:     meshsetting.ValidColumn,
+			meshtunnel.Table:      meshtunnel.ValidColumn,
+			meshtunnelusage.Table: meshtunnelusage.ValidColumn,
 		})
 	})
 	return columnCheck(table, column)

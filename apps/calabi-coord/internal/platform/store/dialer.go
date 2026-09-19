@@ -54,6 +54,15 @@ func withSQLiteParams(dsn string) string {
 	}
 	if !strings.Contains(dsn, "_fk=") {
 		dsn += sep + "_fk=1"
+		sep = "&"
+	}
+	// database/sql keeps several connections, and SQLite takes one writer at a
+	// time. Without a busy timeout a second writer fails at once with
+	// SQLITE_BUSY instead of waiting its turn — seen at startup, when the
+	// usage purge ran into another write. A self-hosted coordinator's default
+	// store is this file, so a registration must not fail the same way.
+	if !strings.Contains(dsn, "busy_timeout") {
+		dsn += sep + "_pragma=busy_timeout(10000)"
 	}
 	return dsn
 }

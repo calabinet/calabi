@@ -119,9 +119,14 @@ type Config struct {
 	Mesh     MeshConfig      `yaml:"mesh"`
 	Relay    RelayRole       `yaml:"relay"`
 
-	// AcceptedTokens is the temporary auth list. replaces this with
-	// identity-svc gRPC lookup.
-	AcceptedTokens []TokenEntry `yaml:"accepted_tokens"`
+	// CoordPubKey / CoordPubKeyFile name the coordinator this edge belongs to: the base64 Ed25519 key
+	// its grants are signed with, inline or in a file the coordinator writes
+	// (CALABI_COORD_GRANT_PUBKEY_FILE, on a volume the two share). A
+	// standalone edge accepts devices by those grants and nothing else, for
+	// tunnels and relay alike. relay.coord_pubkey is the older spelling of the
+	// inline key and is kept equal to it (resolveCoordPubKey).
+	CoordPubKey     string `yaml:"coord_pubkey"`
+	CoordPubKeyFile string `yaml:"coord_pubkey_file"`
 
 	// MultiRegion chooses how the edge reaches the control plane.
 	// Defaults to mode=cluster which preserves behaviour
@@ -344,6 +349,47 @@ func (c Config) ValidateRole() error {
 	}
 }
 
+// ValidateClientAuth rejects an edge that could accept no client. On the
+// platform bff-edge verifies clients. Anywhere else the edge belongs to a
+// self-hosted coordinator and accepts devices by its grants, so it must say so
+// (mode: standalone) and name the coordinator's key. Such an edge would
+// otherwise start cleanly and turn every device away.
+func (c Config) ValidateClientAuth() error {
+	if c.MultiRegion.IsBFFEdge() {
+		return nil
+	}
+	if c.RunsEdge() && !c.IsStandaloneMode() {
+		return fmt.Errorf("no control plane verifies clients here (multi_region is not bff-edge): an edge that " +
+			"belongs to a self-hosted coordinator says mode: standalone and names the coordinator's key " +
+			"(coord_pubkey or coord_pubkey_file; `calabi-coord pubkey` prints it)")
+	}
+	if c.IsStandaloneMode() && strings.TrimSpace(c.CoordPubKey) == "" && strings.TrimSpace(c.CoordPubKeyFile) == "" {
+		return fmt.Errorf("mode: standalone needs the coordinator's public key (coord_pubkey, or coord_pubkey_file " +
+			"where the coordinator writes it; `calabi-coord pubkey` prints it): its grants are the only way a " +
+			"device gets in, for tunnels and relay alike")
+	}
+	return nil
+}
+
+// resolveCoordPubKey keeps the two spellings of the coordinator's inline key
+// equal, as resolveNodeScoped does for node_label: relay.coord_pubkey came
+// first, when only the relay checked grants. Setting both to different values,
+// or an inline key and a key file, is refused rather than picking one.
+func resolveCoordPubKey(c *Config) error {
+	top, relay := strings.TrimSpace(c.CoordPubKey), strings.TrimSpace(c.Relay.CoordPubKey)
+	switch {
+	case top != "" && relay != "" && top != relay:
+		return fmt.Errorf("coord_pubkey and relay.coord_pubkey name different keys; keep coord_pubkey")
+	case top == "":
+		top = relay
+	}
+	if top != "" && strings.TrimSpace(c.CoordPubKeyFile) != "" {
+		return fmt.Errorf("coord_pubkey and coord_pubkey_file are both set; give the coordinator's key one way")
+	}
+	c.CoordPubKey, c.Relay.CoordPubKey = top, top
+	return nil
+}
+
 // IsPlatformKind reports whether this relay is a platform (multi-tenant) relay
 // rather than a self-hosted one. Mirrors relayAuthConfig's parsing exactly:
 // empty / "self" / "self-hosted" is self-hosted, only "platform" is platform.
@@ -474,15 +520,10 @@ func (c Config) NormalizeForMode() (cfg Config, byoiRefused bool) {
 	c.Cert.Addr = ""
 	c.Quota.Addr = ""
 	c.Config.Addr = ""
+	// A standalone edge belongs to a coordinator and its relay serves that
+	// coordinator's devices only: grants are required, whatever the file says.
+	c.Relay.RequireAuth = true
 	return c, false
-}
-
-// TokenEntry maps a bearer token to a tenant context.
-type TokenEntry struct {
-	Token       string `yaml:"token"`
-	TenantID    string `yaml:"tenant_id"`
-	WorkspaceID string `yaml:"workspace_id"`
-	ClientID    string `yaml:"client_id"`
 }
 
 // LogConfig controls structured-logger behavior.
@@ -500,9 +541,11 @@ type LogConfig struct {
 // what makes the self-hosting docs' "it never phones home" true of the default
 // build and not just of a hand-written config.
 //
-// Note what this does NOT set: Mode. A config-less edge is therefore not in
-// standalone mode and will not honour a client-supplied security policy —
-// TrustsClientPolicy.
+// Note what this does NOT set: Mode, or any way to accept a client. A
+// config-less edge is therefore refused at start (ValidateClientAuth) unless the
+// environment makes it a relay, or a standalone edge that names its coordinator.
+// It used to carry a demo token for a config-less quick start; the static token
+// table is gone.
 func Default() Config {
 	return Config{
 		NodeLabel: "edge-dev-1",
@@ -528,14 +571,6 @@ func Default() Config {
 		},
 		Admin: AdminListener{
 			Addr: ":9101",
-		},
-		AcceptedTokens: []TokenEntry{
-			{
-				Token:       "dev-token-please-change",
-				TenantID:    "dev",
-				WorkspaceID: "default",
-				ClientID:    "client-1",
-			},
 		},
 		Log: LogConfig{Level: "info", Format: "text"},
 	}
@@ -574,6 +609,10 @@ func Load(path string) (Config, error) {
 		return Config{}, fmt.Errorf("parse config: %w", err)
 	}
 	if err := resolveNodeScoped(&cfg, raw, legacy); err != nil {
+		return Config{}, err
+	}
+	// A token table the edge would now ignore (see obsolete.go).
+	if err := checkRemovedTokens(data); err != nil {
 		return Config{}, err
 	}
 	// Role assertions that need to tell "the operator wrote this" from
@@ -657,14 +696,4 @@ func resolveNodeScoped(cfg *Config, raw Config, legacy legacySpellings) error {
 		cfg.BaseDomain = cfg.HTTP.BaseDomain
 	}
 	return nil
-}
-
-// LookupToken returns the TokenEntry matching token, or false if not found.
-func (c *Config) LookupToken(token string) (TokenEntry, bool) {
-	for _, t := range c.AcceptedTokens {
-		if t.Token == token {
-			return t, true
-		}
-	}
-	return TokenEntry{}, false
 }

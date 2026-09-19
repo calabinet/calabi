@@ -131,7 +131,7 @@ func TestDialCoordOpensItsSocketThroughHostnet(t *testing.T) {
 	hostnet.SetSocketHook(func(uintptr) error { hooked.Add(1); return nil })
 	t.Cleanup(func() { hostnet.SetSocketHook(nil) })
 
-	conn, err := DialCoord(ln.Addr().String(), true)
+	conn, err := DialCoord(ln.Addr().String(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,12 +10,16 @@ import (
 	proto "github.com/calabi/calabi/pkg/protocol"
 )
 
+// testPinA is a well-formed certificate pin for configs that need one.
+const testPinA = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
 func TestLoadLocalConfig_Valid(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "tunnels.yaml")
-	yaml := `server: edge.example.com:7443
-token_env: CALABI_TOKEN
-insecure: true
+	yaml := `mesh:
+  coord: coord.example.com:7012
+  trust: pin
+  pins: [` + testPinA + `]
 tunnels:
   - name: web
     type: http
@@ -32,14 +37,79 @@ tunnels:
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if cfg.Server != "edge.example.com:7443" || cfg.TokenEnv != "CALABI_TOKEN" || !cfg.Insecure {
-		t.Errorf("top-level fields wrong: %+v", cfg)
+	if cfg.Mesh.Coord != "coord.example.com:7012" || cfg.Mesh.Enabled || len(cfg.Mesh.Pins) != 1 {
+		t.Errorf("mesh block wrong: %+v", cfg.Mesh)
 	}
 	if len(cfg.Tunnels) != 2 {
 		t.Fatalf("want 2 tunnels, got %d", len(cfg.Tunnels))
 	}
 	if cfg.Tunnels[1].Type != "tcp" || cfg.Tunnels[1].RemotePort != 2222 {
 		t.Errorf("tcp tunnel wrong: %+v", cfg.Tunnels[1])
+	}
+}
+
+// The settings that named the edge are gone: the coordinator names it. A
+// hand-written file that still sets them is refused, naming them and the way
+// in, instead of either failing on "unknown field" or appearing to still use
+// them; the console's own file has them set aside (the daemon rewrites it).
+func TestLoadLocalConfig_RemovedEdgeSettings(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tunnels.yaml")
+	body := "server: edge.example.com:7443\ntoken: s3cret\ntrust: pin\npins: [" + testPinA + "]\n" +
+		"mesh:\n  coord: coord.example.com:7012\n  trust: pin\n  pins: [" + testPinA + "]\n" +
+		"tunnels:\n  - name: web\n    type: http\n    local: 8080\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := loadLocalConfig(path)
+	if err == nil {
+		t.Fatal("a hand-written config that names the edge loaded")
+	}
+	for _, want := range []string{"server", "token", "trust", "pins", "calabi join"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal should name %q: %v", want, err)
+		}
+	}
+	if !strings.Contains(err.Error(), "server, token, trust, pins") {
+		t.Errorf("the refusal should list exactly the top-level settings, in file order: %v", err)
+	}
+
+	cfg, removed, err := loadLocalConfigOrEmpty(path, true)
+	if err != nil {
+		t.Fatalf("the console's own file must load with them set aside: %v", err)
+	}
+	if strings.Join(removed, ",") != "server,token,trust,pins" {
+		t.Errorf("set aside %v, want server,token,trust,pins", removed)
+	}
+	// The mesh block's own trust and pins are the coordinator's, not the edge's.
+	if cfg.Mesh.Coord != "coord.example.com:7012" || cfg.Mesh.Trust != "pin" || len(cfg.Mesh.Pins) != 1 || len(cfg.Tunnels) != 1 {
+		t.Errorf("the rest of the file did not survive: %+v", cfg)
+	}
+
+	if _, removed, err := loadLocalConfigOrEmpty(path, false); err == nil || removed != nil {
+		t.Errorf("a hand-written file (managed=false) must be refused: removed=%v err=%v", removed, err)
+	}
+}
+
+// The example the help text and the self-hosting docs point at is a config the
+// client accepts, every tunnel in it included. It went stale once already: it
+// named the edge and a token after the client stopped reading either.
+func TestTheExampleConfigLoads(t *testing.T) {
+	cfg, err := loadLocalConfig(filepath.Join("..", "..", "..", "..", "docs", "examples", "tunnels.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Mesh.Coord == "" {
+		t.Error("the example joins no coordinator: nothing would name its edge")
+	}
+	if _, err := cfg.Mesh.coordTrust(cfg.Mesh.AuthKey); err != nil {
+		t.Errorf("the example's coordinator trust: %v", err)
+	}
+	var logs strings.Builder
+	planned := planTunnels(slog.New(slog.NewTextHandler(&logs, nil)), cfg.Tunnels)
+	if len(planned) != len(cfg.Tunnels) || len(planned) == 0 {
+		t.Errorf("planned %d of %d tunnels:\n%s", len(planned), len(cfg.Tunnels), logs.String())
 	}
 }
 
@@ -237,43 +307,5 @@ func TestDaemonIsLocal_StandaloneMode(t *testing.T) {
 	t.Setenv("CALABI_MODE", "standalone")
 	if !daemonIsLocal([]string{"--config", "x.yaml"}) {
 		t.Error("standalone client mode should select the local daemon even without --local")
-	}
-}
-
-func TestTokenEnvRef(t *testing.T) {
-	cases := []struct {
-		in       string
-		wantName string
-		wantOK   bool
-	}{
-		{"${CALABI_TOKEN}", "CALABI_TOKEN", true},
-		{"${ FOO }", "FOO", true}, // trimmed
-		{"tk_literalsecret", "", false},
-		{"${}", "", false},           // empty name
-		{"$CALABI_TOKEN", "", false}, // no braces → opaque literal
-		{"pre${X}post", "", false},   // not a whole-string ref
-		{"", "", false},
-	}
-	for _, c := range cases {
-		name, ok := tokenEnvRef(c.in)
-		if ok != c.wantOK || name != c.wantName {
-			t.Errorf("tokenEnvRef(%q) = (%q, %v), want (%q, %v)", c.in, name, ok, c.wantName, c.wantOK)
-		}
-	}
-}
-
-func TestResolveLocalToken(t *testing.T) {
-	// Inline literal is returned verbatim — no env needed.
-	if got := resolveLocalToken(&localConfig{Token: "tk_inline"}); got != "tk_inline" {
-		t.Errorf("inline token = %q, want tk_inline", got)
-	}
-	// token: ${VAR} reads from the environment (the merged, single-field form).
-	t.Setenv("MY_EDGE_TOKEN", "from-env")
-	if got := resolveLocalToken(&localConfig{Token: "${MY_EDGE_TOKEN}"}); got != "from-env" {
-		t.Errorf("token ${MY_EDGE_TOKEN} = %q, want from-env", got)
-	}
-	// Deprecated token_env still works for older configs (back-compat).
-	if got := resolveLocalToken(&localConfig{TokenEnv: "MY_EDGE_TOKEN"}); got != "from-env" {
-		t.Errorf("token_env back-compat = %q, want from-env", got)
 	}
 }

@@ -17,11 +17,14 @@ import (
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/coordsetting"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshacl"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshaclrevision"
+	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshauthkey"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshconnrecord"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshnode"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshrelay"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshservice"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshsetting"
+	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshtunnel"
+	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshtunnelusage"
 )
 
 // Client is the client that holds all ent builders.
@@ -35,6 +38,8 @@ type Client struct {
 	MeshACL *MeshACLClient
 	// MeshACLRevision is the client for interacting with the MeshACLRevision builders.
 	MeshACLRevision *MeshACLRevisionClient
+	// MeshAuthKey is the client for interacting with the MeshAuthKey builders.
+	MeshAuthKey *MeshAuthKeyClient
 	// MeshConnRecord is the client for interacting with the MeshConnRecord builders.
 	MeshConnRecord *MeshConnRecordClient
 	// MeshNode is the client for interacting with the MeshNode builders.
@@ -45,6 +50,10 @@ type Client struct {
 	MeshService *MeshServiceClient
 	// MeshSetting is the client for interacting with the MeshSetting builders.
 	MeshSetting *MeshSettingClient
+	// MeshTunnel is the client for interacting with the MeshTunnel builders.
+	MeshTunnel *MeshTunnelClient
+	// MeshTunnelUsage is the client for interacting with the MeshTunnelUsage builders.
+	MeshTunnelUsage *MeshTunnelUsageClient
 }
 
 // NewClient creates a new client configured with the given options.
@@ -59,11 +68,14 @@ func (c *Client) init() {
 	c.CoordSetting = NewCoordSettingClient(c.config)
 	c.MeshACL = NewMeshACLClient(c.config)
 	c.MeshACLRevision = NewMeshACLRevisionClient(c.config)
+	c.MeshAuthKey = NewMeshAuthKeyClient(c.config)
 	c.MeshConnRecord = NewMeshConnRecordClient(c.config)
 	c.MeshNode = NewMeshNodeClient(c.config)
 	c.MeshRelay = NewMeshRelayClient(c.config)
 	c.MeshService = NewMeshServiceClient(c.config)
 	c.MeshSetting = NewMeshSettingClient(c.config)
+	c.MeshTunnel = NewMeshTunnelClient(c.config)
+	c.MeshTunnelUsage = NewMeshTunnelUsageClient(c.config)
 }
 
 type (
@@ -159,11 +171,14 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		CoordSetting:    NewCoordSettingClient(cfg),
 		MeshACL:         NewMeshACLClient(cfg),
 		MeshACLRevision: NewMeshACLRevisionClient(cfg),
+		MeshAuthKey:     NewMeshAuthKeyClient(cfg),
 		MeshConnRecord:  NewMeshConnRecordClient(cfg),
 		MeshNode:        NewMeshNodeClient(cfg),
 		MeshRelay:       NewMeshRelayClient(cfg),
 		MeshService:     NewMeshServiceClient(cfg),
 		MeshSetting:     NewMeshSettingClient(cfg),
+		MeshTunnel:      NewMeshTunnelClient(cfg),
+		MeshTunnelUsage: NewMeshTunnelUsageClient(cfg),
 	}, nil
 }
 
@@ -186,11 +201,14 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		CoordSetting:    NewCoordSettingClient(cfg),
 		MeshACL:         NewMeshACLClient(cfg),
 		MeshACLRevision: NewMeshACLRevisionClient(cfg),
+		MeshAuthKey:     NewMeshAuthKeyClient(cfg),
 		MeshConnRecord:  NewMeshConnRecordClient(cfg),
 		MeshNode:        NewMeshNodeClient(cfg),
 		MeshRelay:       NewMeshRelayClient(cfg),
 		MeshService:     NewMeshServiceClient(cfg),
 		MeshSetting:     NewMeshSettingClient(cfg),
+		MeshTunnel:      NewMeshTunnelClient(cfg),
+		MeshTunnelUsage: NewMeshTunnelUsageClient(cfg),
 	}, nil
 }
 
@@ -220,8 +238,9 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.CoordSetting, c.MeshACL, c.MeshACLRevision, c.MeshConnRecord, c.MeshNode,
-		c.MeshRelay, c.MeshService, c.MeshSetting,
+		c.CoordSetting, c.MeshACL, c.MeshACLRevision, c.MeshAuthKey, c.MeshConnRecord,
+		c.MeshNode, c.MeshRelay, c.MeshService, c.MeshSetting, c.MeshTunnel,
+		c.MeshTunnelUsage,
 	} {
 		n.Use(hooks...)
 	}
@@ -231,8 +250,9 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.CoordSetting, c.MeshACL, c.MeshACLRevision, c.MeshConnRecord, c.MeshNode,
-		c.MeshRelay, c.MeshService, c.MeshSetting,
+		c.CoordSetting, c.MeshACL, c.MeshACLRevision, c.MeshAuthKey, c.MeshConnRecord,
+		c.MeshNode, c.MeshRelay, c.MeshService, c.MeshSetting, c.MeshTunnel,
+		c.MeshTunnelUsage,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -247,6 +267,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.MeshACL.mutate(ctx, m)
 	case *MeshACLRevisionMutation:
 		return c.MeshACLRevision.mutate(ctx, m)
+	case *MeshAuthKeyMutation:
+		return c.MeshAuthKey.mutate(ctx, m)
 	case *MeshConnRecordMutation:
 		return c.MeshConnRecord.mutate(ctx, m)
 	case *MeshNodeMutation:
@@ -257,6 +279,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.MeshService.mutate(ctx, m)
 	case *MeshSettingMutation:
 		return c.MeshSetting.mutate(ctx, m)
+	case *MeshTunnelMutation:
+		return c.MeshTunnel.mutate(ctx, m)
+	case *MeshTunnelUsageMutation:
+		return c.MeshTunnelUsage.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
 	}
@@ -658,6 +684,139 @@ func (c *MeshACLRevisionClient) mutate(ctx context.Context, m *MeshACLRevisionMu
 		return (&MeshACLRevisionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown MeshACLRevision mutation op: %q", m.Op())
+	}
+}
+
+// MeshAuthKeyClient is a client for the MeshAuthKey schema.
+type MeshAuthKeyClient struct {
+	config
+}
+
+// NewMeshAuthKeyClient returns a client for the MeshAuthKey from the given config.
+func NewMeshAuthKeyClient(c config) *MeshAuthKeyClient {
+	return &MeshAuthKeyClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `meshauthkey.Hooks(f(g(h())))`.
+func (c *MeshAuthKeyClient) Use(hooks ...Hook) {
+	c.hooks.MeshAuthKey = append(c.hooks.MeshAuthKey, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `meshauthkey.Intercept(f(g(h())))`.
+func (c *MeshAuthKeyClient) Intercept(interceptors ...Interceptor) {
+	c.inters.MeshAuthKey = append(c.inters.MeshAuthKey, interceptors...)
+}
+
+// Create returns a builder for creating a MeshAuthKey entity.
+func (c *MeshAuthKeyClient) Create() *MeshAuthKeyCreate {
+	mutation := newMeshAuthKeyMutation(c.config, OpCreate)
+	return &MeshAuthKeyCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of MeshAuthKey entities.
+func (c *MeshAuthKeyClient) CreateBulk(builders ...*MeshAuthKeyCreate) *MeshAuthKeyCreateBulk {
+	return &MeshAuthKeyCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MeshAuthKeyClient) MapCreateBulk(slice any, setFunc func(*MeshAuthKeyCreate, int)) *MeshAuthKeyCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MeshAuthKeyCreateBulk{err: fmt.Errorf("calling to MeshAuthKeyClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MeshAuthKeyCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MeshAuthKeyCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for MeshAuthKey.
+func (c *MeshAuthKeyClient) Update() *MeshAuthKeyUpdate {
+	mutation := newMeshAuthKeyMutation(c.config, OpUpdate)
+	return &MeshAuthKeyUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MeshAuthKeyClient) UpdateOne(mak *MeshAuthKey) *MeshAuthKeyUpdateOne {
+	mutation := newMeshAuthKeyMutation(c.config, OpUpdateOne, withMeshAuthKey(mak))
+	return &MeshAuthKeyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MeshAuthKeyClient) UpdateOneID(id int) *MeshAuthKeyUpdateOne {
+	mutation := newMeshAuthKeyMutation(c.config, OpUpdateOne, withMeshAuthKeyID(id))
+	return &MeshAuthKeyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for MeshAuthKey.
+func (c *MeshAuthKeyClient) Delete() *MeshAuthKeyDelete {
+	mutation := newMeshAuthKeyMutation(c.config, OpDelete)
+	return &MeshAuthKeyDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MeshAuthKeyClient) DeleteOne(mak *MeshAuthKey) *MeshAuthKeyDeleteOne {
+	return c.DeleteOneID(mak.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MeshAuthKeyClient) DeleteOneID(id int) *MeshAuthKeyDeleteOne {
+	builder := c.Delete().Where(meshauthkey.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MeshAuthKeyDeleteOne{builder}
+}
+
+// Query returns a query builder for MeshAuthKey.
+func (c *MeshAuthKeyClient) Query() *MeshAuthKeyQuery {
+	return &MeshAuthKeyQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMeshAuthKey},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a MeshAuthKey entity by its id.
+func (c *MeshAuthKeyClient) Get(ctx context.Context, id int) (*MeshAuthKey, error) {
+	return c.Query().Where(meshauthkey.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MeshAuthKeyClient) GetX(ctx context.Context, id int) *MeshAuthKey {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *MeshAuthKeyClient) Hooks() []Hook {
+	return c.hooks.MeshAuthKey
+}
+
+// Interceptors returns the client interceptors.
+func (c *MeshAuthKeyClient) Interceptors() []Interceptor {
+	return c.inters.MeshAuthKey
+}
+
+func (c *MeshAuthKeyClient) mutate(ctx context.Context, m *MeshAuthKeyMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MeshAuthKeyCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MeshAuthKeyUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MeshAuthKeyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MeshAuthKeyDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown MeshAuthKey mutation op: %q", m.Op())
 	}
 }
 
@@ -1326,14 +1485,281 @@ func (c *MeshSettingClient) mutate(ctx context.Context, m *MeshSettingMutation) 
 	}
 }
 
+// MeshTunnelClient is a client for the MeshTunnel schema.
+type MeshTunnelClient struct {
+	config
+}
+
+// NewMeshTunnelClient returns a client for the MeshTunnel from the given config.
+func NewMeshTunnelClient(c config) *MeshTunnelClient {
+	return &MeshTunnelClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `meshtunnel.Hooks(f(g(h())))`.
+func (c *MeshTunnelClient) Use(hooks ...Hook) {
+	c.hooks.MeshTunnel = append(c.hooks.MeshTunnel, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `meshtunnel.Intercept(f(g(h())))`.
+func (c *MeshTunnelClient) Intercept(interceptors ...Interceptor) {
+	c.inters.MeshTunnel = append(c.inters.MeshTunnel, interceptors...)
+}
+
+// Create returns a builder for creating a MeshTunnel entity.
+func (c *MeshTunnelClient) Create() *MeshTunnelCreate {
+	mutation := newMeshTunnelMutation(c.config, OpCreate)
+	return &MeshTunnelCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of MeshTunnel entities.
+func (c *MeshTunnelClient) CreateBulk(builders ...*MeshTunnelCreate) *MeshTunnelCreateBulk {
+	return &MeshTunnelCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MeshTunnelClient) MapCreateBulk(slice any, setFunc func(*MeshTunnelCreate, int)) *MeshTunnelCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MeshTunnelCreateBulk{err: fmt.Errorf("calling to MeshTunnelClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MeshTunnelCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MeshTunnelCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for MeshTunnel.
+func (c *MeshTunnelClient) Update() *MeshTunnelUpdate {
+	mutation := newMeshTunnelMutation(c.config, OpUpdate)
+	return &MeshTunnelUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MeshTunnelClient) UpdateOne(mt *MeshTunnel) *MeshTunnelUpdateOne {
+	mutation := newMeshTunnelMutation(c.config, OpUpdateOne, withMeshTunnel(mt))
+	return &MeshTunnelUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MeshTunnelClient) UpdateOneID(id int) *MeshTunnelUpdateOne {
+	mutation := newMeshTunnelMutation(c.config, OpUpdateOne, withMeshTunnelID(id))
+	return &MeshTunnelUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for MeshTunnel.
+func (c *MeshTunnelClient) Delete() *MeshTunnelDelete {
+	mutation := newMeshTunnelMutation(c.config, OpDelete)
+	return &MeshTunnelDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MeshTunnelClient) DeleteOne(mt *MeshTunnel) *MeshTunnelDeleteOne {
+	return c.DeleteOneID(mt.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MeshTunnelClient) DeleteOneID(id int) *MeshTunnelDeleteOne {
+	builder := c.Delete().Where(meshtunnel.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MeshTunnelDeleteOne{builder}
+}
+
+// Query returns a query builder for MeshTunnel.
+func (c *MeshTunnelClient) Query() *MeshTunnelQuery {
+	return &MeshTunnelQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMeshTunnel},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a MeshTunnel entity by its id.
+func (c *MeshTunnelClient) Get(ctx context.Context, id int) (*MeshTunnel, error) {
+	return c.Query().Where(meshtunnel.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MeshTunnelClient) GetX(ctx context.Context, id int) *MeshTunnel {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *MeshTunnelClient) Hooks() []Hook {
+	return c.hooks.MeshTunnel
+}
+
+// Interceptors returns the client interceptors.
+func (c *MeshTunnelClient) Interceptors() []Interceptor {
+	return c.inters.MeshTunnel
+}
+
+func (c *MeshTunnelClient) mutate(ctx context.Context, m *MeshTunnelMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MeshTunnelCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MeshTunnelUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MeshTunnelUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MeshTunnelDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown MeshTunnel mutation op: %q", m.Op())
+	}
+}
+
+// MeshTunnelUsageClient is a client for the MeshTunnelUsage schema.
+type MeshTunnelUsageClient struct {
+	config
+}
+
+// NewMeshTunnelUsageClient returns a client for the MeshTunnelUsage from the given config.
+func NewMeshTunnelUsageClient(c config) *MeshTunnelUsageClient {
+	return &MeshTunnelUsageClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `meshtunnelusage.Hooks(f(g(h())))`.
+func (c *MeshTunnelUsageClient) Use(hooks ...Hook) {
+	c.hooks.MeshTunnelUsage = append(c.hooks.MeshTunnelUsage, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `meshtunnelusage.Intercept(f(g(h())))`.
+func (c *MeshTunnelUsageClient) Intercept(interceptors ...Interceptor) {
+	c.inters.MeshTunnelUsage = append(c.inters.MeshTunnelUsage, interceptors...)
+}
+
+// Create returns a builder for creating a MeshTunnelUsage entity.
+func (c *MeshTunnelUsageClient) Create() *MeshTunnelUsageCreate {
+	mutation := newMeshTunnelUsageMutation(c.config, OpCreate)
+	return &MeshTunnelUsageCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of MeshTunnelUsage entities.
+func (c *MeshTunnelUsageClient) CreateBulk(builders ...*MeshTunnelUsageCreate) *MeshTunnelUsageCreateBulk {
+	return &MeshTunnelUsageCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MeshTunnelUsageClient) MapCreateBulk(slice any, setFunc func(*MeshTunnelUsageCreate, int)) *MeshTunnelUsageCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MeshTunnelUsageCreateBulk{err: fmt.Errorf("calling to MeshTunnelUsageClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MeshTunnelUsageCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MeshTunnelUsageCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for MeshTunnelUsage.
+func (c *MeshTunnelUsageClient) Update() *MeshTunnelUsageUpdate {
+	mutation := newMeshTunnelUsageMutation(c.config, OpUpdate)
+	return &MeshTunnelUsageUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MeshTunnelUsageClient) UpdateOne(mtu *MeshTunnelUsage) *MeshTunnelUsageUpdateOne {
+	mutation := newMeshTunnelUsageMutation(c.config, OpUpdateOne, withMeshTunnelUsage(mtu))
+	return &MeshTunnelUsageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MeshTunnelUsageClient) UpdateOneID(id int) *MeshTunnelUsageUpdateOne {
+	mutation := newMeshTunnelUsageMutation(c.config, OpUpdateOne, withMeshTunnelUsageID(id))
+	return &MeshTunnelUsageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for MeshTunnelUsage.
+func (c *MeshTunnelUsageClient) Delete() *MeshTunnelUsageDelete {
+	mutation := newMeshTunnelUsageMutation(c.config, OpDelete)
+	return &MeshTunnelUsageDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MeshTunnelUsageClient) DeleteOne(mtu *MeshTunnelUsage) *MeshTunnelUsageDeleteOne {
+	return c.DeleteOneID(mtu.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MeshTunnelUsageClient) DeleteOneID(id int) *MeshTunnelUsageDeleteOne {
+	builder := c.Delete().Where(meshtunnelusage.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MeshTunnelUsageDeleteOne{builder}
+}
+
+// Query returns a query builder for MeshTunnelUsage.
+func (c *MeshTunnelUsageClient) Query() *MeshTunnelUsageQuery {
+	return &MeshTunnelUsageQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMeshTunnelUsage},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a MeshTunnelUsage entity by its id.
+func (c *MeshTunnelUsageClient) Get(ctx context.Context, id int) (*MeshTunnelUsage, error) {
+	return c.Query().Where(meshtunnelusage.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MeshTunnelUsageClient) GetX(ctx context.Context, id int) *MeshTunnelUsage {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *MeshTunnelUsageClient) Hooks() []Hook {
+	return c.hooks.MeshTunnelUsage
+}
+
+// Interceptors returns the client interceptors.
+func (c *MeshTunnelUsageClient) Interceptors() []Interceptor {
+	return c.inters.MeshTunnelUsage
+}
+
+func (c *MeshTunnelUsageClient) mutate(ctx context.Context, m *MeshTunnelUsageMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MeshTunnelUsageCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MeshTunnelUsageUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MeshTunnelUsageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MeshTunnelUsageDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown MeshTunnelUsage mutation op: %q", m.Op())
+	}
+}
+
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		CoordSetting, MeshACL, MeshACLRevision, MeshConnRecord, MeshNode, MeshRelay,
-		MeshService, MeshSetting []ent.Hook
+		CoordSetting, MeshACL, MeshACLRevision, MeshAuthKey, MeshConnRecord, MeshNode,
+		MeshRelay, MeshService, MeshSetting, MeshTunnel, MeshTunnelUsage []ent.Hook
 	}
 	inters struct {
-		CoordSetting, MeshACL, MeshACLRevision, MeshConnRecord, MeshNode, MeshRelay,
-		MeshService, MeshSetting []ent.Interceptor
+		CoordSetting, MeshACL, MeshACLRevision, MeshAuthKey, MeshConnRecord, MeshNode,
+		MeshRelay, MeshService, MeshSetting, MeshTunnel,
+		MeshTunnelUsage []ent.Interceptor
 	}
 )

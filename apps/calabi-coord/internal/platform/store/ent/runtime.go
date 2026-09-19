@@ -8,11 +8,14 @@ import (
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/coordsetting"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshacl"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshaclrevision"
+	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshauthkey"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshconnrecord"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshnode"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshrelay"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshservice"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshsetting"
+	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshtunnel"
+	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshtunnelusage"
 	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/schema"
 )
 
@@ -62,6 +65,36 @@ func init() {
 	meshaclrevisionDescCreatedAt := meshaclrevisionFields[3].Descriptor()
 	// meshaclrevision.DefaultCreatedAt holds the default value on creation for the created_at field.
 	meshaclrevision.DefaultCreatedAt = meshaclrevisionDescCreatedAt.Default.(func() time.Time)
+	meshauthkeyFields := schema.MeshAuthKey{}.Fields()
+	_ = meshauthkeyFields
+	// meshauthkeyDescHash is the schema descriptor for hash field.
+	meshauthkeyDescHash := meshauthkeyFields[1].Descriptor()
+	// meshauthkey.HashValidator is a validator for the "hash" field. It is called by the builders before save.
+	meshauthkey.HashValidator = meshauthkeyDescHash.Validators[0].(func(string) error)
+	// meshauthkeyDescPrefix is the schema descriptor for prefix field.
+	meshauthkeyDescPrefix := meshauthkeyFields[2].Descriptor()
+	// meshauthkey.DefaultPrefix holds the default value on creation for the prefix field.
+	meshauthkey.DefaultPrefix = meshauthkeyDescPrefix.Default.(string)
+	// meshauthkeyDescTagsJSON is the schema descriptor for tags_json field.
+	meshauthkeyDescTagsJSON := meshauthkeyFields[3].Descriptor()
+	// meshauthkey.DefaultTagsJSON holds the default value on creation for the tags_json field.
+	meshauthkey.DefaultTagsJSON = meshauthkeyDescTagsJSON.Default.(string)
+	// meshauthkeyDescMaxUses is the schema descriptor for max_uses field.
+	meshauthkeyDescMaxUses := meshauthkeyFields[4].Descriptor()
+	// meshauthkey.DefaultMaxUses holds the default value on creation for the max_uses field.
+	meshauthkey.DefaultMaxUses = meshauthkeyDescMaxUses.Default.(int)
+	// meshauthkeyDescUses is the schema descriptor for uses field.
+	meshauthkeyDescUses := meshauthkeyFields[5].Descriptor()
+	// meshauthkey.DefaultUses holds the default value on creation for the uses field.
+	meshauthkey.DefaultUses = meshauthkeyDescUses.Default.(int)
+	// meshauthkeyDescNote is the schema descriptor for note field.
+	meshauthkeyDescNote := meshauthkeyFields[8].Descriptor()
+	// meshauthkey.DefaultNote holds the default value on creation for the note field.
+	meshauthkey.DefaultNote = meshauthkeyDescNote.Default.(string)
+	// meshauthkeyDescCreatedAt is the schema descriptor for created_at field.
+	meshauthkeyDescCreatedAt := meshauthkeyFields[9].Descriptor()
+	// meshauthkey.DefaultCreatedAt holds the default value on creation for the created_at field.
+	meshauthkey.DefaultCreatedAt = meshauthkeyDescCreatedAt.Default.(func() time.Time)
 	meshconnrecordFields := schema.MeshConnRecord{}.Fields()
 	_ = meshconnrecordFields
 	// meshconnrecordDescBytesTx is the schema descriptor for bytes_tx field.
@@ -76,8 +109,16 @@ func init() {
 	meshconnrecordDescPath := meshconnrecordFields[6].Descriptor()
 	// meshconnrecord.DefaultPath holds the default value on creation for the path field.
 	meshconnrecord.DefaultPath = meshconnrecordDescPath.Default.(string)
+	// meshconnrecordDescRelayBytesTx is the schema descriptor for relay_bytes_tx field.
+	meshconnrecordDescRelayBytesTx := meshconnrecordFields[7].Descriptor()
+	// meshconnrecord.DefaultRelayBytesTx holds the default value on creation for the relay_bytes_tx field.
+	meshconnrecord.DefaultRelayBytesTx = meshconnrecordDescRelayBytesTx.Default.(int64)
+	// meshconnrecordDescRelayBytesRx is the schema descriptor for relay_bytes_rx field.
+	meshconnrecordDescRelayBytesRx := meshconnrecordFields[8].Descriptor()
+	// meshconnrecord.DefaultRelayBytesRx holds the default value on creation for the relay_bytes_rx field.
+	meshconnrecord.DefaultRelayBytesRx = meshconnrecordDescRelayBytesRx.Default.(int64)
 	// meshconnrecordDescUpdatedAt is the schema descriptor for updated_at field.
-	meshconnrecordDescUpdatedAt := meshconnrecordFields[7].Descriptor()
+	meshconnrecordDescUpdatedAt := meshconnrecordFields[9].Descriptor()
 	// meshconnrecord.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	meshconnrecord.DefaultUpdatedAt = meshconnrecordDescUpdatedAt.Default.(func() time.Time)
 	// meshconnrecord.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -164,12 +205,20 @@ func init() {
 	meshnodeDescDisabled := meshnodeFields[21].Descriptor()
 	// meshnode.DefaultDisabled holds the default value on creation for the disabled field.
 	meshnode.DefaultDisabled = meshnodeDescDisabled.Default.(bool)
+	// meshnodeDescEnrolledBy is the schema descriptor for enrolled_by field.
+	meshnodeDescEnrolledBy := meshnodeFields[22].Descriptor()
+	// meshnode.DefaultEnrolledBy holds the default value on creation for the enrolled_by field.
+	meshnode.DefaultEnrolledBy = meshnodeDescEnrolledBy.Default.(string)
+	// meshnodeDescSignedOut is the schema descriptor for signed_out field.
+	meshnodeDescSignedOut := meshnodeFields[23].Descriptor()
+	// meshnode.DefaultSignedOut holds the default value on creation for the signed_out field.
+	meshnode.DefaultSignedOut = meshnodeDescSignedOut.Default.(bool)
 	// meshnodeDescCreatedAt is the schema descriptor for created_at field.
-	meshnodeDescCreatedAt := meshnodeFields[22].Descriptor()
+	meshnodeDescCreatedAt := meshnodeFields[24].Descriptor()
 	// meshnode.DefaultCreatedAt holds the default value on creation for the created_at field.
 	meshnode.DefaultCreatedAt = meshnodeDescCreatedAt.Default.(func() time.Time)
 	// meshnodeDescLastSeen is the schema descriptor for last_seen field.
-	meshnodeDescLastSeen := meshnodeFields[23].Descriptor()
+	meshnodeDescLastSeen := meshnodeFields[25].Descriptor()
 	// meshnode.DefaultLastSeen holds the default value on creation for the last_seen field.
 	meshnode.DefaultLastSeen = meshnodeDescLastSeen.Default.(func() time.Time)
 	// meshnode.UpdateDefaultLastSeen holds the default value on update for the last_seen field.
@@ -242,4 +291,28 @@ func init() {
 	meshsetting.DefaultUpdatedAt = meshsettingDescUpdatedAt.Default.(func() time.Time)
 	// meshsetting.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	meshsetting.UpdateDefaultUpdatedAt = meshsettingDescUpdatedAt.UpdateDefault.(func() time.Time)
+	meshtunnelFields := schema.MeshTunnel{}.Fields()
+	_ = meshtunnelFields
+	// meshtunnelDescPublicAddr is the schema descriptor for public_addr field.
+	meshtunnelDescPublicAddr := meshtunnelFields[4].Descriptor()
+	// meshtunnel.DefaultPublicAddr holds the default value on creation for the public_addr field.
+	meshtunnel.DefaultPublicAddr = meshtunnelDescPublicAddr.Default.(string)
+	// meshtunnelDescLocalAddr is the schema descriptor for local_addr field.
+	meshtunnelDescLocalAddr := meshtunnelFields[5].Descriptor()
+	// meshtunnel.DefaultLocalAddr holds the default value on creation for the local_addr field.
+	meshtunnel.DefaultLocalAddr = meshtunnelDescLocalAddr.Default.(string)
+	// meshtunnelDescStatus is the schema descriptor for status field.
+	meshtunnelDescStatus := meshtunnelFields[6].Descriptor()
+	// meshtunnel.DefaultStatus holds the default value on creation for the status field.
+	meshtunnel.DefaultStatus = meshtunnelDescStatus.Default.(string)
+	meshtunnelusageFields := schema.MeshTunnelUsage{}.Fields()
+	_ = meshtunnelusageFields
+	// meshtunnelusageDescBytesIn is the schema descriptor for bytes_in field.
+	meshtunnelusageDescBytesIn := meshtunnelusageFields[4].Descriptor()
+	// meshtunnelusage.DefaultBytesIn holds the default value on creation for the bytes_in field.
+	meshtunnelusage.DefaultBytesIn = meshtunnelusageDescBytesIn.Default.(int64)
+	// meshtunnelusageDescBytesOut is the schema descriptor for bytes_out field.
+	meshtunnelusageDescBytesOut := meshtunnelusageFields[5].Descriptor()
+	// meshtunnelusage.DefaultBytesOut holds the default value on creation for the bytes_out field.
+	meshtunnelusage.DefaultBytesOut = meshtunnelusageDescBytesOut.Default.(int64)
 }

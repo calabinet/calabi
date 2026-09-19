@@ -356,6 +356,34 @@ func (mnu *MeshNodeUpdate) SetNillableDisabled(b *bool) *MeshNodeUpdate {
 	return mnu
 }
 
+// SetEnrolledBy sets the "enrolled_by" field.
+func (mnu *MeshNodeUpdate) SetEnrolledBy(s string) *MeshNodeUpdate {
+	mnu.mutation.SetEnrolledBy(s)
+	return mnu
+}
+
+// SetNillableEnrolledBy sets the "enrolled_by" field if the given value is not nil.
+func (mnu *MeshNodeUpdate) SetNillableEnrolledBy(s *string) *MeshNodeUpdate {
+	if s != nil {
+		mnu.SetEnrolledBy(*s)
+	}
+	return mnu
+}
+
+// SetSignedOut sets the "signed_out" field.
+func (mnu *MeshNodeUpdate) SetSignedOut(b bool) *MeshNodeUpdate {
+	mnu.mutation.SetSignedOut(b)
+	return mnu
+}
+
+// SetNillableSignedOut sets the "signed_out" field if the given value is not nil.
+func (mnu *MeshNodeUpdate) SetNillableSignedOut(b *bool) *MeshNodeUpdate {
+	if b != nil {
+		mnu.SetSignedOut(*b)
+	}
+	return mnu
+}
+
 // SetLastSeen sets the "last_seen" field.
 func (mnu *MeshNodeUpdate) SetLastSeen(t time.Time) *MeshNodeUpdate {
 	mnu.mutation.SetLastSeen(t)
@@ -499,6 +527,12 @@ func (mnu *MeshNodeUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := mnu.mutation.Disabled(); ok {
 		_spec.SetField(meshnode.FieldDisabled, field.TypeBool, value)
+	}
+	if value, ok := mnu.mutation.EnrolledBy(); ok {
+		_spec.SetField(meshnode.FieldEnrolledBy, field.TypeString, value)
+	}
+	if value, ok := mnu.mutation.SignedOut(); ok {
+		_spec.SetField(meshnode.FieldSignedOut, field.TypeBool, value)
 	}
 	if value, ok := mnu.mutation.LastSeen(); ok {
 		_spec.SetField(meshnode.FieldLastSeen, field.TypeTime, value)
@@ -851,6 +885,34 @@ func (mnuo *MeshNodeUpdateOne) SetNillableDisabled(b *bool) *MeshNodeUpdateOne {
 	return mnuo
 }
 
+// SetEnrolledBy sets the "enrolled_by" field.
+func (mnuo *MeshNodeUpdateOne) SetEnrolledBy(s string) *MeshNodeUpdateOne {
+	mnuo.mutation.SetEnrolledBy(s)
+	return mnuo
+}
+
+// SetNillableEnrolledBy sets the "enrolled_by" field if the given value is not nil.
+func (mnuo *MeshNodeUpdateOne) SetNillableEnrolledBy(s *string) *MeshNodeUpdateOne {
+	if s != nil {
+		mnuo.SetEnrolledBy(*s)
+	}
+	return mnuo
+}
+
+// SetSignedOut sets the "signed_out" field.
+func (mnuo *MeshNodeUpdateOne) SetSignedOut(b bool) *MeshNodeUpdateOne {
+	mnuo.mutation.SetSignedOut(b)
+	return mnuo
+}
+
+// SetNillableSignedOut sets the "signed_out" field if the given value is not nil.
+func (mnuo *MeshNodeUpdateOne) SetNillableSignedOut(b *bool) *MeshNodeUpdateOne {
+	if b != nil {
+		mnuo.SetSignedOut(*b)
+	}
+	return mnuo
+}
+
 // SetLastSeen sets the "last_seen" field.
 func (mnuo *MeshNodeUpdateOne) SetLastSeen(t time.Time) *MeshNodeUpdateOne {
 	mnuo.mutation.SetLastSeen(t)
@@ -1024,6 +1086,12 @@ func (mnuo *MeshNodeUpdateOne) sqlSave(ctx context.Context) (_node *MeshNode, er
 	}
 	if value, ok := mnuo.mutation.Disabled(); ok {
 		_spec.SetField(meshnode.FieldDisabled, field.TypeBool, value)
+	}
+	if value, ok := mnuo.mutation.EnrolledBy(); ok {
+		_spec.SetField(meshnode.FieldEnrolledBy, field.TypeString, value)
+	}
+	if value, ok := mnuo.mutation.SignedOut(); ok {
+		_spec.SetField(meshnode.FieldSignedOut, field.TypeBool, value)
 	}
 	if value, ok := mnuo.mutation.LastSeen(); ok {
 		_spec.SetField(meshnode.FieldLastSeen, field.TypeTime, value)

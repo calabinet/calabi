@@ -56,23 +56,26 @@ behind NAT, a server behind CGNAT, a box inside a corporate network. Two ways:
  └──────────────┘                          │  role: relay  │  only, never decrypts
    your laptop                             └───────────────┘
 
-              calabi-coord — the mesh's coordinator: who is in the
-              network, what address each device gets, who may talk to whom
+              calabi-coord — every device's identity: who has joined, where
+              the edge is, each device's mesh address, who may talk to whom
 ```
 
 Nothing here opens an inbound port on your laptop. In both modes the client
 dials out.
 
+`calabi-coord` and `calabi-edge` together are your server. A device joins it
+once, with an invite, and has tunnels and the mesh from then on; the mesh can be
+off on a device while its tunnels run.
+
 ### What is in this repository
 
 The data plane: the `calabi` client, the `calabi-edge` data node, and the
-`calabi-coord` mesh coordinator. Everything needed to run tunnels and a mesh on
+`calabi-coord` coordinator. Everything needed to run tunnels and a mesh on
 your own machines is here, and self-hosted it needs no account and calls no
 service of ours.
 
-It also holds the Android app. That one is a client for calabi.net: it signs in
-there and joins that organization's mesh, and it does not join a self-hosted
-coordinator yet.
+It also holds the Android app, which joins your own server with an invite, or
+signs in to calabi.net and joins that organization's mesh.
 
 The hosted platform at [calabi.net](https://calabi.net) runs this same data
 plane and adds the control plane around it: accounts and organizations, a
@@ -87,16 +90,32 @@ a web console. That part is a separate product and is not in this repository.
 |---|---|---|
 | `calabi` | the client — opens tunnels, joins the mesh, serves the local web console | your laptop, a server, a Pi |
 | `calabi-edge` | the data plane. `role: edge` accepts public traffic for tunnels; `role: relay` is a mesh relay + STUN responder; `role: both` does both | a host with a public IP |
-| `calabi-coord` | the mesh coordinator — device registry, IP allocation, ACLs, the relay directory | one host, reachable by your devices |
-| Calabi for Android | the phone app — puts the phone in your calabi.net organization's mesh as a device, with exit devices and a Quick Settings tile; tunnels and usage read-only | an Android 8.0+ phone (arm64, armv7) |
+| `calabi-coord` | the coordinator — every device's identity: invites, device registry, IP allocation, ACLs; names the edge and signs the grants it accepts | one host, reachable by your devices |
+| Android app | puts the phone in a mesh as a device — your own server's or a calabi.net organization's — with exit devices and a Quick Settings tile; tunnels and usage read-only | an Android 8.0+ phone (arm64, armv7) |
 
-The three binaries are pure Go, `CGO_ENABLED=0`, no runtime dependencies. Only
-tunnels? You need two of them, and never have to think about `calabi-coord`.
+The three binaries are pure Go, `CGO_ENABLED=0`, no runtime dependencies.
+`calabi-coord` and `calabi-edge` together are your server; the client runs on
+each device.
 
 The Android app (`apps/client-android`) is Kotlin around the same Go client
 code, bound in with gomobile (`apps/client/mobile`).
 
 ---
+
+## Your server
+
+- **Invites** — `calabi-coord invite` prints a `calabi://join` link, a QR code,
+  and the same as a `calabi join` command line. By default an invite admits one
+  device, for 24 hours.
+- **Joining is the sign-in** — the coordinator tells a device where the edge is
+  and signs the grant the edge lets it in with. A grant lasts an hour, and the
+  device renews it.
+- **Devices** — `calabi-coord device list | approve | disable | enable |
+  delete`. A device you disable or delete is refused by the coordinator at once,
+  and by the edge when its grant runs out, within the hour.
+- **Tunnels and traffic in one place** — every joined daemon reports its tunnels
+  to the coordinator, which, with a database, keeps their traffic by the hour
+  for 92 days. The phone and the console show both.
 
 ## Tunnels
 
@@ -110,9 +129,9 @@ code, bound in with gomobile (`apps/client/mobile`).
   auth and OAuth (Google/GitHub) on web tunnels, header injection/removal, and
   per-tunnel rate limits. Basic-auth passwords are bcrypt-hashed locally before
   they ever leave your machine.
-- **Supervisor daemon** — every tunnel from one YAML file in one process, with
-  auto-reconnect, installable as a boot-start OS service (Windows service /
-  systemd / launchd) that restarts on crash.
+- **One daemon** — every tunnel of a device in one process, with
+  auto-reconnect, created in the console or read from a YAML file, installable
+  as a boot-start OS service (Windows service / systemd / launchd).
 
 ## Mesh
 
@@ -121,12 +140,16 @@ code, bound in with gomobile (`apps/client/mobile`).
 - **Direct when possible, relayed when not** — devices discover each other's
   endpoints, measure latency to each relay over STUN, and hole-punch. A relayed
   path is the fallback, not the design.
-- **Your own relay** — `calabi-edge` with `role: relay` is the relay. It moves
-  already-encrypted packets between device keys and **cannot decrypt them**; the
-  isolation is structural, enforced by a dependency test, not by a config flag.
+- **Your own relay** — `calabi-edge` with `role: relay` (or `both`, as
+  `deploy/server` runs it) is the relay. It moves already-encrypted packets
+  between device keys and **cannot decrypt them**; the isolation is structural,
+  enforced by a dependency test, not by a config flag.
   Run one relay or several, in as many regions as you like.
 - **Stable addresses** — every device gets a `100.64.0.0/10` address that
   follows it across networks, on every platform.
+- **A switch on each device** — `calabi mesh down`, or the console, takes a
+  device out of the mesh and leaves its tunnels running; `calabi mesh up` puts
+  it back.
 - **ACLs** — a JSON policy file of groups and rules decides which devices may
   reach which, on which ports. It hot-reloads, and a broken file **fails closed**
   (deny all) rather than open.
@@ -143,7 +166,9 @@ While the daemon runs it serves a web console on **`http://127.0.0.1:7400`** —
 live tunnel list with traffic counters, a request inspector with one-click
 replay, mesh peers and their transport, daemon logs, and create / edit / delete
 tunnels straight from the browser. It talks only to the local daemon over
-loopback. Available in 10 languages.
+loopback. It is also where a machine joins your server: paste an invite — no
+config file to write. Joined, it shows every tunnel on your server and this
+month's traffic. Available in 10 languages.
 
 ---
 
@@ -166,6 +191,11 @@ Or directly (on Windows, name the outputs `*.exe`):
 `make build` adds the `.exe` suffix automatically on Windows. To cross-compile:
 `GOOS=windows GOARCH=amd64 go build -o calabi-edge.exe ./cmd/calabi-edge`.
 
+Every release also has all three prebuilt, for 7 platforms each — `calabi-coord`
+from 1.13 — and each as a docker image: `calabinet/calabi`,
+`calabinet/calabi-edge` and `calabinet/calabi-coord`. They are built from this
+repository; see [below](#releases-and-checking-them-yourself).
+
 ### The Android app
 
 Needs JDK 17, the Android SDK (platform 35) with NDK r27, and gomobile. The Go
@@ -175,76 +205,41 @@ core is built into an `.aar` by `scripts/mobile/build-core-android.ps1`
 
 ---
 
-## Quick start — a tunnel
+## Quick start — your own server
+
+`calabi-coord` and `calabi-edge` together are your server. On a Linux machine
+with a public address and Docker Compose (or `podman compose`), [`deploy/server`](deploy/server)
+runs both from one `.env`:
 
 ```bash
-# 1. the edge, on a host with a public IP (or locally, to try it)
-./calabi-edge                                 # :7443 control, :8080 http
+cd deploy/server
+cp .env.example .env     # CALABI_PUBLIC_HOST, CALABI_ADMIN_TOKEN, and CALABI_TUNNEL_DOMAIN for HTTP tunnels
+docker compose up -d
 
-# 2. a local service to expose
-python3 -m http.server 9000
-
-# 3. the client, pointed at your edge
-export CALABI_SERVER=127.0.0.1:7443
-export CALABI_TOKEN=dev-token-please-change
-export CALABI_INSECURE=1                       # dev: self-signed edge
-./calabi http 9000 --domain app.localtest.me
-
-# 4. visit through the edge
-curl http://127.0.0.1:8080/ -H 'Host: app.localtest.me'
+# an invite for each device: a calabi://join link and a QR code
+docker compose exec coord calabi-coord invite --note laptop
 ```
 
-For several tunnels with auto-reconnect and the console:
+Open 7012 and 7443 (devices), 80 and 443 (HTTP tunnels), 20000–20999 tcp/udp
+(TCP and UDP tunnels), 3340 and 3478/udp (the mesh relay).
+
+Then on each device — the Android app scans the QR code instead:
 
 ```bash
-./calabi daemon --config tunnels.yaml   # then open http://127.0.0.1:7400
+calabi join "calabi://join?…"    # joining is the sign-in: tunnels and the mesh both work now
+calabi http 8080                 # → https://u000001.<your tunnel domain>
+ping 100.64.0.2                  # another device, over WireGuard
 ```
 
-## Quick start — a mesh
+The joined client's daemon is running: its console at `http://127.0.0.1:7400`
+creates tunnels and switches the mesh off and on (tunnels keep working with it
+off). The coordinator is the one identity a device has — it names the edge and
+signs the grant the edge lets the device in with — so there is no token to copy
+and no certificate to confirm for the edge.
 
-One coordinator, one relay, and as many devices as you want.
-
-```bash
-# 1. the relay — calabi-edge in relay role, on a host with a public IP.
-#    A relay needs no config file at all: no domain, no certificate.
-CALABI_EDGE_ROLE=relay CALABI_EDGE_RELAY_LABEL=home \
-  ./calabi-edge                               # :3340 relay (TCP), :3478 STUN (UDP)
-
-# 2. the coordinator. authkeys.json maps an auth key to a meshnet (+ ACL tags):
-#      { "my-secret-key": { "meshnet": 1, "tags": ["tag:laptop"] } }
-#    Without CALABI_COORD_DB_DSN the device registry lives in memory: restart
-#    the coordinator and every device re-enrols on a different 100.64.x.x.
-CALABI_COORD_AUTHKEYS_FILE=./authkeys.json \
-CALABI_COORD_DB_DSN=sqlite:./coord.db \
-CALABI_COORD_DERP_ADDR=relay.example.com:3340 \
-CALABI_COORD_DERP_STUN_PORT=3478 \
-CALABI_COORD_GRPC_ADDR=:7012 \
-./calabi-coord
-
-# 3. every device joins (needs a tun device + privileges;
-#    Windows ships wintun.dll inside the binary)
-sudo ./calabi mesh up \
-  --coord coord.example.com:7012 \
-  --relay relay.example.com:3340 \
-  --auth-key my-secret-key --name laptop
-
-./calabi mesh status
-```
-
-Then `ping 100.64.0.x` between devices — no port forwarding anywhere.
-
-> **TLS between device and coordinator.** The client dials the coordinator over
-> TLS by default and verifies it against the CA baked into the binary. For your
-> own deployment either give `calabi-coord` a cert from your own CA and point
-> devices at it with `CALABI_EDGE_CA_FILE=/path/to/your-ca.pem`, or — on a trusted
-> network only — set `CALABI_INSECURE=1` for plaintext. **The auth key crosses
-> that connection**, so do not run it plaintext over the public internet.
-
-To run the mesh as a background service instead of in the foreground, put a
-`mesh:` block in the daemon config and use `calabi daemon install`.
-
-**Full guide** — edge config, per-tunnel security policy, the supervisor daemon,
-OS-service install, the writable `:7400` console, HTTPS, and the mesh in detail:
+**Full guide** — running the binaries without Docker, every coordinator and edge
+setting, per-tunnel security policy, servers and fleets that join from a config
+file, the `:7400` console, ACLs, subnet routers and exit devices:
 see **[docs/self-hosting.md](docs/self-hosting.md)**.
 
 ---
@@ -307,7 +302,8 @@ apksigner verify --print-certs calabi-android.apk
 - Join machines across several clouds into one flat private network without
   peering VPCs.
 - Route a laptop's traffic out through a machine at home via an exit device.
-- Reach your machines from an Android phone over a calabi.net mesh.
+- Reach your machines from an Android phone, over your own mesh or a calabi.net
+  one.
 
 ## Contributing
 

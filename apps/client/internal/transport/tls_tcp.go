@@ -25,7 +25,12 @@ type DialOptions struct {
 	// deploy/dev/certs/ca.crt via CALABI_EDGE_CA_FILE so a dev edge signed
 	// by the dev CA verifies without baking the dev root into the binary.
 	CACertFile string
-	Timeout    time.Duration // overall dial+handshake timeout
+	// TLSConfig, when set, replaces Insecure and CACertFile: the caller has
+	// decided how this server's certificate is checked (a self-hosted edge
+	// pinned by fingerprint, or only the operator's own CA —
+	// internal/trust). Dial still sets the protocol and TLS 1.3 floor.
+	TLSConfig *tls.Config
+	Timeout   time.Duration // overall dial+handshake timeout
 }
 
 // Mux pairs a yamux session with the control stream the client opened
@@ -97,12 +102,16 @@ func Dial(opts DialOptions) (*Mux, error) {
 		MinVersion: tls.VersionTLS13,
 		NextProtos: []string{"calabi/1"},
 	}
-	if opts.Insecure {
+	if opts.TLSConfig != nil {
+		tlsCfg = opts.TLSConfig.Clone()
+		tlsCfg.MinVersion = tls.VersionTLS13
+		tlsCfg.NextProtos = []string{"calabi/1"}
+	} else if opts.Insecure {
 		// CALABI_INSECURE=1 — skip cert verification entirely. The cmd
 		// layer is responsible for warning the user this is unsafe.
 		tlsCfg.InsecureSkipVerify = true //nolint:gosec
 	} else {
-		pool, err := edgeRootCAs(opts.CACertFile)
+		pool, err := edgeRootCAs(embeddedEdgeCA, opts.CACertFile)
 		if err != nil {
 			return nil, fmt.Errorf("edge CA: %w", err)
 		}

@@ -15,8 +15,21 @@ class ConnectTileService : TileService() {
 
     private val app get() = application as CalabiApp
 
+    override fun onTileAdded() {
+        super.onTileAdded()
+        AppPrefs.setTileAdded(this, true)
+    }
+
+    override fun onTileRemoved() {
+        AppPrefs.setTileAdded(this, false)
+        super.onTileRemoved()
+    }
+
     override fun onStartListening() {
         super.onStartListening()
+        // Only a tile in the panel listens: this also catches one added before
+        // onTileAdded was recorded.
+        AppPrefs.setTileAdded(this, true)
         listening = WeakReference(this)
         render()
     }

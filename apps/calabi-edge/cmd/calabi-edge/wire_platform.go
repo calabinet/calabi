@@ -74,17 +74,15 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 	// direct-dial addresses, which no longer reach anything.
 	deps.controlPlaneWired = cpBFF != nil
 
-	// Token verification: prefer identity-svc gRPC if configured. The core
-	// falls back to the static-YAML table when deps.verifier stays nil.
+	// Token verification through bff-edge. With deps.verifier nil the node is a
+	// self-hosted coordinator's, and main accepts devices by that coordinator's
+	// grants instead (there is no static token table any more).
 	var identityCli *identity.Verifier
-	switch {
-	case cpBFF != nil:
+	if cpBFF != nil {
 		v := identity.Wrap(logger, cpBFF.Client)
 		deps.verifier = v
 		identityCli = v
 		logger.Info("identity wired via bff-edge")
-	default:
-		logger.Info("identity-svc not configured; using static YAML tokens")
 	}
 
 	// Shared tunnel_id -> proxy_id map. The persister populates this on
@@ -239,8 +237,15 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 	//     node needn't know its own org id; bff-edge stamps it from the mTLS cert.
 	//     cfg.Cert.OrgID (0 for a BYOI edge) is only the cluster-mode fallback.
 	//
-	// Skipped only when no relay label is set (nothing to attribute to).
-	if cfg.RunsRelay() && cfg.Relay.Label != "" {
+	// Skipped when no relay label is set (nothing to attribute to), and when
+	// there is no control plane to report to. The second one was missing until
+	// 1.13: a standalone relay with a label — docs/self-hosting.md starts one
+	// with CALABI_EDGE_RELAY_LABEL=home — got a reporter with a nil bus, and the
+	// first minute that carried any traffic crashed the process.
+	switch {
+	case cfg.RunsRelay() && cfg.Relay.Label != "" && bus == nil:
+		logger.Info("relay usage is not reported: no control plane to report it to", "label", cfg.Relay.Label)
+	case cfg.RunsRelay() && cfg.Relay.Label != "":
 		if cfg.Relay.IsPlatformKind() {
 			region := cfg.Relay.Label
 			deps.relayReporter = newPlatformRelayUsageReporter(bus, region, logger)

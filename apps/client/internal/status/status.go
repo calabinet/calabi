@@ -952,13 +952,7 @@ func (s *Server) Run(ctx context.Context) error {
 	// Outermost, so it applies whichever UA posture the console runs in.
 	handler = s.consoleGuard(handler)
 	s.srv = &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second}
-	// Compare PORTS, not the two address strings. net.Listen("tcp",
-	// "0.0.0.0:7500") on a dual-stack host hands back an IPv6 socket whose
-	// Addr() prints "[::]:7500" — same port, different text — so a string
-	// comparison announced "requested port busy — fell back" on a machine where
-	// nothing was busy at all, and sent an operator looking for a second daemon
-	// that did not exist (field report 2026-09-09).
-	if boundPort(s.addr) != boundPort(requested) {
+	if fellBack(s.addr, requested) {
 		s.logger.Info("status page up (requested port busy — fell back)",
 			"url", "http://"+s.addr, "requested", requested)
 	} else {
@@ -1002,6 +996,19 @@ func (s *Server) Run(ctx context.Context) error {
 // boundPort is the port of a host:port string, or the string itself when it has
 // no port to take. Only the port carries the meaning here: which INTERFACE the
 // kernel expressed the bind as is not something the operator asked for.
+// fellBack reports whether the console had to take another port than the one
+// requested. Compare PORTS, not the two address strings: net.Listen("tcp",
+// "0.0.0.0:7500") on a dual-stack host hands back an IPv6 socket whose Addr()
+// prints "[::]:7500" — same port, different text — so a string comparison
+// announced "requested port busy — fell back" on a machine where nothing was
+// busy at all, and sent an operator looking for a second daemon that did not
+// exist (field report 2026-09-09). Port 0 asks for any port: whichever it got
+// is not a fallback.
+func fellBack(bound, requested string) bool {
+	rp := boundPort(requested)
+	return rp != "0" && boundPort(bound) != rp
+}
+
 func boundPort(addr string) string {
 	if _, port, err := net.SplitHostPort(addr); err == nil {
 		return port

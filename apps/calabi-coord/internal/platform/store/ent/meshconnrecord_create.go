@@ -86,6 +86,34 @@ func (mcrc *MeshConnRecordCreate) SetNillablePath(s *string) *MeshConnRecordCrea
 	return mcrc
 }
 
+// SetRelayBytesTx sets the "relay_bytes_tx" field.
+func (mcrc *MeshConnRecordCreate) SetRelayBytesTx(i int64) *MeshConnRecordCreate {
+	mcrc.mutation.SetRelayBytesTx(i)
+	return mcrc
+}
+
+// SetNillableRelayBytesTx sets the "relay_bytes_tx" field if the given value is not nil.
+func (mcrc *MeshConnRecordCreate) SetNillableRelayBytesTx(i *int64) *MeshConnRecordCreate {
+	if i != nil {
+		mcrc.SetRelayBytesTx(*i)
+	}
+	return mcrc
+}
+
+// SetRelayBytesRx sets the "relay_bytes_rx" field.
+func (mcrc *MeshConnRecordCreate) SetRelayBytesRx(i int64) *MeshConnRecordCreate {
+	mcrc.mutation.SetRelayBytesRx(i)
+	return mcrc
+}
+
+// SetNillableRelayBytesRx sets the "relay_bytes_rx" field if the given value is not nil.
+func (mcrc *MeshConnRecordCreate) SetNillableRelayBytesRx(i *int64) *MeshConnRecordCreate {
+	if i != nil {
+		mcrc.SetRelayBytesRx(*i)
+	}
+	return mcrc
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (mcrc *MeshConnRecordCreate) SetUpdatedAt(t time.Time) *MeshConnRecordCreate {
 	mcrc.mutation.SetUpdatedAt(t)
@@ -147,6 +175,14 @@ func (mcrc *MeshConnRecordCreate) defaults() {
 		v := meshconnrecord.DefaultPath
 		mcrc.mutation.SetPath(v)
 	}
+	if _, ok := mcrc.mutation.RelayBytesTx(); !ok {
+		v := meshconnrecord.DefaultRelayBytesTx
+		mcrc.mutation.SetRelayBytesTx(v)
+	}
+	if _, ok := mcrc.mutation.RelayBytesRx(); !ok {
+		v := meshconnrecord.DefaultRelayBytesRx
+		mcrc.mutation.SetRelayBytesRx(v)
+	}
 	if _, ok := mcrc.mutation.UpdatedAt(); !ok {
 		v := meshconnrecord.DefaultUpdatedAt()
 		mcrc.mutation.SetUpdatedAt(v)
@@ -175,6 +211,12 @@ func (mcrc *MeshConnRecordCreate) check() error {
 	}
 	if _, ok := mcrc.mutation.Path(); !ok {
 		return &ValidationError{Name: "path", err: errors.New(`ent: missing required field "MeshConnRecord.path"`)}
+	}
+	if _, ok := mcrc.mutation.RelayBytesTx(); !ok {
+		return &ValidationError{Name: "relay_bytes_tx", err: errors.New(`ent: missing required field "MeshConnRecord.relay_bytes_tx"`)}
+	}
+	if _, ok := mcrc.mutation.RelayBytesRx(); !ok {
+		return &ValidationError{Name: "relay_bytes_rx", err: errors.New(`ent: missing required field "MeshConnRecord.relay_bytes_rx"`)}
 	}
 	if _, ok := mcrc.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "MeshConnRecord.updated_at"`)}
@@ -232,6 +274,14 @@ func (mcrc *MeshConnRecordCreate) createSpec() (*MeshConnRecord, *sqlgraph.Creat
 	if value, ok := mcrc.mutation.Path(); ok {
 		_spec.SetField(meshconnrecord.FieldPath, field.TypeString, value)
 		_node.Path = value
+	}
+	if value, ok := mcrc.mutation.RelayBytesTx(); ok {
+		_spec.SetField(meshconnrecord.FieldRelayBytesTx, field.TypeInt64, value)
+		_node.RelayBytesTx = value
+	}
+	if value, ok := mcrc.mutation.RelayBytesRx(); ok {
+		_spec.SetField(meshconnrecord.FieldRelayBytesRx, field.TypeInt64, value)
+		_node.RelayBytesRx = value
 	}
 	if value, ok := mcrc.mutation.UpdatedAt(); ok {
 		_spec.SetField(meshconnrecord.FieldUpdatedAt, field.TypeTime, value)

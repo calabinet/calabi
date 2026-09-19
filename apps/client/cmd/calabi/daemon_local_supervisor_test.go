@@ -21,8 +21,8 @@ func TestSupervisor_TunnelsOverlaysAssignedAddr(t *testing.T) {
 	planned := planTunnels(logger, []localTunnelConfig{
 		{Name: "stage", Type: "http", Local: "192.168.1.5:8080"}, // no configured domain
 	})
-	sv := newLocalSupervisor(logger, localConfig{Server: "edge:7443", Insecure: true},
-		filepath.Join(dir, "t.yaml"), planned, "edge:7443")
+	sv := newLocalSupervisor(logger, localConfig{}, filepath.Join(dir, "t.yaml"), planned)
+	sv.setEdgeAddr("edge:7443")
 	id := planned[0].id
 
 	if got := sv.Tunnels(); len(got) != 1 || got[0].Domain != "" || got[0].EdgeNodeID != 0 {
@@ -48,12 +48,14 @@ func testSupervisor(t *testing.T) (*localSupervisor, string) {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "tunnels.yaml")
-	base := localConfig{Server: "edge.example.com:7443", TokenEnv: "CALABI_TOKEN", Insecure: true}
+	base := localConfig{Mesh: meshConfig{Enabled: true, Coord: "coord.example.com:7012", Trust: "pin", Pins: []string{testPinA}}}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	planned := planTunnels(logger, []localTunnelConfig{
 		{Name: "web", Type: "http", Local: "8080", Domain: "web.example.com"},
 	})
-	return newLocalSupervisor(logger, base, path, planned, "edge.example.com:7443"), path
+	sv := newLocalSupervisor(logger, base, path, planned)
+	sv.setEdgeAddr("edge.example.com:7443")
+	return sv, path
 }
 
 // The first edge-assigned subdomain is pinned into the plan + YAML so it stays
@@ -65,7 +67,7 @@ func TestSupervisor_PinsAssignedDomain(t *testing.T) {
 	planned := planTunnels(logger, []localTunnelConfig{
 		{Name: "stage", Type: "http", Local: "192.168.1.5:8080"}, // no configured domain
 	})
-	sv := newLocalSupervisor(logger, localConfig{Server: "edge:7443", Insecure: true}, path, planned, "edge:7443")
+	sv := newLocalSupervisor(logger, localConfig{}, path, planned)
 	id := planned[0].id
 
 	sv.recordAssignedAddr(id, "u000007.edge.example.com", 0)
@@ -88,20 +90,18 @@ func TestSupervisor_PinsAssignedDomain(t *testing.T) {
 	}
 }
 
-// A config that uses an inline `token:` (and no token_env / ca_file) must NOT
-// gain spurious empty top-level fields when persist() rewrites the file — which
-// happens on first connect, when the edge-assigned address is pinned. Regression
-// for localConfig's optional fields lacking omitempty (a `token:`-only config
-// used to grow a bogus `token_env: ""`).
-func TestSupervisor_PersistOmitsUnsetTopLevelFields(t *testing.T) {
+// A mesh block with only a coordinator must NOT gain spurious empty fields when
+// persist() rewrites the file — which happens on first connect, when the
+// edge-assigned address is pinned — and the file must still load.
+func TestSupervisor_PersistOmitsUnsetFields(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "tunnels.yaml")
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	planned := planTunnels(logger, []localTunnelConfig{
 		{Name: "web", Type: "http", Local: "8080"}, // no domain → edge assigns one
 	})
-	base := localConfig{Server: "edge:7443", Token: "s3cret"} // inline token, nothing else
-	sv := newLocalSupervisor(logger, base, path, planned, "edge:7443")
+	base := localConfig{Mesh: meshConfig{Enabled: true, Coord: "coord:7012"}}
+	sv := newLocalSupervisor(logger, base, path, planned)
 
 	sv.recordAssignedAddr(planned[0].id, "u000007.edge.example.com", 0) // triggers persist()
 
@@ -110,13 +110,16 @@ func TestSupervisor_PersistOmitsUnsetTopLevelFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := string(data)
-	for _, unwanted := range []string{"token_env", "ca_file", "insecure"} {
+	for _, unwanted := range []string{"auth_key", "ca_file", "pins", "relay"} {
 		if strings.Contains(out, unwanted) {
 			t.Errorf("persist injected unset field %q into the YAML:\n%s", unwanted, out)
 		}
 	}
-	if !strings.Contains(out, "token: s3cret") {
-		t.Errorf("inline token not preserved on persist:\n%s", out)
+	if !strings.Contains(out, "coord: coord:7012") {
+		t.Errorf("the coordinator is not preserved on persist:\n%s", out)
+	}
+	if _, err := loadLocalConfig(path); err != nil {
+		t.Errorf("the persisted file does not load: %v", err)
 	}
 }
 
@@ -138,9 +141,9 @@ func TestSupervisor_CreatePersists(t *testing.T) {
 	if !strings.Contains(string(data), "name: api") || !strings.Contains(string(data), "remote_port: 2222") {
 		t.Errorf("config not persisted:\n%s", data)
 	}
-	// token_env must be preserved (no inline token leaked).
-	if !strings.Contains(string(data), "token_env: CALABI_TOKEN") {
-		t.Errorf("token_env not preserved:\n%s", data)
+	// The mesh block — the coordinator and how it is trusted — is preserved.
+	if !strings.Contains(string(data), "coord: coord.example.com:7012") || !strings.Contains(string(data), testPinA) {
+		t.Errorf("mesh block not preserved:\n%s", data)
 	}
 }
 

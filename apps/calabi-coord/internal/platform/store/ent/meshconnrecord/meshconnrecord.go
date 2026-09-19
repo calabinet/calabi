@@ -27,6 +27,10 @@ const (
 	FieldBytesRx = "bytes_rx"
 	// FieldPath holds the string denoting the path field in the database.
 	FieldPath = "path"
+	// FieldRelayBytesTx holds the string denoting the relay_bytes_tx field in the database.
+	FieldRelayBytesTx = "relay_bytes_tx"
+	// FieldRelayBytesRx holds the string denoting the relay_bytes_rx field in the database.
+	FieldRelayBytesRx = "relay_bytes_rx"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
 	// Table holds the table name of the meshconnrecord in the database.
@@ -43,6 +47,8 @@ var Columns = []string{
 	FieldBytesTx,
 	FieldBytesRx,
 	FieldPath,
+	FieldRelayBytesTx,
+	FieldRelayBytesRx,
 	FieldUpdatedAt,
 }
 
@@ -63,6 +69,10 @@ var (
 	DefaultBytesRx int64
 	// DefaultPath holds the default value on creation for the "path" field.
 	DefaultPath string
+	// DefaultRelayBytesTx holds the default value on creation for the "relay_bytes_tx" field.
+	DefaultRelayBytesTx int64
+	// DefaultRelayBytesRx holds the default value on creation for the "relay_bytes_rx" field.
+	DefaultRelayBytesRx int64
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
@@ -110,6 +120,16 @@ func ByBytesRx(opts ...sql.OrderTermOption) OrderOption {
 // ByPath orders the results by the path field.
 func ByPath(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPath, opts...).ToFunc()
+}
+
+// ByRelayBytesTx orders the results by the relay_bytes_tx field.
+func ByRelayBytesTx(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRelayBytesTx, opts...).ToFunc()
+}
+
+// ByRelayBytesRx orders the results by the relay_bytes_rx field.
+func ByRelayBytesRx(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRelayBytesRx, opts...).ToFunc()
 }
 
 // ByUpdatedAt orders the results by the updated_at field.

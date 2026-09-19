@@ -52,6 +52,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	IdentityHooks_ValidateToken_FullMethodName      = "/calabi.v1.hooks.IdentityHooks/ValidateToken"
 	IdentityHooks_ListRelayEndpoints_FullMethodName = "/calabi.v1.hooks.IdentityHooks/ListRelayEndpoints"
+	IdentityHooks_CheckEnrollment_FullMethodName    = "/calabi.v1.hooks.IdentityHooks/CheckEnrollment"
 )
 
 // IdentityHooksClient is the client API for IdentityHooks service.
@@ -67,6 +68,13 @@ type IdentityHooksClient interface {
 	// in the DERP map. A platform derives these from its edge fleet; a
 	// self-hoster can answer with a static list.
 	ListRelayEndpoints(ctx context.Context, in *ListRelayEndpointsRequest, opts ...grpc.CallOption) (*ListRelayEndpointsResponse, error)
+	// CheckEnrollment asks whether what a node enrolled as still admits it to
+	// the org: the coordinator's question when an enrolled node registers again
+	// by proof of its node key alone, without its auth key (mesh capability
+	// node_reauth). Exactly one of user_id and api_key_id is set, as recorded
+	// at enrollment. An implementation that cannot answer returns an error, and
+	// the node is refused — it can still enroll with its credential.
+	CheckEnrollment(ctx context.Context, in *CheckEnrollmentRequest, opts ...grpc.CallOption) (*CheckEnrollmentResponse, error)
 }
 
 type identityHooksClient struct {
@@ -97,6 +105,16 @@ func (c *identityHooksClient) ListRelayEndpoints(ctx context.Context, in *ListRe
 	return out, nil
 }
 
+func (c *identityHooksClient) CheckEnrollment(ctx context.Context, in *CheckEnrollmentRequest, opts ...grpc.CallOption) (*CheckEnrollmentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckEnrollmentResponse)
+	err := c.cc.Invoke(ctx, IdentityHooks_CheckEnrollment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // IdentityHooksServer is the server API for IdentityHooks service.
 // All implementations must embed UnimplementedIdentityHooksServer
 // for forward compatibility.
@@ -110,6 +128,13 @@ type IdentityHooksServer interface {
 	// in the DERP map. A platform derives these from its edge fleet; a
 	// self-hoster can answer with a static list.
 	ListRelayEndpoints(context.Context, *ListRelayEndpointsRequest) (*ListRelayEndpointsResponse, error)
+	// CheckEnrollment asks whether what a node enrolled as still admits it to
+	// the org: the coordinator's question when an enrolled node registers again
+	// by proof of its node key alone, without its auth key (mesh capability
+	// node_reauth). Exactly one of user_id and api_key_id is set, as recorded
+	// at enrollment. An implementation that cannot answer returns an error, and
+	// the node is refused — it can still enroll with its credential.
+	CheckEnrollment(context.Context, *CheckEnrollmentRequest) (*CheckEnrollmentResponse, error)
 	mustEmbedUnimplementedIdentityHooksServer()
 }
 
@@ -125,6 +150,9 @@ func (UnimplementedIdentityHooksServer) ValidateToken(context.Context, *Validate
 }
 func (UnimplementedIdentityHooksServer) ListRelayEndpoints(context.Context, *ListRelayEndpointsRequest) (*ListRelayEndpointsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRelayEndpoints not implemented")
+}
+func (UnimplementedIdentityHooksServer) CheckEnrollment(context.Context, *CheckEnrollmentRequest) (*CheckEnrollmentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckEnrollment not implemented")
 }
 func (UnimplementedIdentityHooksServer) mustEmbedUnimplementedIdentityHooksServer() {}
 func (UnimplementedIdentityHooksServer) testEmbeddedByValue()                       {}
@@ -183,6 +211,24 @@ func _IdentityHooks_ListRelayEndpoints_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IdentityHooks_CheckEnrollment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckEnrollmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityHooksServer).CheckEnrollment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityHooks_CheckEnrollment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityHooksServer).CheckEnrollment(ctx, req.(*CheckEnrollmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // IdentityHooks_ServiceDesc is the grpc.ServiceDesc for IdentityHooks service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -197,6 +243,10 @@ var IdentityHooks_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListRelayEndpoints",
 			Handler:    _IdentityHooks_ListRelayEndpoints_Handler,
+		},
+		{
+			MethodName: "CheckEnrollment",
+			Handler:    _IdentityHooks_CheckEnrollment_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

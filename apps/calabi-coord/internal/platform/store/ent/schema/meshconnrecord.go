@@ -56,6 +56,16 @@ func (MeshConnRecord) Fields() []ent.Field {
 		field.String("path").
 			Default("").
 			Comment(`"direct" or "relay" as last reported in the hour. NOT an endpoint address — see the type comment`),
+		// The relayed part of the two totals above. `path` is only the hour's
+		// last reported value, so a pair that moved between relay and direct
+		// mid-hour cannot be split by it; a self-hosted server's relay usage is
+		// summed from these.
+		field.Int64("relay_bytes_tx").
+			Default(0).
+			Comment("of bytes_tx, what went through a relay"),
+		field.Int64("relay_bytes_rx").
+			Default(0).
+			Comment("of bytes_rx, what came through a relay"),
 		field.Time("updated_at").
 			Default(time.Now).
 			UpdateDefault(time.Now),

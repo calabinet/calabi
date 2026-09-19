@@ -26,6 +26,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "../api/client";
 import { UpdatePanel, useUpdateInfo } from "../components/UpdateNotice";
+import { SelfHostedCard } from "../components/SelfHosted";
 import type { AccountMe, Healthz } from "../api/types";
 import { useLogout } from "../hooks/use-logout";
 import { useServiceMode } from "../hooks/use-service-mode";
@@ -116,6 +117,8 @@ export default function Settings() {
       <Title level={4} style={{ margin: 0 }}>
         {t("nav.settings")}
       </Title>
+
+      {standalone && <SelfHostedCard />}
 
       <Card title={t("settings.daemonCard")} size="small">
         <Space direction="vertical" size={4} style={{ width: "100%" }}>

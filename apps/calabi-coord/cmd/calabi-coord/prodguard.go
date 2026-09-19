@@ -59,10 +59,13 @@ func checkProductionPosture() error {
 	// version of this check demanded identity-svc outright, which would have
 	// told anyone running their own coordinator that their perfectly correct
 	// deployment was misconfigured.
-	if !envIsSet("IDENTITY_ADDR") && !envIsSet("AUTHKEYS_FILE") {
+	// A database turns the built-in key off as well: devices then join with
+	// keys the coordinator mints (calabi-coord invite) — see devStaticAuth.
+	if !envIsSet("IDENTITY_ADDR") && !envIsSet("AUTHKEYS_FILE") && !dbConfigured() {
 		bad = append(bad, "no authentication source: set CALABI_COORD_IDENTITY_ADDR (verify tk_ keys through "+
-			"the platform's IdentityHooks) or CALABI_COORD_AUTHKEYS_FILE (your own key -> meshnet map). "+
-			"Without either, coord falls back to a single BUILT-IN key that admits any caller into meshnet 1")
+			"the platform's IdentityHooks), CALABI_COORD_AUTHKEYS_FILE (your own key -> meshnet map), or "+
+			"CALABI_COORD_DB_DSN (devices join with keys minted by calabi-coord invite). "+
+			"Without any of them, coord falls back to a single BUILT-IN key that admits any caller into meshnet 1")
 	}
 
 	// Mesh-admin surface. F0.1 already refuses a tokenless surface; production

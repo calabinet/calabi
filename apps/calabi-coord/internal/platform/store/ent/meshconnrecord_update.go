@@ -161,6 +161,48 @@ func (mcru *MeshConnRecordUpdate) SetNillablePath(s *string) *MeshConnRecordUpda
 	return mcru
 }
 
+// SetRelayBytesTx sets the "relay_bytes_tx" field.
+func (mcru *MeshConnRecordUpdate) SetRelayBytesTx(i int64) *MeshConnRecordUpdate {
+	mcru.mutation.ResetRelayBytesTx()
+	mcru.mutation.SetRelayBytesTx(i)
+	return mcru
+}
+
+// SetNillableRelayBytesTx sets the "relay_bytes_tx" field if the given value is not nil.
+func (mcru *MeshConnRecordUpdate) SetNillableRelayBytesTx(i *int64) *MeshConnRecordUpdate {
+	if i != nil {
+		mcru.SetRelayBytesTx(*i)
+	}
+	return mcru
+}
+
+// AddRelayBytesTx adds i to the "relay_bytes_tx" field.
+func (mcru *MeshConnRecordUpdate) AddRelayBytesTx(i int64) *MeshConnRecordUpdate {
+	mcru.mutation.AddRelayBytesTx(i)
+	return mcru
+}
+
+// SetRelayBytesRx sets the "relay_bytes_rx" field.
+func (mcru *MeshConnRecordUpdate) SetRelayBytesRx(i int64) *MeshConnRecordUpdate {
+	mcru.mutation.ResetRelayBytesRx()
+	mcru.mutation.SetRelayBytesRx(i)
+	return mcru
+}
+
+// SetNillableRelayBytesRx sets the "relay_bytes_rx" field if the given value is not nil.
+func (mcru *MeshConnRecordUpdate) SetNillableRelayBytesRx(i *int64) *MeshConnRecordUpdate {
+	if i != nil {
+		mcru.SetRelayBytesRx(*i)
+	}
+	return mcru
+}
+
+// AddRelayBytesRx adds i to the "relay_bytes_rx" field.
+func (mcru *MeshConnRecordUpdate) AddRelayBytesRx(i int64) *MeshConnRecordUpdate {
+	mcru.mutation.AddRelayBytesRx(i)
+	return mcru
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (mcru *MeshConnRecordUpdate) SetUpdatedAt(t time.Time) *MeshConnRecordUpdate {
 	mcru.mutation.SetUpdatedAt(t)
@@ -252,6 +294,18 @@ func (mcru *MeshConnRecordUpdate) sqlSave(ctx context.Context) (n int, err error
 	}
 	if value, ok := mcru.mutation.Path(); ok {
 		_spec.SetField(meshconnrecord.FieldPath, field.TypeString, value)
+	}
+	if value, ok := mcru.mutation.RelayBytesTx(); ok {
+		_spec.SetField(meshconnrecord.FieldRelayBytesTx, field.TypeInt64, value)
+	}
+	if value, ok := mcru.mutation.AddedRelayBytesTx(); ok {
+		_spec.AddField(meshconnrecord.FieldRelayBytesTx, field.TypeInt64, value)
+	}
+	if value, ok := mcru.mutation.RelayBytesRx(); ok {
+		_spec.SetField(meshconnrecord.FieldRelayBytesRx, field.TypeInt64, value)
+	}
+	if value, ok := mcru.mutation.AddedRelayBytesRx(); ok {
+		_spec.AddField(meshconnrecord.FieldRelayBytesRx, field.TypeInt64, value)
 	}
 	if value, ok := mcru.mutation.UpdatedAt(); ok {
 		_spec.SetField(meshconnrecord.FieldUpdatedAt, field.TypeTime, value)
@@ -409,6 +463,48 @@ func (mcruo *MeshConnRecordUpdateOne) SetNillablePath(s *string) *MeshConnRecord
 	return mcruo
 }
 
+// SetRelayBytesTx sets the "relay_bytes_tx" field.
+func (mcruo *MeshConnRecordUpdateOne) SetRelayBytesTx(i int64) *MeshConnRecordUpdateOne {
+	mcruo.mutation.ResetRelayBytesTx()
+	mcruo.mutation.SetRelayBytesTx(i)
+	return mcruo
+}
+
+// SetNillableRelayBytesTx sets the "relay_bytes_tx" field if the given value is not nil.
+func (mcruo *MeshConnRecordUpdateOne) SetNillableRelayBytesTx(i *int64) *MeshConnRecordUpdateOne {
+	if i != nil {
+		mcruo.SetRelayBytesTx(*i)
+	}
+	return mcruo
+}
+
+// AddRelayBytesTx adds i to the "relay_bytes_tx" field.
+func (mcruo *MeshConnRecordUpdateOne) AddRelayBytesTx(i int64) *MeshConnRecordUpdateOne {
+	mcruo.mutation.AddRelayBytesTx(i)
+	return mcruo
+}
+
+// SetRelayBytesRx sets the "relay_bytes_rx" field.
+func (mcruo *MeshConnRecordUpdateOne) SetRelayBytesRx(i int64) *MeshConnRecordUpdateOne {
+	mcruo.mutation.ResetRelayBytesRx()
+	mcruo.mutation.SetRelayBytesRx(i)
+	return mcruo
+}
+
+// SetNillableRelayBytesRx sets the "relay_bytes_rx" field if the given value is not nil.
+func (mcruo *MeshConnRecordUpdateOne) SetNillableRelayBytesRx(i *int64) *MeshConnRecordUpdateOne {
+	if i != nil {
+		mcruo.SetRelayBytesRx(*i)
+	}
+	return mcruo
+}
+
+// AddRelayBytesRx adds i to the "relay_bytes_rx" field.
+func (mcruo *MeshConnRecordUpdateOne) AddRelayBytesRx(i int64) *MeshConnRecordUpdateOne {
+	mcruo.mutation.AddRelayBytesRx(i)
+	return mcruo
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (mcruo *MeshConnRecordUpdateOne) SetUpdatedAt(t time.Time) *MeshConnRecordUpdateOne {
 	mcruo.mutation.SetUpdatedAt(t)
@@ -530,6 +626,18 @@ func (mcruo *MeshConnRecordUpdateOne) sqlSave(ctx context.Context) (_node *MeshC
 	}
 	if value, ok := mcruo.mutation.Path(); ok {
 		_spec.SetField(meshconnrecord.FieldPath, field.TypeString, value)
+	}
+	if value, ok := mcruo.mutation.RelayBytesTx(); ok {
+		_spec.SetField(meshconnrecord.FieldRelayBytesTx, field.TypeInt64, value)
+	}
+	if value, ok := mcruo.mutation.AddedRelayBytesTx(); ok {
+		_spec.AddField(meshconnrecord.FieldRelayBytesTx, field.TypeInt64, value)
+	}
+	if value, ok := mcruo.mutation.RelayBytesRx(); ok {
+		_spec.SetField(meshconnrecord.FieldRelayBytesRx, field.TypeInt64, value)
+	}
+	if value, ok := mcruo.mutation.AddedRelayBytesRx(); ok {
+		_spec.AddField(meshconnrecord.FieldRelayBytesRx, field.TypeInt64, value)
 	}
 	if value, ok := mcruo.mutation.UpdatedAt(); ok {
 		_spec.SetField(meshconnrecord.FieldUpdatedAt, field.TypeTime, value)

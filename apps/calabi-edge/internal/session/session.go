@@ -25,6 +25,7 @@ import (
 
 	"github.com/calabi/calabi/apps/calabi-edge/internal/policy"
 	"github.com/calabi/calabi/apps/calabi-edge/internal/ratelimit"
+	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
 	proto "github.com/calabi/calabi/pkg/protocol"
 )
 
@@ -128,6 +129,13 @@ type Session struct {
 	// only from the server-authoritative config_json. Set once at session
 	// creation from ControlOptions.TrustClientPolicy.
 	TrustClientPolicy bool
+
+	// grants is set when this session authenticated by a coordinator grant
+	// (grantauth.go): grantNode is the node key it proved, and grantExpiry,
+	// under mu, is when it must have presented a newer grant.
+	grants      GrantAuth
+	grantNode   meshproto.NodeKey
+	grantExpiry time.Time
 
 	logger *slog.Logger
 	mux    *yamux.Session

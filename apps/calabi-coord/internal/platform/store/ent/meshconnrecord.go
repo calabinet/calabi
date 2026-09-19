@@ -31,6 +31,10 @@ type MeshConnRecord struct {
 	BytesRx int64 `json:"bytes_rx,omitempty"`
 	// "direct" or "relay" as last reported in the hour. NOT an endpoint address — see the type comment
 	Path string `json:"path,omitempty"`
+	// of bytes_tx, what went through a relay
+	RelayBytesTx int64 `json:"relay_bytes_tx,omitempty"`
+	// of bytes_rx, what came through a relay
+	RelayBytesRx int64 `json:"relay_bytes_rx,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
 	UpdatedAt    time.Time `json:"updated_at,omitempty"`
 	selectValues sql.SelectValues
@@ -41,7 +45,7 @@ func (*MeshConnRecord) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case meshconnrecord.FieldID, meshconnrecord.FieldMeshnetID, meshconnrecord.FieldSrcNodeID, meshconnrecord.FieldDstNodeID, meshconnrecord.FieldBytesTx, meshconnrecord.FieldBytesRx:
+		case meshconnrecord.FieldID, meshconnrecord.FieldMeshnetID, meshconnrecord.FieldSrcNodeID, meshconnrecord.FieldDstNodeID, meshconnrecord.FieldBytesTx, meshconnrecord.FieldBytesRx, meshconnrecord.FieldRelayBytesTx, meshconnrecord.FieldRelayBytesRx:
 			values[i] = new(sql.NullInt64)
 		case meshconnrecord.FieldPath:
 			values[i] = new(sql.NullString)
@@ -110,6 +114,18 @@ func (mcr *MeshConnRecord) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				mcr.Path = value.String
 			}
+		case meshconnrecord.FieldRelayBytesTx:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field relay_bytes_tx", values[i])
+			} else if value.Valid {
+				mcr.RelayBytesTx = value.Int64
+			}
+		case meshconnrecord.FieldRelayBytesRx:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field relay_bytes_rx", values[i])
+			} else if value.Valid {
+				mcr.RelayBytesRx = value.Int64
+			}
 		case meshconnrecord.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
@@ -172,6 +188,12 @@ func (mcr *MeshConnRecord) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("path=")
 	builder.WriteString(mcr.Path)
+	builder.WriteString(", ")
+	builder.WriteString("relay_bytes_tx=")
+	builder.WriteString(fmt.Sprintf("%v", mcr.RelayBytesTx))
+	builder.WriteString(", ")
+	builder.WriteString("relay_bytes_rx=")
+	builder.WriteString(fmt.Sprintf("%v", mcr.RelayBytesRx))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
 	builder.WriteString(mcr.UpdatedAt.Format(time.ANSIC))

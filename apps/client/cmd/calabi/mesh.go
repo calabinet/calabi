@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/netip"
@@ -55,9 +56,14 @@ func runMesh(args []string) int {
 }
 
 func runMeshUp(args []string) int {
+	// No arguments: the running daemon's device, back on the mesh after
+	// `calabi mesh down` (or a self-hosted device that joined with it off).
+	if len(args) == 0 {
+		return postDaemonMesh("up")
+	}
 	fs := flag.NewFlagSet("mesh up", flag.ContinueOnError)
 	coordAddr := fs.String("coord", "", "coordinator address host:port (in production: your bff-console entrypoint)")
-	relayAddr := fs.String("relay", "", "relay address host:port (this device's DERP home)")
+	relayAddr := fs.String("relay", "", "relay address host:port to start on (optional: without it the home relay comes from the coordinator's relay map)")
 	authKey := fs.String("auth-key", "", "tk_ auth key (platform) or pre-shared key (self-hosted)")
 	name := fs.String("name", defaultNodeName(), "device name (how this machine is labelled in the console)")
 	mtu := fs.Int("mtu", mesh.DefaultMTU, "tun MTU (576-1500); LOWER it to test a path that black-holes full-size packets")
@@ -67,12 +73,26 @@ func runMeshUp(args []string) int {
 	aliasRoutes := fs.String("alias-routes", "", "DEPRECATED and ignored: every advertised route is aliased where the host supports it")
 	advertiseExit := fs.Bool("advertise-exit-node", false, "advertise this device as an exit device (offer to forward peers' default route to the internet)")
 	exitNode := fs.String("exit-node", "", "route this device's default traffic through the named exit device (name or overlay IP)")
+	trustMode := fs.String("trust", "", "how to check the coordinator's certificate: system, pin, ca, plaintext or platform. Default: platform for a tk_ key, otherwise system (CALABI_EDGE_CA_FILE = ca, CALABI_INSECURE=1 = plaintext)")
+	var pins []string
+	fs.Func("pin", "the coordinator's certificate fingerprint, printed by calabi-coord fingerprint (implies --trust pin); repeatable", func(v string) error {
+		pins = append(pins, v)
+		return nil
+	})
+	caFile := fs.String("ca-file", "", "the CA certificate to check the coordinator against (implies --trust ca)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	if *coordAddr == "" || *relayAddr == "" || *authKey == "" {
-		fmt.Fprintln(os.Stderr, "calabi mesh up: --coord, --relay and --auth-key are required")
+	if *coordAddr == "" || *authKey == "" {
+		fmt.Fprintln(os.Stderr, "calabi mesh up: --coord and --auth-key are required")
 		printMeshUsage()
+		return 2
+	}
+	// Before the tun exists: a bad --trust or --pin is the person's typo, not a
+	// reason to have created a network device.
+	coordT, err := coordTrust(coordTrustSpec{Mode: *trustMode, Pins: pins, CAFile: *caFile}, *authKey)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "calabi mesh up: %v\n", err)
 		return 2
 	}
 	routes, err := parseCIDRList(*advertise)
@@ -149,7 +169,7 @@ func runMeshUp(args []string) int {
 		dp.SetExitBypassHosts([]string{*coordAddr, *relayAddr})
 	}
 
-	conn, err := dialCoord(*coordAddr)
+	conn, err := dialCoord(*coordAddr, coordT)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "calabi mesh up: coordinator dial: %v\n", err)
 		return 1
@@ -683,7 +703,11 @@ func humanBytes(n int) string {
 
 // runMeshDown asks the local daemon to stop the mesh subsystem (POST
 // /v1/mesh/down, local-token gated).
-func runMeshDown(_ []string) int {
+func runMeshDown(_ []string) int { return postDaemonMesh("down") }
+
+// postDaemonMesh asks the running daemon to take its device off the mesh
+// ("down"), or put it back ("up").
+func postDaemonMesh(what string) int {
 	// Same resolution as `mesh status` — a daemon that fell back off 7400 has to
 	// be stoppable too, or the port scan turns a convenience into a trap.
 	var resp *http.Response
@@ -691,9 +715,9 @@ func runMeshDown(_ []string) int {
 	var err error
 	for _, base := range meshConsoleCandidates() {
 		tried = base
-		req, rerr := http.NewRequest(http.MethodPost, base+"/v1/mesh/down", nil)
+		req, rerr := http.NewRequest(http.MethodPost, base+"/v1/mesh/"+what, nil)
 		if rerr != nil {
-			fmt.Fprintf(os.Stderr, "calabi mesh down: %v\n", rerr)
+			fmt.Fprintf(os.Stderr, "calabi mesh %s: %v\n", what, rerr)
 			return 1
 		}
 		req.Header.Set("X-Local-Token", localTokenFor(base))
@@ -702,15 +726,20 @@ func runMeshDown(_ []string) int {
 		}
 	}
 	if err != nil || resp == nil {
-		fmt.Fprintf(os.Stderr, "calabi mesh down: no daemon answered (last tried %s: %v)\n", tried, err)
+		fmt.Fprintf(os.Stderr, "calabi mesh %s: no daemon answered (last tried %s: %v)\n", what, tried, err)
 		return 1
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		fmt.Fprintf(os.Stderr, "calabi mesh down: %s\n", resp.Status)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		fmt.Fprintf(os.Stderr, "calabi mesh %s: %s %s\n", what, resp.Status, strings.TrimSpace(string(body)))
 		return 1
 	}
-	fmt.Println("mesh: down (restart the daemon, or re-enable in its config, to rejoin)")
+	if what == "down" {
+		fmt.Println("mesh: down — this device left the mesh; its tunnels keep working. `calabi mesh up` puts it back.")
+	} else {
+		fmt.Println("mesh: up")
+	}
 	return 0
 }
 
@@ -740,16 +769,22 @@ func printMeshUsage() {
 	fmt.Fprintln(os.Stderr, `calabi mesh -- the WireGuard mesh subsystem
 
 Usage:
-  calabi mesh up --coord HOST:PORT --relay HOST:PORT --auth-key KEY [--name N] [--key-file PATH]
+  calabi mesh up --coord HOST:PORT --auth-key KEY [--relay HOST:PORT] [--name N] [--key-file PATH]
+                 [--trust system|pin|ca|plaintext|platform] [--pin FINGERPRINT] [--ca-file PATH]
                  [--advertise-routes CIDR,...] [--advertise-exit-node] [--exit-node NAME|IP]
      Join the meshnet in the FOREGROUND: enroll with the coordinator, bring up a
-     WireGuard tun over the relay, apply the netmap. Ctrl-C to leave.
+     WireGuard tun, apply the netmap. Ctrl-C to leave. Without --relay the home
+     relay comes from the coordinator's relay map. --trust says how to check the
+     coordinator's certificate (default: platform for a tk_ key, else system);
+     a self-signed coordinator is pinned with --pin <fingerprint>.
      --advertise-routes / --advertise-exit-node make this node a subnet router /
      exit node; --exit-node routes THIS node's default traffic through a peer.
   calabi mesh status
      Show the mesh status of the running local daemon (reads :7400 /v1/mesh).
   calabi mesh down
-     Ask the running local daemon to stop the mesh subsystem.
+     Take the running daemon's device off the mesh; its tunnels keep working.
+  calabi mesh up
+     With no arguments: put the running daemon's device back on the mesh.
   calabi mesh relaytest [--relay host:3340] [--seconds N] [--size N] [--rate Mbit]
      Drive ONE LEG of the relay path — this node to the relay and back, through
      the relay's own read and write loops, with no second node, no WireGuard and
@@ -759,7 +794,7 @@ Usage:
      three at once.
 
 Run mesh as a background SERVICE via the local daemon: add a mesh: block
-(enabled/coord/relay/auth_key/name) to the daemon config and run
+(enabled/coord/auth_key/name, optionally relay and trust/pins/ca_file) to the daemon config and run
 'calabi daemon --local --config tunnels.yaml' (installable with
 'calabi daemon install'). status/down talk to that daemon.
 

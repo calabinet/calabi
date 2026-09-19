@@ -167,6 +167,17 @@ func (s *MemNodeStore) SetApproved(_ context.Context, id int64, approved bool) e
 	return nil
 }
 
+func (s *MemNodeStore) SetSignedOut(_ context.Context, id int64, signedOut bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n, ok := s.nodes[id]
+	if !ok {
+		return ErrNodeNotFound
+	}
+	n.SignedOut = signedOut
+	return nil
+}
+
 func (s *MemNodeStore) SetDisabled(_ context.Context, id int64, disabled bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

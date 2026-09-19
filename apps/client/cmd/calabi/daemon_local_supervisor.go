@@ -11,7 +11,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"sync"
 
@@ -24,10 +23,18 @@ import (
 
 type localSupervisor struct {
 	logger      *slog.Logger
-	base        localConfig // top-level config (server/token/insecure/ca) for persistence
+	base        localConfig // top-level config (the mesh block) for persistence
 	configPath  string
-	server      string
 	reconcileCh chan struct{} // nudged by write ops; drained by the session loop
+	// retryNow wakes the reconnect loop from its back-off: the coordinator's
+	// new certificate was just confirmed in the console.
+	retryNow chan struct{}
+
+	// The edge the coordinator named last, and why the last try to reach it
+	// failed (nil once a session is up). Guarded by edgeMu.
+	edgeMu  sync.Mutex
+	edge    string
+	edgeErr error
 
 	mu      sync.Mutex
 	planned []plannedTunnel
@@ -94,7 +101,7 @@ func (sv *localSupervisor) recordAssignedAddr(id int64, domain string, remotePor
 	}
 }
 
-func newLocalSupervisor(logger *slog.Logger, base localConfig, configPath string, planned []plannedTunnel, server string) *localSupervisor {
+func newLocalSupervisor(logger *slog.Logger, base localConfig, configPath string, planned []plannedTunnel) *localSupervisor {
 	var maxID int64
 	for _, p := range planned {
 		if p.id > maxID {
@@ -105,11 +112,57 @@ func newLocalSupervisor(logger *slog.Logger, base localConfig, configPath string
 		logger:      logger.With("component", "supervisor"),
 		base:        base,
 		configPath:  configPath,
-		server:      server,
 		reconcileCh: make(chan struct{}, 1),
+		retryNow:    make(chan struct{}, 1),
 		planned:     planned,
 		nextSeq:     maxID,
 	}
+}
+
+// edgeAddr is the edge the coordinator named last; "" before it named one.
+func (sv *localSupervisor) edgeAddr() string {
+	sv.edgeMu.Lock()
+	defer sv.edgeMu.Unlock()
+	return sv.edge
+}
+
+// setEdgeAddr records the edge the coordinator named.
+func (sv *localSupervisor) setEdgeAddr(addr string) {
+	sv.edgeMu.Lock()
+	defer sv.edgeMu.Unlock()
+	sv.edge = addr
+}
+
+// setEdgeErr records why the edge could not be reached, or the session with it
+// ended; nil once it is up.
+func (sv *localSupervisor) setEdgeErr(err error) {
+	sv.edgeMu.Lock()
+	defer sv.edgeMu.Unlock()
+	sv.edgeErr = err
+}
+
+// edgeStatus is the edge's part of GET /v1/selfhosted.
+func (sv *localSupervisor) edgeStatus(connected bool) map[string]any {
+	sv.edgeMu.Lock()
+	addr, err := sv.edge, sv.edgeErr
+	sv.edgeMu.Unlock()
+	out := map[string]any{"connected": connected}
+	if addr != "" {
+		out["server"] = addr
+	}
+	switch {
+	case connected:
+		out["state"] = "connected"
+	case err != nil:
+		out["error"] = err.Error()
+		out["state"] = "connecting"
+		if p := edgeProblem(err); p != "" {
+			out["state"] = p
+		}
+	default:
+		out["state"] = "connecting"
+	}
+	return out
 }
 
 // snapshot returns a copy of the current plan for lock-free iteration.
@@ -134,7 +187,7 @@ func (sv *localSupervisor) signalReconcile() {
 // threaded and race-free: the CLOSE_PROXY of a policy-changed tunnel is written
 // to the ordered control stream before its replacement NEW_PROXY, so the edge
 // frees the domain before re-registering it (no CodeProxyDuplicate).
-func (sv *localSupervisor) reconcile(sctx context.Context, logger *slog.Logger, cli *session.Client, reg *localRegistry, state *status.State, server string) {
+func (sv *localSupervisor) reconcile(sctx context.Context, logger *slog.Logger, cli *session.Client, reg *localRegistry, state *status.State) {
 	plan := sv.snapshot()
 	planByID := make(map[int64]plannedTunnel, len(plan))
 	for _, p := range plan {
@@ -162,7 +215,7 @@ func (sv *localSupervisor) reconcile(sctx context.Context, logger *slog.Logger, 
 	}
 
 	// 2) Register new (and just-closed policy-changed) tunnels.
-	edgeHost := hostOnly(server)
+	edgeHost := hostOnly(sv.edgeAddr())
 	for _, p := range plan {
 		if sctx.Err() != nil {
 			return
@@ -399,32 +452,53 @@ func (sv *localSupervisor) persistBestEffort(op string) {
 	}
 }
 
-// persist rewrites the YAML config from the current plan. The top-level fields
-// (server / token / token_env / insecure / ca_file) are preserved verbatim from
-// the loaded config — notably token_env, so a secret kept out of the file stays
-// out. Comments are NOT preserved (yaml.Marshal rebuilds the document); a header
-// flags the file as console-managed.
+// persist rewrites the YAML config from the current plan. The mesh block is
+// preserved from the loaded config. Comments are NOT preserved (yaml.Marshal
+// rebuilds the document); a header flags the file as console-managed.
 func (sv *localSupervisor) persist() error {
 	sv.mu.Lock()
+	out := sv.configLocked()
+	path := sv.configPath
+	sv.mu.Unlock()
+	return writeLocalConfig(path, out)
+}
+
+// configLocked is the whole config as it would be written: the top-level
+// fields and mesh block, and the current tunnels. sv.mu held.
+func (sv *localSupervisor) configLocked() localConfig {
 	out := sv.base
 	out.Tunnels = make([]localTunnelConfig, 0, len(sv.planned))
 	for _, p := range sv.planned {
 		out.Tunnels = append(out.Tunnels, p.yaml)
 	}
-	path := sv.configPath
-	sv.mu.Unlock()
+	return out
+}
 
-	data, err := yaml.Marshal(&out)
+// config is configLocked for callers without the lock.
+func (sv *localSupervisor) config() localConfig {
+	sv.mu.Lock()
+	defer sv.mu.Unlock()
+	return sv.configLocked()
+}
+
+// updateBase changes the top-level fields or the mesh block and writes the
+// file. The tunnels are untouched.
+func (sv *localSupervisor) updateBase(change func(*localConfig)) error {
+	sv.mu.Lock()
+	change(&sv.base)
+	sv.mu.Unlock()
+	return sv.persist()
+}
+
+// marshalLocalConfig renders a config the way the console writes it.
+func marshalLocalConfig(cfg localConfig) ([]byte, error) {
+	data, err := yaml.Marshal(&cfg)
 	if err != nil {
-		return fmt.Errorf("marshal config: %w", err)
+		return nil, fmt.Errorf("marshal config: %w", err)
 	}
 	const header = "# Managed by the calabi daemon console.\n" +
 		"# Edits in the web UI rewrite this file (values preserved, comments not).\n\n"
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append([]byte(header), data...), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return append([]byte(header), data...), nil
 }
 
 // Compile-time assertions that the supervisor satisfies the localweb seams.

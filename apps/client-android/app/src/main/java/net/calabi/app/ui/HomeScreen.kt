@@ -166,6 +166,9 @@ private fun DevicesTab(
         item { Hero(model, onConnect, onDisconnect, onPickExit) }
         item { StoppedPrompt(model) }
         item { ReplacePrompt(model, onReplace) }
+        item { CertChangedPrompt(model) }
+        item { ApprovalPrompt(model) }
+        item { TilePrompt(model) }
         if (model.nodes != null || model.nodesError != null) {
             item {
                 Row(
@@ -179,6 +182,16 @@ private fun DevicesTab(
                             fontSize = 13.sp, color = Palette.muted,
                         )
                     }
+                }
+            }
+        }
+        if (model.nodesNeedConnection) {
+            item {
+                Group(Modifier.padding(horizontal = 16.dp)) {
+                    Text(
+                        stringResource(R.string.devices_connect_to_see), style = Styles.hint.copy(fontSize = 14.sp),
+                        textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(24.dp),
+                    )
                 }
             }
         }
@@ -205,6 +218,8 @@ private fun DevicesTab(
 private fun Header(model: AppModel, onPickOrg: () -> Unit, onAccount: () -> Unit) {
     val org = model.activeOrg
     val orgLabel = when {
+        // The self-hosted server stands where the organization would.
+        model.selfHosted -> model.server.substringBeforeLast(':')
         org == null -> ""
         org.personal -> stringResource(R.string.settings_org_personal)
         else -> org.name
@@ -219,13 +234,21 @@ private fun Header(model: AppModel, onPickOrg: () -> Unit, onAccount: () -> Unit
                     .clip(shape)
                     .background(Palette.surface)
                     .border(1.dp, Palette.line, shape)
-                    .clickable(enabled = canSwitch, role = Role.Button, onClick = onPickOrg)
+                    // The server has no switcher; it opens the settings that say where this phone is.
+                    .clickable(
+                        enabled = canSwitch || model.selfHosted, role = Role.Button,
+                        onClick = if (model.selfHosted) onAccount else onPickOrg,
+                    )
                     .padding(start = 6.dp, end = if (canSwitch) 12.dp else 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Box(Modifier.size(32.dp).background(Palette.ink, CircleShape), contentAlignment = Alignment.Center) {
-                    Text(orgLabel.take(1).uppercase(), color = Palette.ground, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    if (model.selfHosted) {
+                        Glyph(R.drawable.ic_server, Palette.ground, 16.dp)
+                    } else {
+                        Text(orgLabel.take(1).uppercase(), color = Palette.ground, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
                 Text(
                     orgLabel, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Palette.ink,
@@ -235,17 +258,20 @@ private fun Header(model: AppModel, onPickOrg: () -> Unit, onAccount: () -> Unit
             }
         }
         Spacer(Modifier.weight(1f))
-        val account = stringResource(R.string.account)
-        Box(
-            Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(Palette.avatar)
-                .clickable(role = Role.Button, onClick = onAccount)
-                .semantics { contentDescription = account },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(model.email.take(1).uppercase(), fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Palette.ink)
+        // No account on a self-hosted server: the chip above is all there is to say.
+        if (!model.selfHosted) {
+            val account = stringResource(R.string.account)
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(Palette.avatar)
+                    .clickable(role = Role.Button, onClick = onAccount)
+                    .semantics { contentDescription = account },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(model.email.take(1).uppercase(), fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Palette.ink)
+            }
         }
     }
 }
@@ -260,19 +286,35 @@ private fun Hero(model: AppModel, onConnect: () -> Unit, onDisconnect: () -> Uni
     val phase = when {
         !model.connected -> Phase.Off
         c?.state == "connected" -> Phase.On
-        c?.state == "not_enrolled" || c?.state == "signed_out" -> Phase.Problem
+        c?.state in setOf("not_enrolled", "signed_out", "needs_invite", "disabled", "cert_changed") -> Phase.Problem
         else -> Phase.Busy
     }
     val title = when (phase) {
         Phase.Off -> stringResource(R.string.state_stopped)
         Phase.On -> stringResource(R.string.state_connected)
-        Phase.Problem -> stringResource(if (c?.state == "signed_out") R.string.state_signed_out_short else R.string.state_not_enrolled_short)
+        Phase.Problem -> stringResource(
+            when (c?.state) {
+                "signed_out" -> R.string.state_signed_out_short
+                "needs_invite" -> R.string.state_needs_invite_short
+                "disabled" -> R.string.state_disabled_short
+                "cert_changed" -> R.string.state_cert_changed_short
+                else -> R.string.state_not_enrolled_short
+            },
+        )
         Phase.Busy -> stringResource(if (c?.state == "retrying") R.string.state_retrying else R.string.state_connecting)
     }
     val subtitle = when (phase) {
         Phase.Off -> stringResource(R.string.hero_tap_to_connect)
         Phase.On -> "${c?.name.orEmpty()} · ${c?.overlay.orEmpty()}"
-        Phase.Problem -> stringResource(if (c?.state == "signed_out") R.string.state_signed_out else R.string.state_not_enrolled)
+        Phase.Problem -> stringResource(
+            when (c?.state) {
+                "signed_out" -> R.string.state_signed_out
+                "needs_invite" -> R.string.state_needs_invite
+                "disabled" -> R.string.state_disabled
+                "cert_changed" -> R.string.state_cert_changed
+                else -> R.string.state_not_enrolled
+            },
+        )
         Phase.Busy -> c?.error.orEmpty()
     }
     val action = stringResource(if (phase == Phase.Off) R.string.action_connect else R.string.action_disconnect)
@@ -488,7 +530,13 @@ fun ExitChoices(model: AppModel, onPicked: () -> Unit = {}) {
         }
     }
     if (candidates.isEmpty()) {
-        Text(stringResource(R.string.settings_exit_empty), style = Styles.hint, modifier = Modifier.padding(horizontal = 8.dp))
+        val empty = when {
+            // A self-hosted server's devices come from the live session.
+            model.selfHosted && model.nodesNeedConnection -> R.string.settings_exit_connect
+            model.selfHosted -> R.string.settings_exit_empty_server
+            else -> R.string.settings_exit_empty
+        }
+        Text(stringResource(empty), style = Styles.hint, modifier = Modifier.padding(horizontal = 8.dp))
     }
 }
 
@@ -535,4 +583,16 @@ private fun osName(os: String): String = when (os) {
     "android" -> "Android"
     "ios" -> "iOS"
     else -> os
+}
+
+/** Joined, and waiting for the server's administrator to approve this phone. */
+@Composable
+private fun ApprovalPrompt(model: AppModel) {
+    if (!model.selfHosted || !model.awaitingApproval) return
+    Group(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(stringResource(R.string.approval_title), style = Styles.rowTitle)
+            Text(stringResource(R.string.approval_body), style = Styles.hint.copy(fontSize = 13.sp))
+        }
+    }
 }

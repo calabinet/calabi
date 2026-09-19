@@ -37,6 +37,9 @@ data class Connection(
     val selfOverlay: String,
     val exitNode: String,
     val peers: JSONArray,
+    /** State cert_changed: what the self-hosted server presents, and what this phone trusts. */
+    val certPresented: String = "",
+    val certPinned: String = "",
 )
 
 data class Org(val id: Long, val name: String, val personal: Boolean)
@@ -50,6 +53,9 @@ data class UsageOverview(
     val month: MonthUsage?,
     val days: List<DayUsage>,
     val devices: SeatUsage?,
+    /** A self-hosted server: why it has no traffic figures ("no_database"), and whether relay traffic is left out. */
+    val unavailable: String = "",
+    val relayNotRecorded: Boolean = false,
 )
 
 data class MonthUsage(
@@ -81,6 +87,14 @@ class AppModel {
         private set
     var email by mutableStateOf("")
         private set
+    /** "platform" or "self_hosted"; the self-hosted server's address. */
+    var mode by mutableStateOf("")
+        private set
+    var server by mutableStateOf("")
+        private set
+    /** Self-hosted and not connected: the device list comes from the live session. */
+    var nodesNeedConnection by mutableStateOf(false)
+        private set
     var activeOrgId by mutableLongStateOf(0L)
         private set
     var orgs by mutableStateOf(emptyList<Org>())
@@ -107,6 +121,20 @@ class AppModel {
     var stoppedInBackground by mutableStateOf(false)
         private set
 
+    val selfHosted: Boolean get() = mode == "self_hosted"
+
+    /** Joined, but the server's administrator has not approved this phone yet. */
+    val awaitingApproval: Boolean get() {
+        val self = connection?.selfOverlay.orEmpty().ifBlank { connection?.overlay.orEmpty() }
+        val list = nodes ?: return false
+        if (self.isBlank()) return false
+        for (i in 0 until list.length()) {
+            val n = list.getJSONObject(i)
+            if (n.optString("overlay") == self && n.has("approved")) return !n.optBoolean("approved")
+        }
+        return false
+    }
+
     /** Owners, admins and auditors see the org's tunnels; everyone else their own. */
     val seesOnlyOwnTunnels: Boolean get() = role.isNotBlank() && role !in setOf("owner", "admin", "auditor")
 
@@ -121,22 +149,31 @@ class AppModel {
             state = m.optString("state"), error = m.optString("error"), name = m.optString("name"),
             overlay = m.optString("overlay"), selfOverlay = m.optString("self_overlay"), exitNode = m.optString("exit_node"),
             peers = m.optJSONArray("peers") ?: JSONArray(),
+            certPresented = m.optString("cert_presented"), certPinned = m.optString("cert_pinned"),
         )
     }
 
     suspend fun refreshNodes() {
         val r = CoreClient.call("GET", "/v1/mesh/nodes")
-        if (r.ok) {
-            nodes = r.json().optJSONArray("items") ?: JSONArray()
-            nodesError = null
-        } else {
-            nodesError = r.error("HTTP ${r.status}")
+        nodesNeedConnection = r.json().optString("code") == "not_connected"
+        when {
+            r.ok -> {
+                nodes = r.json().optJSONArray("items") ?: JSONArray()
+                nodesError = null
+            }
+            nodesNeedConnection -> {
+                nodes = null
+                nodesError = null
+            }
+            else -> nodesError = r.error("HTTP ${r.status}")
         }
     }
 
     suspend fun refreshAccount() {
         val st = CoreClient.call("GET", "/v1/state").json()
         email = st.optString("email")
+        mode = st.optString("mode")
+        server = st.optString("server")
         activeOrgId = st.optLong("active_org_id")
         val s = CoreClient.call("GET", "/v1/settings").json()
         deviceName = s.optString("device_name")
@@ -217,7 +254,7 @@ class AppModel {
         val devices = o.optJSONObject("devices")?.let {
             SeatUsage(it.optLong("used"), it.optLong("disabled"), it.optLong("limit"), it.optBoolean("own"))
         }
-        usage = UsageOverview(o.optString("plan"), month, days, devices)
+        usage = UsageOverview(o.optString("plan"), month, days, devices, o.optString("unavailable"), o.optBoolean("relay_not_recorded"))
         usageError = null
     }
 

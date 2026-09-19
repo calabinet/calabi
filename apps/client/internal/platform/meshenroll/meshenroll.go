@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/calabi/calabi/apps/client/internal/hostnet"
-	"github.com/calabi/calabi/apps/client/internal/transport"
 )
 
 // Enrollment is the control plane's answer to GET /v1/mesh/enrollment. When
@@ -110,46 +109,27 @@ var coordKeepalive = grpc.WithKeepaliveParams(keepalive.ClientParameters{
 
 // DialCoord opens the gRPC connection to the mesh coordinator.
 //
-// Coord's public gRPC is the one internal control-plane surface a client dials
-// directly over the public internet, and the client sends its auth key over it,
-// so it is dialed over TLS — verified against the embedded platform edge CA (the
-// SAME root the edge :7443 control transport trusts). coord presents an
-// edge-CA-signed server cert, so no extra trust root has to be shipped. The TLS
-// ServerName is the host in addr, which must match the cert SAN (e.g.
-// coord.calabi.net).
-//
-// plaintext dials without TLS, for dev / smoke stacks whose coord serves none.
-// The desktop daemon sets it from CALABI_INSECURE=1, the same escape hatch the
-// edge control transport honors.
+// tlsCfg says how the coordinator's certificate is checked, and nil means no TLS
+// at all. The caller builds it from the connection's trust (internal/trust): the
+// compiled-in CA for calabi.net, the connection's own system roots / CA / pin
+// for a self-hosted coordinator.
+// It matters because the client sends its auth key over this connection.
 //
 // When a hostnet socket hook is installed (a phone: the connection carries the
 // tunnel's control plane and must stay out of the tunnel), the connection is
 // opened through hostnet. Otherwise gRPC dials on its own, as it always has —
 // including honoring an HTTPS_PROXY, which a custom dialer would switch off.
-func DialCoord(addr string, plaintext bool) (*grpc.ClientConn, error) {
+func DialCoord(addr string, tlsCfg *tls.Config) (*grpc.ClientConn, error) {
 	opts := []grpc.DialOption{coordKeepalive}
 	if hostnet.HasSocketHook() {
 		opts = append(opts, grpc.WithContextDialer(func(ctx context.Context, target string) (net.Conn, error) {
 			return hostnet.Dialer().DialContext(ctx, "tcp", target)
 		}))
 	}
-	if plaintext {
+	if tlsCfg == nil {
 		return grpc.NewClient(addr, append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))...)
 	}
-	pool, err := transport.EdgeRootCAs()
-	if err != nil {
-		return nil, fmt.Errorf("coord TLS trust root: %w (set CALABI_INSECURE=1 for a plaintext dev coordinator)", err)
-	}
-	host, _, splitErr := net.SplitHostPort(addr)
-	if splitErr != nil {
-		host = addr // addr may already be a bare host
-	}
-	creds := credentials.NewTLS(&tls.Config{
-		RootCAs:    pool,
-		ServerName: host,
-		MinVersion: tls.VersionTLS12,
-	})
-	return grpc.NewClient(addr, append(opts, grpc.WithTransportCredentials(creds))...)
+	return grpc.NewClient(addr, append(opts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))...)
 }
 
 const (

@@ -92,6 +92,8 @@ func (s *Store) Upsert(ctx context.Context, n *core.Node) (*core.Node, error) {
 			SetTagsPinned(n.TagsPinned).
 			SetApproved(n.Approved).
 			SetTagsJSON(tags).
+			SetEnrolledBy(n.EnrolledBy).
+			SetSignedOut(n.SignedOut).
 			Save(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("coord store: create node: %w", err)
@@ -131,6 +133,11 @@ func (s *Store) Upsert(ctx context.Context, n *core.Node) (*core.Node, error) {
 		// the UPDATE drops can never actually change.
 		SetNillableBlockIncoming(n.BlockIncoming).
 		SetTagsJSON(tags).
+		// Both decided by core.Register: an enrollment with an auth key sets who
+		// the node enrolled as and clears a sign-out; a re-registration by proof
+		// alone carries the stored values through.
+		SetEnrolledBy(n.EnrolledBy).
+		SetSignedOut(n.SignedOut).
 		Save(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -186,6 +193,15 @@ func (s *Store) ListMeshnet(ctx context.Context, t core.MeshnetID) ([]*core.Node
 		out = append(out, n)
 	}
 	return out, nil
+}
+
+// SetSignedOut records a device's sign-out (core.Node.SignedOut).
+func (s *Store) SetSignedOut(ctx context.Context, id int64, signedOut bool) error {
+	err := s.client.MeshNode.UpdateOneID(int(id)).SetSignedOut(signedOut).Exec(ctx)
+	if ent.IsNotFound(err) {
+		return core.ErrNodeNotFound
+	}
+	return err
 }
 
 // SetDisabled flips a node's admin kill switch (MESH.8b).
@@ -607,6 +623,8 @@ func toNode(m *ent.MeshNode) (*core.Node, error) {
 	n.BlockIncoming = m.BlockIncoming
 	n.TagsPinned = m.TagsPinned
 	n.Approved = m.Approved
+	n.EnrolledBy = m.EnrolledBy
+	n.SignedOut = m.SignedOut
 	if n.Tags, err = unmarshalStrings(m.TagsJSON); err != nil {
 		return nil, fmt.Errorf("coord store: tags: %w", err)
 	}

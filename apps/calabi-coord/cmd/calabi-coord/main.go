@@ -55,6 +55,22 @@ func main() {
 		fmt.Println(version)
 		return
 	}
+	switch args := flag.Args(); {
+	case len(args) == 0:
+	case args[0] == "fingerprint":
+		os.Exit(runFingerprint())
+	case args[0] == "pubkey":
+		os.Exit(runPubkey())
+	case args[0] == "authkey":
+		os.Exit(runAuthKey(args[1:]))
+	case args[0] == "invite":
+		os.Exit(runInvite(args[1:]))
+	case args[0] == "device":
+		os.Exit(runDevice(args[1:]))
+	default:
+		fmt.Fprintf(os.Stderr, "unknown command %q (commands: fingerprint, pubkey, authkey, invite, device; flags: -version)\n", args[0])
+		os.Exit(2)
+	}
 
 	logger := svcboot.NewLogger()
 
@@ -85,11 +101,20 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info("calabi-coord core wired")
+	// Listener security, resolved once: the gRPC server serves it, and the
+	// admin API reports it (invite links carry its fingerprint).
+	listenerTLS, err := resolveCoordTLS()
+	if err != nil {
+		logger.Error("coord: refusing to start", "err", err)
+		os.Exit(1)
+	}
+	coord.ListenerTLS = listenerTLS.listener()
 
 	notif := core.NewNotifier()
 	// Hot-reload the ACL policy file and re-push netmaps on change (no-op unless
 	// CALABI_COORD_POLICY_FILE is set). Started here so it has the notifier.
 	startPolicyWatcher(logger, notif)
+	startAuthKeysWatcher(logger)
 	srv := rpc.New(coord, auth, notif, logger)
 
 	if err := svcboot.Run(svcboot.Options{
@@ -104,11 +129,12 @@ func main() {
 		DefaultGRPCAddr:  defaultGRPC,
 		DefaultAdminAddr: defaultAdmin,
 		// Coord's gRPC is the one control-plane surface a client dials over the
-		// public internet, so it can serve TLS itself (edge-CA server cert) rather
-		// than needing a front proxy. Empty/plaintext when unconfigured (dev).
+		// public internet, so it serves TLS itself rather than needing a front
+		// proxy: the configured certificate, else a self-signed one it keeps
+		// (tls.go). Plaintext only with CALABI_COORD_TLS=off.
 		// The keepalive options are what let a daemon detect a control connection
 		// that died without a RST (see keepalive.go — ship this before the client).
-		GRPCServerOptions: append(coordServerCreds(logger), coordKeepaliveOptions()...),
+		GRPCServerOptions: append(coordServerCreds(logger, listenerTLS), coordKeepaliveOptions()...),
 		Register: func(s *grpc.Server) error {
 			meshpb.RegisterCoordinatorServer(s, srv)
 			return nil
@@ -116,7 +142,7 @@ func main() {
 		// Node-admin HTTP surface (MESH.8b): list / disable / enable nodes. Served
 		// only when CALABI_COORD_MESH_ADMIN_ADDR is set, on a PRIVATE address (the
 		// bff-admin gateway is its authenticated front door).
-		Extra: withConnRecordPurge(coord, logger, withEdgeDERPWatcher(notif, meshAdminServer(meshAdmin, coord, notif, logger))),
+		Extra: withConnRecordPurge(coord, logger, withEdgeDirectory(edgeDirectoryOf(coord), withEdgeDERPWatcher(notif, meshAdminServer(meshAdmin, coord, notif, logger)))),
 	}); err != nil {
 		os.Exit(1)
 	}
@@ -149,6 +175,8 @@ func withConnRecordPurge(coord *core.Coordinator, logger *slog.Logger, next func
 		if coord.ConnRecords != nil {
 			go runConnRecordPurge(ctx, logger, coord)
 		}
+		// Tunnel traffic (self-hosted, with a database) has its own sweep.
+		go runTunnelUsagePurge(ctx, logger, coord)
 		return next(ctx)
 	}
 }

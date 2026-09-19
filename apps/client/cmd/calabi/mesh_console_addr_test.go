@@ -1,12 +1,17 @@
 package main
 
 import (
+	"context"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabi/calabi/apps/client/internal/status"
 )
 
 // `calabi mesh status` used to assume 127.0.0.1:7400 and report a running
@@ -84,6 +89,59 @@ func TestConsoleCandidatesIgnoreAnUnusableFile(t *testing.T) {
 			}
 		}
 	}
+}
+
+// console.url says where this client's daemon is. A one-shot `calabi http`
+// started beside it serves its own page on the next port, and used to write that
+// page's address there — `calabi mesh up` then got a 404 from the one-shot, and
+// `calabi join` would have posted the join to it. The daemon's console still
+// writes it.
+func TestOnlyTheDaemonConsoleRecordsItsAddress(t *testing.T) {
+	dir := t.TempDir()
+	creds.SetDataDir(dir)
+	t.Cleanup(func() { creds.SetDataDir("") })
+	file := filepath.Join(dir, consoleURLFile)
+
+	addr := freeLoopbackAddr(t)
+	t.Setenv("CALABI_STATUS_ADDR", addr)
+	startStatusPage(quietTestLogger(), status.New("test", ""))
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		resp, err := http.Get("http://" + addr + "/healthz")
+		if err == nil {
+			resp.Body.Close()
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the one-shot page never came up: %v", err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if b, err := os.ReadFile(file); err == nil {
+		t.Fatalf("a one-shot page recorded itself as the console: %q", strings.TrimSpace(string(b)))
+	}
+
+	daemon := freeLoopbackAddr(t)
+	t.Setenv("CALABI_STATUS_ADDR", daemon)
+	ctx, cancel := context.WithCancel(context.Background())
+	url, done := startDaemonConsole(ctx, quietTestLogger(), status.New("test", ""), func(*http.ServeMux) {})
+	t.Cleanup(func() { cancel(); <-done })
+	if got := readConsoleURLFile(file); got == "" || got != url {
+		t.Fatalf("console.url = %q, want the daemon's %q", got, url)
+	}
+}
+
+// freeLoopbackAddr is a loopback address nothing is listening on.
+func freeLoopbackAddr(t *testing.T) string {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := l.Addr().String()
+	_ = l.Close()
+	return addr
 }
 
 func containsStr(list []string, want string) bool {

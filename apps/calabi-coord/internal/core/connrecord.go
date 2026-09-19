@@ -53,6 +53,12 @@ type ConnRecord struct {
 	BytesTx   int64
 	BytesRx   int64
 	Path      string
+	// RelayBytesTx/Rx are the part of BytesTx/Rx that went through a relay.
+	// Path is only the hour's last reported path, so a pair that switched from
+	// relay to direct mid-hour would otherwise count every byte of it as one or
+	// the other. What a self-hosted server's relays carried is summed from these.
+	RelayBytesTx int64
+	RelayBytesRx int64
 }
 
 // ConnRecordQuery narrows one listing of the trail. Zero values widen: an empty
@@ -93,6 +99,9 @@ type ConnRecordStore interface {
 	// org turns the trail off: "stop collecting" without "delete what you have"
 	// would leave the claim false for a whole retention window.
 	PurgeConnRecordsOf(ctx context.Context, t MeshnetID) (int, error)
+	// RelayBytesByHour is a meshnet's relayed traffic per UTC hour in [from,
+	// to), as its senders reported it (RelayBytesTx), so each byte counts once.
+	RelayBytesByHour(ctx context.Context, t MeshnetID, from, to time.Time) (map[time.Time]int64, error)
 }
 
 // maxConnSamplesPerReport bounds one call. A node with a few hundred peers over
@@ -181,8 +190,13 @@ func (c *Coordinator) RecordConnections(ctx context.Context, srcNodeID int64, sa
 		}
 		r.BytesTx += s.BytesTx
 		r.BytesRx += s.BytesRx
-		if p := normalizeConnPath(s.Path); p != "" {
+		p := normalizeConnPath(s.Path)
+		if p != "" {
 			r.Path = p
+		}
+		if p == "relay" {
+			r.RelayBytesTx += s.BytesTx
+			r.RelayBytesRx += s.BytesRx
 		}
 	}
 	if len(folded) == 0 {

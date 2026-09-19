@@ -10,6 +10,243 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## 1.13.0 — 2026-09-19
+
+**Your own server, as one thing.** `calabi-coord` and `calabi-edge` together are
+a self-hosted Calabi server, and the coordinator is every device's identity. A
+device joins it once — an invite scanned on the phone, pasted into the console,
+or `calabi join` in a terminal — and from then on the coordinator tells it where
+the edge is and signs the grant the edge lets it in with. The same device has
+tunnels and the mesh, and the mesh can be switched off on it without losing the
+tunnels. `deploy/server` runs the coordinator and the edge from one compose file
+and one `.env`.
+
+**What is in this repository and what is not.** **Your server**, **Tunnels**,
+**Mesh**, **Local console** and **Mobile** below are changes in what this
+release ships, built from this tree. The last section, **On calabi.net**, is the
+hosted control plane: its code is not in this repository, and a self-hosted
+deployment does not get it.
+
+**Things that behave differently for setups that already exist.**
+
+- **A self-hosted edge takes no tokens any more.** It needs `mode: standalone`
+  and the coordinator's public key (`coord_pubkey`, or `coord_pubkey_file` where
+  the coordinator writes it; `calabi-coord pubkey` prints it), and accepts
+  devices by the coordinator's grants, for tunnels and relay alike. A config
+  that still lists `accepted_tokens` is refused at start and says why; an empty
+  list is ignored, so calabi.net's own edges, whose files carry
+  `accepted_tokens: []`, start as before.
+- **`tunnels.yaml` no longer names the edge.** `server`, `token`, `token_env`,
+  `insecure`, `ca_file`, `trust` and `pins` at the top level are refused in a
+  file you wrote, and dropped with a warning from the console's own. Join the
+  coordinator — `calabi join`, or a `mesh:` block with a key — and the edge
+  comes from it.
+- **`calabi http`, `tcp`, `udp` and `sni` in standalone mode** use the device
+  this client joined as, and no longer read `CALABI_SERVER`, `CALABI_TOKEN` or
+  `CALABI_INSECURE`. A client that has not joined says so.
+- **A standalone relay always checks grants**, and needs the coordinator's key.
+- **A self-hosted coordinator serves TLS.** One without certificate files used
+  to serve plaintext; it now makes a self-signed certificate on its first start
+  and keeps it in `./coord-tls` (`CALABI_COORD_TLS_DIR`). Pin its fingerprint on
+  the devices (`calabi-coord fingerprint` prints it; invites carry it), or set
+  `CALABI_COORD_TLS=off` to stay on plaintext.
+- **Removing a key from the coordinator's key file no longer takes its devices
+  off.** Devices come back by proving they hold their device key. Disable or
+  delete a device to remove it (`calabi-coord device`).
+- **A coordinator with a database has no built-in key.** `dev-meshnet-1-key`
+  works only on a coordinator with neither a key file nor a database.
+- **A connection to your coordinator is never checked against the CA compiled
+  into the client**, which is calabi.net's. `ca_file:` is now the only CA
+  trusted for it, not one more.
+
+### Your server
+
+- **Added** — **`deploy/server`**: the coordinator and the edge on one machine,
+  from one `docker-compose.yml` and one `.env` (the public address, an admin
+  token, the tunnel domain). The edge's config is written from the `.env`, the
+  coordinator hands the edge its public key over a shared volume and reads the
+  edge's certificate itself, and both run with `CALABI_ENV=production`. It runs
+  with Docker Compose or `podman compose`.
+- **Added** — **The coordinator is released.** Archives for the same seven
+  platforms as the client and the edge, `SHA256SUMS.coord`, entries in the build
+  manifest, and a docker image, `calabinet/calabi-coord` (amd64, arm64), which
+  keeps its certificate, its grant key and — by default — a SQLite database in
+  the `/data` volume.
+- **Added** — **Grants.** A coordinator without a platform behind it signs a
+  grant for each device with a key it creates on first start
+  (`./coord-grant.key`, or `CALABI_COORD_RELAY_GRANT_KEY_FILE`).
+  `CALABI_COORD_GRANT_PUBKEY_FILE` writes the public half for an edge to read;
+  `calabi-coord pubkey` prints it. A grant lasts an hour and devices renew it; a
+  disabled or deleted device keeps its tunnels at most until its grant runs out.
+- **Added** — **The coordinator names the edge.** `CALABI_COORD_EDGE_ADDR` is
+  where devices dial it. Its fingerprint comes from `CALABI_COORD_EDGE_PIN`, or
+  the coordinator reads the certificate the edge presents
+  (`CALABI_COORD_EDGE_PROBE_ADDR` when it reaches the edge another way) — every
+  few seconds until it has one, then every minute — so an edge that replaces its
+  certificate is followed by every device without anyone confirming it.
+  `CALABI_COORD_EDGE_TRUST=system` is for an edge with a public certificate.
+  A device waiting for approval gets no edge.
+- **Added** — **Invites.** `calabi-coord invite` prints a `calabi://join` link, a
+  QR code, and the same as a `calabi join "…"` command line. By default an
+  invite admits one device, for 24 hours; `--uses`, `--reusable`, `--expires`,
+  `--no-expiry` and `--tag` change that. `calabi-coord authkey create`, `list`
+  and `revoke` manage keys without the link. The coordinator stores only a hash
+  of each key.
+- **Added** — **`calabi-coord device list | approve | disable | enable |
+  delete`**, so managing devices needs no hand-written calls to the admin API.
+- **Added** — **The edge keeps its self-signed control certificate** in
+  `state.dir` (`control.crt`, `control.key`) when it has no certificate files;
+  `calabi-edge -fingerprint` prints the fingerprint. Without a `state.dir` it
+  still makes a new certificate at every start, and now warns.
+- **Fixed** — **A self-hosted relay crashed a minute after devices used it.** A
+  relay with a label and no control plane set up usage reporting with nothing to
+  report to, and the first report crashed the process. Relays that report to
+  calabi.net (BYOI) were not affected.
+- **Fixed** — **A coordinator on SQLite could fail a write with "database is
+  locked"** when two writes met; it now waits its turn.
+- **Fixed** — **An edge hot-reload could say "applied" and change nothing.**
+  Only a fixed list of fields was compared, so a change to any field added
+  since — `mode`, `role`, every `relay.*` setting — was logged as applied and
+  took effect only at the next restart. A reload that changes anything but
+  `base_domain` is now refused, naming the fields, and goes through the same
+  steps as start-up.
+- **Changed** — (coordinator) Connection records keep the relayed part of each
+  hour's bytes; the new columns are added on start. The key file is re-read when
+  it changes, every two seconds.
+
+### Tunnels
+
+- **Added** — **`calabi join <invite>`**, the terminal's way onto your server:
+  it hands the join to the running daemon, or saves it and starts the daemon.
+  `--name`, `--pin`, `--replace`, `--no-start-daemon`.
+- **Changed** — **A device signs in to your edge with its coordinator's grant**
+  and the proof of its own key, answering a challenge the edge makes for each
+  connection. It dials the edge pinned to the fingerprint the coordinator gave,
+  and renews the grant on a live session before it runs out.
+- **Changed** — `calabi daemon` in standalone mode without `--config` runs the
+  console's own `tunnels.yaml` from its data directory instead of exiting with
+  "missing --config".
+- **Fixed** — **`calabi mesh` commands failed while a `calabi http` ran beside
+  the daemon.** A `calabi http`, `tcp`, `udp` or `sni` started while the daemon
+  ran recorded its own status page as the daemon's console, and `calabi mesh
+  up`, `down` and `status` then went to that page. Only the daemon records its
+  console now.
+- **Fixed** — `calabi daemon start` looked for the service's console only beside
+  the `calabi` binary. It now also looks in the system data directory, where the
+  desktop app's service keeps it, and otherwise says that `calabi daemon status`
+  will show the address.
+- **Fixed** — The status page said the requested port was busy when
+  `CALABI_STATUS_ADDR` asked for any port (`…:0`).
+
+### Mesh
+
+- **Added** — **The mesh is a switch, not the sign-in.** Off — in the console,
+  or `calabi mesh down` — the device leaves the mesh and keeps its tunnels, and
+  stays off across restarts; `calabi mesh up` with no arguments puts it back. A
+  daemon reports its tunnels to the coordinator either way.
+- **Added** — **A key is only for joining.** A device that has joined comes back
+  by proving it holds its device key. A daemon remembers which device it is
+  (`mesh-reauth.json` in its data directory), so `auth_key:` can come out of its
+  `mesh:` block. A key's expiry and use limit apply to new devices.
+- **Added** — **Leaving.** A device that leaves from the phone or the console is
+  marked as signed out and needs a new invite to come back. Its record, address
+  and seat stay.
+- **Added** — **Checking the coordinator's certificate**: `--trust` (`system`,
+  `pin`, `ca`, `plaintext`, or `platform` for calabi.net), `--pin` and
+  `--ca-file` on `calabi mesh up`, and `trust:`, `pins:`, `ca_file:` in the
+  `mesh:` block.
+- **Added** — **The relay address is optional.** Without `--relay` a device takes
+  its relays from the coordinator's directory.
+- **Added** — **Tunnels and traffic on your coordinator.** A daemon that has
+  joined reports its tunnels — name, type, addresses, whether each is up, bytes —
+  every five minutes and whenever the list changes. The coordinator keeps the
+  list and, with a database, tunnel traffic by the hour for 92 days, and gives
+  both, with this month's relayed traffic, to the phone and the console.
+  calabi.net's coordinator refuses these calls.
+- **Fixed** — **A disabled device kept its session.** Every call on a disabled
+  device's session is now refused.
+- **Fixed** — **Desktop exit devices: relays dialed later went into the mesh.**
+  Every relay in the coordinator's directory now keeps the machine's own route,
+  including one that appears later.
+- **Fixed** — **A device the relay turned away dialed it again every 15
+  seconds.** A device deleted on the coordinator, or out of touch with it for
+  more than an hour, holds a relay grant that has expired. The relay refused it,
+  and the device dialed again on every keepalive sweep for as long as it ran —
+  a connection and a warning in the relay's log every 15 seconds. After a
+  refusal it now waits longer each time, from 15 seconds up to 5 minutes, and
+  keeps asking at that pace. Getting back in touch with the coordinator, waking
+  from sleep and a network change each bring an immediate retry. A relay that
+  restarts or refuses the connection outright is still retried every 15 seconds.
+- **Fixed** — **Right after a device started, reaching another device took about
+  five seconds.** The first WireGuard handshake went out before the relay had
+  let the device in — before the relay connection was up, or after it was up
+  but before the relay had checked the device's grant — and was lost, and
+  WireGuard waits five seconds before trying again. Packets now wait, for up to
+  three seconds, until the relay admits the device or a direct path is found,
+  and go out then. The daemon's log no longer shows `Failed to send handshake
+  initiation: use of closed network connection` at start.
+- **Changed** — WireGuard's own messages are now part of the daemon's log. They
+  used to go to standard output, which a service's log file did not include.
+
+### Local console
+
+- **Added** — **Connect to a self-hosted server**, on the sign-in page and on a
+  standalone daemon that has nothing to connect to yet: an invite link, or the
+  coordinator's address and a key. The coordinator's certificate is settled
+  first — the invite's fingerprint, the system's trusted roots, or a fingerprint
+  you compare — and the key is spent last, so a join that stops halfway spends
+  nothing. The daemon then starts again in place, on the same port. Signed in to
+  calabi.net, it offers to sign out first.
+- **Added** — In self-hosted mode: the server in the account menu; a
+  *Self-hosted server* card in Settings with the coordinator, the edge this
+  device's tunnels run on, and the mesh switch; *Tunnels on this network* and
+  *Network traffic this month*; banners when the machine is not connected yet,
+  when the coordinator's certificate changed (both fingerprints, and a button
+  that trusts only the one presented now), when the device waits for approval,
+  needs a new invite, or is disabled. *Disconnect and forget this server* tells
+  the coordinator, deletes the console's `tunnels.yaml` — tunnels included,
+  counted in the confirmation — and goes back to the calabi.net sign-in page.
+- **Added** — A standalone daemon's console saves what the device advertises,
+  its routing settings and its declared services into the config.
+- **Fixed** — **Not signed in and unable to reach calabi.net, the console showed
+  "cannot reach the server" instead of the sign-in page.** A daemon holding no
+  credentials now answers "not signed in" itself.
+
+### Mobile
+
+- **Added** — **Join your own server**: *Connect to a self-hosted server* on the
+  sign-in page. Scan an invite's QR code, open its `calabi://join` link (a phone
+  signed in to calabi.net asks first), or type the address and key. A
+  certificate that is neither in the invite nor trusted by the system is shown
+  for you to compare with `calabi-coord fingerprint`.
+- **Added** — Joined to your own server, the phone shows its devices, the
+  tunnels of the desktop daemons, and this month's traffic, also while it is not
+  connected. Settings shows the server where the organization was; *Leave this
+  server* leaves it. When the server presents another certificate, the phone
+  shows both fingerprints and keeps trying with the old one until you trust the
+  new one.
+- **Added** — **Quick Settings tile.** Settings has a *Quick Settings tile* row:
+  on Android 13 and later one system dialog adds it; before that the app shows
+  the steps, with separate ones for Huawei and Honor.
+- **Changed** — The *Devices* tab is now *Mesh*, beside *Tunnels*.
+
+### On calabi.net
+
+The hosted control plane. **None of this is in this repository**, and a
+self-hosted deployment does not get it.
+
+- **Changed** — **Devices come back by proof.** A device reconnecting to the
+  mesh proves it holds its device key instead of presenting its sign-in again.
+  At that moment the control plane checks that the account is still active and
+  a member of the organization, or that the API key is not revoked or expired,
+  and refuses it otherwise. Needs a client from this release; older clients
+  present their sign-in on every reconnect, as before.
+- **Fixed** — In Mesh → Services → Add service, the local address can only be
+  this machine (`127.0.0.1` or `localhost`), as the coordinator already
+  required. The form said to enter another machine on the LAN, then showed the
+  coordinator's error; it now says what is allowed and checks it before sending.
+  A device reaches other machines on its LAN through a subnet route.
+
 ## 1.12.0 — 2026-09-18
 
 **The first Android app**, and staged rollouts for the automatic update. Client

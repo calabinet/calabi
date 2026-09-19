@@ -45,23 +45,32 @@ fun UsageSection(model: AppModel) {
         u == null -> Group { Loading() }
         else -> {
             Group {
-                u.month?.let { MonthBlock(it, u.plan) }
+                u.month?.let { MonthBlock(it, u.plan, u.relayNotRecorded) }
+                if (u.month == null && u.unavailable.isNotBlank()) {
+                    Text(
+                        stringResource(R.string.usage_unavailable_no_database), style = Styles.hint.copy(fontSize = 14.sp),
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
                 if (u.days.isNotEmpty()) {
                     if (u.month != null) RowDivider()
                     WeekChart(u.days)
                 }
                 u.devices?.let {
-                    if (u.month != null || u.days.isNotEmpty()) RowDivider()
+                    if (u.month != null || u.days.isNotEmpty() || u.unavailable.isNotBlank()) RowDivider()
                     DevicesRow(it)
                 }
             }
-            if (u.month != null) Text(stringResource(R.string.usage_month_utc), style = Styles.hint, modifier = Modifier.padding(horizontal = 8.dp))
+            // A self-hosted server's month is this phone's; only calabi.net's runs on UTC.
+            if (u.month != null && u.plan != "self_hosted") {
+                Text(stringResource(R.string.usage_month_utc), style = Styles.hint, modifier = Modifier.padding(horizontal = 8.dp))
+            }
         }
     }
 }
 
 @Composable
-private fun MonthBlock(m: MonthUsage, plan: String) {
+private fun MonthBlock(m: MonthUsage, plan: String, relayNotRecorded: Boolean) {
     Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.usage_month), style = Styles.rowTitle, modifier = Modifier.weight(1f))
@@ -96,8 +105,9 @@ private fun MonthBlock(m: MonthUsage, plan: String) {
         }
         if (m.limitBytes > 0) Meter(fraction, tone)
         if (m.limitBytes == 0L) Text(stringResource(R.string.usage_limit_unknown), style = Styles.hint)
+        val relay = if (relayNotRecorded) stringResource(R.string.usage_relay_not_recorded) else stringResource(R.string.usage_relay, formatBytes(m.relayBytes))
         Text(
-            stringResource(R.string.usage_tunnels, formatBytes(m.tunnelBytes)) + " · " + stringResource(R.string.usage_relay, formatBytes(m.relayBytes)),
+            stringResource(R.string.usage_tunnels, formatBytes(m.tunnelBytes)) + " · " + relay,
             style = Styles.hint.copy(fontSize = 13.sp),
         )
         if (m.selfHostedBytes > 0) Text(stringResource(R.string.usage_self_hosted, formatBytes(m.selfHostedBytes)), style = Styles.hint)
@@ -173,5 +183,6 @@ private fun planLabel(code: String): String? = when (code) {
     "business" -> stringResource(R.string.plan_business)
     "enterprise" -> stringResource(R.string.plan_enterprise)
     "pro_gift" -> stringResource(R.string.plan_pro_gift)
+    "self_hosted" -> stringResource(R.string.plan_self_hosted)
     else -> null
 }

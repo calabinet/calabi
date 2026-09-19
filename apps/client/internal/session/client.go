@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/calabi/calabi/apps/client/internal/transport"
+	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
 	proto "github.com/calabi/calabi/pkg/protocol"
 )
 
@@ -105,6 +106,9 @@ type Client struct {
 	token    string
 	clientNm string
 	deviceID int64 // identity-svc clients.id; 0 = unknown
+	// device, when set, is how this session signs in to an edge of its
+	// self-hosted coordinator instead of with token (SetDeviceCredential).
+	device *DeviceCredential
 
 	// lastInbound is the unix-nano time of the last frame READ from the edge.
 	//
@@ -215,6 +219,36 @@ func New(logger *slog.Logger, mux *transport.Mux, token, clientName string) *Cli
 	}
 }
 
+// DeviceCredential is how a device signs in to an edge of its self-hosted
+// coordinator: the grant the
+// coordinator signed for its node key, and that key's private half, which
+// answers the edge's per-connection challenge.
+type DeviceCredential struct {
+	Grant    []byte
+	NodeKey  meshproto.NodeKey
+	NodePriv [meshproto.KeyLen]byte
+}
+
+// SetDeviceCredential makes Handshake sign in with cred instead of a token.
+// Call before Handshake.
+func (c *Client) SetDeviceCredential(cred DeviceCredential) {
+	c.mu.Lock()
+	c.device = &cred
+	c.mu.Unlock()
+}
+
+// RefreshGrant hands the edge a renewed grant for this session's node key
+// (AUTH_REFRESH), before the one it signed in with runs out. The edge ends a
+// session whose grant expires unrenewed.
+func (c *Client) RefreshGrant(grant []byte) error {
+	c.mu.Lock()
+	if c.device != nil {
+		c.device.Grant = grant
+	}
+	c.mu.Unlock()
+	return c.ctrl.WritePayload(proto.FrameAuthRefresh, &proto.AuthRefresh{Grant: grant})
+}
+
 // SetDeviceID attaches the identity-svc clients.id this session should
 // announce in its AUTH frame for live-presence tracking. Call before
 // Handshake; 0 = unknown (Phase A's fallback for un-registered clients).
@@ -299,12 +333,28 @@ func (c *Client) Handshake(ctx context.Context) error {
 		"heartbeat_ms", ack.HeartbeatIntervalMs)
 
 	c.mu.Lock()
-	devID := c.deviceID
+	devID, device := c.deviceID, c.device
 	c.mu.Unlock()
 	auth := &proto.AuthRequest{
 		Token:      c.token,
 		ClientName: c.clientNm,
 		DeviceID:   devID,
+	}
+	switch {
+	case len(ack.AuthChallenge) > 0 && device == nil:
+		return errors.New("this edge accepts devices of its self-hosted coordinator only, and this client has not joined one")
+	case len(ack.AuthChallenge) > 0:
+		ch, err := meshproto.ParseEdgeChallenge(ack.AuthChallenge)
+		if err != nil {
+			return fmt.Errorf("HELLO_ACK: %w", err)
+		}
+		auth.Token = ""
+		auth.Grant = device.Grant
+		auth.Proof = meshproto.SealEdgeProof(ch, device.NodeKey, device.NodePriv)
+	case device != nil:
+		// An edge that sends no challenge accepts tokens only: a platform edge, or
+		// one older than grants. There is nothing this device could sign in with.
+		return errors.New("this edge does not accept a self-hosted coordinator's devices (it asked for no proof)")
 	}
 	if err := c.ctrl.WritePayload(proto.FrameAuth, auth); err != nil {
 		return fmt.Errorf("send AUTH: %w", err)

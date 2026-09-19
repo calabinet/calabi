@@ -102,6 +102,9 @@ func (s *Session) Loop(ctx context.Context, registrar ProxyRegistrar, domains Do
 		}
 		_ = s.Close()
 	}()
+	// A session that authenticated by a coordinator grant ends when the grant
+	// runs out unrenewed (grantauth.go).
+	go s.watchGrantExpiry(ctx)
 
 	for {
 		select {
@@ -150,6 +153,9 @@ func (s *Session) Loop(ctx context.Context, registrar ProxyRegistrar, domains Do
 
 		case proto.FrameMetricsReport:
 			s.logger.Debug("metrics report from client", "payload_size", len(f.Payload))
+
+		case proto.FrameAuthRefresh:
+			s.handleAuthRefresh(f)
 
 		default:
 			s.logger.Debug("unhandled frame", "type", f.Type.String())

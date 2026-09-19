@@ -79,6 +79,14 @@ func (s *Server) authorizeNode(ctx context.Context, token string, nodeID int64) 
 		s.sessions.forget(token)
 		return nil, status.Error(codes.Unauthenticated, "session no longer matches the node; register again")
 	}
+	// Disabling a node ends its netmap stream, but the session it earned before
+	// that used to keep working for everything else: a disabled device went on
+	// reporting endpoints, connections and service health for as long as it
+	// stayed connected. The kill switch covers the whole session.
+	if node.Disabled {
+		s.sessions.forget(token)
+		return nil, status.Error(codes.PermissionDenied, "node is disabled")
+	}
 	return node, nil
 }
 
@@ -86,6 +94,24 @@ func (s *Server) authorizeNode(ctx context.Context, token string, nodeID int64) 
 // answer to (mesh protocol v2, nodeauth.go). The auth key is resolved here too:
 // an anonymous caller must not be able to make the coordinator hold state.
 func (s *Server) GetRegisterChallenge(ctx context.Context, req *meshpb.GetRegisterChallengeRequest) (*meshpb.GetRegisterChallengeResponse, error) {
+	if req.GetAuthKey() == "" && req.GetNodeId() != 0 {
+		// Re-registration by proof alone (node_reauth). Only the local checks
+		// here: the identity service is asked in RegisterNode, after the proof,
+		// so a caller that merely knows a node's id and public key - every peer
+		// does - cannot make the coordinator call it.
+		node, err := s.reauthTarget(ctx, req.GetNodeId(), req.GetNodeKey())
+		if err != nil {
+			return nil, err
+		}
+		id, ch, err := s.sessions.issueNodeChallenge(node.Meshnet, node.ID)
+		if err != nil {
+			if errors.Is(err, errTooManyChallenges) {
+				return nil, status.Error(codes.ResourceExhausted, err.Error())
+			}
+			return nil, status.Errorf(codes.Internal, "registration challenge: %v", err)
+		}
+		return &meshpb.GetRegisterChallengeResponse{ChallengeId: id, Challenge: ch.Encode()}, nil
+	}
 	ident, err := s.auth.Resolve(ctx, req.GetAuthKey())
 	if err != nil {
 		return nil, status.Error(codes.Unauthenticated, "auth key denied")
@@ -98,6 +124,104 @@ func (s *Server) GetRegisterChallenge(ctx context.Context, req *meshpb.GetRegist
 		return nil, status.Errorf(codes.Internal, "registration challenge: %v", err)
 	}
 	return &meshpb.GetRegisterChallengeResponse{ChallengeId: id, Challenge: ch.Encode()}, nil
+}
+
+// reauthTarget loads the node a re-registration by proof alone names and applies
+// every check that needs nothing but the node's own record. The codes tell the
+// device what to do next: NotFound and FailedPrecondition (signed out) mean
+// "enroll with an auth key", PermissionDenied means disabled.
+func (s *Server) reauthTarget(ctx context.Context, nodeID int64, rawKey string) (*core.Node, error) {
+	key, err := meshproto.ParseNodeKey(rawKey)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "node_key: %v", err)
+	}
+	node, err := s.coord.Nodes.Get(ctx, nodeID)
+	if err != nil {
+		if errors.Is(err, core.ErrNodeNotFound) {
+			return nil, status.Error(codes.NotFound, "node not found; enroll with an auth key")
+		}
+		return nil, status.Errorf(codes.Internal, "load node: %v", err)
+	}
+	if node.NodeKey != key {
+		return nil, status.Error(codes.Unauthenticated, "node_key does not match the node")
+	}
+	if node.Disabled {
+		return nil, status.Error(codes.PermissionDenied, "node is disabled")
+	}
+	if node.SignedOut {
+		return nil, status.Error(codes.FailedPrecondition, "node signed out; enroll with an auth key")
+	}
+	return node, nil
+}
+
+// admittedBy reports whether the node with this key in this meshnet already
+// enrolled as principal. An empty principal (a key-file entry) never counts:
+// those keys have nothing to spend anyway.
+func (s *Server) admittedBy(ctx context.Context, meshnet core.MeshnetID, key meshproto.NodeKey, principal string) bool {
+	if principal == "" {
+		return false
+	}
+	n, err := s.coord.Nodes.FindByKey(ctx, meshnet, key)
+	return err == nil && n != nil && n.EnrolledBy == principal
+}
+
+// SignOut marks the caller's node signed out (core.Node.SignedOut) and ends its
+// session. The node keeps its record and address; it comes back only by
+// enrolling with an auth key.
+func (s *Server) SignOut(ctx context.Context, req *meshpb.SignOutRequest) (*meshpb.SignOutResponse, error) {
+	node, err := s.authorizeNode(ctx, req.GetSessionToken(), 0)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.coord.SignOut(ctx, node.ID); err != nil {
+		if errors.Is(err, core.ErrNodeNotFound) {
+			return nil, status.Error(codes.NotFound, "node not found")
+		}
+		return nil, status.Errorf(codes.Internal, "sign out: %v", err)
+	}
+	s.sessions.forget(req.GetSessionToken())
+	return &meshpb.SignOutResponse{}, nil
+}
+
+// ListNodes lists the caller's meshnet for a self-hosted coordinator's apps
+// (see the proto). Every device in the meshnet, not only the ones the caller's
+// ACL lets it reach: a person looking at their own network wants to see the
+// machine that is offline or that the rules keep from this phone.
+func (s *Server) ListNodes(ctx context.Context, req *meshpb.ListNodesRequest) (*meshpb.ListNodesResponse, error) {
+	if !s.coord.SelfHosted() {
+		return nil, status.Error(codes.PermissionDenied, "device lists come from the platform API on this coordinator")
+	}
+	self, err := s.authorizeReader(ctx, req.GetSessionToken())
+	if err != nil {
+		return nil, err
+	}
+	nodes, err := s.coord.MeshnetNodes(ctx, self.Meshnet)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list: %v", err)
+	}
+	out := &meshpb.ListNodesResponse{}
+	for _, n := range nodes {
+		info := &meshpb.NodeInfo{
+			Id: n.ID, Name: n.Name, Os: n.OS, Online: s.coord.Presence.IsOnline(n.ID),
+			Disabled: n.Disabled, Approved: n.Approved,
+		}
+		if n.Overlay.IsValid() {
+			info.OverlayAddr = n.Overlay.String()
+		}
+		if !n.LastSeen.IsZero() {
+			info.LastSeenUnix = n.LastSeen.Unix()
+		}
+		for _, r := range n.ApprovedRoutes {
+			info.ApprovedRoutes = append(info.ApprovedRoutes, r.String())
+		}
+		for _, sv := range n.Services {
+			if sv.Approved {
+				info.Services = append(info.Services, &meshpb.PeerService{Name: sv.Name, Proto: sv.Proto, Port: uint32(sv.Port)})
+			}
+		}
+		out.Nodes = append(out.Nodes, info)
+	}
+	return out, nil
 }
 
 // UpdateNodeDeclarations records new declarations for a node that is ALREADY
@@ -164,25 +288,67 @@ func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeReque
 		return nil, status.Errorf(codes.FailedPrecondition,
 			"mesh protocol v%d is no longer accepted; this coordinator requires v%d or newer - upgrade calabi", v, minNodeProtocolVersion)
 	}
-	ident, err := s.auth.Resolve(ctx, req.GetAuthKey())
-	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, "auth key denied")
-	}
-	meshnet := ident.Meshnet
 	nodeKey, err := meshproto.ParseNodeKey(req.GetNodeKey())
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "node_key: %v", err)
 	}
+	// Who the node is, and which meshnet: from the auth key, or - re-registering
+	// by proof alone (node_reauth) - from the node's own record, since without a
+	// key there is nothing else to take it from.
+	var (
+		ident         core.Identity
+		reauth        = req.GetAuthKey() == "" && req.GetNodeId() != 0
+		challengeNode int64
+	)
+	if reauth {
+		node, err := s.reauthTarget(ctx, req.GetNodeId(), req.GetNodeKey())
+		if err != nil {
+			return nil, err
+		}
+		ident = core.Identity{Meshnet: node.Meshnet, Tags: node.Tags, UserID: node.OwnerUserID, Principal: node.EnrolledBy}
+		challengeNode = node.ID
+	} else {
+		ident, err = s.auth.Resolve(ctx, req.GetAuthKey())
+		if err != nil {
+			return nil, status.Error(codes.Unauthenticated, "auth key denied")
+		}
+	}
+	meshnet := ident.Meshnet
 	// Proof of possession (mesh protocol v2). The auth key above says which org
 	// the caller belongs to; only this says which DEVICE it is. Without it a
 	// member could re-enroll a colleague's node - node keys are public within an
 	// org - and be handed that device's record (security audit 1-C).
-	pending, ok := s.sessions.takeChallenge(req.GetChallengeId(), meshnet)
+	pending, ok := s.sessions.takeChallenge(req.GetChallengeId(), meshnet, challengeNode)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "registration challenge missing, expired or already used; call GetRegisterChallenge first")
 	}
 	if err := meshproto.OpenRegisterProof(pending.ch, pending.ephPriv, nodeKey, req.GetRegisterProof()); err != nil {
 		return nil, status.Error(codes.Unauthenticated, "registration proof rejected: the caller does not hold this node key")
+	}
+	if reauth {
+		// What a credential got checked for on every reconnect until now: a
+		// revoked API key, a removed member, a suspended account. Asked only
+		// here, after the proof, so a caller that is not the device costs the
+		// identity service nothing.
+		if err := s.auth.Reauthorize(ctx, meshnet, ident.Principal); err != nil {
+			if errors.Is(err, core.ErrAuthDenied) {
+				return nil, status.Error(codes.Unauthenticated, "what this device enrolled with no longer admits it; enroll with an auth key")
+			}
+			return nil, status.Error(codes.Unavailable, "cannot confirm this device's enrollment right now")
+		}
+	}
+	// A key with a limited number of uses, or an expiry, spends one per device
+	// it admits (core/authkeys.go). The device it already admitted is not a new
+	// one: presenting the key again - a desktop with the key in its config file
+	// does after every restart - costs nothing and is not refused for an expiry
+	// or a use limit that only ever applied to newcomers.
+	undoSpend := func() {}
+	if !reauth && !s.admittedBy(ctx, meshnet, nodeKey, ident.Principal) {
+		undo, err := s.auth.Spend(ctx, ident.Principal)
+		if err != nil {
+			return nil, status.Error(codes.Unauthenticated, "auth key expired, used up or revoked")
+		}
+		undoSpend = undo
 	}
 	in := core.RegisterInput{
 		Meshnet:           meshnet,
@@ -190,6 +356,8 @@ func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeReque
 		NodeKey:           nodeKey,
 		Tags:              ident.Tags,
 		OwnerUserID:       ident.UserID,
+		EnrolledBy:        ident.Principal,
+		Reauth:            reauth,
 		DeviceFingerprint: req.GetDeviceFingerprint(),
 		OS:                req.GetOs(),
 		BlockIncoming:     req.BlockIncoming,
@@ -233,11 +401,16 @@ func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeReque
 
 	node, err := s.coord.Register(ctx, in)
 	if err != nil {
+		undoSpend()
 		switch {
 		case errors.Is(err, core.ErrNodeQuotaExceeded):
 			return nil, status.Error(codes.ResourceExhausted, err.Error())
 		case errors.Is(err, core.ErrNodeDisabled):
 			return nil, status.Error(codes.PermissionDenied, err.Error())
+		case errors.Is(err, core.ErrNodeSignedOut):
+			return nil, status.Error(codes.FailedPrecondition, err.Error())
+		case errors.Is(err, core.ErrNodeNotFound):
+			return nil, status.Error(codes.NotFound, "node not found; enroll with an auth key")
 		default:
 			return nil, status.Errorf(codes.Internal, "register: %v", err)
 		}
@@ -451,10 +624,20 @@ func sameAddrPortSet(a, b []netip.AddrPort) bool {
 
 // negotiate returns the working protocol version + capability subset: the min of
 // what the client and this coordinator support. v0 defines no capabilities.
-func negotiate(clientVer uint32, _ []string) (uint32, []string) {
+func negotiate(clientVer uint32, clientCaps []string) (uint32, []string) {
 	ver := clientVer
 	if ver > meshproto.ProtocolVersion {
 		ver = meshproto.ProtocolVersion
 	}
-	return ver, nil
+	var caps []string
+	for _, c := range clientCaps {
+		if serverCapabilities.Supports(meshproto.Capability(c)) {
+			caps = append(caps, c)
+		}
+	}
+	return ver, caps
 }
+
+// serverCapabilities is what this coordinator does beyond the base protocol.
+// RegisterNodeResponse carries the part the node also asked for.
+var serverCapabilities = meshproto.Capabilities{meshproto.CapNodeReauth}

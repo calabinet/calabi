@@ -89,6 +89,16 @@ type discoProber struct {
 	// (that carries its STUN port) — still gets a validated return path instead of
 	// the relay. Reaped after learnedTTL without a refresh.
 	learned map[meshproto.DiscoKey]map[netip.AddrPort]time.Time
+	// onFound, when set, is called (outside mu) each time a peer gets a direct
+	// path it did not have: the bind sends then what it held for want of one.
+	onFound func()
+}
+
+// setOnPathFound registers the callback told of each newly found direct path.
+func (p *discoProber) setOnPathFound(f func()) {
+	p.mu.Lock()
+	p.onFound = f
+	p.mu.Unlock()
 }
 
 type pendingProbe struct {
@@ -129,6 +139,12 @@ func newDiscoProber(ms *magicSock, logger *slog.Logger) *discoProber {
 // pong by tx id) reaches the peer. A pong for an unknown tx, or from a different
 // peer than we pinged, is ignored (it can't validate a path we didn't probe).
 func (p *discoProber) onPong(peer meshproto.DiscoKey, tx discoTxID, _ netip.AddrPort) {
+	var found func()
+	defer func() { // after the unlock below: the callback sends, which asks bestPath
+		if found != nil {
+			found()
+		}
+	}()
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	pp, ok := p.pending[tx]
@@ -142,6 +158,7 @@ func (p *discoProber) onPong(peer meshproto.DiscoKey, tx discoTxID, _ netip.Addr
 	switch {
 	case !had:
 		p.paths[peer] = peerPath{ep: pp.ep, confirmed: now, rtt: rtt}
+		found = p.onFound
 		if p.logger != nil {
 			p.logger.Info("mesh direct path found", "peer_disco", peer.String(),
 				"endpoint", pp.ep.String(), "rtt", rtt.Round(time.Microsecond).String())

@@ -53,6 +53,7 @@ import type {
   TunnelInfo,
   TunnelList,
 } from "../api/types";
+import { SelfHostedTunnelsCard } from "../components/SelfHosted";
 import InspectorDrawer from "../components/InspectorDrawer";
 import { notify } from "../hooks/use-notifications";
 import { useServiceMode } from "../hooks/use-service-mode";
@@ -811,6 +812,10 @@ export default function Tunnels() {
         pagination={{ pageSize: 20, showSizeChanger: false }}
         locale={{ emptyText: t("tunnels.emptyText") }}
       />
+
+      {/* Self-hosted: every tunnel the network's daemons report to the
+          coordinator, this machine's and the other devices'. */}
+      {standalone && <SelfHostedTunnelsCard />}
 
       <InspectorDrawer
         open={!!drawerProxy}

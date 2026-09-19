@@ -14,13 +14,13 @@
 // console. The link below is built from the console origin the daemon reports
 // (/v1/service-mode → console_web), NOT a hardcoded host, so self-hosted
 // deployments point at their own console.
-import { LockOutlined, UserOutlined } from "@ant-design/icons";
+import { CloudServerOutlined, LockOutlined, UserOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Form, Input, Space, Typography } from "antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../api/client";
-import type { AccountMe } from "../api/types";
+import type { AccountMe, SelfHostedStatus } from "../api/types";
 import Logo from "../components/Logo";
 import { useServiceMode } from "../hooks/use-service-mode";
 import { useTranslation } from "react-i18next";
@@ -118,6 +118,15 @@ export default function Login() {
         setNeedsTotp(true);
       }
     },
+  });
+
+  // The secondary way in: this computer on the user's own server instead of
+  // calabi.net (docs/runbook/self-hosted-sign-in-plan.md §6.2). Shown only when
+  // the daemon can switch — a daemon from before answers 404.
+  const { data: selfHosted } = useQuery<SelfHostedStatus>({
+    queryKey: ["selfhosted"],
+    queryFn: api.selfHosted,
+    retry: false,
   });
 
   if (agentMode || me.isSuccess) {
@@ -222,6 +231,12 @@ export default function Login() {
               </Button>
             </Form.Item>
           </Form>
+
+          {selfHosted?.mode === "platform" && selfHosted.can_join && (
+            <Button block icon={<CloudServerOutlined />} onClick={() => navigate("/connect")}>
+              {t("selfHosted.entry")}
+            </Button>
+          )}
 
           {/* Registration lives in the web console, not here. The URL comes from
               the daemon (/v1/service-mode → console_web), baked at build time and

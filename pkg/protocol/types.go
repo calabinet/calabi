@@ -21,11 +21,15 @@ type FrameType uint8
 
 // Frame type constants. Keep in sync with control.proto.
 const (
-	FrameUnspecified   FrameType = 0x00
-	FrameHello         FrameType = 0x01
-	FrameHelloAck      FrameType = 0x02
-	FrameAuth          FrameType = 0x03
-	FrameAuthResp      FrameType = 0x04
+	FrameUnspecified FrameType = 0x00
+	FrameHello       FrameType = 0x01
+	FrameHelloAck    FrameType = 0x02
+	FrameAuth        FrameType = 0x03
+	FrameAuthResp    FrameType = 0x04
+	// FrameAuthRefresh carries a renewed coordinator grant on an established
+	// session, before the one AUTH presented expires (self-hosted edges only).
+	// Newer than control.proto's enum: the JSON frames here are the wire.
+	FrameAuthRefresh   FrameType = 0x05
 	FrameNewProxy      FrameType = 0x10
 	FrameNewProxyResp  FrameType = 0x11
 	FrameCloseProxy    FrameType = 0x12
@@ -52,6 +56,8 @@ func (t FrameType) String() string {
 		return "AUTH"
 	case FrameAuthResp:
 		return "AUTH_RESP"
+	case FrameAuthRefresh:
+		return "AUTH_REFRESH"
 	case FrameNewProxy:
 		return "NEW_PROXY"
 	case FrameNewProxyResp:

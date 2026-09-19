@@ -21,7 +21,7 @@
     <string name="login_verify">验证</string>
     <string name="login_back">返回</string>
 
-    <string name="tab_devices">设备</string>
+    <string name="tab_mesh">组网</string>
     <string name="tab_settings">设置</string>
     <string name="account">账号</string>
 
@@ -76,6 +76,8 @@
     <string name="settings_exit_hint">让全部上网流量经由你的某台设备。</string>
     <string name="settings_exit_none">不使用</string>
     <string name="settings_exit_empty">组织里还没有设备提供出口。</string>
+    <string name="settings_exit_empty_server">这台服务器上还没有设备提供出口。</string>
+    <string name="settings_exit_connect">连接后显示这台服务器上可作出口的设备。</string>
     <string name="settings_support">支持</string>
     <string name="settings_export_logs">分享诊断日志</string>
     <string name="settings_sign_out">退出登录</string>
@@ -90,6 +92,8 @@
     <string name="tunnels_title">隧道</string>
     <string name="tunnels_scope_own">只列出你创建的隧道。</string>
     <string name="tunnels_empty">还没有隧道。隧道在电脑上的 Calabi 客户端或网页控制台里创建。</string>
+    <string name="tunnels_scope_self_hosted">只列出已加入这个组网的电脑上的隧道。</string>
+    <string name="tunnels_empty_self_hosted">还没有隧道。已加入这个组网的电脑上配置的隧道会显示在这里。</string>
     <string name="tunnel_state_active">在线</string>
     <string name="tunnel_state_offline">离线</string>
     <string name="tunnel_state_pending">待接入</string>
@@ -109,6 +113,7 @@
     <string name="tunnel_local">本地地址</string>
     <string name="tunnel_served_by">接入方</string>
     <string name="served_self_hosted">自建节点</string>
+    <string name="tunnel_device">所在设备</string>
     <string name="served_platform">平台</string>
     <string name="tunnel_creator">创建者</string>
     <string name="tunnel_creator_me">你</string>
@@ -146,12 +151,15 @@
     <string name="usage_devices_own">我的组网设备</string>
     <string name="usage_devices_disabled">%1$d 台已停用</string>
     <string name="usage_month_utc">按 UTC 自然月统计。</string>
+    <string name="usage_unavailable_no_database">这台服务器不保存流量记录。</string>
+    <string name="usage_relay_not_recorded">组网中继未记录</string>
     <string name="plan_free">体验版</string>
     <string name="plan_basic">基础版</string>
     <string name="plan_pro">专业版</string>
     <string name="plan_business">商业版</string>
     <string name="plan_enterprise">企业版</string>
     <string name="plan_pro_gift">Pro 附赠</string>
+    <string name="plan_self_hosted">自建</string>
 
     <string name="settings_replace">替换旧设备</string>
     <string name="replace_prompt_title">换了手机或重装了？</string>
@@ -161,6 +169,17 @@
     <string name="stopped_prompt_title">手机在后台关掉了 Calabi</string>
     <string name="stopped_prompt_body">连接随之断开。%1$s</string>
     <string name="background_allow">允许后台运行</string>
+    <string name="tile_row">快捷开关</string>
+    <string name="tile_row_hint">加到下拉快捷设置，不打开 App 就能连接或断开。</string>
+    <string name="tile_row_added_hint">下拉快捷设置就能连接或断开。</string>
+    <string name="tile_added">已添加</string>
+    <string name="tile_prompt_title">下拉就能开关 Calabi</string>
+    <string name="tile_prompt_body">把 Calabi 加到快捷设置，不用打开 App 就能连接或断开。</string>
+    <string name="tile_add">添加到快捷设置</string>
+    <string name="tile_steps_title">添加 Calabi 快捷开关</string>
+    <string name="tile_steps_huawei">从屏幕顶部下拉并展开全部开关，点右上角的铅笔图标进入「开关排序」，在下方找到 Calabi，按住拖到上方，再点「完成」。</string>
+    <string name="tile_steps">从屏幕顶部下拉两次打开快捷设置，点「编辑」（通常是铅笔图标），找到 Calabi，按住拖到上方。</string>
+    <string name="tile_steps_ok">知道了</string>
     <string name="replace_title">替换旧设备</string>
     <string name="replace_hint">旧设备会从组织里删除，本机沿用它的名字。组网地址不沿用。</string>
     <string name="replace_last_seen">上次在线 %1$s</string>
@@ -209,4 +228,54 @@
     <string name="region_ca_toronto">多伦多</string>
     <string name="region_sa_saopaulo">圣保罗</string>
     <string name="region_af_johannesburg">约翰内斯堡</string>
+    <!-- A self-hosted server (docs/runbook/self-hosted-sign-in-plan.md S3). -->
+    <string name="login_self_hosted">连接自建服务器</string>
+    <string name="sh_title">连接自建服务器</string>
+    <string name="sh_subtitle">用服务器管理员给你的邀请，加入你或你的团队自己运行的组网。</string>
+    <string name="sh_scan">扫描邀请二维码</string>
+    <string name="sh_scan_prompt">把摄像头对准邀请二维码</string>
+    <string name="sh_or_type">或者手动填写</string>
+    <string name="sh_server">服务器（主机:端口）</string>
+    <string name="sh_key">密钥</string>
+    <string name="sh_advanced">证书选项</string>
+    <string name="sh_advanced_hide">收起证书选项</string>
+    <string name="sh_pin">证书指纹（可选）</string>
+    <string name="sh_pin_hint">在服务器上运行 calabi-coord fingerprint 可以看到。留空的话，App 会把服务器出示的指纹给你核对。</string>
+    <string name="sh_plaintext">不加密</string>
+    <string name="sh_plaintext_hint">只用于可信网络里的服务器：密钥会以明文经过网络。</string>
+    <string name="sh_join">加入</string>
+    <string name="sh_joining">正在加入…</string>
+    <string name="sh_failed">没有加入成功</string>
+    <string name="sh_key_refused">服务器没有接受这个密钥：可能已用过、已过期或已吊销。请向管理员要一个新的邀请。</string>
+    <string name="sh_disabled">这台设备在该服务器上已被停用。</string>
+    <string name="sh_full">该组网的设备数已满。</string>
+    <string name="sh_no_tls">这台服务器没有启用 TLS。如果它在你信任的网络里，可以在证书选项里打开「不加密」。</string>
+    <string name="sh_pin_mismatch">服务器的证书和指纹对不上。加入之前请先和服务器管理员确认。服务器出示的是：%1$s</string>
+    <string name="sh_unreachable">连不上服务器：%1$s</string>
+    <string name="sh_not_an_invite">这不是 Calabi 的邀请。</string>
+    <string name="sh_confirm_title">核对服务器的证书指纹</string>
+    <string name="sh_confirm_body">手机还不认识这台服务器的证书。请和服务器上 calabi-coord fingerprint 的输出核对：</string>
+    <string name="sh_confirm_yes">一致，加入</string>
+    <string name="sh_switch_title">加入这台服务器？</string>
+    <string name="sh_switch_body">服务器：%1$s。这台手机同一时间只在一个网络里，加入后会退出现在所在的网络。</string>
+    <string name="sh_switch_yes">退出并加入</string>
+    <string name="state_needs_invite_short">需要新的邀请</string>
+    <string name="state_needs_invite">服务器不再接受这台手机。请向管理员要一个新的邀请。</string>
+    <string name="state_disabled_short">已被停用</string>
+    <string name="state_disabled">服务器管理员停用了这台手机。</string>
+    <string name="state_cert_changed_short">证书变了</string>
+    <string name="state_cert_changed">服务器出示的证书和之前不一样。</string>
+    <string name="cert_changed_title">核对服务器的新证书</string>
+    <string name="cert_changed_body">可能是管理员换了证书，也可能是别的机器在冒充这台服务器。新指纹和服务器上 calabi-coord fingerprint 的输出核对一致之前，手机不会连接。</string>
+    <string name="cert_changed_was">之前信任的</string>
+    <string name="cert_changed_now">现在出示的</string>
+    <string name="cert_changed_trust">一致，信任新证书</string>
+    <string name="cert_changed_again">服务器出示的证书又变了，请重新核对。</string>
+    <string name="devices_connect_to_see">连接后显示这台服务器上的设备。</string>
+    <string name="approval_title">等待批准</string>
+    <string name="approval_body">服务器管理员批准后，这台手机才能访问其他设备。</string>
+    <string name="settings_server">自建服务器</string>
+    <string name="settings_leave_server">断开并忘记此服务器</string>
+    <string name="settings_leave_server_confirm">断开并忘记此服务器？</string>
+    <string name="settings_leave_server_body">这台手机会离开该组网。再次加入需要新的邀请。</string>
 </resources>
