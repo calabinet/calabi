@@ -1,0 +1,87 @@
+# Alerts for a self-hosted Calabi server.
+#
+# Three rules, each on a metric the programs really emit — checked by running
+# them and reading /metrics, not by reading the source. alerts_test.yml pins
+# every one of them, including the cases that must stay SILENT.
+#
+# WHY THESE ARE "SUSTAINED", NOT RATIOS
+#
+# An error RATIO is the right shape for a busy server and the wrong one for a
+# small deployment: on a coordinator serving a handful of devices, one failed
+# RPC out of three is 33% and means nothing. These rules instead ask whether
+# errors have been arriving CONTINUOUSLY for ten minutes, which reads the same
+# whether you have three devices or three hundred.
+
+groups:
+  - name: calabi-self-hosted
+    interval: 30s
+    rules:
+      # 1. One of the two programs stopped answering.
+      #
+      # This is the one that catches a program being GONE rather than failing.
+      # The other two rules need metrics to be flowing, and a dead program emits
+      # nothing at all — a crashed service is QUIETER than a healthy one.
+      #
+      # for: 3m rides out an ordinary `docker compose up -d`.
+      - alert: CalabiTargetDown
+        expr: up == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} ({{ $labels.instance }}) has not answered a scrape for 3m"
+          description: "Check `docker compose ps` and `docker compose logs {{ $labels.job }}`. If the container is running, the admin address in prometheus.yml may no longer match the one in docker-compose.yml."
+
+      # 2. The edge is failing or shedding visitor traffic.
+      #
+      # `outcome` separates three different things, and only the first is a
+      # fault on this server:
+      #
+      #   this server   internal_error, replay_head_failed, and the global_*
+      #                 pair — the edge is saturated and dropping traffic.
+      #   your upstream open_upstream_failed: whatever the tunnel points at
+      #                 refused the connection. SEE THE NOTE BELOW.
+      #   by design     rate_limited, conn_capped, daily_capped, ip_denied,
+      #                 auth_required, oauth_redirect — the per-tunnel policy
+      #                 you configured, doing its job.
+      #
+      # Excluded as ambient: no_tunnel, peek_failed, sniff_failed. A public edge
+      # is scanned continuously by strangers; those are not your server failing.
+      #
+      # IF YOU ALSO RUN THE SERVICES BEHIND YOUR TUNNELS — which a self-hoster
+      # usually does — then open_upstream_failed IS actionable for you, unlike
+      # on a shared platform where it belongs to someone else. Add it:
+      #
+      #   outcome=~"internal_error|replay_head_failed|global_rate_limited|global_conn_capped|open_upstream_failed"
+      - alert: CalabiEdgeFailingVisitors
+        expr: |
+          sum by (outcome) (rate(calabi_edge_visitor_requests_total{
+            outcome=~"internal_error|replay_head_failed|global_rate_limited|global_conn_capped"
+          }[5m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "edge has been returning {{ $labels.outcome }} continuously for 10m"
+          description: "Break it down with: sum by (proxy_type, outcome) (rate(calabi_edge_visitor_requests_total[5m])). global_* means the edge is saturated; internal_error means read its logs."
+
+      # 3. The coordinator is failing RPCs.
+      #
+      # Devices talk to the coordinator to join, to refresh grants and to fetch
+      # the network map. Sustained errors here mean devices cannot join or are
+      # losing their place in the mesh, even while tunnels keep working.
+      #
+      # PermissionDenied and Unauthenticated are deliberately absent: those are
+      # a caller being refused, which is the server working.
+      - alert: CalabiCoordRPCErrors
+        expr: |
+          sum by (handler) (rate(calabi_handler_requests_total{
+            svc="calabi-coord",
+            code=~"Internal|Unavailable|Unknown|DataLoss|DeadlineExceeded"
+          }[5m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "coordinator has been failing {{ $labels.handler }} continuously for 10m"
+          description: "Break it down with: sum by (handler, code) (rate(calabi_handler_requests_total{svc=\"calabi-coord\"}[5m])). Then read `docker compose logs coord`."

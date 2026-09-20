@@ -1,0 +1,39 @@
+# Prometheus for a self-hosted Calabi server.
+#
+# It scrapes the two programs in ../docker-compose.yml and nothing else. Both
+# bind their admin port to 127.0.0.1, so Prometheus has to share the host's
+# network namespace — docker-compose.monitoring.yml runs it with
+# network_mode: host for exactly that reason.
+#
+# Nothing here reaches calabi.net. A self-hosted server is monitored entirely
+# from your own machine.
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  # The coordinator: device registry, grants, ACLs.
+  # CALABI_COORD_ADMIN_ADDR in ../docker-compose.yml.
+  - job_name: coord
+    static_configs:
+      - targets: ["127.0.0.1:9122"]
+
+  # The edge: tunnels and the mesh relay.
+  # The `admin.addr` field in the edge config ../docker-compose.yml writes.
+  - job_name: edge
+    static_configs:
+      - targets: ["127.0.0.1:9101"]
+
+# ALERTMANAGER is not wired up here. Prometheus will evaluate the rules and show
+# them under Status -> Rules and Alerts with no further setup, which is enough
+# to see whether anything is firing. To actually be notified, run Alertmanager
+# and add:
+#
+#   alerting:
+#     alertmanagers:
+#       - static_configs:
+#           - targets: ["127.0.0.1:9093"]

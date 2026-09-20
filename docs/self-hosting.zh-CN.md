@@ -527,6 +527,35 @@ mesh:
 
 ---
 
+## 监控
+
+协调器和边缘节点各自在管理地址上提供 `/metrics` 和 `/healthz`——这套部署里分别是 `:9122` 和 `:9101`，
+都绑在 `127.0.0.1`。
+
+[`deploy/server/monitoring`](../deploy/server/monitoring) 是配好的 Prometheus：抓取配置、三条告警，
+以及证明这些告警会触发的测试。在 `deploy/server` 目录下：
+
+```bash
+docker compose -f docker-compose.yml -f monitoring/docker-compose.monitoring.yml up -d
+ssh -L 9090:127.0.0.1:9090 you@your-server   # 然后打开 http://127.0.0.1:9090
+```
+
+三条告警：
+
+| 告警 | 什么时候触发 |
+| --- | --- |
+| `CalabiTargetDown` | 两个程序之一连续 3 分钟没有应答。 |
+| `CalabiEdgeFailingVisitors` | 边缘节点连续 10 分钟在丢弃或失败访客请求。 |
+| `CalabiCoordRPCErrors` | 协调器连续 10 分钟在失败设备的 RPC。 |
+
+你自己配的访问规则拦掉访客、陌生人扫描你的地址，这两类都不会触发告警——它们都是正常的
+（[为什么](#为什么边缘节点那条告警不统计所有失败的请求)）。隧道背后的服务挂掉默认也不算，
+[README](../deploy/server/monitoring/README.md) 里写了怎么把它加进来。
+
+这套东西不连 calabi.net 的任何地方。
+
+---
+
 ## 从 1.12 及更早版本升级
 
 1.13 起，协调器是每台设备的身份，隧道和组网都是。
@@ -604,6 +633,28 @@ mesh:
 
 同一时间只能在一个上面。已登录 calabi.net 时，客户端会先请你退出，再加入你的服务器。`calabi join --replace`
 把设备从一台服务器换到另一台。
+
+### 为什么边缘节点那条告警不统计所有失败的请求？
+
+因为大多数失败的请求并不是你的服务器出了问题。
+
+边缘节点给每个访客请求记一个 `outcome`，它们分三类，只有第一类是故障：
+
+- **你的服务器**——`internal_error`、`replay_head_failed`，以及 `global_*` 那一对，后者意味着边缘节点
+  已经饱和、在丢流量。
+- **你的上游**——`open_upstream_failed`：隧道指向的那个服务拒绝了连接。如果那个服务是你自己跑的，
+  它就该由你处理，所以 README 里写了怎么把它加进告警。
+- **你的规则**——`rate_limited`、`ip_denied`、`conn_capped`、`daily_capped`、`auth_required`、
+  `oauth_redirect`。都是你配的访问控制在正常工作。
+
+`no_tunnel` 和 `sniff_failed` 同样排除在外：一个公网地址会被陌生人持续扫描，在流量小的服务器上，
+这类请求很容易比真实请求还多。把它们算进去的告警会天天响，而且什么也说明不了。
+
+想一次看全：
+
+```promql
+sum by (proxy_type, outcome) (rate(calabi_edge_visitor_requests_total[5m]))
+```
 
 ---
 

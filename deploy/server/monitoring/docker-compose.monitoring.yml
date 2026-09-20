@@ -1,0 +1,32 @@
+# Prometheus alongside a self-hosted Calabi server. An OVERLAY — run it
+# together with the bundle's own compose file, from deploy/server:
+#
+#   docker compose -f docker-compose.yml -f monitoring/docker-compose.monitoring.yml up -d
+#
+# The relative paths below resolve against the project directory, which is the
+# directory of the FIRST -f file (deploy/server), not this one.
+#
+# network_mode: host because the coordinator and the edge bind their admin
+# ports to 127.0.0.1 — a container on a bridge network cannot reach those, and
+# opening them to the bridge would expose them further than they should be.
+#
+# The web UI is bound to 127.0.0.1 for the same reason. Reach it over an SSH
+# tunnel: ssh -L 9090:127.0.0.1:9090 you@your-server
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.listen-address=127.0.0.1:9090
+
+volumes:
+  prometheus-data: {}

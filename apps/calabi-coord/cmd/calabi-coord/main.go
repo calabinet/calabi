@@ -121,9 +121,11 @@ func main() {
 		Name:    serviceName,
 		Version: version,
 		// State the env namespace instead of letting svcboot derive it from Name.
-		// Name is what the public export renames (calabi-coord -> calabi-coord), so a
-		// derived prefix made the two trees read DIFFERENT variables from the same
-		// source while every comment named the same one. See env.go.
+		// The export used to rename Name (coord-svc -> calabi-coord), so a derived
+		// prefix made the two trees read DIFFERENT variables from the same source
+		// while every comment named the same one. Both trees agree since 2026-09-20,
+		// but a prefix derived from branding is a config change waiting to happen,
+		// so it stays explicit. See env.go.
 		EnvPrefix:        envPrefix,
 		LegacyEnvPrefix:  legacyEnvPrefix,
 		DefaultGRPCAddr:  defaultGRPC,

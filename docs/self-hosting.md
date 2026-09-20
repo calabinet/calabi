@@ -641,6 +641,39 @@ work with a self-hosted server:
 
 ---
 
+## Monitoring
+
+The coordinator and the edge each serve `/metrics` and `/healthz` on their admin
+address — `:9122` and `:9101` in the bundle, both on `127.0.0.1`.
+
+[`deploy/server/monitoring`](../deploy/server/monitoring) is a ready Prometheus
+setup for them: a scrape config, three alerts, and tests that prove the alerts
+fire. From `deploy/server`:
+
+```bash
+docker compose -f docker-compose.yml -f monitoring/docker-compose.monitoring.yml up -d
+ssh -L 9090:127.0.0.1:9090 you@your-server   # then open http://127.0.0.1:9090
+```
+
+The three alerts:
+
+| Alert | Fires when |
+| --- | --- |
+| `CalabiTargetDown` | Either program stopped answering for 3 minutes. |
+| `CalabiEdgeFailingVisitors` | The edge has been failing or shedding visitor traffic for 10 minutes. |
+| `CalabiCoordRPCErrors` | The coordinator has been failing device RPCs for 10 minutes. |
+
+They stay silent for your own access rules refusing visitors, and for strangers
+scanning your address — both are normal
+([why](#why-doesnt-the-edge-alert-count-every-failed-request)). A tunnel's
+upstream being down is also ignored by default;
+[the README](../deploy/server/monitoring/README.md) says how to include it if
+you run those services yourself.
+
+Nothing in it reaches calabi.net.
+
+---
+
 ## Upgrading from 1.12 or earlier
 
 In 1.13 the coordinator became every device's identity, for tunnels as well as
@@ -750,6 +783,33 @@ and devices. calabi.net adds accounts, organizations and metering around it.
 One at a time. Signed in to calabi.net, the client asks you to sign out before
 it joins your server. `calabi join --replace` moves a device from one server to
 another.
+
+### Why doesn't the edge alert count every failed request?
+
+Because most failed requests are not your server failing.
+
+The edge records an `outcome` for every visitor request, and they fall into
+three groups. Only the first is a fault:
+
+- **Your server** — `internal_error`, `replay_head_failed`, and the `global_*`
+  pair, which mean the edge is saturated and dropping traffic.
+- **Your upstream** — `open_upstream_failed`: whatever the tunnel points at
+  refused the connection. Yours to fix if you run it, which is why the README
+  says how to include it.
+- **Your rules** — `rate_limited`, `ip_denied`, `conn_capped`, `daily_capped`,
+  `auth_required`, `oauth_redirect`. The access control you configured, doing
+  its job.
+
+`no_tunnel` and `sniff_failed` are left out as well: a public address is
+scanned continuously by strangers, and on a quiet server those can easily
+outnumber real requests. An alert that counted them would fire every day and
+tell you nothing.
+
+You can see all of them at once:
+
+```promql
+sum by (proxy_type, outcome) (rate(calabi_edge_visitor_requests_total[5m]))
+```
 
 ---
 

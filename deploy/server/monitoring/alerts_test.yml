@@ -1,0 +1,210 @@
+# Unit tests for alerts.yml. Run them before trusting a rule:
+#
+#   cd deploy/server/monitoring
+#   docker run --rm -v "$PWD:/r:ro" --entrypoint promtool prom/prometheus \
+#     test rules /r/alerts_test.yml
+#
+# It talks to nothing. It evaluates the rules against synthetic series.
+#
+# WHY BOTHER
+#
+# `promtool check rules` only PARSES. A rule that reads a metric name nothing
+# emits parses perfectly, loads without a warning, and then never fires — which
+# looks exactly like a healthy server. These tests evaluate, so a rule that
+# selects nothing fails here instead of in six months.
+#
+# The SILENT cases matter more than the firing ones: a rule is defined by what
+# it refuses to wake you for.
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  # === CalabiTargetDown ====================================================
+
+  # Fires: the edge stopped answering.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="edge",instance="127.0.0.1:9101"}'
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: CalabiTargetDown
+        exp_alerts:
+          - exp_labels:
+              job: edge
+              instance: "127.0.0.1:9101"
+              severity: critical
+            exp_annotations:
+              summary: "edge (127.0.0.1:9101) has not answered a scrape for 3m"
+              description: "Check `docker compose ps` and `docker compose logs edge`. If the container is running, the admin address in prometheus.yml may no longer match the one in docker-compose.yml."
+
+  # SILENT: both programs healthy.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="coord",instance="127.0.0.1:9122"}'
+        values: "1x10"
+      - series: 'up{job="edge",instance="127.0.0.1:9101"}'
+        values: "1x10"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: CalabiTargetDown
+        exp_alerts: []
+
+  # SILENT: two missed scrapes during an ordinary restart, evaluated WHILE the
+  # target is still down — otherwise this case would pass no matter what `for`
+  # said, which is a test that proves nothing.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="coord",instance="127.0.0.1:9122"}'
+        values: "1 1 0 0 1 1 1 1 1 1 1"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: CalabiTargetDown
+        exp_alerts: []
+
+  # === CalabiEdgeFailingVisitors ===========================================
+
+  # Fires: the edge is erroring on its own, continuously.
+  - interval: 1m
+    input_series:
+      - series: 'calabi_edge_visitor_requests_total{outcome="ok",proxy_type="http"}'
+        values: "0+60x15"
+      - series: 'calabi_edge_visitor_requests_total{outcome="internal_error",proxy_type="http"}'
+        values: "0+6x15"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: CalabiEdgeFailingVisitors
+        exp_alerts:
+          - exp_labels:
+              outcome: internal_error
+              severity: warning
+            exp_annotations:
+              summary: "edge has been returning internal_error continuously for 10m"
+              description: "Break it down with: sum by (proxy_type, outcome) (rate(calabi_edge_visitor_requests_total[5m])). global_* means the edge is saturated; internal_error means read its logs."
+
+  # Fires: saturated and shedding, even though nothing "errored".
+  - interval: 1m
+    input_series:
+      - series: 'calabi_edge_visitor_requests_total{outcome="ok",proxy_type="tcp"}'
+        values: "0+60x15"
+      - series: 'calabi_edge_visitor_requests_total{outcome="global_conn_capped",proxy_type="tcp"}'
+        values: "0+12x15"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: CalabiEdgeFailingVisitors
+        exp_alerts:
+          - exp_labels:
+              outcome: global_conn_capped
+              severity: warning
+            exp_annotations:
+              summary: "edge has been returning global_conn_capped continuously for 10m"
+              description: "Break it down with: sum by (proxy_type, outcome) (rate(calabi_edge_visitor_requests_total[5m])). global_* means the edge is saturated; internal_error means read its logs."
+
+  # SILENT: the per-tunnel policy you configured, refusing visitors all day.
+  - interval: 1m
+    input_series:
+      - series: 'calabi_edge_visitor_requests_total{outcome="ok",proxy_type="http"}'
+        values: "0+60x15"
+      - series: 'calabi_edge_visitor_requests_total{outcome="rate_limited",proxy_type="http"}'
+        values: "0+60x15"
+      - series: 'calabi_edge_visitor_requests_total{outcome="ip_denied",proxy_type="http"}'
+        values: "0+60x15"
+      - series: 'calabi_edge_visitor_requests_total{outcome="auth_required",proxy_type="http"}'
+        values: "0+60x15"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: CalabiEdgeFailingVisitors
+        exp_alerts: []
+
+  # SILENT: strangers scanning a public address.
+  - interval: 1m
+    input_series:
+      - series: 'calabi_edge_visitor_requests_total{outcome="no_tunnel",proxy_type="http"}'
+        values: "0+300x15"
+      - series: 'calabi_edge_visitor_requests_total{outcome="sniff_failed",proxy_type="https"}'
+        values: "0+60x15"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: CalabiEdgeFailingVisitors
+        exp_alerts: []
+
+  # SILENT by default: your own upstream is down. Uncomment open_upstream_failed
+  # in alerts.yml if you run those services yourself and want to hear about it —
+  # then this case is expected to go red, which is how you confirm the change.
+  - interval: 1m
+    input_series:
+      - series: 'calabi_edge_visitor_requests_total{outcome="ok",proxy_type="http"}'
+        values: "0+60x15"
+      - series: 'calabi_edge_visitor_requests_total{outcome="open_upstream_failed",proxy_type="http"}'
+        values: "0+60x15"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: CalabiEdgeFailingVisitors
+        exp_alerts: []
+
+  # === CalabiCoordRPCErrors ================================================
+
+  # Fires: devices cannot register. Note the handler name is the real gRPC
+  # method — that is what the interceptor records.
+  - interval: 1m
+    input_series:
+      - series: 'calabi_handler_requests_total{svc="calabi-coord",handler="/calabi.mesh.v1.Coordinator/RegisterNode",code="OK",org_id="",plan=""}'
+        values: "0+30x15"
+      - series: 'calabi_handler_requests_total{svc="calabi-coord",handler="/calabi.mesh.v1.Coordinator/RegisterNode",code="Internal",org_id="",plan=""}'
+        values: "0+6x15"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: CalabiCoordRPCErrors
+        exp_alerts:
+          - exp_labels:
+              handler: "/calabi.mesh.v1.Coordinator/RegisterNode"
+              severity: warning
+            exp_annotations:
+              summary: "coordinator has been failing /calabi.mesh.v1.Coordinator/RegisterNode continuously for 10m"
+              description: "Break it down with: sum by (handler, code) (rate(calabi_handler_requests_total{svc=\"calabi-coord\"}[5m])). Then read `docker compose logs coord`."
+
+  # SILENT: callers being refused is the server working, not failing.
+  - interval: 1m
+    input_series:
+      - series: 'calabi_handler_requests_total{svc="calabi-coord",handler="/calabi.mesh.v1.Coordinator/RegisterNode",code="OK",org_id="",plan=""}'
+        values: "0+30x15"
+      - series: 'calabi_handler_requests_total{svc="calabi-coord",handler="/calabi.mesh.v1.Coordinator/RegisterNode",code="PermissionDenied",org_id="",plan=""}'
+        values: "0+30x15"
+      - series: 'calabi_handler_requests_total{svc="calabi-coord",handler="/calabi.mesh.v1.Coordinator/RegisterNode",code="Unauthenticated",org_id="",plan=""}'
+        values: "0+30x15"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: CalabiCoordRPCErrors
+        exp_alerts: []
+
+  # SILENT: one transient error, evaluated after it has decayed out of the 5m
+  # rate window. This tests the RATE WINDOW. It does NOT test `for` — by eval
+  # time the expression is already false, so it would pass with for: 0s too.
+  # The case below is the one that tests `for`.
+  - interval: 1m
+    input_series:
+      - series: 'calabi_handler_requests_total{svc="calabi-coord",handler="/calabi.mesh.v1.Coordinator/RegisterNode",code="OK",org_id="",plan=""}'
+        values: "0+30x15"
+      - series: 'calabi_handler_requests_total{svc="calabi-coord",handler="/calabi.mesh.v1.Coordinator/RegisterNode",code="Unavailable",org_id="",plan=""}'
+        values: "0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: CalabiCoordRPCErrors
+        exp_alerts: []
+
+  # SILENT: errors ARRIVING RIGHT NOW, but only for the last minute or two.
+  # This is the case that tests `for: 10m`: at eval time the expression is
+  # TRUE, so the rule is pending — and only `for` keeps it from paging.
+  # Setting for: 0s turns this case red, which is how it earns its place.
+  - interval: 1m
+    input_series:
+      - series: 'calabi_handler_requests_total{svc="calabi-coord",handler="/calabi.mesh.v1.Coordinator/RegisterNode",code="OK",org_id="",plan=""}'
+        values: "0+30x15"
+      - series: 'calabi_handler_requests_total{svc="calabi-coord",handler="/calabi.mesh.v1.Coordinator/RegisterNode",code="Unavailable",org_id="",plan=""}'
+        values: "0 0 0 0 0 0 0 0 0 1 2 3"
+    alert_rule_test:
+      - eval_time: 11m
+        alertname: CalabiCoordRPCErrors
+        exp_alerts: []
