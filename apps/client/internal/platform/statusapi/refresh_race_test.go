@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 // When the access token expires, every request the local console has in flight

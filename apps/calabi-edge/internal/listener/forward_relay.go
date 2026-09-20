@@ -21,7 +21,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/mesh"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/mesh"
 )
 
 // meshDialTimeout caps how long we wait to connect to the owner edge's

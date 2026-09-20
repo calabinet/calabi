@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/localweb"
-	"github.com/calabi/calabi/apps/client/internal/platform/statusapi"
+	"github.com/calabinet/calabi/apps/client/internal/localweb"
+	"github.com/calabinet/calabi/apps/client/internal/platform/statusapi"
 )
 
 // The two daemon kinds serve /v1/mesh from two different structs: the local

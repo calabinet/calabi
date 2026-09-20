@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/calabi/calabi/apps/client/internal/selfupdate"
+	"github.com/calabinet/calabi/apps/client/internal/selfupdate"
 )
 
 // UpdateSource is the daemon's self-update agent, as the console needs it.

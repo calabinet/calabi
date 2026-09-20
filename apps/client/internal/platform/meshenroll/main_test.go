@@ -3,7 +3,7 @@ package meshenroll
 import (
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/testhome"
+	"github.com/calabinet/calabi/apps/client/internal/testhome"
 )
 
 // The per-user directories are sandboxed for this package's tests; see testhome.

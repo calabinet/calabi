@@ -11,8 +11,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/identity"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/identity"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
 )
 
 const registerInterval = 30 * time.Second

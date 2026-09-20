@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/netip"
 
-	"github.com/calabi/calabi/apps/client/internal/hostnet"
+	"github.com/calabinet/calabi/apps/client/internal/hostnet"
 )
 
 // privateV4Blocks are the IPv4 ranges an exit-node client keeps on the physical

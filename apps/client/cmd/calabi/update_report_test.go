@@ -8,8 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	"github.com/calabi/calabi/apps/client/internal/selfupdate"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/selfupdate"
 )
 
 // The status code decides whether the agent keeps a batch or drops it. Getting

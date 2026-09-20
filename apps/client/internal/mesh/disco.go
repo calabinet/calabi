@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/crypto/nacl/box"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // DISCO is the peer-to-peer NAT-traversal protocol (MESH.4): short ping/pong

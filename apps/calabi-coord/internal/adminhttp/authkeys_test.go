@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/adminhttp"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/adminhttp"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 )
 
 func keyServer(t *testing.T, withKeys bool) *httptest.Server {

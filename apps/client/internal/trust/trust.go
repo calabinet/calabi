@@ -18,8 +18,8 @@ import (
 	"net"
 	"strings"
 
-	"github.com/calabi/calabi/apps/client/internal/transport"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/client/internal/transport"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // Mode is how a server's certificate is checked.

@@ -24,7 +24,7 @@ syntax = "proto3";
 
 package calabi.v1.bff_edge;
 
-option go_package = "github.com/calabi/calabi/pkg/edge-proto/edgepb;edgepb";
+option go_package = "github.com/calabinet/calabi/pkg/edge-proto/edgepb;edgepb";
 
 import "google/protobuf/timestamp.proto";
 // The edge-facing message set, mirrored from control_plane with identical field

@@ -38,8 +38,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	cruntime "github.com/calabi/calabi/apps/client/internal/runtime"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	cruntime "github.com/calabinet/calabi/apps/client/internal/runtime"
 	"github.com/kardianos/service"
 )
 

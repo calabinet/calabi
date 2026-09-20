@@ -34,7 +34,7 @@ import (
 
 	"github.com/gofrs/flock"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 // SingleInstanceLock holds the lock that grants exclusive daemon rights.

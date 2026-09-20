@@ -27,7 +27,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 )
 
 // Notifier is the slice of core.Notifier the admin surface needs to push a fresh

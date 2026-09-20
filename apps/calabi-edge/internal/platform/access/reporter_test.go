@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	eventbus "github.com/calabi/calabi/apps/calabi-edge/internal/bus"
+	eventbus "github.com/calabinet/calabi/apps/calabi-edge/internal/bus"
 )
 
 type capturingBus struct {

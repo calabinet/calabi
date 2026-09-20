@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"time"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // Grant authentication — how a self-hosted edge accepts a device.

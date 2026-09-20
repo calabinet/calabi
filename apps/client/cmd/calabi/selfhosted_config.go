@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	"github.com/calabi/calabi/apps/client/internal/trust"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/trust"
 )
 
 // managedConfigPath is the tunnels.yaml the console writes when a person

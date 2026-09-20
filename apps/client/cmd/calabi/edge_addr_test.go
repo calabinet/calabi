@@ -19,7 +19,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 // edgeDirectory stands in for bff-console's GET /v1/edges. It counts calls,

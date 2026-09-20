@@ -14,7 +14,7 @@ import (
 
 	"golang.zx2c4.com/wireguard/device"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // A pool with no link to send on says so; it is not "closed" until it is.
@@ -39,7 +39,7 @@ func TestRelayPoolWithNoLinkSaysSoRatherThanClosed(t *testing.T) {
 func TestAPacketSentBeforeTheFirstRelayLinkGoesOutWhenItComesUp(t *testing.T) {
 	relay := startFakeRelay(t)
 	self, peer := meshproto.NodeKey{1}, meshproto.NodeKey{2}
-	bind := newMeshBind(self, slog.Default())
+	bind := newMeshBind(self, nil, slog.Default())
 	pool := newRelayPool(self, [meshproto.KeyLen]byte{}, nil, slog.Default())
 	defer pool.Close()
 	pool.setOnLinkUp(func(string) { bind.retryHeld() })
@@ -96,7 +96,7 @@ func (*noLinkSender) Send(string, meshproto.NodeKey, []byte) error { return errN
 // counts as a relay send error — a drop this datapath chose is reported.
 func TestHeldPacketsAreCopiedOrderedAndBounded(t *testing.T) {
 	peer := meshproto.NodeKey{2}
-	bind := newMeshBind(meshproto.NodeKey{1}, slog.Default())
+	bind := newMeshBind(meshproto.NodeKey{1}, nil, slog.Default())
 	bind.attach(&noLinkSender{})
 
 	buf := []byte("p0")
@@ -138,7 +138,7 @@ func TestHeldPacketsAreCopiedOrderedAndBounded(t *testing.T) {
 // extends a held packet's life.
 func TestRetryingKeepsAHeldPacketsAge(t *testing.T) {
 	peer := meshproto.NodeKey{2}
-	bind := newMeshBind(meshproto.NodeKey{1}, slog.Default())
+	bind := newMeshBind(meshproto.NodeKey{1}, nil, slog.Default())
 	bind.attach(&noLinkSender{})
 	at := time.Now().Add(-time.Second)
 	bind.hold(peer, [][]byte{[]byte("x")}, at)
@@ -307,7 +307,7 @@ func TestTheFirstHandshakeWaitsForTheRelayToAdmitTheDevice(t *testing.T) {
 	priv := testKey(9)
 	self, peer := priv.Public(), meshproto.NodeKey{2}
 	relay := startAuthRelay(t, self, 300*time.Millisecond)
-	bind := newMeshBind(self, slog.Default())
+	bind := newMeshBind(self, nil, slog.Default())
 	pool := newRelayPool(self, [meshproto.KeyLen]byte(priv), nil, slog.Default())
 	defer pool.Close()
 	pool.setOnLinkUp(func(string) { bind.retryHeld() })

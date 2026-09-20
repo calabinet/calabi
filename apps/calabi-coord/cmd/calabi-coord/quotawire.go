@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"strconv"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 )
 
 // staticNodeQuota builds the node cap from CALABI_COORD_NODE_QUOTA:

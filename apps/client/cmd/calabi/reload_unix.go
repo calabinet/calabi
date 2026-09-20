@@ -26,7 +26,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 // installSIGHUP wires a goroutine that, on SIGHUP, invokes onReload.

@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	proto "github.com/calabi/calabi/pkg/protocol"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 func TestDialUpstream_HTTPUsesPlainTCP(t *testing.T) {

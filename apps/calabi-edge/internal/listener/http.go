@@ -13,14 +13,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/accesslog"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/mesh"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/policy"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/ratelimit"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/router"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/visitorerr"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/accesslog"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/mesh"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/policy"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/ratelimit"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/router"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/visitorerr"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // HTTPObserver is the visitor-facing metrics surface for the HTTP listener.
@@ -292,7 +292,7 @@ func (h *HTTP) handle(visitor net.Conn) {
 	// Pipe bytes both ways. The first side to error / EOF unblocks us.
 	// Both directions go through the session's per-customer rate
 	// limiter; zero-rate sessions pass through unchanged.
-	lim := sess.Limiter()
+	lim := sess.LimiterFor(target.ProxyID)
 	type result struct {
 		dir   string
 		bytes int64

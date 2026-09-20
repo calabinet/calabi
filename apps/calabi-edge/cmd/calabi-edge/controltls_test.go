@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/config"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/config"
 )
 
 func leafOf(t *testing.T, c controlCert) *x509.Certificate {

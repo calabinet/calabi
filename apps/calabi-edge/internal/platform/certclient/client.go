@@ -43,9 +43,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	eventbus "github.com/calabi/calabi/apps/calabi-edge/internal/bus"
-	"github.com/calabi/calabi/pkg/certevents"
-	pb "github.com/calabi/calabi/pkg/edge-proto/edgepb"
+	eventbus "github.com/calabinet/calabi/apps/calabi-edge/internal/bus"
+	"github.com/calabinet/calabi/pkg/certevents"
+	pb "github.com/calabinet/calabi/pkg/edge-proto/edgepb"
 )
 
 // DefaultRefreshInterval governs how often the client re-polls cert-svc

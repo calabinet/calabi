@@ -14,7 +14,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 func isolatedDataDir(t *testing.T) string {

@@ -20,7 +20,7 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/oauth"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/oauth"
 )
 
 // advanced holds the platform-only policy features. nil sub-fields = feature

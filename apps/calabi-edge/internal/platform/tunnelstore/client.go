@@ -22,7 +22,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pb "github.com/calabi/calabi/pkg/edge-proto/edgepb"
+	pb "github.com/calabinet/calabi/pkg/edge-proto/edgepb"
 )
 
 // ErrTunnelDisabled signals that tunnel-svc refused a Claim because the row
@@ -60,6 +60,22 @@ var ErrClaimConflict = errors.New("tunnelstore: claim conflict (owned by another
 // caller reserves the offending port before failing, and the next attempt gets
 // a different one.
 var ErrPortBound = errors.New("tunnelstore: remote port already bound on this edge")
+
+// ErrTunnelAwaitingApproval signals that tunnel-svc refused a Claim because the
+// organization reviews the tunnels its ordinary members create and this row is
+// still queued (gRPC Aborted).
+//
+// WHY Aborted, which is not a perfect fit. The edge tells claim refusals apart
+// by CODE alone, and the three that read better are already spoken for on this
+// path: PermissionDenied is admin-disabled, FailedPrecondition is an ownership
+// conflict, AlreadyExists is the port index. Rather than match on message text
+// — which would couple this file to tunnel-svc's prose — the two sides agree on
+// a code nothing else here uses. tunnel-svc's mapStoreErr names this file.
+//
+// Hard-fail, like the three above: the Persist fallback would mint a SECOND
+// row, which (being another member create in the same org) would queue too —
+// one new pending tunnel per reconnect, and a review queue nobody can empty.
+var ErrTunnelAwaitingApproval = errors.New("tunnelstore: tunnel awaiting approval")
 
 // managedSubdomainSeqRE matches the SubdomainAllocator's output shape
 // ("uNNNNNN.<base>"). The captured digits feed allocator.Seed so the
@@ -157,6 +173,15 @@ type PersistResult struct {
 	// cannot drop its own restrictions. Empty for CLI-created rows that
 	// carry no server-side policy. See apps/calabi-edge/internal/policy.
 	ConfigJSON string
+	// Approval is the row's review state: "" / "approved" = serve it,
+	// "pending" = the org reviews member tunnels and an admin has not let this
+	// one through yet.
+	//
+	// It has to travel on the CREATE result, not only on claims: a create
+	// SUCCEEDS for a queued tunnel (the row is kept so there is something to
+	// review), so without this the edge would read "no error" and start serving
+	// the very tunnel the review was supposed to hold.
+	Approval string
 }
 
 // Persist creates a tunnel row in tunnel-svc. Returns a partial result
@@ -192,7 +217,11 @@ func (c *Client) Persist(ctx context.Context, in PersistInput) (PersistResult, e
 		ClientProposedSecurityJson: in.ProposedSecurityJSON,
 	})
 	if err == nil {
-		return PersistResult{TunnelID: t.GetMeta().GetId(), ConfigJSON: t.GetConfigJson()}, nil
+		return PersistResult{
+			TunnelID:   t.GetMeta().GetId(),
+			ConfigJSON: t.GetConfigJson(),
+			Approval:   t.GetApproval(),
+		}, nil
 	}
 	// On AlreadyExists, look up by the same key so we can still report
 	// status / delete later. This makes Persist idempotent w.r.t. edge
@@ -313,9 +342,18 @@ func (c *Client) Claim(ctx context.Context, in ClaimInput) (PersistResult, error
 		if status.Code(err) == codes.AlreadyExists {
 			return PersistResult{}, fmt.Errorf("%w: %v", ErrPortBound, err)
 		}
+		// Aborted ⇒ the org reviews member tunnels and this one is queued. Same
+		// hard-fail as the three above, for the reason in ErrTunnelAwaitingApproval.
+		if status.Code(err) == codes.Aborted {
+			return PersistResult{}, fmt.Errorf("%w: %v", ErrTunnelAwaitingApproval, err)
+		}
 		return PersistResult{}, err
 	}
-	return PersistResult{TunnelID: t.GetMeta().GetId(), ConfigJSON: t.GetConfigJson()}, nil
+	return PersistResult{
+		TunnelID:   t.GetMeta().GetId(),
+		ConfigJSON: t.GetConfigJson(),
+		Approval:   t.GetApproval(),
+	}, nil
 }
 
 // ReportStatus updates a tunnel's status + reason. Best-effort.

@@ -15,7 +15,7 @@ syntax = "proto3";
 
 package calabi.mesh.v1;
 
-option go_package = "github.com/calabi/calabi/pkg/mesh-proto/meshpb;meshpb";
+option go_package = "github.com/calabinet/calabi/pkg/mesh-proto/meshpb;meshpb";
 
 // Coordinator is the mesh control plane ("the brains"). Nodes authenticate out
 // of band (identity-svc auth key / interactive login) and then speak only this
@@ -651,6 +651,24 @@ message NetMap {
   // and all of it is in use" is something to act on; "no alias" is not.
   uint32 alias_budget_addrs = 10;
   uint32 alias_used_addrs = 11;
+  // relay_bandwidth_kbps / relay_bandwidth_burst_kbps are the rate this node
+  // should hold ITSELF to for traffic it sends over a PLATFORM relay — a
+  // sustained rate plus a short-burst ceiling, in kbps, matching the plan's
+  // per-device allowance.
+  //
+  // Self-limiting, not enforcement: the relay polices the same numbers and
+  // drops what it will not carry. This field exists so the drop does not have
+  // to happen. A WireGuard tunnel is a datagram path, so the TCP inside it only
+  // learns about a limit by losing a packet and halving its window; a node that
+  // paces itself gets the same throughput with none of that. A modified client
+  // that ignores this is not a hole — it just gets the lossy version.
+  //
+  // 0 / absent = no self-limit, which is what an older coordinator sends and
+  // what a self-hosted one sends. Direct (hole-punched) traffic is NEVER
+  // charged against it: it costs the platform nothing.
+  // See docs/runbook/mesh-relay-rate-limit-plan.md.
+  uint32 relay_bandwidth_kbps = 12;
+  uint32 relay_bandwidth_burst_kbps = 13;
   // MagicDNS records land here in MESH.6.
 }
 

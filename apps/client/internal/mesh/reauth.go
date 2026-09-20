@@ -4,7 +4,7 @@ import (
 	"errors"
 	"sync"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // ErrRegister wraps a session that ended at registration — the coordinator

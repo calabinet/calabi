@@ -10,7 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshconnrecord"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshconnrecord"
 )
 
 // MeshConnRecordCreate is the builder for creating a MeshConnRecord entity.

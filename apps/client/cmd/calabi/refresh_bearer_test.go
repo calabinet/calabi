@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 // refreshServer stands in for bff-console's /v1/auth/refresh with identity-svc's

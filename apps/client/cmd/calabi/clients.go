@@ -12,8 +12,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	"github.com/calabi/calabi/apps/client/internal/platform/clientreg"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/platform/clientreg"
 )
 
 // runClients dispatches `calabi clients <subcommand>`.

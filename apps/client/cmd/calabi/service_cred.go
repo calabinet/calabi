@@ -19,8 +19,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	"github.com/calabi/calabi/apps/client/internal/platform/bffclient"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/platform/bffclient"
 )
 
 // serviceInstallEnv returns the env vars to bake into the platform service at

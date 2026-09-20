@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	eventbus "github.com/calabi/calabi/apps/calabi-edge/internal/bus"
+	eventbus "github.com/calabinet/calabi/apps/calabi-edge/internal/bus"
 )
 
 // CachedClient wraps Client with a per-org TTL cache and parallel
@@ -54,12 +54,11 @@ type CachedClient struct {
 }
 
 type quotaCacheEntry struct {
-	cap       int64 // -1 = unlimited, 0 = no opinion, >0 = numeric cap
-	bps       int64 // sustained bytes/sec; 0 = unlimited
-	peakBps   int64 // peak (burst) bytes/sec; 0 = no separate burst tier
-	maxConns  int64 // concurrent visitor-connection cap; 0 = unlimited
-	tcpRPM    int64 // new TCP/TLS(+SNI/UDP) connection rate, events/min; 0 = unlimited
-	httpRPM   int64 // new HTTP(S) connection rate, events/min; 0 = unlimited
+	cap       int64     // -1 = unlimited, 0 = no opinion, >0 = numeric cap
+	bw        Bandwidth // both tiers, bytes/sec; 0 in a field = unlimited there
+	maxConns  int64     // concurrent visitor-connection cap; 0 = unlimited
+	tcpRPM    int64     // new TCP/TLS(+SNI/UDP) connection rate, events/min; 0 = unlimited
+	httpRPM   int64     // new HTTP(S) connection rate, events/min; 0 = unlimited
 	expiresAt time.Time
 }
 
@@ -155,22 +154,22 @@ func (cc *CachedClient) invalidate(orgID int64) {
 //
 // Returns, in order:
 //   - cap:      online-client cap (-1 unlimited, 0 no opinion, >0 numeric)
-//   - bps/peak: bandwidth bytes/sec (0 = unlimited / no burst tier)
+//   - bw:       both bandwidth tiers, bytes/sec (0 in a field = unlimited)
 //   - maxConns: concurrent-connection cap (0 = unlimited)
 //   - tcpRPM / httpRPM: new-connection rate caps, events/min (0 = unlimited)
 //
 // Returns the cap-lookup error if any (admit path fails closed). Bandwidth
 // + connection caps degrade open on error per their Client contracts.
-func (cc *CachedClient) LookupOrg(ctx context.Context, orgID int64) (cap, bps, peak, maxConns, tcpRPM, httpRPM int64, err error) {
+func (cc *CachedClient) LookupOrg(ctx context.Context, orgID int64) (cap int64, bw Bandwidth, maxConns, tcpRPM, httpRPM int64, err error) {
 	if cc == nil || cc.Client == nil || orgID <= 0 {
-		return -1, 0, 0, 0, 0, 0, nil
+		return -1, Bandwidth{}, 0, 0, 0, nil
 	}
 	// Cache fast path.
 	cc.mu.RLock()
 	e, ok := cc.entries[orgID]
 	cc.mu.RUnlock()
 	if ok && time.Now().Before(e.expiresAt) {
-		return e.cap, e.bps, e.peakBps, e.maxConns, e.tcpRPM, e.httpRPM, nil
+		return e.cap, e.bw, e.maxConns, e.tcpRPM, e.httpRPM, nil
 	}
 
 	// Cache miss — fan out the underlying calls. Each GetEffective hits
@@ -180,18 +179,16 @@ func (cc *CachedClient) LookupOrg(ctx context.Context, orgID int64) (cap, bps, p
 		v   int64
 		err error
 	}
-	type bwResult struct{ bps, peak int64 }
 	type connResult struct{ maxConns, tcpRPM, httpRPM int64 }
 	capCh := make(chan capResult, 1)
-	bwCh := make(chan bwResult, 1)
+	bwCh := make(chan Bandwidth, 1)
 	connCh := make(chan connResult, 1)
 	go func() {
 		v, ierr := cc.Client.OnlineClientLimit(ctx, orgID)
 		capCh <- capResult{v: v, err: ierr}
 	}()
 	go func() {
-		s, p := cc.Client.BandwidthLimitsBytesPerSec(ctx, orgID)
-		bwCh <- bwResult{bps: s, peak: p}
+		bwCh <- cc.Client.BandwidthCapsBytesPerSec(ctx, orgID)
 	}()
 	go func() {
 		mc, t, h := cc.Client.ConnLimits(ctx, orgID)
@@ -203,46 +200,67 @@ func (cc *CachedClient) LookupOrg(ctx context.Context, orgID int64) (cap, bps, p
 	if capR.err != nil {
 		// Cap is the fail-closed dimension; surface the error. Don't
 		// write the cache so the next reconnect retries fresh.
-		return 0, bwR.bps, bwR.peak, connR.maxConns, connR.tcpRPM, connR.httpRPM, capR.err
+		return 0, bwR, connR.maxConns, connR.tcpRPM, connR.httpRPM, capR.err
 	}
 	cc.mu.Lock()
 	cc.entries[orgID] = quotaCacheEntry{
 		cap:       capR.v,
-		bps:       bwR.bps,
-		peakBps:   bwR.peak,
+		bw:        bwR,
 		maxConns:  connR.maxConns,
 		tcpRPM:    connR.tcpRPM,
 		httpRPM:   connR.httpRPM,
 		expiresAt: time.Now().Add(cc.ttl),
 	}
 	cc.mu.Unlock()
-	return capR.v, bwR.bps, bwR.peak, connR.maxConns, connR.tcpRPM, connR.httpRPM, nil
+	return capR.v, bwR, connR.maxConns, connR.tcpRPM, connR.httpRPM, nil
 }
 
 // OnlineClientLimit honors the cache. Falls through to the underlying
 // Client on cache miss + fresh-error.
 func (cc *CachedClient) OnlineClientLimit(ctx context.Context, orgID int64) (int64, error) {
-	cap, _, _, _, _, _, err := cc.LookupOrg(ctx, orgID)
+	cap, _, _, _, _, err := cc.LookupOrg(ctx, orgID)
 	return cap, err
 }
 
-// BandwidthBytesPerSec honors the cache. Returns the sustained rate; 0 on
-// any uncacheable error (matching the underlying Client's degrade-open).
+// BandwidthBytesPerSec honors the cache. Returns the per-tunnel sustained
+// rate; 0 on any uncacheable error (matching the Client's degrade-open).
 func (cc *CachedClient) BandwidthBytesPerSec(ctx context.Context, orgID int64) int64 {
-	_, bps, _, _, _, _, _ := cc.LookupOrg(ctx, orgID)
-	return bps
+	_, bw, _, _, _, _ := cc.LookupOrg(ctx, orgID)
+	return bw.Sustained
 }
 
-// BandwidthLimitsBytesPerSec honors the cache; returns (sustained, peak).
+// BandwidthCapsBytesPerSec honors the cache; returns BOTH tiers.
+func (cc *CachedClient) BandwidthCapsBytesPerSec(ctx context.Context, orgID int64) Bandwidth {
+	_, bw, _, _, _, _ := cc.LookupOrg(ctx, orgID)
+	return bw
+}
+
+// BandwidthLimitsBytesPerSec honors the cache; returns the per-tunnel tier.
 func (cc *CachedClient) BandwidthLimitsBytesPerSec(ctx context.Context, orgID int64) (int64, int64) {
-	_, bps, peak, _, _, _, _ := cc.LookupOrg(ctx, orgID)
-	return bps, peak
+	bw := cc.BandwidthCapsBytesPerSec(ctx, orgID)
+	return bw.Sustained, bw.Peak
+}
+
+// OrgBandwidthLimitsBytesPerSec honors the cache; returns the org-wide tier.
+// Same cached row as the per-tunnel tier, so asking for both costs one
+// lookup, not two.
+func (cc *CachedClient) OrgBandwidthLimitsBytesPerSec(ctx context.Context, orgID int64) (int64, int64) {
+	bw := cc.BandwidthCapsBytesPerSec(ctx, orgID)
+	return bw.OrgSustained, bw.OrgPeak
+}
+
+// RelayBandwidthBytesPerSec returns the MESH RELAY pair: the per-device rate
+// (which reuses the per-tunnel keys) and the org-wide relay rate. Honors the
+// same cached row — a relay reconnect storm costs one lookup per org per TTL.
+func (cc *CachedClient) RelayBandwidthBytesPerSec(ctx context.Context, orgID int64) (devSustained, devPeak, orgSustained, orgPeak int64) {
+	bw := cc.BandwidthCapsBytesPerSec(ctx, orgID)
+	return bw.Sustained, bw.Peak, bw.OrgRelaySustained, bw.OrgRelayPeak
 }
 
 // ConnLimits honors the cache; returns (maxConns, tcpRatePerMin,
 // httpRatePerMin). Each 0 = unlimited. Degrades open (zeros) on error.
 func (cc *CachedClient) ConnLimits(ctx context.Context, orgID int64) (maxConns, tcpRatePerMin, httpRatePerMin int64) {
-	_, _, _, mc, t, h, _ := cc.LookupOrg(ctx, orgID)
+	_, _, mc, t, h, _ := cc.LookupOrg(ctx, orgID)
 	return mc, t, h
 }
 

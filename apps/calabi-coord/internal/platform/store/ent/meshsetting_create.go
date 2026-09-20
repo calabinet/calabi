@@ -10,7 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshsetting"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshsetting"
 )
 
 // MeshSettingCreate is the builder for creating a MeshSetting entity.

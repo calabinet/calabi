@@ -27,9 +27,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	"github.com/calabi/calabi/apps/client/internal/hostnet"
-	"github.com/calabi/calabi/apps/client/internal/selfhosted"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/hostnet"
+	"github.com/calabinet/calabi/apps/client/internal/selfhosted"
 )
 
 // Platform is what the app implements for the core.

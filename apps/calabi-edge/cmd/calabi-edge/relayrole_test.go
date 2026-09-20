@@ -6,8 +6,8 @@ import (
 	"encoding/base64"
 	"testing"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/config"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/config"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 func TestRelayAuthConfig(t *testing.T) {

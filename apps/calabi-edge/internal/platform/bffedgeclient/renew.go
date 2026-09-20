@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/calabi/calabi/pkg/edge-proto/edgepb"
+	pb "github.com/calabinet/calabi/pkg/edge-proto/edgepb"
 )
 
 const (

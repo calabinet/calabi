@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 // otherConsoleCandidates lists where another client's console may be answering:

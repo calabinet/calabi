@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/mesh"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
 )
 
 // The level this picks is the whole point of the function, and it is exactly

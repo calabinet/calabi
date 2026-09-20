@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/config"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/config"
 )
 
 // hotPaths is what a reload may change. Everything else must be refused.

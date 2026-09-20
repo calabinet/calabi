@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // The edge a self-hosted coordinator's devices serve tunnels through, from the environment:

@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"sort"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 // Replacing an old device. A reinstalled or new phone

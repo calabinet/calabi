@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/coordsetting"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshconnrecord"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/coordsetting"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshconnrecord"
 )
 
 // Connection records over ent — the data-plane audit trail (core/connrecord.go).

@@ -27,10 +27,10 @@ func TestIsStandaloneMode(t *testing.T) {
 // mode=standalone is mistakenly set.
 func TestTrustsClientPolicy(t *testing.T) {
 	cases := []struct {
-		name             string
-		mode             string
+		name              string
+		mode              string
 		controlPlaneWired bool
-		want             bool
+		want              bool
 	}{
 		{"standalone fork (no control plane)", "standalone", false, true},
 		{"standalone but control plane wired (BYOI/misconfig)", "standalone", true, false},

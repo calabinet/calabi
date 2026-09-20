@@ -18,13 +18,13 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/meshresolver"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/configclient"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/identity"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/tunnelstore"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/usage"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/policy"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/meshresolver"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/configclient"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/identity"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/tunnelstore"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/usage"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/policy"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
 )
 
 // tunnelIDIndex maps tunnel-svc row ids to local proxy ids so the
@@ -112,6 +112,18 @@ func (a *tunnelPersisterAdapter) OnProxyOpened(sess *session.Session, p *session
 				"claim_tunnel_id", p.ClaimTunnelID, "proxy_id", p.ID,
 				"type", string(p.Type), "domain", p.Domain)
 			return 0, err
+		}
+		// The org reviews the tunnels its members create and this one is still
+		// queued. Hard-fail for the same reason as the disable above, plus one
+		// of its own: the Persist fallback would create ANOTHER row, which is
+		// another member create in the same org and would queue as well — one
+		// new pending tunnel per reconnect. Tagged with the session sentinel so
+		// the daemon gets a code that means "waiting", not "duplicate".
+		if errors.Is(err, tunnelstore.ErrTunnelAwaitingApproval) {
+			a.logger.Info("claim refused: tunnel awaiting approval — not creating a second row",
+				"claim_tunnel_id", p.ClaimTunnelID, "proxy_id", p.ID,
+				"type", string(p.Type), "domain", p.Domain)
+			return 0, fmt.Errorf("%w: %v", session.ErrProxyAwaitingApproval, err)
 		}
 		// a genuine ownership conflict (FailedPrecondition) must ALSO
 		// hard-fail here. Falling through to Persist would mint a brand-new row
@@ -222,6 +234,21 @@ func (a *tunnelPersisterAdapter) OnProxyOpened(sess *session.Session, p *session
 			return 0, fmt.Errorf("%w: %s", session.ErrProxyPolicyRequired, err)
 		}
 		return 0, err
+	}
+	// The create SUCCEEDED and the row is parked: the org reviews what its
+	// members publish. Refuse the proxy here — this is the CLI's only gate,
+	// because on this path there is no claim to refuse. The row is kept (that
+	// is the point: an admin has something to review), so nothing is rolled
+	// back at the control plane; only the local proxy is.
+	//
+	// No ReportStatus either: "enabled" on a tunnel nothing serves would show
+	// the member a live-looking row in the console and tell the offline-alert
+	// sweep a lie.
+	if res.Approval == "pending" {
+		a.logger.Info("proxy refused: the organization reviews member tunnels and this one is queued",
+			"tunnel_id", res.TunnelID, "proxy_id", p.ID, "type", string(p.Type),
+			"domain", p.Domain, "org_id", orgID)
+		return 0, session.ErrProxyAwaitingApproval
 	}
 	if res.TunnelID != 0 {
 		// Mark online via ReportStatus so the row gets last_seen_at

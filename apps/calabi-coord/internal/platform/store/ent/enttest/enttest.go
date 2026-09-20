@@ -5,12 +5,12 @@ package enttest
 import (
 	"context"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent"
 	// required by schema hooks.
-	_ "github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/runtime"
+	_ "github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/runtime"
 
 	"entgo.io/ent/dialect/sql/schema"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/migrate"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/migrate"
 )
 
 type (

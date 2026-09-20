@@ -26,8 +26,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
-	meshpb "github.com/calabi/calabi/pkg/mesh-proto/meshpb"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
+	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
 )
 
 // shCoord is a self-hosted coordinator stand-in serving TLS on a self-signed

@@ -10,8 +10,8 @@ import (
 
 	"golang.zx2c4.com/wireguard/tun/tuntest"
 
-	"github.com/calabi/calabi/apps/client/internal/hostnet"
-	meshpb "github.com/calabi/calabi/pkg/mesh-proto/meshpb"
+	"github.com/calabinet/calabi/apps/client/internal/hostnet"
+	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
 )
 
 // Choosing an exit device must put its default route into WireGuard, following

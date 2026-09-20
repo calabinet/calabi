@@ -17,7 +17,7 @@ import (
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // DefaultMTU is a conservative tunnel MTU that leaves room for the WireGuard +
@@ -91,6 +91,10 @@ type WGDatapath struct {
 	dev    *device.Device
 	bind   *meshBind
 	relays *relayPool
+	// relayMeter is the client's self-limit on relayed traffic: the bind charges
+	// it, the tun reader waits on it, SetConfig re-rates it from each netmap.
+	// Held here because all three need the same one (relayrate.go).
+	relayMeter *relayMeter
 	// filter drops inbound packets the meshnet's access rules don't allow
 	// (MESH.5b). Installed on the tun; updated from every netmap.
 	filter *PacketFilter
@@ -345,7 +349,12 @@ func newWGDatapath(tunDev tun.Device, routing Routing, priv PrivateKey, relayAdd
 		return nil, fmt.Errorf("mesh: tun name: %w", err)
 	}
 
-	bind := newMeshBind(self, logger)
+	// One meter shared by the two halves of relay rate limiting: the bind
+	// charges what it sends over the relay, the tun reader pays before its next
+	// read. Created unconditionally and idle until a coordinator sends an
+	// allowance (relayrate.go).
+	meter := &relayMeter{}
+	bind := newMeshBind(self, meter, logger)
 	// The relay pool starts as the single bootstrap link this node was configured
 	// with; once the netmap arrives it also links to the relays its peers are homed
 	// at (MESH.4 B2b). Every link feeds the same inbound queue.
@@ -373,7 +382,7 @@ func newWGDatapath(tunDev tun.Device, routing Routing, priv PrivateKey, relayAdd
 	// reach the OS. Until a netmap arrives the filter is disabled (= pass-through),
 	// so this changes nothing for a coordinator that doesn't compile filters.
 	filter := &PacketFilter{}
-	ftun := newFilteredTUN(tunDev, filter, logger)
+	ftun := newFilteredTUN(context.Background(), tunDev, filter, meter, logger)
 	dev := device.NewDevice(ftun, bind, wgLogger(logger, wgLogLevel()))
 	if err := dev.IpcSet(fmt.Sprintf("private_key=%s\nlisten_port=0\n", priv.Hex())); err != nil {
 		dev.Close()
@@ -400,7 +409,7 @@ func newWGDatapath(tunDev tun.Device, routing Routing, priv PrivateKey, relayAdd
 		go serveUAPI(ln, dev, logger)
 	}
 
-	d := &WGDatapath{priv: priv, self: self, ifname: ifname, tun: tunDev, ftun: ftun, dev: dev, bind: bind, relays: relays, filter: filter, uapi: uapiLn, routing: routing, logger: logger}
+	d := &WGDatapath{priv: priv, self: self, ifname: ifname, tun: tunDev, ftun: ftun, dev: dev, bind: bind, relays: relays, relayMeter: meter, filter: filter, uapi: uapiLn, routing: routing, logger: logger}
 	if d.routing == nil {
 		d.routing = osRouting{d}
 	}
@@ -483,6 +492,13 @@ func (d *WGDatapath) SetConfig(cfg WGConfig) error {
 	// Snapshot is what the console reads, and an alias nobody can see is an
 	// address nobody can dial.
 	d.setAliasReport(cfg)
+	// The relay self-limit, refreshed from every netmap. kbps → bytes/sec uses
+	// the same ×1024/8 the edge does, so the rate the client paces itself by and
+	// the rate the relay polices it by are the same number.
+	d.relayMeter.SetRelayRate(
+		relayRateBytesPerSec(cfg.RelayBandwidthKbps),
+		relayRateBytesPerSec(cfg.RelayBandwidthBurstKbps),
+	)
 	// Access rules for INBOUND traffic. Applied before the peers go live so a
 	// packet can't slip in during the window between the two.
 	if d.filter.SetRules(cfg.FilterEnabled, cfg.Filter) {

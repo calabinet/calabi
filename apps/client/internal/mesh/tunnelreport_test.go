@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
-	meshpb "github.com/calabi/calabi/pkg/mesh-proto/meshpb"
+	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
 )
 
 // The meter reports what each tunnel added since the last ACCEPTED report: a

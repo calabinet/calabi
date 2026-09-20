@@ -10,7 +10,7 @@ import (
 	"net"
 	"net/netip"
 
-	"github.com/calabi/calabi/pkg/mesh-proto/stun"
+	"github.com/calabinet/calabi/pkg/mesh-proto/stun"
 )
 
 // Serve answers STUN binding requests on conn until it is closed (returns on the

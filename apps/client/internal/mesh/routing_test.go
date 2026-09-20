@@ -10,8 +10,8 @@ import (
 
 	"golang.zx2c4.com/wireguard/tun/tuntest"
 
-	"github.com/calabi/calabi/apps/client/internal/hostnet"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/client/internal/hostnet"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // recordingRouting is a platform Routing that remembers what it was asked to do.

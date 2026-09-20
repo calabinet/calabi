@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // fakeRelayServer is a minimal relay stand-in: it accepts links, reads the

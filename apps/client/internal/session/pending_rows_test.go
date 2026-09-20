@@ -22,7 +22,7 @@ import (
 	"log/slog"
 	"testing"
 
-	proto "github.com/calabi/calabi/pkg/protocol"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // pendingRecorder records only what this test asks about; every other

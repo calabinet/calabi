@@ -12,7 +12,7 @@ func TestUDPDatagram_RoundTrip(t *testing.T) {
 	var buf bytes.Buffer
 	for _, msg := range [][]byte{
 		[]byte("hello"),
-		make([]byte, 0),             // 0-length keep-alive
+		make([]byte, 0), // 0-length keep-alive
 		bytes.Repeat([]byte("x"), 1024),
 		bytes.Repeat([]byte("Y"), MaxUDPDatagram),
 	} {

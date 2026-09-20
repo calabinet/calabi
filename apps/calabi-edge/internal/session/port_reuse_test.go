@@ -46,8 +46,8 @@ import (
 
 	"github.com/hashicorp/yamux"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/router"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/router"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // ---------------------------------------------------------------------------

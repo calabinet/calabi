@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshconnrecord"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshconnrecord"
 )
 
 // MeshConnRecord is the model entity for the MeshConnRecord schema.

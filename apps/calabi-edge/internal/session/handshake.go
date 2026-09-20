@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // HandshakeDeadline is the maximum wall-clock duration a server gives a

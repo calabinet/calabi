@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/localweb"
-	"github.com/calabi/calabi/apps/client/internal/mesh/derp"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/client/internal/localweb"
+	"github.com/calabinet/calabi/apps/client/internal/mesh/derp"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // A query string must not be able to pin the node's relay link to a measurement

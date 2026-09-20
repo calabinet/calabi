@@ -27,9 +27,9 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	"github.com/calabi/calabi/apps/client/internal/platform/bffclient"
-	cruntime "github.com/calabi/calabi/apps/client/internal/runtime"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/platform/bffclient"
+	cruntime "github.com/calabinet/calabi/apps/client/internal/runtime"
 )
 
 // portRolledNote explains a console that did not land on the port the user

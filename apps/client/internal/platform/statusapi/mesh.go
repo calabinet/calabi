@@ -17,8 +17,8 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	"github.com/calabi/calabi/apps/client/internal/mesh"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
 )
 
 // MeshStatusSource is the platform daemon's live mesh state. The mesh

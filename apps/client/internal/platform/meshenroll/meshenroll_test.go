@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/calabi/calabi/apps/client/internal/hostnet"
+	"github.com/calabinet/calabi/apps/client/internal/hostnet"
 )
 
 func TestFetchReturnsTheEnrollment(t *testing.T) {

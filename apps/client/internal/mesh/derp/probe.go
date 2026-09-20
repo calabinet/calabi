@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // Driving ONE LEG of the relay path over a link that is already authenticated.

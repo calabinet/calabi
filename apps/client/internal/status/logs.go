@@ -32,7 +32,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/logging"
+	"github.com/calabinet/calabi/apps/client/internal/logging"
 )
 
 const (

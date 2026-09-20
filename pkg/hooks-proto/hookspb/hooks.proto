@@ -33,7 +33,7 @@ syntax = "proto3";
 
 package calabi.v1.hooks;
 
-option go_package = "github.com/calabi/calabi/pkg/hooks-proto/hookspb;hookspb";
+option go_package = "github.com/calabinet/calabi/pkg/hooks-proto/hookspb;hookspb";
 
 import "google/protobuf/timestamp.proto";
 

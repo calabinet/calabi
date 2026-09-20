@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/policy"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/policy"
 )
 
 // TestProxyPolicySwap covers the runtime-swappable security policy that backs

@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/accesslog"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/accesslog"
 )
 
 func TestSeamVocabulariesMatch(t *testing.T) {

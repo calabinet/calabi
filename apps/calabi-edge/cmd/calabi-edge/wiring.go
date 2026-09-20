@@ -10,10 +10,10 @@ import (
 	"crypto/tls"
 	"io"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/config"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/listener"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/router"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/config"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/listener"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/router"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
 )
 
 // platformInputs are the core data-plane objects the platform wiring attaches
@@ -73,6 +73,14 @@ type platformDeps struct {
 	// node has no single-org identity / no relay label — runRelay then relays
 	// without reporting.
 	relayReporter *relayUsageReporter
+
+	// relayRate resolves each mesh link's rate limiter from its org's quota
+	//. nil = the relay forwards unlimited,
+	// which is what a self-hosted relay does and what every platform relay did
+	// before this existed. Only wired for a PLATFORM-kind relay: a self-hosted
+	// one carries its owner's own traffic on their own VPS, and the platform
+	// neither may nor can meter it.
+	relayRate *relayRateResolver
 
 	runners []namedRunner
 	closers []io.Closer

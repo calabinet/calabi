@@ -32,15 +32,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/config"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/configreload"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/listener"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/metrics"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/ratelimit"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/router"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/tlsutil"
-	"github.com/calabi/calabi/pkg/observability"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/config"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/configreload"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/listener"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/metrics"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/ratelimit"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/router"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/tlsutil"
+	"github.com/calabinet/calabi/pkg/observability"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -286,6 +286,13 @@ func run() error {
 		logger.Info("standalone mode: trusting client-supplied per-proxy security policy")
 	}
 
+	// Org-wide bandwidth buckets.
+	// Process-global and reference-counted by session: every tunnel of one org
+	// on this edge draws from the same bucket, on top of its own per-tunnel
+	// one. Always constructed — it costs an empty map, and a nil registry
+	// would silently mean "no org tier" on an edge that does have quota.
+	orgBandwidth := ratelimit.NewOrgRegistry()
+
 	ctrl := listener.NewControl(logger, listener.ControlOptions{
 		Addr:     cfg.Control.Addr,
 		TLS:      tlsCfg,
@@ -310,6 +317,7 @@ func run() error {
 		Router:             r,
 		Observer:           metricsSet,
 		BandwidthResolver:  deps.bandwidthResolver,
+		OrgBandwidth:       orgBandwidth,
 		ConnGuardInstaller: deps.connGuard,
 		OnlineCapAdmit:     deps.onlineCap,
 		PostHandshake:      deps.postHandshake,
@@ -403,7 +411,9 @@ func run() error {
 		if coordKey != nil {
 			relayCfg.CoordPubKey = base64.StdEncoding.EncodeToString(coordKey)
 		}
-		go func() { errCh <- labelErr("relay", runRelay(ctx, relayCfg, logger, deps.relayReporter)) }()
+		go func() {
+			errCh <- labelErr("relay", runRelay(ctx, relayCfg, logger, deps.relayReporter, deps.relayRate))
+		}()
 	}
 	go func() { errCh <- labelErr("admin", obs.Run(ctx)) }()
 	go func() { errCh <- labelErr("configreload", reloader.Run(ctx)) }()
@@ -744,6 +754,10 @@ func (a *onlineCapAdapter) AdmitNewSession(ctx context.Context, tenantID string)
 // satisfy it, so the adapter compiles with or without the cache.
 type bandwidthLookup interface {
 	BandwidthLimitsBytesPerSec(ctx context.Context, orgID int64) (sustainedBps, peakBps int64)
+	// OrgBandwidthLimitsBytesPerSec is the org-wide tier (2026-09-20). On the
+	// cached client both methods read the same cached row, so asking for both
+	// is one lookup.
+	OrgBandwidthLimitsBytesPerSec(ctx context.Context, orgID int64) (sustainedBps, peakBps int64)
 }
 
 // quotaBandwidthAdapter bridges *quotaclient.Client (or its cached
@@ -759,26 +773,35 @@ type quotaBandwidthAdapter struct {
 	logger *slog.Logger
 }
 
-func (a *quotaBandwidthAdapter) BandwidthLimitsBytesPerSec(ctx context.Context, tenantID, _ string) (int64, int64) {
+func (a *quotaBandwidthAdapter) BandwidthLimitsBytesPerSec(ctx context.Context, tenantID, _ string) listener.BandwidthCaps {
 	// Test-only override: EDGE_DEBUG_BANDWIDTH_BPS=N forces all sessions
 	// to N bytes/sec sustained (no peak tier) regardless of tenant /
 	// quota-svc. Used by the e2e to assert the limiter wires
-	// through to io.Copy.
+	// through to io.Copy. It sets the PER-TUNNEL tier only — the e2e asserts
+	// one tunnel's throughput, and leaving the org tier off keeps the
+	// override's meaning unchanged now that there are two tiers.
 	if dbg := os.Getenv("EDGE_DEBUG_BANDWIDTH_BPS"); dbg != "" {
 		if n, err := strconvAtoi64(dbg); err == nil && n > 0 {
-			return n, 0
+			return listener.BandwidthCaps{Sustained: n}
 		}
 	}
 	if a == nil || a.cli == nil {
-		return 0, 0
+		return listener.BandwidthCaps{}
 	}
 	orgID, err := strconvAtoi64(tenantID)
 	if err != nil || orgID <= 0 {
 		// Static-YAML / dev tenants like "dev" / "e2e" never had a real
 		// org row; nothing to look up.
-		return 0, 0
+		return listener.BandwidthCaps{}
 	}
-	return a.cli.BandwidthLimitsBytesPerSec(ctx, orgID)
+	sustained, peak := a.cli.BandwidthLimitsBytesPerSec(ctx, orgID)
+	orgSustained, orgPeak := a.cli.OrgBandwidthLimitsBytesPerSec(ctx, orgID)
+	return listener.BandwidthCaps{
+		Sustained:    sustained,
+		Peak:         peak,
+		OrgSustained: orgSustained,
+		OrgPeak:      orgPeak,
+	}
 }
 
 // connLimitsLookup is the slice of the quota client the conn-guard needs.

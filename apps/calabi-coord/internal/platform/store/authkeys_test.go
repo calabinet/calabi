@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 )
 
 // The in-memory and the database key stores answer the same questions the same

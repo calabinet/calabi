@@ -3,7 +3,7 @@ package session
 import (
 	"testing"
 
-	proto "github.com/calabi/calabi/pkg/protocol"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // allocWithBase is a DomainAllocator that also exposes Base(), like the real

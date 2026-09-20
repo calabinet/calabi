@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	cruntime "github.com/calabi/calabi/apps/client/internal/runtime"
-	"github.com/calabi/calabi/apps/client/internal/selfhosted"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	cruntime "github.com/calabinet/calabi/apps/client/internal/runtime"
+	"github.com/calabinet/calabi/apps/client/internal/selfhosted"
 )
 
 func runJoin(args []string) int {

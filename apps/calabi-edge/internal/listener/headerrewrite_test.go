@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/policy"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/policy"
 )
 
 func headerPolicy(t *testing.T) *policy.Policy {

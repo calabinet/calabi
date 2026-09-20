@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 type lockedBuffer struct {

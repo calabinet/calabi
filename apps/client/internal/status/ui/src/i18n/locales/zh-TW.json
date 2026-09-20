@@ -138,6 +138,10 @@
     "meshDatapathPendingTip": "中繼位址已確定，組網資料面還在啟動。"
   },
   "tunnels": {
+    "awaitingApproval": "待審核",
+    "awaitingApprovalTip": "該組織要求審核成員新建的隧道。需要管理員在控制台通過後，這條隧道才會對外提供服務。",
+    "rejected": "已拒絕",
+    "rejectedTip": "管理員拒絕了這條隧道。",
     "newTunnel": "新建隧道",
     "refresh": "重新整理",
     "colStatus": "狀態",

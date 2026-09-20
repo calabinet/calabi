@@ -7,10 +7,10 @@ import (
 
 	entsql "entgo.io/ent/dialect/sql"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshauthkey"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/predicate"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshauthkey"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/predicate"
 )
 
 // The auth keys a self-hosted coordinator mints (core.AuthKeyStore).

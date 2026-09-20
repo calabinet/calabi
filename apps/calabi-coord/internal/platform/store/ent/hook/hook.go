@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent"
 )
 
 // The CoordSettingFunc type is an adapter to allow the use of ordinary

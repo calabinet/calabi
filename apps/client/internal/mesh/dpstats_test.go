@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"testing"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // The inbound queue's overflow drop is the one place this datapath discards
@@ -17,7 +17,7 @@ import (
 // uncounted drop makes the entire datapath unfalsifiable: "is this us or the
 // network?" had no answer.
 func TestQueueOverflowIsCounted(t *testing.T) {
-	b := newMeshBind(meshproto.NodeKey{}, nil)
+	b := newMeshBind(meshproto.NodeKey{}, nil, nil)
 	// Never Opened, so nothing drains: the queue fills to capacity and every
 	// packet after that must be counted as dropped.
 	const sent = 400
@@ -44,7 +44,7 @@ func TestQueueOverflowIsCounted(t *testing.T) {
 // collapse it — is visible as a number rather than only as reordering in a
 // capture.
 func TestInboundIsSplitByTransport(t *testing.T) {
-	b := newMeshBind(meshproto.NodeKey{}, nil)
+	b := newMeshBind(meshproto.NodeKey{}, nil, nil)
 	b.deliver(meshproto.NodeKey{}, []byte{1})
 	b.deliver(meshproto.NodeKey{}, []byte{2})
 	b.deliverDirect(netip.MustParseAddrPort("192.0.2.1:1234"), []byte{3})
@@ -120,7 +120,7 @@ func TestReadSocketBuffersReturnsRealSizes(t *testing.T) {
 // when someone needs it. Absolute totals that walk backwards are worse than no
 // totals, because nothing about them looks wrong.
 func TestSocketCountersSurviveASocketRebuild(t *testing.T) {
-	b := newMeshBind(meshproto.NodeKey{}, nil)
+	b := newMeshBind(meshproto.NodeKey{}, nil, nil)
 
 	first, err := newMagicSock(DiscoPrivateKey{}, nil)
 	if err != nil {

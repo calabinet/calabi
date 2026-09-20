@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/config"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/config"
 )
 
 // testCoordKey makes the test configs valid standalone edges: an edge with no

@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	"github.com/calabi/calabi/apps/client/internal/selfupdate"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/selfupdate"
 )
 
 // newUpdateReporter returns the agent's Report function, or nil when there is no

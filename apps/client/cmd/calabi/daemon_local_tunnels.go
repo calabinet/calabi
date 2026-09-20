@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/calabi/calabi/apps/client/internal/mesh"
-	"github.com/calabi/calabi/apps/client/internal/status"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
+	"github.com/calabinet/calabi/apps/client/internal/status"
 )
 
 // tunnelStates is what the local daemon tells a self-hosted coordinator about

@@ -33,7 +33,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/config"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/config"
 )
 
 // Hot-reload debounce window.

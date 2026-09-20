@@ -1,6 +1,7 @@
 package mesh
 
 import (
+	"context"
 	"log/slog"
 	"sync/atomic"
 
@@ -27,6 +28,21 @@ type filteredTUN struct {
 	flows  *flowTable
 	logger *slog.Logger
 
+	// meter is the relay rate limit's brake. Read pays off what the bind
+	// charged BEFORE taking the next batch, which is the only point in this
+	// data path where not-reading turns into the application's write()
+	// blocking. See relayrate.go.
+	//
+	// It holds up traffic to every peer, not just the relayed ones: there is
+	// one goroutine reading this device for the whole machine
+	// (wireguard-go device/send.go RoutineReadFromTUN), so a wait here is a
+	// wait for the direct paths too. Known and accepted —
+	// has the alternatives and why they
+	// are worse.
+	meter *relayMeter
+	// ctx bounds the wait so a shutting-down datapath is not stuck paying.
+	ctx context.Context
+
 	// dropped counts refusals (see dpstats.go). The Debug log below is fine for
 	// watching a filter work, but it cannot answer "how many did we refuse over
 	// the last hour" — and a legitimate refusal and a policy bug look identical
@@ -34,8 +50,14 @@ type filteredTUN struct {
 	dropped atomic.Uint64
 }
 
-func newFilteredTUN(inner tun.Device, filter *PacketFilter, logger *slog.Logger) *filteredTUN {
-	return &filteredTUN{Device: inner, filter: filter, flows: newFlowTable(), logger: logger}
+func newFilteredTUN(ctx context.Context, inner tun.Device, filter *PacketFilter, meter *relayMeter, logger *slog.Logger) *filteredTUN {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return &filteredTUN{
+		Device: inner, filter: filter, flows: newFlowTable(),
+		meter: meter, ctx: ctx, logger: logger,
+	}
 }
 
 // Read passes outbound packets through untouched and records the flow each one
@@ -43,6 +65,9 @@ func newFilteredTUN(inner tun.Device, filter *PacketFilter, logger *slog.Logger)
 // enabled would lose the flows that were opened just before a policy landed, so
 // it happens unconditionally — the table is small and costs nothing when unused.
 func (t *filteredTUN) Read(bufs [][]byte, sizes []int, offset int) (int, error) {
+	// Pay for the relayed bytes the previous batches produced before taking
+	// more work. Before the cap arrives (or with none) this is a nil check.
+	t.meter.settle(t.ctx)
 	n, err := t.Device.Read(bufs, sizes, offset)
 	for i := 0; i < n && i < len(sizes) && i < len(bufs); i++ {
 		end := offset + sizes[i]

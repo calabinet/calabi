@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"net/netip"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // errSubnetRouterUnsupported: the subnet-router glue (IP forwarding + NAT) isn't

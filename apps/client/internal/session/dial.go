@@ -5,7 +5,7 @@ import (
 	"net"
 	"time"
 
-	proto "github.com/calabi/calabi/pkg/protocol"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // dialUpstream opens the connection to the local upstream described by t.

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/calabi/calabi/pkg/relay"
+	"github.com/calabinet/calabi/pkg/relay"
 )
 
 // relayUsageSubject is where a merged node re-sends its OWN relay usage. In

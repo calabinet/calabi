@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/mesh"
-	"github.com/calabi/calabi/apps/client/internal/session"
-	"github.com/calabi/calabi/apps/client/internal/status"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
+	"github.com/calabinet/calabi/apps/client/internal/session"
+	"github.com/calabinet/calabi/apps/client/internal/status"
 )
 
 // What the local daemon reports to a self-hosted coordinator: every configured

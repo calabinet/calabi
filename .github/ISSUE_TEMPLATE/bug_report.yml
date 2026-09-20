@@ -1,0 +1,84 @@
+# GENERATED into the public mirror by scripts/export-public.sh from
+# docs/public-github/ in the private monorepo. Edit it HERE.
+name: Bug report
+description: Something in the client, the edge, the coordinator or the Android app does not work.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Found a vulnerability?** Do not file it here — see
+        [SECURITY.md](https://github.com/calabinet/calabi/blob/main/SECURITY.md).
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - client (calabi)
+        - edge (calabi-edge)
+        - coordinator (calabi-coord)
+        - Android app
+        - desktop app
+        - not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: server
+    attributes:
+      label: Which server
+      description: The coordinator and edge your client talks to.
+      options:
+        - calabi.net
+        - my own server
+        - both
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`calabi version`, `calabi-edge -version`, `calabi-coord -version`, or the commit."
+      placeholder: "calabi 1.13.0, calabi-edge 1.13.0"
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: OS and architecture
+      placeholder: "Ubuntu 24.04 arm64 / Windows 11 24H2 / macOS 15 Apple silicon / Android 15"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. calabi join "calabi://join?…"
+        2. calabi http 8080
+        3. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Quote the lines in full — the exact wording is what we search for, and it
+        tells us which build you are running. `CALABI_DEBUG=1` adds detail.
+        The client's are in the console at `http://127.0.0.1:7400`, in `logs/`
+        in its config directory, or in `calabi.log` next to an installed service.
+      render: text

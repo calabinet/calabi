@@ -24,7 +24,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 // logoutSandbox gives logout its own data dir and local token, a control plane

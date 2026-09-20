@@ -17,7 +17,7 @@ package main
 import (
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 func TestShouldRegisterDeviceOnlyWhenTheIdIsMissing(t *testing.T) {

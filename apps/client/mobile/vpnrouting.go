@@ -9,7 +9,7 @@ import (
 
 	"golang.zx2c4.com/wireguard/tun"
 
-	"github.com/calabi/calabi/apps/client/internal/mesh"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
 )
 
 // meshOverlay is the range every node address comes from; the VPN always routes

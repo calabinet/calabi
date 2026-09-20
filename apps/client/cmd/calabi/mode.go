@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 // Client operating mode — the explicit counterpart to the edge's top-level

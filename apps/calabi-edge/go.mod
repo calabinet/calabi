@@ -1,13 +1,13 @@
-module github.com/calabi/calabi/apps/calabi-edge
+module github.com/calabinet/calabi/apps/calabi-edge
 
 go 1.25.0
 
 require (
-	github.com/calabi/calabi/pkg/mesh-proto v0.0.0
-	github.com/calabi/calabi/pkg/observability v0.0.0
-	github.com/calabi/calabi/pkg/protocol v0.0.0
-	github.com/calabi/calabi/pkg/relay v0.0.0
-	github.com/calabi/calabi/pkg/stunserver v0.0.0
+	github.com/calabinet/calabi/pkg/mesh-proto v0.0.0
+	github.com/calabinet/calabi/pkg/observability v0.0.0
+	github.com/calabinet/calabi/pkg/protocol v0.0.0
+	github.com/calabinet/calabi/pkg/relay v0.0.0
+	github.com/calabinet/calabi/pkg/stunserver v0.0.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/hashicorp/yamux v0.1.2
 	github.com/prometheus/client_golang v1.23.2
@@ -19,8 +19,8 @@ require (
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/calabi/calabi/pkg/certevents v0.0.0
-	github.com/calabi/calabi/pkg/edge-proto v0.0.0
+	github.com/calabinet/calabi/pkg/certevents v0.0.0
+	github.com/calabinet/calabi/pkg/edge-proto v0.0.0
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
@@ -36,13 +36,13 @@ require (
 )
 
 replace (
-	github.com/calabi/calabi/pkg/mesh-proto => ../../pkg/mesh-proto
-	github.com/calabi/calabi/pkg/observability => ../../pkg/observability
-	github.com/calabi/calabi/pkg/protocol => ../../pkg/protocol
-	github.com/calabi/calabi/pkg/relay => ../../pkg/relay
-	github.com/calabi/calabi/pkg/stunserver => ../../pkg/stunserver
+	github.com/calabinet/calabi/pkg/mesh-proto => ../../pkg/mesh-proto
+	github.com/calabinet/calabi/pkg/observability => ../../pkg/observability
+	github.com/calabinet/calabi/pkg/protocol => ../../pkg/protocol
+	github.com/calabinet/calabi/pkg/relay => ../../pkg/relay
+	github.com/calabinet/calabi/pkg/stunserver => ../../pkg/stunserver
 )
 
-replace github.com/calabi/calabi/pkg/edge-proto => ../../pkg/edge-proto
+replace github.com/calabinet/calabi/pkg/edge-proto => ../../pkg/edge-proto
 
-replace github.com/calabi/calabi/pkg/certevents => ../../pkg/certevents
+replace github.com/calabinet/calabi/pkg/certevents => ../../pkg/certevents

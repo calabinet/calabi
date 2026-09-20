@@ -24,7 +24,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	edgepb "github.com/calabi/calabi/pkg/edge-proto/edgepb"
+	edgepb "github.com/calabinet/calabi/pkg/edge-proto/edgepb"
 )
 
 // ===================== Quota adapter =====================

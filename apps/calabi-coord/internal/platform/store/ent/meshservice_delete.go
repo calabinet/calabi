@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshservice"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/predicate"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshservice"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/predicate"
 )
 
 // MeshServiceDelete is the builder for deleting a MeshService entity.

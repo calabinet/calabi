@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/identity"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/identity"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
 )
 
 // defaultPresenceInterval is the fallback heartbeat cadence used when

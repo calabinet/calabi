@@ -44,10 +44,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	"github.com/calabi/calabi/apps/client/internal/inspect"
-	"github.com/calabi/calabi/apps/client/internal/probe"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/inspect"
+	"github.com/calabinet/calabi/apps/client/internal/probe"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // Config wires the api server with its external endpoints. Zero value

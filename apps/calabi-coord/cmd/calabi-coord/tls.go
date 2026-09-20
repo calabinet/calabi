@@ -21,8 +21,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // Coord's gRPC is the one control-plane surface a client dials directly over the

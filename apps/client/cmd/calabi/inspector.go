@@ -26,8 +26,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/inspect"
-	"github.com/calabi/calabi/apps/client/internal/session"
+	"github.com/calabinet/calabi/apps/client/internal/inspect"
+	"github.com/calabinet/calabi/apps/client/internal/session"
 )
 
 // daemonInspector is the single ConnectionInspector instance shared

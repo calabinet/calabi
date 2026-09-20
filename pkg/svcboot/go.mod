@@ -1,9 +1,9 @@
-module github.com/calabi/calabi/pkg/svcboot
+module github.com/calabinet/calabi/pkg/svcboot
 
 go 1.25.0
 
 require (
-	github.com/calabi/calabi/pkg/observability v0.0.0
+	github.com/calabinet/calabi/pkg/observability v0.0.0
 	google.golang.org/grpc v1.82.1
 )
 
@@ -23,4 +23,4 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/calabi/calabi/pkg/observability => ../observability
+replace github.com/calabinet/calabi/pkg/observability => ../observability

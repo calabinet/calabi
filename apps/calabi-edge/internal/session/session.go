@@ -23,10 +23,10 @@ import (
 
 	"github.com/hashicorp/yamux"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/policy"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/ratelimit"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/policy"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/ratelimit"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // streamPreambleTimeout caps how long we wait for the client to write the
@@ -82,8 +82,35 @@ type Proxy struct {
 	// = no policy (allow all). Use SetPolicy / LoadPolicy. See internal/policy.
 	secPolicy atomic.Pointer[policy.Policy]
 
+	// lim is THIS tunnel's bandwidth bucket (the lower of the two tiers —
+	// the org-wide one lives on the Session). Built by RegisterProxy from the
+	// session's per-tunnel rates; nil = unlimited, which is what a
+	// struct-literal Proxy in a test gets.
+	lim atomic.Pointer[ratelimit.Limiter]
+
 	BytesIn  atomic.Uint64
 	BytesOut atomic.Uint64
+}
+
+// limiter returns this tunnel's own bucket (nil = unlimited).
+func (p *Proxy) limiter() *ratelimit.Limiter {
+	if p == nil {
+		return nil
+	}
+	return p.lim.Load()
+}
+
+// SetBandwidthLimit rebuilds this tunnel's own bucket. Used by the config
+// hot-update path; RegisterProxy calls it once at registration.
+func (p *Proxy) SetBandwidthLimit(sustainedBps, peakBps int64) {
+	if p == nil {
+		return
+	}
+	if sustainedBps <= 0 {
+		p.lim.Store(nil)
+		return
+	}
+	p.lim.Store(ratelimit.New(sustainedBps, peakBps))
 }
 
 // SetPolicy atomically installs (or clears, with nil) this proxy's security
@@ -153,10 +180,20 @@ type Session struct {
 
 	nextStreamID atomic.Uint64
 
-	// limiter caps the per-session bandwidth. Always
-	// non-nil — main.go installs an unlimited (rate=0) limiter by
-	// default and overrides at handshake from quota-svc when wired.
-	limiter atomic.Pointer[ratelimit.Limiter]
+	// Bandwidth limiting is TWO tiers:
+	//
+	//   - tunnelSustained / tunnelPeak are the PER-TUNNEL rates. Each Proxy
+	//     gets its own bucket built from them at RegisterProxy time, so two
+	//     tunnels on one session no longer share one bucket the way the old
+	//     per-session limiter made them.
+	//   - orgLimiter is the org-wide bucket, SHARED with every other session
+	//     of the same org on this edge (ratelimit.OrgRegistry owns it). nil =
+	//     no org tier (unresolvable tenant, or quota not wired).
+	//
+	// Every byte clears both. See ratelimit.Chain.
+	tunnelSustained atomic.Int64
+	tunnelPeak      atomic.Int64
+	orgLimiter      atomic.Pointer[ratelimit.Limiter]
 
 	// connGuard holds the per-org connection limiters (Phase A anti-abuse,
 	// 2026-06-11): concurrent-connection cap + new-connection rate gates.
@@ -195,29 +232,43 @@ func New(logger *slog.Logger, mux *yamux.Session, ctrl io.ReadWriteCloser) *Sess
 		acceptCh:  make(chan struct{}),
 		ConnEpoch: time.Now().UnixMilli(),
 	}
-	s.limiter.Store(ratelimit.New(0, 0)) // unlimited by default
-	return s
+	return s // both tiers start unset = unlimited
 }
 
-// SetBandwidthLimit installs a new dual-rate cap for this session.
-// sustainedBps=0 == unlimited; peakBps>sustainedBps adds a burst ceiling
-// (套餐「带宽速度 / 带宽上限」). Callers (the handshake post-quota lookup;
-// future hot-update from config-svc) are responsible for atomicity — this
-// is a single atomic.Pointer swap.
+// SetBandwidthLimit installs the PER-TUNNEL dual-rate cap (套餐「带宽速度 /
+// 带宽上限」). sustainedBps=0 == unlimited; peakBps>sustainedBps adds a burst
+// ceiling.
+//
+// It takes effect for tunnels registered AFTER it — which is every tunnel in
+// practice, because the handshake resolves quota before the client is allowed
+// to open a proxy. Tunnels already open keep the bucket they were built with;
+// re-rating those live is the hot-update path and is not wired yet (same as
+// before this change).
 func (s *Session) SetBandwidthLimit(sustainedBps, peakBps int64) {
-	s.limiter.Store(ratelimit.New(sustainedBps, peakBps))
+	s.tunnelSustained.Store(sustainedBps)
+	s.tunnelPeak.Store(peakBps)
 }
 
-// Limiter returns the session's current rate limiter. Always non-nil;
-// listeners can call.Reader /.Writer /.Wait without checking.
-func (s *Session) Limiter() *ratelimit.Limiter {
-	if l := s.limiter.Load(); l != nil {
-		return l
+// SetOrgLimiter installs the org-wide tier, shared with the org's other
+// sessions on this edge. nil clears it (no org tier).
+func (s *Session) SetOrgLimiter(l *ratelimit.Limiter) { s.orgLimiter.Store(l) }
+
+// OrgLimiter returns the org-wide tier, or nil when there is none.
+func (s *Session) OrgLimiter() *ratelimit.Limiter { return s.orgLimiter.Load() }
+
+// LimiterFor returns the two-tier limiter for one tunnel: that tunnel's own
+// bucket plus the org-wide one. Never nil, so listeners can wrap without
+// checking; an unknown proxy id (a connection that raced the proxy's teardown)
+// still gets the org tier, which is the safe side to err on.
+func (s *Session) LimiterFor(proxyID string) *ratelimit.Chain {
+	org := s.orgLimiter.Load()
+	s.mu.Lock()
+	p := s.proxies[proxyID]
+	s.mu.Unlock()
+	if p == nil {
+		return ratelimit.NewChain(nil, org)
 	}
-	// Defensive: should never happen because New() pre-installs one.
-	fresh := ratelimit.New(0, 0)
-	s.limiter.Store(fresh)
-	return fresh
+	return ratelimit.NewChain(p.limiter(), org)
 }
 
 // ConnGuard bundles the process-global per-org connection limiters with
@@ -342,6 +393,12 @@ func (s *Session) RegisterProxy(p *Proxy) bool {
 	if _, ok := s.proxies[p.ID]; ok {
 		return false
 	}
+	// Give the tunnel its own bucket from the session's per-tunnel rates.
+	// Done here rather than at the call sites so every path that registers a
+	// proxy (client NEW_PROXY, standalone YAML, tests) gets it — a tunnel that
+	// slipped in without a bucket would be silently unlimited, which is the
+	// failure mode two-tier limiting exists to close.
+	p.SetBandwidthLimit(s.tunnelSustained.Load(), s.tunnelPeak.Load())
 	s.proxies[p.ID] = p
 	return true
 }

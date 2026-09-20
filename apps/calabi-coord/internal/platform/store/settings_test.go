@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 )
 
 // Every field of core.MeshnetSettings must survive the database.

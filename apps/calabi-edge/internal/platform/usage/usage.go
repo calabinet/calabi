@@ -45,8 +45,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	eventbus "github.com/calabi/calabi/apps/calabi-edge/internal/bus"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
+	eventbus "github.com/calabinet/calabi/apps/calabi-edge/internal/bus"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
 )
 
 // SubjectReport is where edges publish usage deltas.

@@ -4,7 +4,7 @@ import (
 	"io"
 	"sync"
 
-	proto "github.com/calabi/calabi/pkg/protocol"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // frameStream wraps a single ReadWriteCloser with Calabi frame codec

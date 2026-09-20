@@ -9,7 +9,7 @@ import (
 	"net/netip"
 	"sync"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // ErrNodeDisabled is returned by Register when a disabled node tries to
@@ -48,6 +48,9 @@ type Coordinator struct {
 	ACL ACLStore
 	// Settings holds per-meshnet switches (device approval). Nil = defaults only.
 	Settings SettingsStore
+	// RelayRates supplies the self-limit a node should apply to relayed
+	// traffic. Nil (self-hosted, dev) = send nothing = no self-limit.
+	RelayRates RelayRateSource
 	// ConnRecords keeps the data-plane audit trail (who exchanged traffic with
 	// whom, by the hour). Nil = this deployment does not keep one: reports are
 	// accepted and discarded rather than refused, so a node built against a
@@ -508,6 +511,11 @@ func (c *Coordinator) NetMapFor(ctx context.Context, nodeID int64) (*NetMap, err
 	// extra scan on every reconnect.
 	nm.UnaliasedRoutes = unaliasedRoutes(self)
 	nm.AliasBudgetAddrs = c.aliasBudgetOf(ctx, self.Meshnet)
+	// The relay self-limit. Nil source (self-hosted) sends zeros, which the
+	// client reads as "no limit" — the same thing an older coordinator sends.
+	if c.RelayRates != nil {
+		nm.RelayBandwidthKbps, nm.RelayBandwidthBurstKbps = c.RelayRates.RelayRateKbps(ctx, self.Meshnet)
+	}
 	for _, n := range all {
 		nm.AliasUsedAddrs += AliasSpend(n.RouteAliases)
 	}

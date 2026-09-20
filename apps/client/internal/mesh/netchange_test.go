@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/hostnet"
-	meshpb "github.com/calabi/calabi/pkg/mesh-proto/meshpb"
+	"github.com/calabinet/calabi/apps/client/internal/hostnet"
+	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
 )
 
 // A phone's platform reports a network change (Wi-Fi to cellular, a new network)

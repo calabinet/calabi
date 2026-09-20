@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-const module = "github.com/calabi/calabi/apps/client"
+const module = "github.com/calabinet/calabi/apps/client"
 
 // mobilePackages is what the phone core builds on. A package joins the list
 // the moment the mobile core imports it, not when it happens to be clean.

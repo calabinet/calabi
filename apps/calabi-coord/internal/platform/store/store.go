@@ -12,14 +12,14 @@ import (
 	"fmt"
 	"net/netip"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshacl"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshaclrevision"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshnode"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshservice"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshsetting"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshacl"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshaclrevision"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshnode"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshservice"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshsetting"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // Store implements core.NodeStore over ent.

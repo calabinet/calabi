@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/mesh"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/router"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/mesh"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/router"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/visitorerr"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/visitorerr"
 )
 
 // TestMeshRoundTripMiss wires the relay side (relayToPeer) to a REAL owner-

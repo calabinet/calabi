@@ -3,9 +3,9 @@ package store
 import (
 	"context"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshrelay"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshrelay"
 )
 
 // Self-hosted relay registry (R2). Every query here is scoped to one meshnet —

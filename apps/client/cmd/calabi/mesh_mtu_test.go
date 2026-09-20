@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/mesh"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
 )
 
 // The MTU knob had a hole: the YAML `mesh:` block only reaches the LOCAL daemon,

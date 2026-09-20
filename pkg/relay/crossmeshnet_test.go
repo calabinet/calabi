@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 func (c coord) grantIn(t *testing.T, node meshproto.NodeKey, meshnet int64) []byte {

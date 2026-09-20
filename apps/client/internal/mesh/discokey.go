@@ -6,7 +6,7 @@ import (
 
 	"golang.org/x/crypto/curve25519"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // DiscoPrivateKey is the private half of a node's DISCO keypair (Curve25519),

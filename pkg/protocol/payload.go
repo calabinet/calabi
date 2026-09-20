@@ -87,7 +87,14 @@ const (
 	// different thing to do about it — nothing about the port is wrong, and the
 	// message carries the two ways out.
 	CodeProxyPolicyRequired = 3008
-	CodeQuotaTunnels        = 4001
+	// CodeProxyAwaitingApproval: the organization reviews the tunnels its
+	// ordinary members create, and this one is queued. The row EXISTS — the
+	// member's work is kept, and an admin approving it is all that is needed —
+	// so this is not a failure to fix but a state to wait in. Distinct from
+	// CodeProxyPolicyRequired because nothing about the tunnel is wrong, and
+	// from CodeProxyDuplicate because retrying changes nothing.
+	CodeProxyAwaitingApproval = 3009
+	CodeQuotaTunnels          = 4001
 	// CodeQuotaExceeded is the generic over-cap signal. Specific dim
 	// codes (tunnels, online_clients) ride in the MessageKey instead so
 	// the wire stays open to adding new dimensions without a code

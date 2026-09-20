@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 )
 
 // Auth keys a self-hosted coordinator mints — what `calabi-coord authkey` and

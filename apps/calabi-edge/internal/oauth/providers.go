@@ -12,9 +12,9 @@ import (
 
 // providerDef holds an IdP's OAuth endpoints + how to read the user's email.
 type providerDef struct {
-	authURL  string
-	tokenURL string
-	scope    string
+	authURL    string
+	tokenURL   string
+	scope      string
 	fetchEmail func(ctx context.Context, hc *http.Client, accessToken string) (string, error)
 }
 

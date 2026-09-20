@@ -10,9 +10,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/hostnet"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
-	"github.com/calabi/calabi/pkg/mesh-proto/stun"
+	"github.com/calabinet/calabi/apps/client/internal/hostnet"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/pkg/mesh-proto/stun"
 )
 
 // magicSock is the node's direct-path UDP socket plus its DISCO identity — the

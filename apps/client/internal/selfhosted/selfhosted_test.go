@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/trust"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/client/internal/trust"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 func TestParseInvite(t *testing.T) {

@@ -11,8 +11,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshconnrecord"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/predicate"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshconnrecord"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/predicate"
 )
 
 // MeshConnRecordUpdate is the builder for updating MeshConnRecord entities.

@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	meshpb "github.com/calabi/calabi/pkg/mesh-proto/meshpb"
+	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
 )
 
 func TestIptablesAliasRules(t *testing.T) {

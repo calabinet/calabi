@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/config"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/config"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // The coordinator this edge belongs to. Its public key is how a standalone edge accepts anyone: devices present

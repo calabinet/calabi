@@ -34,7 +34,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 // registerRequest mirrors the JSON shape bff-console expects on

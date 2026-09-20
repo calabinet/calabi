@@ -35,16 +35,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	"github.com/calabi/calabi/apps/client/internal/platform/clientreg"
-	"github.com/calabi/calabi/apps/client/internal/platform/edgepicker"
-	"github.com/calabi/calabi/apps/client/internal/platform/statusapi"
-	"github.com/calabi/calabi/apps/client/internal/probe"
-	cruntime "github.com/calabi/calabi/apps/client/internal/runtime"
-	"github.com/calabi/calabi/apps/client/internal/session"
-	"github.com/calabi/calabi/apps/client/internal/status"
-	"github.com/calabi/calabi/apps/client/internal/transport"
-	"github.com/calabi/calabi/apps/client/internal/wake"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/platform/clientreg"
+	"github.com/calabinet/calabi/apps/client/internal/platform/edgepicker"
+	"github.com/calabinet/calabi/apps/client/internal/platform/statusapi"
+	"github.com/calabinet/calabi/apps/client/internal/probe"
+	cruntime "github.com/calabinet/calabi/apps/client/internal/runtime"
+	"github.com/calabinet/calabi/apps/client/internal/session"
+	"github.com/calabinet/calabi/apps/client/internal/status"
+	"github.com/calabinet/calabi/apps/client/internal/transport"
+	"github.com/calabinet/calabi/apps/client/internal/wake"
 )
 
 // daemonRegistry is the per-process dynamic ProxyRegistry the daemon

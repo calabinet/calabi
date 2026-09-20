@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 )
 
 func TestChallengeIsSingleUseAndBoundToItsMeshnet(t *testing.T) {

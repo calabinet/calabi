@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // Every field of core.Node, sorted by how the database store treats it. The

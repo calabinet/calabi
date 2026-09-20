@@ -138,6 +138,10 @@
     "meshDatapathPendingTip": "中继地址已确定，组网数据面还在启动。"
   },
   "tunnels": {
+    "awaitingApproval": "待审核",
+    "awaitingApprovalTip": "该组织要求审核成员新建的隧道。需要管理员在控制台通过后，这条隧道才会对外提供服务。",
+    "rejected": "已拒绝",
+    "rejectedTip": "管理员拒绝了这条隧道。",
     "newTunnel": "新建隧道",
     "refresh": "刷新",
     "colStatus": "状态",

@@ -1,6 +1,6 @@
 package listener
 
-import "github.com/calabi/calabi/apps/calabi-edge/internal/ratelimit"
+import "github.com/calabinet/calabi/apps/calabi-edge/internal/ratelimit"
 
 // globalAdmit applies the process-wide (org-agnostic) backpressure to a
 // freshly-accepted visitor connection (Phase B anti-abuse). It is checked

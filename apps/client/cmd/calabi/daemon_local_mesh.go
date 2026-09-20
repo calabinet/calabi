@@ -21,12 +21,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	"github.com/calabi/calabi/apps/client/internal/localweb"
-	"github.com/calabi/calabi/apps/client/internal/mesh"
-	"github.com/calabi/calabi/apps/client/internal/platform/meshenroll"
-	"github.com/calabi/calabi/apps/client/internal/selfhosted"
-	"github.com/calabi/calabi/apps/client/internal/trust"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/localweb"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
+	"github.com/calabinet/calabi/apps/client/internal/platform/meshenroll"
+	"github.com/calabinet/calabi/apps/client/internal/selfhosted"
+	"github.com/calabinet/calabi/apps/client/internal/trust"
 )
 
 // meshConfig is the daemon YAML `mesh:` block. Empty/disabled = the daemon runs

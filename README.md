@@ -319,8 +319,15 @@ Certificate of Origin); there is no CLA:
 git commit -s -m "your message"
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [DCO](DCO). A CI check enforces the
-sign-off on pull requests.
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — what belongs here, and how a pull
+  request reaches the released binaries.
+- **[DEVELOPMENT.md](DEVELOPMENT.md)** — build the three programs and run them
+  against each other on one machine, with no account and no public address.
+- **[SECURITY.md](SECURITY.md)** — reporting a vulnerability. Privately, never
+  as an issue.
+
+CI builds, vets and tests every module on Linux, macOS and Windows, and checks
+the sign-off, on every pull request.
 
 ## License
 

@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent"
-	"github.com/calabi/calabi/pkg/svcboot"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent"
+	"github.com/calabinet/calabi/pkg/svcboot"
 
 	_ "github.com/lib/pq"
 	_ "modernc.org/sqlite"

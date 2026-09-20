@@ -25,7 +25,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/tunnelstore"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/tunnelstore"
 )
 
 func TestClaimPortBoundIsTyped(t *testing.T) {

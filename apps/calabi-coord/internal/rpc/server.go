@@ -13,9 +13,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
-	meshpb "github.com/calabi/calabi/pkg/mesh-proto/meshpb"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
+	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
 )
 
 // Server implements meshpb.CoordinatorServer.

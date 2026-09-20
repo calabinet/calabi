@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/adminhttp"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/adminhttp"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 )
 
 // `calabi-coord device` against a running coordinator's admin API: the list

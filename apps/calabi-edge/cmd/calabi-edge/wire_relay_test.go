@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/config"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/config"
 )
 
 // A relay with no control plane has nowhere to send its usage. Until 1.13 it got

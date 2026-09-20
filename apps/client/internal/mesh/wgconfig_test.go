@@ -4,7 +4,7 @@ import (
 	"net/netip"
 	"testing"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 func TestBuildWGConfig(t *testing.T) {

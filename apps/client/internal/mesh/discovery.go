@@ -3,7 +3,7 @@ package mesh
 import (
 	"net/netip"
 
-	"github.com/calabi/calabi/apps/client/internal/hostnet"
+	"github.com/calabinet/calabi/apps/client/internal/hostnet"
 )
 
 // filterCandidateIPs reduces a host's raw interface addresses to the ones worth

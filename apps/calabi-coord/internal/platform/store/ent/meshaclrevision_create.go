@@ -10,7 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshaclrevision"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshaclrevision"
 )
 
 // MeshACLRevisionCreate is the builder for creating a MeshACLRevision entity.

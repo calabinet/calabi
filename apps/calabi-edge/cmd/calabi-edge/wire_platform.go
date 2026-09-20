@@ -17,21 +17,21 @@ import (
 	"net"
 	"time"
 
-	bffedge "github.com/calabi/calabi/pkg/edge-proto/edgepb"
+	bffedge "github.com/calabinet/calabi/pkg/edge-proto/edgepb"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/accesslog"
-	eventbus "github.com/calabi/calabi/apps/calabi-edge/internal/bus"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/meshresolver"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/access"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/acmechallenge"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/bffedgeclient"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/certclient"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/configclient"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/identity"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/quotaclient"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/tunnelstore"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/usage"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/ratelimit"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/accesslog"
+	eventbus "github.com/calabinet/calabi/apps/calabi-edge/internal/bus"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/meshresolver"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/access"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/acmechallenge"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/bffedgeclient"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/certclient"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/configclient"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/identity"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/quotaclient"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/tunnelstore"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/usage"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/ratelimit"
 )
 
 // wirePlatform stands up the full control plane and returns the bundle of
@@ -276,6 +276,21 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 	// Bandwidth resolver: nil quotaCached yields "unlimited" (still honours the
 	// EDGE_DEBUG_BANDWIDTH_BPS dev override).
 	deps.bandwidthResolver = &quotaBandwidthAdapter{cli: quotaCached, logger: logger}
+
+	// Mesh-relay rate limiting. Wired only for a
+	// PLATFORM-kind relay with a quota client: a self-hosted relay carries its
+	// owner's traffic on their own VPS, which the platform neither may nor can
+	// meter. Note this sits AFTER quotaCached exists — wiring it up with the
+	// relay reporter above would have read a nil that is declared later.
+	if cfg.RunsRelay() && cfg.Relay.IsPlatformKind() {
+		switch {
+		case quotaCached == nil:
+			logger.Info("relay rate limiting NOT wired: no quota client; the relay forwards unlimited")
+		default:
+			deps.relayRate = newRelayRateResolver(quotaCached, logger)
+			logger.Info("relay rate limiting wired (per-device + per-org)", "label", cfg.Relay.Label)
+		}
+	}
 
 	// Online-cap admit (2026-05-28). Needs both identity-svc + quota-svc; the
 	// adapter itself returns Allowed=true when either dep is nil.

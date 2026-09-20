@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 )
 
 // A node's report replaces its list: a name it reported before keeps its row,

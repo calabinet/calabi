@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/hostnet"
-	"github.com/calabi/calabi/apps/client/internal/wake"
+	"github.com/calabinet/calabi/apps/client/internal/hostnet"
+	"github.com/calabinet/calabi/apps/client/internal/wake"
 )
 
 // directTransport is implemented by datapaths that can carry WireGuard over the

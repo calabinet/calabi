@@ -6,9 +6,9 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/calabi/calabi/apps/client/internal/session"
-	"github.com/calabi/calabi/apps/client/internal/status"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	"github.com/calabinet/calabi/apps/client/internal/session"
+	"github.com/calabinet/calabi/apps/client/internal/status"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // runTCP implements `calabi tcp <local-port> [--remote-port N]`.
@@ -88,7 +88,7 @@ func runTCP(args []string) int {
 	}
 	assigned, err := cli.RegisterTunnel(ctx, tun)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi: register tunnel:", err)
+		printRegisterError(os.Stderr, err)
 		return 1
 	}
 	// What the EDGE did with the policy we sent — not what we assumed it would.

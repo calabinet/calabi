@@ -17,10 +17,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	"github.com/calabi/calabi/apps/client/internal/hostnet"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
-	meshpb "github.com/calabi/calabi/pkg/mesh-proto/meshpb"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/hostnet"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
+	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
 )
 
 // fakeBFF is the control plane's public API, as much of it as the core uses.

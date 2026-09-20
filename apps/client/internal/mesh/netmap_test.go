@@ -3,8 +3,8 @@ package mesh
 import (
 	"testing"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
-	meshpb "github.com/calabi/calabi/pkg/mesh-proto/meshpb"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
+	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
 )
 
 func keyB64(b byte) string {

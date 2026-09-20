@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	proto "github.com/calabi/calabi/pkg/protocol"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // testTokens is a TokenVerifier as calabi.net's edges wire it (bff-edge checks

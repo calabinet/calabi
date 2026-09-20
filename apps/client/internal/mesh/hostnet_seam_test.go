@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/hostnet"
+	"github.com/calabinet/calabi/apps/client/internal/hostnet"
 )
 
 // A phone cannot read the interface table itself (Android 11+ refuses the

@@ -1,4 +1,4 @@
-module github.com/calabi/calabi/pkg/edge-proto
+module github.com/calabinet/calabi/pkg/edge-proto
 
 go 1.25.0
 

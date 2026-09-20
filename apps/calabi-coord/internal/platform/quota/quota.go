@@ -16,8 +16,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
-	pb "github.com/calabi/calabi/pkg/hooks-proto/hookspb"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+	pb "github.com/calabinet/calabi/pkg/hooks-proto/hookspb"
 )
 
 // admitKind is the quota-svc CheckAdmit kind for mesh nodes; quota-svc maps it
@@ -30,6 +30,8 @@ type Client struct {
 	rpc     pb.QuotaHooksClient
 	logger  *slog.Logger
 	timeout time.Duration
+	// The relay self-limit cache (relayrate.go).
+	rateCacheFields
 }
 
 // Dial connects to quota-svc. Empty addr is an error (the caller decides whether

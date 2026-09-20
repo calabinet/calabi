@@ -1,0 +1,16 @@
+# GENERATED into the public mirror by scripts/export-public.sh from
+# docs/public-github/ in the private monorepo. Edit it HERE.
+blank_issues_enabled: true
+contact_links:
+  - name: Report a vulnerability
+    url: https://github.com/calabinet/calabi/security/advisories/new
+    about: Privately, never as a public issue. Or email security@calabi.net. See SECURITY.md.
+  - name: Account, billing, plans or the web console
+    url: mailto:support@calabi.net
+    about: Control-plane questions. That code is not in this repository.
+  - name: Running your own server
+    url: https://github.com/calabinet/calabi/blob/main/docs/self-hosting.md
+    about: The coordinator and the edge, end to end.
+  - name: Building and running this repository
+    url: https://github.com/calabinet/calabi/blob/main/DEVELOPMENT.md
+    about: The three programs against each other on one machine.

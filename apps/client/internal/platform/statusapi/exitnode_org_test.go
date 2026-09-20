@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 // The exit device is chosen by name among the organization's devices. Another

@@ -14,9 +14,9 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
-	meshpb "github.com/calabi/calabi/pkg/mesh-proto/meshpb"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
+	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
 )
 
 // fakeTunnelUsage is the smallest core.TunnelUsageStore that works.

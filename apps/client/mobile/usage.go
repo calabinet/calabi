@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 // usageOverview is GET /v1/usage/overview: this month's traffic against the cap,

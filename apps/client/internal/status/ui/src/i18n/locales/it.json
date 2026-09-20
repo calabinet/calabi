@@ -138,6 +138,10 @@
     "meshDatapathPendingTip": "Il relay è noto; il piano dati della rete si sta ancora avviando."
   },
   "tunnels": {
+    "awaitingApproval": "In attesa di approvazione",
+    "awaitingApprovalTip": "Questa organizzazione esamina i tunnel creati dai suoi membri. Un amministratore deve approvarlo nella console prima che serva qualcosa.",
+    "rejected": "Rifiutato",
+    "rejectedTip": "Un amministratore ha rifiutato questo tunnel.",
     "newTunnel": "Nuovo tunnel",
     "refresh": "Aggiorna",
     "colStatus": "Stato",

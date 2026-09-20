@@ -14,7 +14,7 @@ import (
 	"log/slog"
 	"time"
 
-	eventbus "github.com/calabi/calabi/apps/calabi-edge/internal/bus"
+	eventbus "github.com/calabinet/calabi/apps/calabi-edge/internal/bus"
 )
 
 // SubjectReport is where edges publish access-record batches.

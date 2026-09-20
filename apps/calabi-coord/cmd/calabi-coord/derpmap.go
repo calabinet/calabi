@@ -9,7 +9,7 @@ import (
 
 	"log/slog"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 )
 
 // derpMapFile is the on-disk shape of CALABI_COORD_DERP_MAP_FILE — the REAL relay

@@ -7,10 +7,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/mesh"
-	"github.com/calabi/calabi/apps/client/internal/selfhosted"
-	"github.com/calabi/calabi/apps/client/internal/session"
-	"github.com/calabi/calabi/apps/client/internal/transport"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
+	"github.com/calabinet/calabi/apps/client/internal/selfhosted"
+	"github.com/calabinet/calabi/apps/client/internal/session"
+	"github.com/calabinet/calabi/apps/client/internal/transport"
 )
 
 // oneShotEdge is the edge a one-shot command (`calabi http|tcp|udp|sni`) dialled,

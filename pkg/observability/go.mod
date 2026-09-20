@@ -1,4 +1,4 @@
-module github.com/calabi/calabi/pkg/observability
+module github.com/calabinet/calabi/pkg/observability
 
 go 1.25.0
 

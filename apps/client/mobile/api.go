@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 // routes is the core's local API: what the app's screens read and change.

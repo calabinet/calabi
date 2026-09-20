@@ -3,7 +3,7 @@ package mesh
 import (
 	"context"
 	"fmt"
-	"github.com/calabi/calabi/apps/client/internal/mesh/derp"
+	"github.com/calabinet/calabi/apps/client/internal/mesh/derp"
 )
 
 // Probe drives one leg of the relay path — this node to a relay and back — on

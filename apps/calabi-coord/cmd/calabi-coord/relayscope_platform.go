@@ -9,9 +9,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
-	pb "github.com/calabi/calabi/pkg/hooks-proto/hookspb"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+	pb "github.com/calabinet/calabi/pkg/hooks-proto/hookspb"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // Enforcing the traffic cap on mesh relays (F2).

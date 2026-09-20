@@ -20,7 +20,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	pb "github.com/calabi/calabi/pkg/edge-proto/edgepb"
+	pb "github.com/calabinet/calabi/pkg/edge-proto/edgepb"
 )
 
 // Route is the per-tunnel projection we get from config-svc deltas.

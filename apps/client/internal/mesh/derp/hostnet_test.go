@@ -6,7 +6,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/hostnet"
+	"github.com/calabinet/calabi/apps/client/internal/hostnet"
 )
 
 // The relay link carries the tunnel. On Android that socket must be protected

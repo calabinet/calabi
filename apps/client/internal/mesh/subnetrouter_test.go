@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 func mustPfx(s string) netip.Prefix { return netip.MustParsePrefix(s) }

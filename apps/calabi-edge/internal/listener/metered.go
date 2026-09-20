@@ -4,7 +4,7 @@ import (
 	"io"
 	"sync/atomic"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
 )
 
 // proxyMeters returns the byte counters this connection's traffic should

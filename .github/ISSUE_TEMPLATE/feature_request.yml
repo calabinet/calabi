@@ -1,0 +1,44 @@
+# GENERATED into the public mirror by scripts/export-public.sh from
+# docs/public-github/ in the private monorepo. Edit it HERE.
+name: Feature request
+description: Propose a change to the client, the edge, the coordinator or the Android app.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Organizations, billing, quotas and the web console are control-plane
+        features. Their code is not in this repository — send those to
+        [support@calabi.net](mailto:support@calabi.net).
+
+        What this repository can change is in
+        [CONTRIBUTING.md](https://github.com/calabinet/calabi/blob/main/CONTRIBUTING.md#what-belongs-here).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what stops you today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: If you have a shape in mind — a flag, a config field, a command — say so.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: Workarounds, and why they are not enough.
+
+  - type: checkboxes
+    id: offer
+    attributes:
+      label: Would you like to implement it?
+      options:
+        - label: I am willing to open a pull request for this.

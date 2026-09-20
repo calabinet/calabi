@@ -14,9 +14,10 @@ import (
 
 	"github.com/hashicorp/yamux"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/router"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/ratelimit"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/router"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // ControlOptions configures the client-facing TLS+yamux listener.
@@ -51,8 +52,12 @@ type ControlOptions struct {
 	// BandwidthResolver is invoked once per session, post-handshake, to
 	// look up the per-customer bandwidth_kbps from quota-svc. nil ⇒
 	// "no quota-svc wired"; sessions keep the unlimited default. The
-	// resolver MUST degrade open (return 0 on transport failure).
+	// resolver MUST degrade open (return zeros on transport failure).
 	BandwidthResolver BandwidthResolver
+
+	// OrgBandwidth owns the org-wide tier's shared buckets. nil ⇒ per-tunnel
+	// limiting only (which is how a standalone edge runs).
+	OrgBandwidth OrgBandwidthRegistry
 
 	// ConnGuardInstaller, when set, runs once per session post-handshake
 	// to install the per-org connection guard (concurrent-connection cap
@@ -99,13 +104,40 @@ type ControlOptions struct {
 	OnSessionGone func()
 }
 
-// BandwidthResolver maps a session's identity tuple to the per-session
-// limiter's dual cap (bytes/sec): sustained = 套餐「带宽速度」, peak =
-// 套餐「带宽上限」(突发). Empty / non-numeric tenantID may return (0,0)
-// (unlimited) — quota-svc keys by numeric org_id. peak<=sustained ⇒ no
-// separate burst tier.
+// BandwidthCaps is the two-tier bandwidth allowance for one session, all in
+// bytes/sec:
+//
+//   - Sustained / Peak apply to EACH TUNNEL of the session
+//     (套餐「带宽速度 / 带宽上限」).
+//   - OrgSustained / OrgPeak apply to the ORG as a whole — every tunnel of
+//     every session that org has on this edge shares them.
+//
+// 0 means "no limit at this tier"; Peak<=Sustained means no separate burst
+// tier. A returned zero value therefore means unlimited everywhere, which is
+// what an unresolvable tenant or a quota-svc outage must produce (degrade
+// open — an edge that throttles because the control plane blinked is worse
+// than one that briefly does not).
+type BandwidthCaps struct {
+	Sustained    int64
+	Peak         int64
+	OrgSustained int64
+	OrgPeak      int64
+}
+
+// BandwidthResolver maps a session's identity tuple to its two-tier cap.
+// Empty / non-numeric tenantID yields the zero value — quota-svc keys by
+// numeric org_id.
 type BandwidthResolver interface {
-	BandwidthLimitsBytesPerSec(ctx context.Context, tenantID, workspaceID string) (sustainedBps, peakBps int64)
+	BandwidthLimitsBytesPerSec(ctx context.Context, tenantID, workspaceID string) BandwidthCaps
+}
+
+// OrgBandwidthRegistry hands out the org-wide bucket shared by every session
+// of one org on this edge, reference-counted by session.
+// *ratelimit.OrgRegistry implements it; the seam exists so control.go does
+// not have to reach for the concrete type (and tests can count acquires).
+type OrgBandwidthRegistry interface {
+	Acquire(orgID, sustainedBps, peakBps int64) *ratelimit.Limiter
+	Release(orgID int64)
 }
 
 // ConnGuardInstaller resolves a session's per-org connection caps from
@@ -276,15 +308,12 @@ func (c *Control) handle(ctx context.Context, conn net.Conn) {
 		}
 	}
 
-	// Bandwidth lookup. Fire-and-resolve before we accept
-	// proxies so the very first NEW_CONN already sees the correct cap.
-	if c.opts.BandwidthResolver != nil {
-		bps, peak := c.opts.BandwidthResolver.BandwidthLimitsBytesPerSec(ctx, res.TenantID, res.WorkspaceID)
-		if bps > 0 {
-			c.logger.Info("session bandwidth cap installed",
-				"session_id", sess.ID, "sustained_bytes_per_sec", bps, "peak_bytes_per_sec", peak)
-		}
-		sess.SetBandwidthLimit(bps, peak)
+	// Bandwidth lookup. Resolve
+	// before we accept proxies so the very first NEW_CONN already sees the
+	// correct caps — the per-tunnel rates must be on the session before any
+	// RegisterProxy builds a tunnel's bucket from them.
+	if release := c.installBandwidth(ctx, sess, res.TenantID, res.WorkspaceID); release != nil {
+		defer release()
 	}
 
 	// Connection guard (Phase A anti-abuse): install the per-org
@@ -314,6 +343,45 @@ func (c *Control) handle(ctx context.Context, conn net.Conn) {
 
 	sess.StartStreamAcceptor()
 	sess.Loop(ctx, c.opts.Registrar, c.opts.Domains, c.opts.Ports, c.opts.Manager.Observer(), c.opts.Persister)
+}
+
+// installBandwidth puts both bandwidth tiers on a freshly-authenticated
+// session and returns the org tier's release, or nil when there is nothing to
+// release. The caller defers it; nothing else may call it.
+//
+// It is a method rather than inline code in serveConn for one reason: serveConn
+// needs a full TLS + yamux + AUTH handshake to reach, so inline code here could
+// only be tested through a client implementation nobody has written. Splitting
+// it lets the test drive the exact code the handshake runs — which matters most
+// for the release path, whose failure mode (a leaked refcount keeping an org's
+// bucket alive forever) is invisible until an edge has been up for weeks.
+func (c *Control) installBandwidth(ctx context.Context, sess *session.Session, tenantID, workspaceID string) func() {
+	if c.opts.BandwidthResolver == nil {
+		return nil
+	}
+	caps := c.opts.BandwidthResolver.BandwidthLimitsBytesPerSec(ctx, tenantID, workspaceID)
+	sess.SetBandwidthLimit(caps.Sustained, caps.Peak)
+
+	// Org tier: one bucket per org, shared with that org's other sessions on
+	// this edge and freed when the last of them ends. Keyed on the session's
+	// resolved org id — 0 (unresolvable / dev tenant) means no org tier.
+	var release func()
+	if c.opts.OrgBandwidth != nil && caps.OrgSustained > 0 {
+		if orgID := sess.OrgID(); orgID > 0 {
+			sess.SetOrgLimiter(c.opts.OrgBandwidth.Acquire(orgID, caps.OrgSustained, caps.OrgPeak))
+			release = func() { c.opts.OrgBandwidth.Release(orgID) }
+		}
+	}
+	if caps.Sustained > 0 || caps.OrgSustained > 0 {
+		c.logger.Info("session bandwidth caps installed",
+			"session_id", sess.ID,
+			"tunnel_sustained_bytes_per_sec", caps.Sustained,
+			"tunnel_peak_bytes_per_sec", caps.Peak,
+			"org_sustained_bytes_per_sec", caps.OrgSustained,
+			"org_peak_bytes_per_sec", caps.OrgPeak,
+			"org_tier_active", sess.OrgLimiter() != nil)
+	}
+	return release
 }
 
 func (c *Control) recordHandshakeFailure(reason string) {

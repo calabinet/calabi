@@ -11,7 +11,7 @@ import (
 	"net/netip"
 	"time"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // MeshnetID identifies a mesh network. It equals the org id: one org = one
@@ -168,6 +168,11 @@ type NetMap struct {
 	// actionable; "no alias" is not.
 	AliasBudgetAddrs int
 	AliasUsedAddrs   int
+	// RelayBandwidthKbps / RelayBandwidthBurstKbps is the rate this node should
+	// hold ITSELF to over a platform relay.
+	// 0 = no self-limit, which is what a self-hosted coordinator always sends.
+	RelayBandwidthKbps      uint32
+	RelayBandwidthBurstKbps uint32
 	// MagicDNS records land here in MESH.6.
 }
 

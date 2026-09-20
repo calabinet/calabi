@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/platform/meshenroll"
+	"github.com/calabinet/calabi/apps/client/internal/platform/meshenroll"
 )
 
 // meshnet == org, so switching org must move this node to a DIFFERENT mesh.

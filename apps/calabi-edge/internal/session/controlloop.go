@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/policy"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/policy"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // ProxyRegistrar abstracts the router + listener wiring so the session

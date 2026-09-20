@@ -1,0 +1,86 @@
+# CI — build, vet and test every Go module in this repository, on the three
+# platforms the client ships for.
+#
+# GENERATED into the public mirror by scripts/export-public.sh from this
+# source (docs/public-ci-workflow.yml in the private monorepo). Edit it
+# HERE, not in the public repo — the next `sync-public.sh` overwrites the copy.
+#
+# WHY THIS EXISTS
+#
+# A pull request needs an answer that does not wait for a maintainer. The
+# export already proves the tree builds (`go mod tidy && go build && go vet`
+# runs on every export), but that check runs on one machine, against the
+# exported tree, and never runs the tests. This one runs them, on a fresh
+# clone, on Linux, macOS and Windows.
+#
+# WHAT IT DOES NOT BUILD
+#
+# The Android app (JDK + Android SDK 35 + NDK r27 + gomobile) and the Tauri
+# desktop shell (Rust + platform WebView) need toolchains an ordinary PR does
+# not touch. Their Go core is `apps/client`, which IS covered here. Changes to
+# the Kotlin or Rust side are built by hand — see DEVELOPMENT.md.
+#
+# This is not a release build: the official binaries are built and published
+# elsewhere, and verify-release.yml re-derives them to check they match.
+name: CI
+
+on:
+  pull_request:
+    branches: ["**"]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # Matches the `go` line in go.work and in every go.mod.
+          go-version: '1.25'
+          cache-dependency-path: |
+            apps/*/go.sum
+            pkg/*/go.sum
+
+      # The module list comes from go.work rather than a list pinned here, so a
+      # new module is covered the day it is added. The paths in go.work are
+      # relative and forward-slashed, which `cd` accepts on Windows too.
+      - name: Build, vet and test every module
+        shell: bash
+        run: |
+          set -eu
+          for dir in $(grep -oE '\./[A-Za-z0-9/_.-]+' go.work); do
+            printf '\n\033[1m== %s\033[0m\n' "$dir"
+            ( cd "$dir" && go build ./... && go vet ./... && go test ./... )
+          done
+
+  gofmt:
+    name: gofmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Check formatting
+        shell: bash
+        run: |
+          set -eu
+          unformatted="$(gofmt -l apps pkg)"
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt'd:"
+            echo "$unformatted"
+            echo
+            echo "Run: gofmt -w <file>"
+            exit 1
+          fi

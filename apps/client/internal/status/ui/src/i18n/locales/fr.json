@@ -138,6 +138,10 @@
     "meshDatapathPendingTip": "Le relais est connu ; le plan de données du maillage démarre encore."
   },
   "tunnels": {
+    "awaitingApproval": "En attente d’approbation",
+    "awaitingApprovalTip": "Cette organisation examine les tunnels créés par ses membres. Un administrateur doit l’approuver dans la console avant qu’il ne serve quoi que ce soit.",
+    "rejected": "Refusé",
+    "rejectedTip": "Un administrateur a refusé ce tunnel.",
     "newTunnel": "Nouveau tunnel",
     "refresh": "Actualiser",
     "colStatus": "Statut",

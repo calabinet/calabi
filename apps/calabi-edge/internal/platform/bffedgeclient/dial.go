@@ -22,7 +22,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 
-	pb "github.com/calabi/calabi/pkg/edge-proto/edgepb"
+	pb "github.com/calabinet/calabi/pkg/edge-proto/edgepb"
 )
 
 // Config bundles the input paths for Dial.

@@ -8,8 +8,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
-	pb "github.com/calabi/calabi/pkg/hooks-proto/hookspb"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+	pb "github.com/calabinet/calabi/pkg/hooks-proto/hookspb"
 )
 
 type fakeRPC struct {

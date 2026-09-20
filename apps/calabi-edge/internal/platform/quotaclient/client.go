@@ -20,7 +20,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	pb "github.com/calabi/calabi/pkg/edge-proto/edgepb"
+	pb "github.com/calabinet/calabi/pkg/edge-proto/edgepb"
 )
 
 // RPC is the narrow subset of pb.QuotaClient the edge actually uses.
@@ -133,16 +133,37 @@ func (c *Client) OnlineClientLimit(ctx context.Context, orgID int64) (int64, err
 	}
 }
 
-// BandwidthLimitsBytesPerSec returns the session's DUAL bandwidth cap in
-// bytes/sec from ONE GetEffective:
-//   - sustained = bandwidth_kbps        (套餐「带宽速度」, long-run rate)
-//   - peak      = bandwidth_burst_kbps  (套餐「带宽上限」, 突发 ceiling)
+// Bandwidth is an org's TWO-TIER bandwidth allowance in bytes/sec:
 //
-// Either is 0 = unlimited (sustained) / no burst tier (peak). Degrades
-// open to (0,0) on any failure so a quota-svc outage doesn't choke users.
-func (c *Client) BandwidthLimitsBytesPerSec(ctx context.Context, orgID int64) (sustained, peak int64) {
+//   - Sustained / Peak      = bandwidth_kbps / bandwidth_burst_kbps,
+//     applied to EACH TUNNEL (套餐「带宽速度 / 带宽上限」).
+//   - OrgSustained / OrgPeak = org_bandwidth_kbps / org_bandwidth_burst_kbps,
+//     applied to the org as a whole.
+//
+// 0 in any field = no limit at that tier. An absent org_* key therefore
+// leaves the org tier off, which is what every plan row looked like before
+// the keys were seeded — an old row must not suddenly throttle anyone.
+type Bandwidth struct {
+	Sustained    int64
+	Peak         int64
+	OrgSustained int64
+	OrgPeak      int64
+	// OrgRelaySustained / OrgRelayPeak are the org-wide tier for MESH RELAY
+	// traffic (org_relay_bandwidth_kbps). A separate allowance from the tunnel
+	// one on purpose — the two are metered separately and enforced in different
+	// processes, so one shared number could not be honoured across them. The
+	// PER-DEVICE relay rate reuses Sustained / Peak.
+	//
+	OrgRelaySustained int64
+	OrgRelayPeak      int64
+}
+
+// BandwidthCapsBytesPerSec returns both tiers from ONE GetEffective.
+// Degrades open (zero value = unlimited) on any failure so a quota-svc
+// outage doesn't choke users.
+func (c *Client) BandwidthCapsBytesPerSec(ctx context.Context, orgID int64) Bandwidth {
 	if c == nil || c.cli == nil || orgID <= 0 {
-		return 0, 0
+		return Bandwidth{}
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
@@ -150,9 +171,27 @@ func (c *Client) BandwidthLimitsBytesPerSec(ctx context.Context, orgID int64) (s
 	if err != nil {
 		c.logger.Debug("get effective quota failed; defaulting to unlimited",
 			"org", orgID, "err", err)
-		return 0, 0
+		return Bandwidth{}
 	}
-	return bandwidthLimitsFromJSON(resp.GetQuotasJson())
+	return bandwidthCapsFromJSON(resp.GetQuotasJson())
+}
+
+// BandwidthLimitsBytesPerSec returns only the per-tunnel tier. Kept for
+// callers that do not care about the org tier.
+func (c *Client) BandwidthLimitsBytesPerSec(ctx context.Context, orgID int64) (sustained, peak int64) {
+	b := c.BandwidthCapsBytesPerSec(ctx, orgID)
+	return b.Sustained, b.Peak
+}
+
+// OrgBandwidthLimitsBytesPerSec returns only the org-wide tier.
+//
+// On the uncached Client this costs a second GetEffective when the caller
+// also asked for the per-tunnel tier. That is fine because production wires
+// the CachedClient, whose override answers both from one cached row; the
+// uncached path is dev / tests.
+func (c *Client) OrgBandwidthLimitsBytesPerSec(ctx context.Context, orgID int64) (sustained, peak int64) {
+	b := c.BandwidthCapsBytesPerSec(ctx, orgID)
+	return b.OrgSustained, b.OrgPeak
 }
 
 // ConnLimits returns the org's anti-abuse connection caps from quota
@@ -232,17 +271,30 @@ func dailyLimitsFromJSON(quotasJSON string) (dailyTCPConns, dailyHTTPReqs int64)
 	return
 }
 
+// bandwidthCapsFromJSON extracts both tiers from a quotas_json blob.
+// kbps→bytes/sec uses the same *1024/8 convention throughout.
+func bandwidthCapsFromJSON(quotasJSON string) Bandwidth {
+	kbpsToBps := func(key string) int64 {
+		if kbps, ok := extractKbpsKey(quotasJSON, key); ok && kbps > 0 {
+			return int64(kbps) * 1024 / 8
+		}
+		return 0
+	}
+	return Bandwidth{
+		Sustained:         kbpsToBps("bandwidth_kbps"),
+		Peak:              kbpsToBps("bandwidth_burst_kbps"),
+		OrgSustained:      kbpsToBps("org_bandwidth_kbps"),
+		OrgPeak:           kbpsToBps("org_bandwidth_burst_kbps"),
+		OrgRelaySustained: kbpsToBps("org_relay_bandwidth_kbps"),
+		OrgRelayPeak:      kbpsToBps("org_relay_bandwidth_burst_kbps"),
+	}
+}
+
 // bandwidthLimitsFromJSON extracts (sustained, peak) bytes/sec from a
-// quotas_json blob. kbps→bytes/sec uses the same *1024/8 convention as
-// BandwidthBytesPerSec.
+// quotas_json blob — the per-tunnel tier only.
 func bandwidthLimitsFromJSON(quotasJSON string) (sustained, peak int64) {
-	if kbps, ok := extractKbpsKey(quotasJSON, "bandwidth_kbps"); ok && kbps > 0 {
-		sustained = int64(kbps) * 1024 / 8
-	}
-	if kbps, ok := extractKbpsKey(quotasJSON, "bandwidth_burst_kbps"); ok && kbps > 0 {
-		peak = int64(kbps) * 1024 / 8
-	}
-	return sustained, peak
+	b := bandwidthCapsFromJSON(quotasJSON)
+	return b.Sustained, b.Peak
 }
 
 // extractKbps pulls bandwidth_kbps out of a quotas_json blob.

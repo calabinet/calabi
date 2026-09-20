@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/hostnet"
-	"github.com/calabi/calabi/apps/client/internal/trust"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/client/internal/hostnet"
+	"github.com/calabinet/calabi/apps/client/internal/trust"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // The application protocols the two kinds of server speak. A handshake offering

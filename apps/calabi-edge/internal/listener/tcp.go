@@ -9,10 +9,10 @@ import (
 	"net"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/accesslog"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/ratelimit"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/accesslog"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/ratelimit"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // TCPObserver is the visitor-facing metrics surface for the TCP listener.
@@ -154,7 +154,7 @@ func handleTCPConn(logger *slog.Logger, visitor net.Conn, sess *session.Session,
 		"visitor", visitor.RemoteAddr().String())
 
 	// Per-session bandwidth limiter.
-	lim := sess.Limiter()
+	lim := sess.LimiterFor(proxyID)
 	// per-tunnel byte attribution (see metered.go / http.go).
 	inC, outC := proxyMeters(sess, proxyID)
 	type result struct {

@@ -20,11 +20,11 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/adminhttp"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/rpc"
-	meshpb "github.com/calabi/calabi/pkg/mesh-proto/meshpb"
-	"github.com/calabi/calabi/pkg/svcboot"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/adminhttp"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/rpc"
+	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
+	"github.com/calabinet/calabi/pkg/svcboot"
 )
 
 // version is stamped at link time with `-X main.version=<v>` (Dockerfile).

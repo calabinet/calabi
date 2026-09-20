@@ -9,7 +9,7 @@
 // ISOLATION INVARIANT (enforced by scripts/export-public.sh):
 //
 //	This module and the client's mesh subsystem MUST NOT import
-//	github.com/calabi/calabi/pkg/api. meshproto exists precisely so the OPEN
+//	github.com/calabinet/calabi/pkg/api. meshproto exists precisely so the OPEN
 //	mesh client can link the coordination contract without dragging in any
 //	control-plane surface. The export guard fails the build the day that
 //	invariant is violated.

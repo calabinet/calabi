@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/visitorerr"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/visitorerr"
 )
 
 // Result tells the listener what to do after Handle.

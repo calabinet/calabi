@@ -64,3 +64,21 @@ func (q StaticNodeQuota) Admit(_ context.Context, _ MeshnetID, current int) (boo
 	}
 	return true, q.Limit, "", nil
 }
+
+// RelayRateSource supplies the rate a node should hold ITSELF to when sending
+// over a platform relay. Values are kbps:
+// a sustained rate and a short-burst ceiling. Both 0 = no self-limit.
+//
+// A separate seam from NodeQuota for the same reason MemberNodeQuota is: a
+// self-hoster implementing NodeQuota to plug this coordinator into their own
+// platform must not have to grow a method for a number that only means
+// something on a relay fleet they do not run. Absent = nothing sent, which is
+// exactly what a self-hosted coordinator should send.
+//
+// Implementations MUST degrade to (0, 0) on their own failures. Sending a
+// number the coordinator is unsure of would have every node in the meshnet
+// throttle itself on a quota hiccup — the failure mode has to be "no limit",
+// never "some limit we guessed".
+type RelayRateSource interface {
+	RelayRateKbps(ctx context.Context, t MeshnetID) (sustained, burst uint32)
+}

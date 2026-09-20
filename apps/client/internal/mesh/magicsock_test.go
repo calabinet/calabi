@@ -7,7 +7,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/calabi/calabi/pkg/mesh-proto/stun"
+	"github.com/calabinet/calabi/pkg/mesh-proto/stun"
 )
 
 func TestStunHostPortFor(t *testing.T) {

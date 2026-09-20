@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/mesh"
-	"github.com/calabi/calabi/apps/client/internal/platform/meshenroll"
-	"github.com/calabi/calabi/apps/client/internal/platform/statusapi"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
+	"github.com/calabinet/calabi/apps/client/internal/platform/meshenroll"
+	"github.com/calabinet/calabi/apps/client/internal/platform/statusapi"
 )
 
 // writeCreds points creds.Path() at a temp file (CALABI_CONFIG) and writes the

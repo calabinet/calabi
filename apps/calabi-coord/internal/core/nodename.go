@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // Node names are MagicDNS labels: a peer reaches this node by typing its name

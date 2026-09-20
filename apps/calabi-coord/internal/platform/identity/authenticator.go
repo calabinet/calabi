@@ -21,8 +21,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
-	pb "github.com/calabi/calabi/pkg/hooks-proto/hookspb"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+	pb "github.com/calabinet/calabi/pkg/hooks-proto/hookspb"
 )
 
 // RPC is the narrow subset of pb.IdentityHooksClient calabi-coord uses. pb.IdentityHooksClient

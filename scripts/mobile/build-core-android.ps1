@@ -90,7 +90,7 @@ if (Test-Path $work) { Remove-Item -Recurse -Force $work }
 New-Item -ItemType Directory -Force $work | Out-Null
 
 function Abs([string]$rel) { ((Resolve-Path (Join-Path $client $rel)).Path -replace '\\', '/') }
-$replaces = @("replace github.com/calabi/calabi/apps/client => `"$($client -replace '\\','/')`"")
+$replaces = @("replace github.com/calabinet/calabi/apps/client => `"$($client -replace '\\','/')`"")
 # apps/client's own replaces point at sibling modules by relative path; in this
 # module they have to be absolute.
 foreach ($line in Get-Content (Join-Path $client "go.mod")) {
@@ -106,7 +106,7 @@ module calabi.local/mobilebind
 go 1.25.0
 
 require (
-	github.com/calabi/calabi/apps/client v0.0.0
+	github.com/calabinet/calabi/apps/client v0.0.0
 	golang.org/x/mobile $mobileVersion
 )
 
@@ -118,7 +118,7 @@ $($replaces -join "`n")
 package tools
 
 import (
-	_ "github.com/calabi/calabi/apps/client/mobile"
+	_ "github.com/calabinet/calabi/apps/client/mobile"
 	_ "golang.org/x/mobile/bind"
 )
 "@, $utf8)
@@ -141,7 +141,7 @@ try {
     Write-Host "gomobile bind -target=$Targets (NDK $($ndk.Name))..."
     $sw = [Diagnostics.Stopwatch]::StartNew()
     $bind = @("bind", "-target=$Targets", "-androidapi", "26", "-javapkg=net.calabi.core", "-trimpath", "-ldflags=-s -w",
-        "-o", $out, "github.com/calabi/calabi/apps/client/mobile")
+        "-o", $out, "github.com/calabinet/calabi/apps/client/mobile")
     if ((Invoke-Native $gomobile $bind) -ne 0) { throw "gomobile bind failed" }
     Write-Host ("built {0} ({1:N1} MB) in {2:N0}s" -f $out, ((Get-Item $out).Length / 1MB), $sw.Elapsed.TotalSeconds)
 } finally {

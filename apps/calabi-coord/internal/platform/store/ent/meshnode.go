@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshnode"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshnode"
 )
 
 // MeshNode is the model entity for the MeshNode schema.

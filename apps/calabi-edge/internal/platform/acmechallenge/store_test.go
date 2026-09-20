@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	eventbus "github.com/calabi/calabi/apps/calabi-edge/internal/bus"
-	"github.com/calabi/calabi/pkg/certevents"
+	eventbus "github.com/calabinet/calabi/apps/calabi-edge/internal/bus"
+	"github.com/calabinet/calabi/pkg/certevents"
 )
 
 func mustJSON(t *testing.T, v any) []byte {

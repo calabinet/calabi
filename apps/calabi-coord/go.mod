@@ -1,11 +1,11 @@
-module github.com/calabi/calabi/apps/calabi-coord
+module github.com/calabinet/calabi/apps/calabi-coord
 
 go 1.25.0
 
 require (
 	entgo.io/ent v0.14.6
-	github.com/calabi/calabi/pkg/mesh-proto v0.0.0
-	github.com/calabi/calabi/pkg/svcboot v0.0.0
+	github.com/calabinet/calabi/pkg/mesh-proto v0.0.0
+	github.com/calabinet/calabi/pkg/svcboot v0.0.0
 	github.com/lib/pq v1.12.3
 	google.golang.org/grpc v1.82.1
 	modernc.org/sqlite v1.59.0
@@ -38,8 +38,8 @@ require (
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/calabi/calabi/pkg/hooks-proto v0.0.0
-	github.com/calabi/calabi/pkg/observability v0.0.0 // indirect
+	github.com/calabinet/calabi/pkg/hooks-proto v0.0.0
+	github.com/calabinet/calabi/pkg/observability v0.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/prometheus/client_golang v1.23.2 // indirect
@@ -55,9 +55,9 @@ require (
 )
 
 replace (
-	github.com/calabi/calabi/pkg/mesh-proto => ../../pkg/mesh-proto
-	github.com/calabi/calabi/pkg/observability => ../../pkg/observability
-	github.com/calabi/calabi/pkg/svcboot => ../../pkg/svcboot
+	github.com/calabinet/calabi/pkg/mesh-proto => ../../pkg/mesh-proto
+	github.com/calabinet/calabi/pkg/observability => ../../pkg/observability
+	github.com/calabinet/calabi/pkg/svcboot => ../../pkg/svcboot
 )
 
-replace github.com/calabi/calabi/pkg/hooks-proto => ../../pkg/hooks-proto
+replace github.com/calabinet/calabi/pkg/hooks-proto => ../../pkg/hooks-proto

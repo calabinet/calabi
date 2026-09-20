@@ -42,7 +42,7 @@ syntax = "proto3";
 
 package calabi.v1.bff_edge;
 
-option go_package = "github.com/calabi/calabi/pkg/edge-proto/edgepb;edgepb";
+option go_package = "github.com/calabinet/calabi/pkg/edge-proto/edgepb;edgepb";
 
 import "google/protobuf/timestamp.proto";
 
@@ -753,6 +753,17 @@ message Tunnel {
   // claims. Empty for auto-allocated (体验版) or custom-domain (增强版)
   // tunnels. Paid tiers (基础版+) only.
   string subdomain = 19;
+  // Review state: approved | pending | rejected. Carried to the edge because a
+  // CREATE succeeds for a queued tunnel — the row is kept so an admin has
+  // something to review — and without this the edge would read "no error" and
+  // serve the tunnel the review was meant to hold. Empty from an older
+  // control plane, which reads as approved (what it always was).
+  // NUMBER MUST MATCH the control plane's Tunnel.approval (24). bridge.go
+  // converts by re-encoding, so a mirrored field with a different number does
+  // not fail — it lands in whatever field happens to hold that number on the
+  // other side. 23 is created_via there. TestMirroredMessagesMatchControlPlane
+  // is what catches it.
+  string approval = 24;
 
   // creator_user_id — the user who created this tunnel (org RBAC). Drives
   // member visibility: a non-management member (developer/viewer) only sees

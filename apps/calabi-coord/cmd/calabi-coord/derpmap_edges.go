@@ -12,8 +12,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
-	pb "github.com/calabi/calabi/pkg/hooks-proto/hookspb"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+	pb "github.com/calabinet/calabi/pkg/hooks-proto/hookspb"
 )
 
 // Deriving the platform DERP map from the edge directory (edge/derp merge).

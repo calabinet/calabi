@@ -9,8 +9,9 @@ import (
 	"log/slog"
 	"net"
 	"sync"
+	"sync/atomic"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // Hub tracks connected clients by node key and forwards packets between them.
@@ -23,6 +24,12 @@ type Hub struct {
 	usage  map[meshproto.NodeKey]*usageCounter
 	logger *slog.Logger
 	auth   AuthConfig
+	// limiterFor resolves a link's rate limiter once its meshnet is known.
+	// nil = no limiting (self-hosted default). See rate.go.
+	limiterFor RateLimiterFor
+	// refused counts frames declined on rate grounds — distinct from sendq's
+	// Dropped, which counts frames that waited too long. See rate.go.
+	refused refusedCounter
 }
 
 type client struct {
@@ -39,6 +46,10 @@ type client struct {
 	closed chan struct{} // closed when Serve returns; stops the writer
 	auth   authState     // R0': the challenge/grant state of this link (auth.go)
 	usage  *usageCounter
+	// limiter is this link's rate decision, resolved from its meshnet when the
+	// grant lands and re-resolved on re-auth. Atomic: the forwarding path reads
+	// it per frame while acceptProof can replace it. nil = no limit (rate.go).
+	limiter atomic.Pointer[limiterBox]
 }
 
 // NewHub returns an empty hub. A zero AuthConfig means connections are accepted
@@ -72,6 +83,10 @@ func (h *Hub) add(c *client) {
 	if mn := c.auth.meshnet(); mn != 0 {
 		c.usage.meshnet.Store(mn)
 	}
+	// NOTE: the rate limiter is resolved by the CALLER, after this returns.
+	// Resolving it here would run the operator's resolver — which on the
+	// platform asks quota-svc — while holding h.mu, i.e. with every other
+	// connect, disconnect and lookup on this relay waiting behind one RPC.
 }
 
 func (h *Hub) remove(c *client) {
@@ -119,6 +134,11 @@ func (h *Hub) Serve(conn net.Conn) {
 
 	h.add(c)
 	defer h.remove(c)
+	// Outside h.mu on purpose (see add): the resolver may talk to a control
+	// plane. Before it returns this link has no limiter, which means no limit —
+	// a few frames at line rate during a connect is the right way to fail here.
+	h.resolveLimiter(c)
+	defer h.releaseLimiter(c)
 	// The writer starts only after add(), so c.usage is set: the queue credits
 	// usage itself, on the frames it actually manages to write.
 	go c.sendq.run(conn, &c.wmu, c.usage, c.closed)
@@ -185,6 +205,17 @@ func (h *Hub) forward(src *client, dst meshproto.NodeKey, ciphertext []byte) {
 		return // dst offline; nothing to log per packet about it
 	}
 	if crossesMeshnets(src, dc) {
+		return
+	}
+	// Rate decision, on the DESTINATION's limiter: relay usage is billed as the
+	// receiver's egress (see crossesMeshnets above and usage.go), so the side
+	// that pays for the bytes is the side that decides whether they may flow.
+	//
+	// Refused frames are dropped BEFORE the queue, not left to age out in it —
+	// occupying a queue slot for 500 ms only adds latency to the frames behind
+	// them, and they were never going to be sent.
+	if !dc.allow(len(ciphertext)) {
+		h.refused.add(1)
 		return
 	}
 	frame, err := meshproto.EncodeDERPFrame(meshproto.DERPFrameRecvPacket, meshproto.EncodePacket(src.key, ciphertext))

@@ -28,11 +28,11 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/tunnelstore"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/router"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
-	pb "github.com/calabi/calabi/pkg/edge-proto/edgepb"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/tunnelstore"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/router"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
+	pb "github.com/calabinet/calabi/pkg/edge-proto/edgepb"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // portBoundRPC is tunnel-svc with (1000400000, 20000) already bound to some

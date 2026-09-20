@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/identity"
-	platformquota "github.com/calabi/calabi/apps/calabi-coord/internal/platform/quota"
-	platformstore "github.com/calabi/calabi/apps/calabi-coord/internal/platform/store"
-	"github.com/calabi/calabi/pkg/svcboot"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/identity"
+	platformquota "github.com/calabinet/calabi/apps/calabi-coord/internal/platform/quota"
+	platformstore "github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store"
+	"github.com/calabinet/calabi/pkg/svcboot"
 )
 
 // wire builds the coordinator for the PLATFORM (SaaS) deployment.
@@ -133,6 +133,16 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 		// platform each org decides (MeshnetSettings.AutoApproveRoutes).
 		AutoApproveAllRoutes: env("IDENTITY_ADDR") == "",
 		Logger:               logger,
+	}
+
+	// The quota-svc-backed node quota also knows the plan's bandwidth numbers,
+	// which is what a node needs in order to pace ITSELF over a relay
+	//. The static fallback does not implement
+	// it, so a coordinator without quota-svc sends no self-limit — correct:
+	// the relay is still policing, the node just finds out the lossy way.
+	if rr, ok := coord.Quota.(core.RelayRateSource); ok {
+		coord.RelayRates = rr
+		logger.Info("relay self-limit will be sent in netmaps (per-plan bandwidth_kbps)")
 	}
 
 	if addr := env("IDENTITY_ADDR"); addr != "" {

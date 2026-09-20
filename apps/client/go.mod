@@ -1,9 +1,9 @@
-module github.com/calabi/calabi/apps/client
+module github.com/calabinet/calabi/apps/client
 
 go 1.25.0
 
 require (
-	github.com/calabi/calabi/pkg/protocol v0.0.0
+	github.com/calabinet/calabi/pkg/protocol v0.0.0
 	github.com/gofrs/flock v0.12.1
 	github.com/hashicorp/yamux v0.1.2
 	github.com/kardianos/service v1.2.2
@@ -11,6 +11,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	golang.org/x/crypto v0.53.0
 	golang.org/x/term v0.44.0
+	golang.org/x/time v0.7.0
 	golang.zx2c4.com/wireguard v0.0.0-20260522210424-ecfc5a8d5446
 	golang.zx2c4.com/wireguard/windows v1.0.1
 	google.golang.org/grpc v1.82.1
@@ -30,7 +31,7 @@ require (
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/calabi/calabi/pkg/mesh-proto v0.0.0
+	github.com/calabinet/calabi/pkg/mesh-proto v0.0.0
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/kr/text v0.2.0 // indirect
@@ -45,6 +46,6 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/calabi/calabi/pkg/protocol => ../../pkg/protocol
+replace github.com/calabinet/calabi/pkg/protocol => ../../pkg/protocol
 
-replace github.com/calabi/calabi/pkg/mesh-proto => ../../pkg/mesh-proto
+replace github.com/calabinet/calabi/pkg/mesh-proto => ../../pkg/mesh-proto

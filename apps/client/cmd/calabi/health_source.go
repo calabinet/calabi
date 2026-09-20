@@ -4,8 +4,8 @@
 package main
 
 import (
-	"github.com/calabi/calabi/apps/client/internal/probe"
-	"github.com/calabi/calabi/apps/client/internal/status"
+	"github.com/calabinet/calabi/apps/client/internal/probe"
+	"github.com/calabinet/calabi/apps/client/internal/status"
 )
 
 // stateSource adapts status.State for probe.Monitor.SetSource. The

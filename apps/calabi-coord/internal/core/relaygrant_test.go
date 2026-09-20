@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 func signingIssuer(t *testing.T) (*SigningRelayGrantIssuer, ed25519.PublicKey) {

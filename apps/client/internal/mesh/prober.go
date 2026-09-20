@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // probeInterval is how often the prober re-pings known peers' endpoints — to

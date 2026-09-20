@@ -1,4 +1,4 @@
-module github.com/calabi/calabi/pkg/mesh-proto
+module github.com/calabinet/calabi/pkg/mesh-proto
 
 go 1.25.0
 

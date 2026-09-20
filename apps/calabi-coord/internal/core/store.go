@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/netip"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // ErrNodeNotFound is returned by NodeStore.Get for an unknown id.

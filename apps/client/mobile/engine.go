@@ -11,10 +11,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/calabi/calabi/apps/client/internal/mesh"
-	"github.com/calabi/calabi/apps/client/internal/platform/meshenroll"
-	"github.com/calabi/calabi/apps/client/internal/selfhosted"
-	"github.com/calabi/calabi/apps/client/internal/trust"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
+	"github.com/calabinet/calabi/apps/client/internal/platform/meshenroll"
+	"github.com/calabinet/calabi/apps/client/internal/selfhosted"
+	"github.com/calabinet/calabi/apps/client/internal/trust"
 )
 
 // Connection states reported by GET /v1/mesh.

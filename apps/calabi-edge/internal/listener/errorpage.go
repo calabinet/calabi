@@ -14,7 +14,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/visitorerr"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/visitorerr"
 )
 
 // upstreamErrCode maps the failure of OpenProxyConn onto a visitor-facing code.

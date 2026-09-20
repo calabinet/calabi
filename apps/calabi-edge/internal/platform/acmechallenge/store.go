@@ -27,8 +27,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/calabi/calabi/pkg/certevents"
-	eventbus "github.com/calabi/calabi/apps/calabi-edge/internal/bus"
+	eventbus "github.com/calabinet/calabi/apps/calabi-edge/internal/bus"
+	"github.com/calabinet/calabi/pkg/certevents"
 )
 
 // DefaultTTL bounds how long a token lives without an explicit cleanup.

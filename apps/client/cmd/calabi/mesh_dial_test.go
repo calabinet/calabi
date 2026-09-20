@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/trust"
+	"github.com/calabinet/calabi/apps/client/internal/trust"
 )
 
 // testCAPEM returns a freshly made CA certificate, PEM-encoded.

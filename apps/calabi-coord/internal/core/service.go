@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // Services are what a node OFFERS on the mesh: "this machine serves postgres on

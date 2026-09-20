@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/transport"
+	"github.com/calabinet/calabi/apps/client/internal/transport"
 	"github.com/hashicorp/yamux"
 )
 

@@ -1,8 +1,8 @@
 package rpc
 
 import (
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
-	meshpb "github.com/calabi/calabi/pkg/mesh-proto/meshpb"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
 )
 
 // toProtoNetMap maps a core.NetMap onto the wire type. Peers already come
@@ -52,6 +52,8 @@ func toProtoNetMap(nm *core.NetMap) *meshpb.NetMap {
 		out.UnaliasedRoutes = append(out.UnaliasedRoutes, r.String())
 	}
 	out.AliasBudgetAddrs = uint32(nm.AliasBudgetAddrs)
+	out.RelayBandwidthKbps = nm.RelayBandwidthKbps
+	out.RelayBandwidthBurstKbps = nm.RelayBandwidthBurstKbps
 	out.AliasUsedAddrs = uint32(nm.AliasUsedAddrs)
 	return out
 }

@@ -138,6 +138,10 @@
     "meshDatapathPendingTip": "릴레이는 확인되었고, 메시 데이터 플레인은 아직 시작 중입니다."
   },
   "tunnels": {
+    "awaitingApproval": "승인 대기",
+    "awaitingApprovalTip": "이 조직은 구성원이 만든 터널을 검토합니다. 관리자가 콘솔에서 승인해야 서비스가 시작됩니다.",
+    "rejected": "거절됨",
+    "rejectedTip": "관리자가 이 터널을 거절했습니다.",
     "newTunnel": "새 터널",
     "refresh": "새로 고침",
     "colStatus": "상태",

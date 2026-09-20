@@ -10,7 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshservice"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshservice"
 )
 
 // MeshServiceCreate is the builder for creating a MeshService entity.

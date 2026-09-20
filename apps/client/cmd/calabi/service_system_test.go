@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 func TestHasBoolFlag(t *testing.T) {

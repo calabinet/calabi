@@ -278,7 +278,11 @@ apksigner verify --print-certs calabi-android.apk
 git commit -s -m "your message"
 ```
 
-细节见 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [DCO](DCO)。PR 上有 CI 检查这个签名。
+- **[CONTRIBUTING.md](CONTRIBUTING.md)**——这里收什么改动，以及一个 PR 怎么进到发布的二进制里。
+- **[DEVELOPMENT.md](DEVELOPMENT.md)**——在一台机器上把三个程序编出来跑通，不需要账号，也不需要公网地址。
+- **[SECURITY.md](SECURITY.md)**——怎么报告安全漏洞。走私下渠道，别开 issue。
+
+每个 PR 上，CI 都会在 Linux、macOS 和 Windows 上构建、检查并跑测试，也会检查签名。
 
 ## 许可证
 

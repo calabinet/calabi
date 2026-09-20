@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // Relay-side authentication (R0′).
@@ -144,6 +144,11 @@ func (h *Hub) acceptProof(c *client, payload []byte) (ok bool, err error) {
 	// grantMeshnet onto the counter moments later.
 	if c.usage != nil {
 		c.usage.meshnet.Store(g.Meshnet)
+		// The org may have changed with the grant, and the rate limiter is
+		// resolved FROM the org — leaving the old one in place would keep
+		// charging a link against the org it used to belong to. add() does the
+		// same for the opening handshake.
+		h.resolveLimiter(c)
 	}
 	return true, nil
 }

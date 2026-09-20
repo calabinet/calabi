@@ -10,7 +10,7 @@ type fakeRWC struct {
 	closed int
 }
 
-func (f *fakeRWC) Read([]byte) (int, error)  { return 0, io.EOF }
+func (f *fakeRWC) Read([]byte) (int, error)    { return 0, io.EOF }
 func (f *fakeRWC) Write(b []byte) (int, error) { return len(b), nil }
 func (f *fakeRWC) Close() error                { f.closed++; return nil }
 

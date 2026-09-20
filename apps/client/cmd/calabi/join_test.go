@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 // `calabi join` with no daemon running joins here: the console's config names

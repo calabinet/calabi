@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/ratelimit"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/ratelimit"
 )
 
 // A session with no ConnGuard installed (dev / standalone / static-token)

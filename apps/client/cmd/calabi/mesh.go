@@ -20,9 +20,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	"github.com/calabi/calabi/apps/client/internal/mesh"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // runMesh is the `calabi mesh` command group — the WireGuard mesh

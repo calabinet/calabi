@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/configclient"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/tunnelstore"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/configclient"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/tunnelstore"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // resolveProxyHost returns the public host the daemon should request in
@@ -50,10 +50,10 @@ func buildConfigPushFromDelta(d configclient.Delta, baseDomain string) *proto.Co
 	case "upsert":
 		return &proto.ConfigPush{
 			UpsertProxies: []proto.UpsertProxy{{
-				TunnelID:   int64(d.Route.ID),
-				Name:       d.Route.Name,
-				Type:       proto.ProxyKind(d.Route.Type),
-				LocalAddr:  d.Route.LocalAddr,
+				TunnelID:  int64(d.Route.ID),
+				Name:      d.Route.Name,
+				Type:      proto.ProxyKind(d.Route.Type),
+				LocalAddr: d.Route.LocalAddr,
 				// Phase 2: resolve a requested subdomain prefix to
 				// <prefix>.<this edge base> so the daemon's NEW_PROXY
 				// pins it in this region.

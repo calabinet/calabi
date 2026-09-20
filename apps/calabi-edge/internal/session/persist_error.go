@@ -14,7 +14,7 @@ import (
 	"errors"
 	"strings"
 
-	proto "github.com/calabi/calabi/pkg/protocol"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // ErrProxyPolicyRequired marks a persist failure caused by the organization's
@@ -28,6 +28,15 @@ import (
 // produce it, and nothing here needs to know that.
 var ErrProxyPolicyRequired = errors.New("tunnel refused: the organization requires access protection")
 
+// ErrProxyAwaitingApproval marks a persist/claim that produced a tunnel the
+// organization has not approved yet.
+//
+// Same seam as above, and the same reason it is declared here. Note what it is
+// NOT: a failure. The row was created and kept; an admin approving it is the
+// whole remedy, and nothing the client can change would help. The daemon says
+// so and stops rather than retrying.
+var ErrProxyAwaitingApproval = errors.New("tunnel awaiting approval: an admin of this organization has to approve it before it serves")
+
 // persistErrorCode picks the wire code for a definitive persist failure.
 //
 // The default stays CodeProxyDuplicate: that is what this branch was built for,
@@ -35,6 +44,9 @@ var ErrProxyPolicyRequired = errors.New("tunnel refused: the organization requir
 func persistErrorCode(err error) int {
 	if errors.Is(err, ErrProxyPolicyRequired) {
 		return proto.CodeProxyPolicyRequired
+	}
+	if errors.Is(err, ErrProxyAwaitingApproval) {
+		return proto.CodeProxyAwaitingApproval
 	}
 	return proto.CodeProxyDuplicate
 }

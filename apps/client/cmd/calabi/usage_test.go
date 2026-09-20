@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/status"
+	"github.com/calabinet/calabi/apps/client/internal/status"
 )
 
 func TestUsageMeter_AccumulatesResetsAndPersists(t *testing.T) {

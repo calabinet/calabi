@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/mesh/derp"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/client/internal/mesh/derp"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // relayPool is the node's set of live relay links (MESH.4 B2b — the multi-relay

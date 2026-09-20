@@ -20,8 +20,8 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/platform/configclient"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/router"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/platform/configclient"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/router"
 )
 
 const testEdgeID = int64(1000400000)

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"log/slog"
 
-	"github.com/calabi/calabi/apps/client/internal/mesh/magicdns"
+	"github.com/calabinet/calabi/apps/client/internal/mesh/magicdns"
 )
 
 // ErrMagicDNSUnsupported means the OS integration (assign the resolver IP +

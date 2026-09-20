@@ -19,7 +19,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	pb "github.com/calabi/calabi/pkg/edge-proto/edgepb"
+	pb "github.com/calabinet/calabi/pkg/edge-proto/edgepb"
 )
 
 // RPC is the narrow subset of pb.IdentityClient the edge actually uses.

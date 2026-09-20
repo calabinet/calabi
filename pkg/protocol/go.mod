@@ -1,3 +1,3 @@
-module github.com/calabi/calabi/pkg/protocol
+module github.com/calabinet/calabi/pkg/protocol
 
 go 1.22

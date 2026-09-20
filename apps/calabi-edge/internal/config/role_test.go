@@ -10,12 +10,12 @@ func TestRoleGating(t *testing.T) {
 		role                string
 		wantEdge, wantRelay bool
 	}{
-		{"", true, false},        // default = edge, unchanged
-		{"edge", true, false},    //
-		{"relay", false, true},   // relay only: no tunnels
-		{"both", true, true},     //
-		{"  Both ", true, true},  // case/space-insensitive
-		{"RELAY", false, true},   //
+		{"", true, false},       // default = edge, unchanged
+		{"edge", true, false},   //
+		{"relay", false, true},  // relay only: no tunnels
+		{"both", true, true},    //
+		{"  Both ", true, true}, // case/space-insensitive
+		{"RELAY", false, true},  //
 	}
 	for _, c := range cases {
 		cfg := Config{Role: c.role}

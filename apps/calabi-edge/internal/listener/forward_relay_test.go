@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/mesh"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/mesh"
 )
 
 type fakeResolver struct {

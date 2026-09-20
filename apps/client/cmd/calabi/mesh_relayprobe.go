@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/localweb"
-	"github.com/calabi/calabi/apps/client/internal/mesh"
-	"github.com/calabi/calabi/apps/client/internal/mesh/derp"
-	"github.com/calabi/calabi/apps/client/internal/platform/statusapi"
+	"github.com/calabinet/calabi/apps/client/internal/localweb"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
+	"github.com/calabinet/calabi/apps/client/internal/mesh/derp"
+	"github.com/calabinet/calabi/apps/client/internal/platform/statusapi"
 )
 
 // Leg probing, from the daemon down to the relay link and back up to both

@@ -20,8 +20,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/hostnet"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/client/internal/hostnet"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // RecvFunc is invoked for each packet the relay forwards to us, in the read-loop

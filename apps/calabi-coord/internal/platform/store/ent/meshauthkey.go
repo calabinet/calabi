@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshauthkey"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshauthkey"
 )
 
 // MeshAuthKey is the model entity for the MeshAuthKey schema.

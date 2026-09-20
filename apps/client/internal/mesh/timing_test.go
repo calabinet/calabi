@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	meshpb "github.com/calabi/calabi/pkg/mesh-proto/meshpb"
+	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
 )
 
 // A desktop session must keep running at exactly the cadence it always had:

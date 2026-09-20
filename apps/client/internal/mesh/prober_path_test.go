@@ -30,7 +30,7 @@ import (
 	"testing"
 	"time"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // seedProbe registers a ping as if Probe had just sent it, so onPong accepts the

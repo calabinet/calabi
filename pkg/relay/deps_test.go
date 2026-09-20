@@ -23,11 +23,11 @@ func TestRelayDepsStayMinimal(t *testing.T) {
 	// Growing it is a deliberate act that should be weighed against the merge
 	// invariant, not a routine `go mod tidy` side effect.
 	allowed := map[string]bool{
-		"github.com/calabi/calabi/pkg/mesh-proto": true,
+		"github.com/calabinet/calabi/pkg/mesh-proto": true,
 	}
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
-		if !strings.Contains(line, "github.com/calabi/calabi/") {
+		if !strings.Contains(line, "github.com/calabinet/calabi/") {
 			continue // external / stdlib deps are fine
 		}
 		if strings.HasPrefix(line, "module ") || strings.HasPrefix(line, "replace ") {
@@ -38,7 +38,7 @@ func TestRelayDepsStayMinimal(t *testing.T) {
 			continue
 		}
 		mod := fields[0]
-		if strings.HasPrefix(mod, "github.com/calabi/calabi/") && !allowed[mod] {
+		if strings.HasPrefix(mod, "github.com/calabinet/calabi/") && !allowed[mod] {
 			t.Errorf("pkg/relay must not depend on %q — the relay forwards ciphertext and must not link edge / control-plane code (see edge-relay-merge-plan.md §二). If this is truly intended, update the allow-list AND reconsider the merge isolation invariant.", mod)
 		}
 	}

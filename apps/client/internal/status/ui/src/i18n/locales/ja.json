@@ -138,6 +138,10 @@
     "meshDatapathPendingTip": "中継は確定済みです。メッシュのデータプレーンはまだ起動中です。"
   },
   "tunnels": {
+    "awaitingApproval": "承認待ち",
+    "awaitingApprovalTip": "この組織はメンバーが作成したトンネルを確認します。管理者がコンソールで承認するまで、何も提供されません。",
+    "rejected": "却下",
+    "rejectedTip": "管理者がこのトンネルを却下しました。",
     "newTunnel": "トンネルを新規作成",
     "refresh": "更新",
     "colStatus": "ステータス",

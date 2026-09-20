@@ -33,10 +33,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/accesslog"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/ratelimit"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/accesslog"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/ratelimit"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 const (

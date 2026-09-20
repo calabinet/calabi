@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	"github.com/calabi/calabi/apps/client/internal/platform/clientreg"
-	"github.com/calabi/calabi/apps/client/internal/session"
-	"github.com/calabi/calabi/apps/client/internal/status"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/platform/clientreg"
+	"github.com/calabinet/calabi/apps/client/internal/session"
+	"github.com/calabinet/calabi/apps/client/internal/status"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // credentialKind classifies what resolveCredential picked, so callers can
@@ -250,7 +250,7 @@ func runHTTP(args []string) int {
 	}
 	assigned, err := cli.RegisterTunnel(ctx, tun)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi: register tunnel:", err)
+		printRegisterError(os.Stderr, err)
 		return 1
 	}
 	// What the EDGE did with the policy we sent — not what we assumed it would.

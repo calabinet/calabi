@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/pkg/mesh-proto/stun"
+	"github.com/calabinet/calabi/pkg/mesh-proto/stun"
 )
 
 // A real client socket asking a real server socket for its reflexive address must

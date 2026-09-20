@@ -3736,6 +3736,17 @@ type Tunnel struct {
 	// claims. Empty for auto-allocated (体验版) or custom-domain (增强版)
 	// tunnels. Paid tiers (基础版+) only.
 	Subdomain string `protobuf:"bytes,19,opt,name=subdomain,proto3" json:"subdomain,omitempty"`
+	// Review state: approved | pending | rejected. Carried to the edge because a
+	// CREATE succeeds for a queued tunnel — the row is kept so an admin has
+	// something to review — and without this the edge would read "no error" and
+	// serve the tunnel the review was meant to hold. Empty from an older
+	// control plane, which reads as approved (what it always was).
+	// NUMBER MUST MATCH the control plane's Tunnel.approval (24). bridge.go
+	// converts by re-encoding, so a mirrored field with a different number does
+	// not fail — it lands in whatever field happens to hold that number on the
+	// other side. 23 is created_via there. TestMirroredMessagesMatchControlPlane
+	// is what catches it.
+	Approval string `protobuf:"bytes,24,opt,name=approval,proto3" json:"approval,omitempty"`
 	// creator_user_id — the user who created this tunnel (org RBAC). Drives
 	// member visibility: a non-management member (developer/viewer) only sees
 	// rows where creator_user_id == themselves; owner/admin/auditor see all.
@@ -3914,6 +3925,13 @@ func (x *Tunnel) GetStatusReason() string {
 func (x *Tunnel) GetSubdomain() string {
 	if x != nil {
 		return x.Subdomain
+	}
+	return ""
+}
+
+func (x *Tunnel) GetApproval() string {
+	if x != nil {
+		return x.Approval
 	}
 	return ""
 }
@@ -4366,7 +4384,7 @@ const file_edgepb_messages_proto_rawDesc = "" +
 	"deleted_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tdeletedAt\"9\n" +
 	"\bSnapshot\x12\x10\n" +
 	"\x03sha\x18\x01 \x01(\tR\x03sha\x12\x1b\n" +
-	"\tbody_json\x18\x02 \x01(\fR\bbodyJson\"\xa2\x06\n" +
+	"\tbody_json\x18\x02 \x01(\fR\bbodyJson\"\xbe\x06\n" +
 	"\x06Tunnel\x124\n" +
 	"\x04meta\x18\x01 \x01(\v2 .calabi.v1.bff_edge.ResourceMetaR\x04meta\x12\x15\n" +
 	"\x06org_id\x18\x02 \x01(\x03R\x05orgId\x12!\n" +
@@ -4391,7 +4409,8 @@ const file_edgepb_messages_proto_rawDesc = "" +
 	"\x13client_edge_node_id\x18\x10 \x01(\x03R\x10clientEdgeNodeId\x12*\n" +
 	"\x11disabled_by_admin\x18\x11 \x01(\bR\x0fdisabledByAdmin\x12#\n" +
 	"\rstatus_reason\x18\x12 \x01(\tR\fstatusReason\x12\x1c\n" +
-	"\tsubdomain\x18\x13 \x01(\tR\tsubdomain\x12&\n" +
+	"\tsubdomain\x18\x13 \x01(\tR\tsubdomain\x12\x1a\n" +
+	"\bapproval\x18\x18 \x01(\tR\bapproval\x12&\n" +
 	"\x0fcreator_user_id\x18\x14 \x01(\x03R\rcreatorUserId\x12%\n" +
 	"\x0eupstream_state\x18\x15 \x01(\tR\rupstreamState\x12%\n" +
 	"\x0eupstream_error\x18\x16 \x01(\tR\rupstreamError\"]\n" +

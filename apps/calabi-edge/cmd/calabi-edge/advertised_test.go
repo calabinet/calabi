@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/config"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/config"
 )
 
 // control.addr is a BIND address, public.addr an ADVERTISED one. What the edge

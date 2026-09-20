@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/localweb"
-	"github.com/calabi/calabi/apps/client/internal/status"
+	"github.com/calabinet/calabi/apps/client/internal/localweb"
+	"github.com/calabinet/calabi/apps/client/internal/status"
 )
 
 // usageMeter is the standalone substitute for the platform's metering-svc: it

@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshservice"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshservice"
 )
 
 // MeshService is the model entity for the MeshService schema.

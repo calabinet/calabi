@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"strings"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // The subnet-router / exit-node NAT rule builders, and the install/reclaim logic

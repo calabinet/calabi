@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // meshKeepalive keeps NAT bindings warm on relayed/direct peer links.
@@ -77,6 +77,12 @@ type WGConfig struct {
 	// SetConfig receives the FULL desired state on every netmap update, which is
 	// exactly the cadence a grant needs to be refreshed at.
 	RelayGrant []byte
+	// RelayBandwidthKbps / RelayBandwidthBurstKbps is the self-limit for traffic
+	// this node sends over a PLATFORM relay. 0 = none. Rides on the config for
+	// the same reason the grant does: it is desired state, refreshed whole on
+	// every netmap. See relayrate.go.
+	RelayBandwidthKbps      uint32
+	RelayBandwidthBurstKbps uint32
 }
 
 // BuildWGConfig maps a NetMap onto the desired WG state. Pure + deterministic so
@@ -86,6 +92,7 @@ func BuildWGConfig(nm NetMap) WGConfig {
 	cfg := WGConfig{NodeKey: nm.Self.NodeKey, OverlayAddr: nm.Self.Overlay}
 	cfg.Filter, cfg.FilterEnabled = nm.Filter, nm.FilterEnabled
 	cfg.RelayGrant = nm.RelayGrant
+	cfg.RelayBandwidthKbps, cfg.RelayBandwidthBurstKbps = nm.RelayBandwidthKbps, nm.RelayBandwidthBurstKbps
 	cfg.SubnetAliases = nm.SubnetAliases
 	for _, r := range nm.UnaliasedRoutes {
 		// Reuse the pair type with an empty Alias: "this real prefix, no alias".

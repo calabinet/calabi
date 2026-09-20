@@ -20,8 +20,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/localweb"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/client/internal/localweb"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // `calabi mesh relaytest` — measure ONE LEG of the relay path.

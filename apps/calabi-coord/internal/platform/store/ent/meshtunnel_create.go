@@ -10,7 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshtunnel"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshtunnel"
 )
 
 // MeshTunnelCreate is the builder for creating a MeshTunnel entity.

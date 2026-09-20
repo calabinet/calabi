@@ -14,12 +14,12 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	"github.com/calabi/calabi/apps/client/internal/mesh"
-	"github.com/calabi/calabi/apps/client/internal/platform/meshenroll"
-	"github.com/calabi/calabi/apps/client/internal/selfhosted"
-	"github.com/calabi/calabi/apps/client/internal/trust"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
+	"github.com/calabinet/calabi/apps/client/internal/platform/meshenroll"
+	"github.com/calabinet/calabi/apps/client/internal/selfhosted"
+	"github.com/calabinet/calabi/apps/client/internal/trust"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // A phone joined to a self-hosted coordinator instead of calabi.net. There is no account and no

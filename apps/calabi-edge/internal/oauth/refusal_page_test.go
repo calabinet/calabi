@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/visitorerr"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/visitorerr"
 )
 
 // A callback with nothing in it is the one refusal reachable with no identity

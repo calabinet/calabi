@@ -25,9 +25,9 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
-	meshpb "github.com/calabi/calabi/pkg/mesh-proto/meshpb"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
+	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 func testSelfSigned(t *testing.T, cn string) (*tls.Certificate, string) {

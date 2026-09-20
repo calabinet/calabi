@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/adminhttp"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/adminhttp"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 )
 
 // The rename endpoint maps core's refusals onto the status codes the BFFs

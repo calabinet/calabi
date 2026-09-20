@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/selfupdate"
+	"github.com/calabinet/calabi/apps/client/internal/selfupdate"
 )
 
 // fakeUpdate is a hand-written UpdateSource so the handler tests do not need a

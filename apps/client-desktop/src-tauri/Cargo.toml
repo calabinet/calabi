@@ -4,7 +4,7 @@ version = "1.13.0"
 description = "Calabi tunnel client — desktop shell"
 authors = ["Calabi Team"]
 license = "Proprietary"
-repository = "https://github.com/calabi/calabi"
+repository = "https://github.com/calabinet/calabi"
 edition = "2021"
 rust-version = "1.75"
 

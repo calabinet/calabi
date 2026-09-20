@@ -138,6 +138,10 @@
     "meshDatapathPendingTip": "Das Relay steht fest; der Mesh-Datenpfad startet noch."
   },
   "tunnels": {
+    "awaitingApproval": "Wartet auf Freigabe",
+    "awaitingApprovalTip": "Diese Organisation prüft die Tunnel, die ihre Mitglieder anlegen. Ein Admin muss diesen in der Konsole freigeben, bevor er etwas bedient.",
+    "rejected": "Abgelehnt",
+    "rejectedTip": "Ein Admin hat diesen Tunnel abgelehnt.",
     "newTunnel": "Neuer Tunnel",
     "refresh": "Aktualisieren",
     "colStatus": "Status",

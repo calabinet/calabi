@@ -8,8 +8,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/calabi/calabi/apps/client/internal/platform/meshenroll"
-	"github.com/calabi/calabi/apps/client/internal/trust"
+	"github.com/calabinet/calabi/apps/client/internal/platform/meshenroll"
+	"github.com/calabinet/calabi/apps/client/internal/trust"
 )
 
 // dialCoord opens the gRPC connection to the mesh coordinator, checking its

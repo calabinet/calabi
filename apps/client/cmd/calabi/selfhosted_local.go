@@ -20,13 +20,13 @@ import (
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	"github.com/calabi/calabi/apps/client/internal/localweb"
-	"github.com/calabi/calabi/apps/client/internal/mesh"
-	"github.com/calabi/calabi/apps/client/internal/selfhosted"
-	"github.com/calabi/calabi/apps/client/internal/status"
-	"github.com/calabi/calabi/apps/client/internal/trust"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/localweb"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
+	"github.com/calabinet/calabi/apps/client/internal/selfhosted"
+	"github.com/calabinet/calabi/apps/client/internal/status"
+	"github.com/calabinet/calabi/apps/client/internal/trust"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // localMesh is the local daemon's mesh. The console changes its settings and

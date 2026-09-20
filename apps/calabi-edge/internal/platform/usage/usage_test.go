@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	eventbus "github.com/calabi/calabi/apps/calabi-edge/internal/bus"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
+	eventbus "github.com/calabinet/calabi/apps/calabi-edge/internal/bus"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
 )
 
 // fakeBus is a tiny in-memory eventbus.Bus stand-in. Publish records;

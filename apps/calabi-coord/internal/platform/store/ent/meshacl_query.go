@@ -11,8 +11,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshacl"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/predicate"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshacl"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/predicate"
 )
 
 // MeshACLQuery is the builder for querying MeshACL entities.

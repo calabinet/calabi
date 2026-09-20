@@ -16,9 +16,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/config"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/tlsutil"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/config"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/tlsutil"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // The control listener's certificate — what clients check before they send the

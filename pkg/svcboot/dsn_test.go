@@ -4,11 +4,11 @@ import "testing"
 
 func TestDBDsn(t *testing.T) {
 	cases := []struct {
-		name         string
-		specificEnv  string
-		specificVal  string
-		sharedVal    string
-		want         string
+		name        string
+		specificEnv string
+		specificVal string
+		sharedVal   string
+		want        string
 	}{
 		{
 			name:        "specific wins over shared",

@@ -138,6 +138,10 @@
     "meshDatapathPendingTip": "The relay is known; the mesh datapath is still coming up."
   },
   "tunnels": {
+    "awaitingApproval": "Awaiting approval",
+    "awaitingApprovalTip": "This organization reviews the tunnels its members create. An admin has to approve this one in the console before it serves anything.",
+    "rejected": "Rejected",
+    "rejectedTip": "An admin turned this tunnel down.",
     "newTunnel": "New tunnel",
     "refresh": "Refresh",
     "colStatus": "Status",

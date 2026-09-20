@@ -5,14 +5,14 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/policy"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/policy"
 )
 
 type fakeConn struct{ closed atomic.Bool }
 
-func (f *fakeConn) Read([]byte) (int, error)  { return 0, io.EOF }
+func (f *fakeConn) Read([]byte) (int, error)    { return 0, io.EOF }
 func (f *fakeConn) Write(b []byte) (int, error) { return len(b), nil }
-func (f *fakeConn) Close() error               { f.closed.Store(true); return nil }
+func (f *fakeConn) Close() error                { f.closed.Store(true); return nil }
 
 // TestCloseProxyConnsDenied verifies a hot policy update cuts ONLY the
 // established connections the new policy denies, leaving allowed ones open —

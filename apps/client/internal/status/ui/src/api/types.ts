@@ -148,6 +148,14 @@ export interface RemoteTunnel {
   // the field entirely when there is nothing to say, and the daemon proxies
   // /v1/tunnels row-for-row, so it arrives here unchanged.
   status_reason?: string;
+  // Review state, present only when it is NOT the ordinary one: the org
+  // reviews the tunnels its members create and this one is queued ("pending"),
+  // or an admin turned it down ("rejected", reason in approval_note). Arrives
+  // unchanged for the same reason status_reason does — the daemon proxies
+  // /v1/tunnels row-for-row. A separate axis from status: nobody disabled
+  // this, it was never let in.
+  approval?: "pending" | "rejected";
+  approval_note?: string;
   edge_node_id?: number;
   config_json?: string;
   client_online?: boolean;

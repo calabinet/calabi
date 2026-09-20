@@ -2500,9 +2500,26 @@ type NetMap struct {
 	// node can say WHY instead of only THAT: "your organisation's budget is 256
 	// and all of it is in use" is something to act on; "no alias" is not.
 	AliasBudgetAddrs uint32 `protobuf:"varint,10,opt,name=alias_budget_addrs,json=aliasBudgetAddrs,proto3" json:"alias_budget_addrs,omitempty"`
-	AliasUsedAddrs   uint32 `protobuf:"varint,11,opt,name=alias_used_addrs,json=aliasUsedAddrs,proto3" json:"alias_used_addrs,omitempty"` // MagicDNS records land here in MESH.6.
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	AliasUsedAddrs   uint32 `protobuf:"varint,11,opt,name=alias_used_addrs,json=aliasUsedAddrs,proto3" json:"alias_used_addrs,omitempty"`
+	// relay_bandwidth_kbps / relay_bandwidth_burst_kbps are the rate this node
+	// should hold ITSELF to for traffic it sends over a PLATFORM relay — a
+	// sustained rate plus a short-burst ceiling, in kbps, matching the plan's
+	// per-device allowance.
+	//
+	// Self-limiting, not enforcement: the relay polices the same numbers and
+	// drops what it will not carry. This field exists so the drop does not have
+	// to happen. A WireGuard tunnel is a datagram path, so the TCP inside it only
+	// learns about a limit by losing a packet and halving its window; a node that
+	// paces itself gets the same throughput with none of that. A modified client
+	// that ignores this is not a hole — it just gets the lossy version.
+	//
+	// 0 / absent = no self-limit, which is what an older coordinator sends and
+	// what a self-hosted one sends. Direct (hole-punched) traffic is NEVER
+	// charged against it: it costs the platform nothing.
+	RelayBandwidthKbps      uint32 `protobuf:"varint,12,opt,name=relay_bandwidth_kbps,json=relayBandwidthKbps,proto3" json:"relay_bandwidth_kbps,omitempty"`
+	RelayBandwidthBurstKbps uint32 `protobuf:"varint,13,opt,name=relay_bandwidth_burst_kbps,json=relayBandwidthBurstKbps,proto3" json:"relay_bandwidth_burst_kbps,omitempty"` // MagicDNS records land here in MESH.6.
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *NetMap) Reset() {
@@ -2608,6 +2625,20 @@ func (x *NetMap) GetAliasBudgetAddrs() uint32 {
 func (x *NetMap) GetAliasUsedAddrs() uint32 {
 	if x != nil {
 		return x.AliasUsedAddrs
+	}
+	return 0
+}
+
+func (x *NetMap) GetRelayBandwidthKbps() uint32 {
+	if x != nil {
+		return x.RelayBandwidthKbps
+	}
+	return 0
+}
+
+func (x *NetMap) GetRelayBandwidthBurstKbps() uint32 {
+	if x != nil {
+		return x.RelayBandwidthBurstKbps
 	}
 	return 0
 }
@@ -3427,7 +3458,7 @@ const file_meshpb_coord_proto_rawDesc = "" +
 	"\x1bReportServiceHealthResponse\"q\n" +
 	"\x11PullNetMapRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\x03R\x06nodeId\x12#\n" +
-	"\rsession_token\x18\x04 \x01(\tR\fsessionTokenJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04R\bauth_keyR\bnode_key\"\xa8\x04\n" +
+	"\rsession_token\x18\x04 \x01(\tR\fsessionTokenJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04R\bauth_keyR\bnode_key\"\x97\x05\n" +
 	"\x06NetMap\x12(\n" +
 	"\x04self\x18\x01 \x01(\v2\x14.calabi.mesh.v1.PeerR\x04self\x12*\n" +
 	"\x05peers\x18\x02 \x03(\v2\x14.calabi.mesh.v1.PeerR\x05peers\x122\n" +
@@ -3441,7 +3472,9 @@ const file_meshpb_coord_proto_rawDesc = "" +
 	"\x10unaliased_routes\x18\t \x03(\tR\x0funaliasedRoutes\x12,\n" +
 	"\x12alias_budget_addrs\x18\n" +
 	" \x01(\rR\x10aliasBudgetAddrs\x12(\n" +
-	"\x10alias_used_addrs\x18\v \x01(\rR\x0ealiasUsedAddrs\"7\n" +
+	"\x10alias_used_addrs\x18\v \x01(\rR\x0ealiasUsedAddrs\x120\n" +
+	"\x14relay_bandwidth_kbps\x18\f \x01(\rR\x12relayBandwidthKbps\x12;\n" +
+	"\x1arelay_bandwidth_burst_kbps\x18\r \x01(\rR\x17relayBandwidthBurstKbps\"7\n" +
 	"\vSubnetAlias\x12\x14\n" +
 	"\x05alias\x18\x01 \x01(\tR\x05alias\x12\x12\n" +
 	"\x04real\x18\x02 \x01(\tR\x04real\"a\n" +

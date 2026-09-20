@@ -41,8 +41,8 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/calabi/calabi/pkg/observability"
-	"github.com/calabi/calabi/pkg/observability/metrics"
+	"github.com/calabinet/calabi/pkg/observability"
+	"github.com/calabinet/calabi/pkg/observability/metrics"
 )
 
 // TZ is the process-wide display timezone for every Calabi binary

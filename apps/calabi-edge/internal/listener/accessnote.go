@@ -14,8 +14,8 @@ package listener
 import (
 	"net"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/accesslog"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/accesslog"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
 )
 
 // noteAccess records one visitor connection's outcome against the tunnel it was

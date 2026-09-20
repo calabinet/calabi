@@ -12,8 +12,8 @@ import (
 
 	"github.com/kardianos/service"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	"github.com/calabi/calabi/apps/client/internal/selfupdate"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/selfupdate"
 )
 
 // updatePubKeyB64 is the baked ed25519 PUBLIC key that verifies desktop update

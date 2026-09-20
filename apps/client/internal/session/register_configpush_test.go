@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	proto "github.com/calabi/calabi/pkg/protocol"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // TestRegisterTunnelSkipsConfigPush reproduces the bug where a foreground

@@ -23,7 +23,7 @@ package session
 import (
 	"testing"
 
-	proto "github.com/calabi/calabi/pkg/protocol"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 const clientPolicyBlob = `{"security":{"basic_auth":{"users":[{"user":"u","hash":"$2a$10$abcdefghijklmnopqrstuv"}]},` +

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // grantRelay authenticates links the way a real relay does (R0′): it challenges

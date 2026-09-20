@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/visitorerr"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/visitorerr"
 )
 
 func TestAuthPageKeepsTheChallengeHeader(t *testing.T) {

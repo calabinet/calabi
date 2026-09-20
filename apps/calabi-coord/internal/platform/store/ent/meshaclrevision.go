@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshaclrevision"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshaclrevision"
 )
 
 // MeshACLRevision is the model entity for the MeshACLRevision schema.

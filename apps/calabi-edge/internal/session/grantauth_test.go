@@ -14,8 +14,8 @@ import (
 	"github.com/hashicorp/yamux"
 	"golang.org/x/crypto/nacl/box"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // testGrants is the GrantAuth a standalone edge wires (cmd/calabi-edge coordGrants):

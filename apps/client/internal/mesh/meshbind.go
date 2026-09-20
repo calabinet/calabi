@@ -11,7 +11,7 @@ import (
 
 	"golang.zx2c4.com/wireguard/conn"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // meshBind is the wireguard-go conn.Bind that carries WireGuard's
@@ -40,6 +40,11 @@ import (
 type meshBind struct {
 	self   meshproto.NodeKey
 	client relaySender // set via attach() before Open
+	// meter charges relayed ciphertext against the client's self-imposed rate
+	// limit. nil until a coordinator sends an allowance; charge() is nil-safe.
+	// The brake itself is in the tun reader — see relayrate.go for why the two
+	// are in different places.
+	meter  *relayMeter
 	logger *slog.Logger
 
 	mu     sync.Mutex
@@ -174,9 +179,10 @@ type inbound struct {
 	pkt []byte
 }
 
-func newMeshBind(self meshproto.NodeKey, logger *slog.Logger) *meshBind {
+func newMeshBind(self meshproto.NodeKey, meter *relayMeter, logger *slog.Logger) *meshBind {
 	return &meshBind{
 		self:   self,
+		meter:  meter,
 		logger: logger,
 		recv:   make(chan inbound, 256),
 		closed: make(chan struct{}), // replaced on first Open
@@ -489,6 +495,12 @@ func (b *meshBind) send(bufs [][]byte, me *meshEndpoint, heldAt time.Time) error
 			return err
 		}
 		b.txRelay.Add(1)
+		// Charge the relay rate limit for what actually went out over the
+		// relay. This is the ONLY place that knows a packet took the relay
+		// rather than a direct path, and buf here is the ciphertext the relay
+		// will meter — so both ends count the same bytes. The tun reader pays
+		// the bill before its next read (relayrate.go).
+		b.meter.charge(len(buf))
 	}
 	return nil
 }

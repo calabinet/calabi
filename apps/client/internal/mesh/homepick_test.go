@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/pkg/mesh-proto/meshpb"
-	"github.com/calabi/calabi/pkg/mesh-proto/stun"
+	"github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
+	"github.com/calabinet/calabi/pkg/mesh-proto/stun"
 )
 
 // startSTUNResponder runs a loopback STUN server that answers binding requests

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/localweb"
-	"github.com/calabi/calabi/apps/client/internal/session"
+	"github.com/calabinet/calabi/apps/client/internal/localweb"
+	"github.com/calabinet/calabi/apps/client/internal/session"
 )
 
 // Once a tunnel registers, /v1/tunnels must report the edge-ASSIGNED domain and

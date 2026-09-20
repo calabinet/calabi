@@ -13,8 +13,8 @@ import (
 	"fmt"
 	"net/netip"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
-	meshpb "github.com/calabi/calabi/pkg/mesh-proto/meshpb"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
+	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
 )
 
 // PeerService is one service a peer offers: what to call it, and what to dial.
@@ -81,6 +81,17 @@ type NetMap struct {
 	// budget is 256 addresses and all of it is in use", rather than "no alias".
 	AliasBudgetAddrs int
 	AliasUsedAddrs   int
+	// RelayBandwidthKbps / RelayBandwidthBurstKbps is the rate this node holds
+	// ITSELF to for traffic it sends over a PLATFORM relay. 0 = no self-limit,
+	// which is what an older coordinator and every self-hosted one send.
+	//
+	// Self-limiting, not enforcement — the relay polices the same numbers. The
+	// point is that pacing costs nothing while being policed costs a dropped
+	// packet, and the TCP inside a WireGuard tunnel only learns a limit exists
+	// by losing one. Direct (hole-punched) traffic is never counted against it.
+	RelayBandwidthKbps      uint32
+	RelayBandwidthBurstKbps uint32
+
 	// RelayGrant is the coordinator's signed authorization for this node to use
 	// relays (R0'). Opaque: the node hands the bytes to a relay, which verifies
 	// them offline against the coordinator's public key. Empty from a coordinator
@@ -181,6 +192,9 @@ func FromNetMap(pb *meshpb.NetMap) (NetMap, error) {
 		Filter:        filterFromProto(pb.GetPacketFilter()),
 		FilterEnabled: pb.GetFilterEnabled(),
 		RelayGrant:    pb.GetRelayGrant(),
+
+		RelayBandwidthKbps:      pb.GetRelayBandwidthKbps(),
+		RelayBandwidthBurstKbps: pb.GetRelayBandwidthBurstKbps(),
 	}
 	for _, ps := range pb.GetSelfServices() {
 		if ps.GetName() == "" {

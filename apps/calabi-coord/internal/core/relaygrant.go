@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // Relay grants (R0′) — the coordinator's half.

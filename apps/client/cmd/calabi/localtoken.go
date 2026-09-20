@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 // localTokenFor returns the local-token the daemon at base will actually accept.

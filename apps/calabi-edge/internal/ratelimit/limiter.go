@@ -24,6 +24,7 @@ import (
 	"context"
 	"io"
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/time/rate"
 )
@@ -55,7 +56,9 @@ const DefaultPeakBurstSeconds = 300
 // short payloads. 4 KB matches the typical http.Read chunk.
 const MinBurstBytes = 4 * 1024
 
-// Limiter is the per-session DUAL token bucket (2026-06-09 双档):
+// Limiter is ONE TIER's DUAL token bucket (2026-06-09 双档). Since 2026-09-20
+// there are two tiers — one per tunnel and one per org — stacked by
+// ratelimit.Chain; each of them is a Limiter shaped exactly like this.
 //   - sustained: the long-run rate (套餐「带宽速度」). After a quiet user's
 //     accumulated tokens drain, throughput is pinned here.
 //   - peak: the instantaneous ceiling (套餐「带宽上限」). A quiet user can
@@ -174,6 +177,68 @@ func (l *Limiter) Wait(ctx context.Context, n int) error {
 		n -= chunk
 	}
 	return nil
+}
+
+// Allow is the NON-BLOCKING form of Wait: it either takes n bytes' worth of
+// tokens from both buckets and returns true, or takes nothing and returns
+// false. Nothing in between — a partial take would let a refused frame still
+// slow the next one down.
+//
+// This exists for the mesh relay, where waiting is not an option: the relay
+// forwards datagrams and a relay that blocks is a relay that buffers, which is
+// the one behaviour a WireGuard path must not have (pkg/relay/sendq.go spells
+// out why). A refused frame is dropped, and the inner TCP treats that as the
+// congestion signal it actually reacts to.
+//
+// A frame larger than a bucket's capacity would be refused forever, which
+// would black-hole big packets rather than pace them. Such a frame is admitted
+// and charged the whole bucket instead: over-admitting once is recoverable,
+// never admitting is not.
+func (l *Limiter) Allow(n int) bool {
+	ok, _ := l.tryTake(n)
+	return ok
+}
+
+// tryTake is Allow plus the ability to give the tokens back. ok=false means
+// nothing was taken and cancel is nil.
+//
+// The cancel exists so two tiers can be combined atomically (Chain.Allow): if
+// the org tier refuses, the per-device tier must not be left having paid for a
+// frame that never went out — the next frame would then be throttled by a
+// debt nobody incurred.
+func (l *Limiter) tryTake(n int) (ok bool, cancel func()) {
+	if l == nil || l.sustained == nil || n <= 0 {
+		return true, func() {}
+	}
+	now := time.Now()
+	// A frame bigger than the bucket would be refused forever; charge it the
+	// whole bucket instead (see Allow's doc comment).
+	if b := l.sustained.Burst(); n > b {
+		n = b
+	}
+	if l.peak != nil {
+		if b := l.peak.Burst(); n > b {
+			n = b
+		}
+	}
+	// Reserve rather than Allow so the second bucket's refusal can give the
+	// first one's tokens back: a byte that never went out must not have been
+	// paid for.
+	rs := l.sustained.ReserveN(now, n)
+	if !rs.OK() || rs.DelayFrom(now) > 0 {
+		rs.Cancel()
+		return false, nil
+	}
+	if l.peak == nil {
+		return true, rs.Cancel
+	}
+	rp := l.peak.ReserveN(now, n)
+	if !rp.OK() || rp.DelayFrom(now) > 0 {
+		rp.Cancel()
+		rs.Cancel()
+		return false, nil
+	}
+	return true, func() { rp.Cancel(); rs.Cancel() }
 }
 
 // Reader wraps r so reads pull tokens before returning bytes upstream.

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	proto "github.com/calabi/calabi/pkg/protocol"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // testPinA is a well-formed certificate pin for configs that need one.

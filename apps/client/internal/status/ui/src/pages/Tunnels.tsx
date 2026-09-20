@@ -359,6 +359,30 @@ export default function Tunnels() {
       // set, so :7400 and the web console never disagree (the old code leaked
       // the raw "已启用"/enabled status here, which says nothing about online).
       render: (_s, row) => {
+        // (0) Waiting for — or refused by — a reviewer. Answered FIRST and
+        // without the daemon's local signals: a queued tunnel is not offline
+        // and not "pending claim", it is a tunnel nothing will serve until a
+        // person acts, and every label below would send its owner looking for
+        // a technical fault instead.
+        if (row.approval === "pending") {
+          return (
+            <StatusDot
+              status="warning"
+              label={t("tunnels.awaitingApproval")}
+              tip={t("tunnels.awaitingApprovalTip")}
+            />
+          );
+        }
+        if (row.approval === "rejected") {
+          return (
+            <StatusDot
+              status="error"
+              label={t("tunnels.rejected")}
+              tip={row.approval_note || t("tunnels.rejectedTip")}
+            />
+          );
+        }
+
         // Base state from the shared collapse (server-authoritative signals).
         let st = effectiveState(row);
         let tip: ReactNode = t(`tunnels.state.${st}`);

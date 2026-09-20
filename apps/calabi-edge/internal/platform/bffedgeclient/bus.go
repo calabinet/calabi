@@ -35,9 +35,9 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	eventbus "github.com/calabi/calabi/apps/calabi-edge/internal/bus"
-	"github.com/calabi/calabi/pkg/certevents"
-	bffedge "github.com/calabi/calabi/pkg/edge-proto/edgepb"
+	eventbus "github.com/calabinet/calabi/apps/calabi-edge/internal/bus"
+	"github.com/calabinet/calabi/pkg/certevents"
+	bffedge "github.com/calabinet/calabi/pkg/edge-proto/edgepb"
 )
 
 // Bus implements eventbus.Bus on top of bff_edge.BFFEdgeClient. Safe

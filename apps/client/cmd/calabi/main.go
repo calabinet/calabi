@@ -26,10 +26,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
-	"github.com/calabi/calabi/apps/client/internal/logging"
-	"github.com/calabi/calabi/apps/client/internal/platform/edgepicker"
-	"github.com/calabi/calabi/apps/client/internal/status"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/logging"
+	"github.com/calabinet/calabi/apps/client/internal/platform/edgepicker"
+	"github.com/calabinet/calabi/apps/client/internal/status"
 )
 
 // consoleURLFile is the basename the daemon writes its REAL bound console URL

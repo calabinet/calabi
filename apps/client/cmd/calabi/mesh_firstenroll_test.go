@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/platform/meshenroll"
+	"github.com/calabinet/calabi/apps/client/internal/platform/meshenroll"
 )
 
 // A fingerprint present at the FIRST enrollment rides that registration; there

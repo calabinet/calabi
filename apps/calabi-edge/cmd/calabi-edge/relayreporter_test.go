@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calabi/calabi/pkg/relay"
+	"github.com/calabinet/calabi/pkg/relay"
 )
 
 type fakeBus struct {
@@ -22,6 +22,7 @@ func (f *fakeBus) Publish(_ string, payload []byte) error {
 	f.published = append(f.published, cp)
 	return nil
 }
+
 // Publish is the whole interface now: the reporter takes usagePublisher, not
 // eventbus.Bus, so this file links no platform transport package either — the
 // export would otherwise pull pkg/eventbus back in through the TEST deps.

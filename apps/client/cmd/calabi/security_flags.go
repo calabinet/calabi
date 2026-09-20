@@ -36,7 +36,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	proto "github.com/calabi/calabi/pkg/protocol"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // stringList is a flag.Value accumulating one entry per occurrence — repeat the

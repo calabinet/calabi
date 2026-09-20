@@ -14,10 +14,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/calabi/calabi/apps/client/internal/localweb"
-	"github.com/calabi/calabi/apps/client/internal/session"
-	"github.com/calabi/calabi/apps/client/internal/status"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	"github.com/calabinet/calabi/apps/client/internal/localweb"
+	"github.com/calabinet/calabi/apps/client/internal/session"
+	"github.com/calabinet/calabi/apps/client/internal/status"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 	"gopkg.in/yaml.v3"
 )
 
@@ -240,6 +240,14 @@ func (sv *localSupervisor) reconcile(sctx context.Context, logger *slog.Logger, 
 		}
 		assigned, err := cli.RegisterTunnelLive(sctx, eff, 0)
 		if err != nil {
+			// A refusal that is the organization answering, not a fault: say it
+			// as a sentence and at INFO. Logging "register tunnel failed" at
+			// ERROR for a tunnel that is simply queued sends whoever runs this
+			// daemon looking for a breakage that is not there.
+			if msg, _ := registerRefusal(err); msg != "" {
+				logger.Info("tunnel not registered: "+msg, "name", eff.Name, "type", p.kind)
+				continue
+			}
 			logger.Error("register tunnel failed", "name", eff.Name, "type", p.kind, "err", err)
 			continue
 		}

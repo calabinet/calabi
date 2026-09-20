@@ -1,4 +1,4 @@
-module github.com/calabi/calabi/pkg/hooks-proto
+module github.com/calabinet/calabi/pkg/hooks-proto
 
 go 1.25.0
 

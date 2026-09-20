@@ -1,6 +1,7 @@
 package mesh
 
 import (
+	"context"
 	"net/netip"
 	"os"
 	"testing"
@@ -36,7 +37,7 @@ func TestFilteredTUNDropsOnlyDisallowed(t *testing.T) {
 		SrcCIDRs: []netip.Prefix{netip.MustParsePrefix("100.64.0.1/32")},
 		DstPorts: []PortRange{{First: 443, Last: 443, Proto: "tcp"}},
 	}})
-	ft := newFilteredTUN(inner, f, nil)
+	ft := newFilteredTUN(context.Background(), inner, f, nil, nil)
 
 	allowed := ipv4("100.64.0.1", protoTCP, 443, 0)
 	denied := ipv4("100.64.0.9", protoTCP, 443, 0)
@@ -59,7 +60,7 @@ func TestFilteredTUNDropsOnlyDisallowed(t *testing.T) {
 // With filtering off the wrap is a pass-through (no copying, no dropping).
 func TestFilteredTUNPassThroughWhenDisabled(t *testing.T) {
 	inner := &fakeTUN{}
-	ft := newFilteredTUN(inner, &PacketFilter{}, nil)
+	ft := newFilteredTUN(context.Background(), inner, &PacketFilter{}, nil, nil)
 	n, err := ft.Write([][]byte{ipv4("203.0.113.1", protoTCP, 22, 0)}, 0)
 	if err != nil || n != 1 || len(inner.written) != 1 {
 		t.Fatalf("pass-through failed: n=%d err=%v written=%d", n, err, len(inner.written))
@@ -72,7 +73,7 @@ func TestFilteredTUNAllDropped(t *testing.T) {
 	inner := &fakeTUN{}
 	f := &PacketFilter{}
 	f.SetRules(true, nil) // enabled, no rules = deny all
-	ft := newFilteredTUN(inner, f, nil)
+	ft := newFilteredTUN(context.Background(), inner, f, nil, nil)
 	n, err := ft.Write([][]byte{ipv4("100.64.0.1", protoTCP, 443, 0)}, 0)
 	if err != nil || n != 1 {
 		t.Fatalf("n=%d err=%v, want the batch reported as handled", n, err)

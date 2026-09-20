@@ -138,6 +138,10 @@
     "meshDatapathPendingTip": "El relay ya se conoce; el plano de datos de la malla aún está arrancando."
   },
   "tunnels": {
+    "awaitingApproval": "Pendiente de aprobación",
+    "awaitingApprovalTip": "Esta organización revisa los túneles que crean sus miembros. Un administrador debe aprobarlo en la consola antes de que sirva nada.",
+    "rejected": "Rechazado",
+    "rejectedTip": "Un administrador rechazó este túnel.",
     "newTunnel": "Nuevo túnel",
     "refresh": "Actualizar",
     "colStatus": "Estado",

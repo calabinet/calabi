@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 // sandboxAt enters a sandbox at a fresh temp dir for this test only, restoring
@@ -118,7 +118,7 @@ func TestEveryTestPackageRunsInTheSandbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected the client module at %s: %v", moduleRoot, err)
 	}
-	if first, _, _ := strings.Cut(string(b), "\n"); strings.TrimSpace(first) != "module github.com/calabi/calabi/apps/client" {
+	if first, _, _ := strings.Cut(string(b), "\n"); strings.TrimSpace(first) != "module github.com/calabinet/calabi/apps/client" {
 		t.Fatalf("expected the client module at %s, go.mod starts %q", moduleRoot, first)
 	}
 

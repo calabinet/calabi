@@ -32,7 +32,7 @@ import (
 	"fmt"
 	"testing"
 
-	proto "github.com/calabi/calabi/pkg/protocol"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // A refusal the user can act on gets its own code, distinct from "duplicate".
@@ -46,6 +46,25 @@ func TestPersistErrorPolicyRefusalHasItsOwnCode(t *testing.T) {
 	if got := persistErrorCode(err); got != proto.CodeProxyPolicyRequired {
 		t.Fatalf("persistErrorCode = %d, want %d (CodeProxyPolicyRequired)",
 			got, proto.CodeProxyPolicyRequired)
+	}
+}
+
+// "Waiting for a reviewer" is a THIRD answer, and it must not share a code with
+// either of the other two: the client's advice differs ("ask an admin", not
+// "change something" and not "the port is taken"), and so does whether running
+// the same command again can ever work.
+func TestPersistErrorAwaitingApprovalHasItsOwnCode(t *testing.T) {
+	for _, other := range []int{proto.CodeProxyDuplicate, proto.CodeProxyPolicyRequired} {
+		if proto.CodeProxyAwaitingApproval == other {
+			t.Fatalf("the approval wait shares code %d with another refusal; a client "+
+				"cannot tell them apart", other)
+		}
+	}
+	err := fmt.Errorf("claim refused: %w: rpc error: code = Aborted desc = store: tunnel awaiting approval",
+		ErrProxyAwaitingApproval)
+	if got := persistErrorCode(err); got != proto.CodeProxyAwaitingApproval {
+		t.Fatalf("persistErrorCode = %d, want %d (CodeProxyAwaitingApproval)",
+			got, proto.CodeProxyAwaitingApproval)
 	}
 }
 

@@ -15,9 +15,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/transport"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	"github.com/calabinet/calabi/apps/client/internal/transport"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // Tunnel describes one tunnel the user wants the client to register.

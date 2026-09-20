@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"strings"
 
-	eventbus "github.com/calabi/calabi/apps/calabi-edge/internal/bus"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	eventbus "github.com/calabinet/calabi/apps/calabi-edge/internal/bus"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // evictSubjectPrefix mirrors apps/identity-svc/internal/onlinecap.SubjectPrefix.

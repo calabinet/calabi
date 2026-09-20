@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // How long ONE iptables invocation may take. These exist because the -w below

@@ -31,7 +31,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/probe"
+	"github.com/calabinet/calabi/apps/client/internal/probe"
 )
 
 // upstreamHealthReporter forwards probe results to bff-console.

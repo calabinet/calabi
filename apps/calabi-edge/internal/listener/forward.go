@@ -38,12 +38,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/accesslog"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/mesh"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/router"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/session"
-	"github.com/calabi/calabi/apps/calabi-edge/internal/visitorerr"
-	proto "github.com/calabi/calabi/pkg/protocol"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/accesslog"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/mesh"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/router"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/visitorerr"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // forwardReadTimeout caps how long we wait for a peer to send the frame
@@ -269,7 +269,7 @@ func (f *Forward) handle(peer net.Conn) {
 	// Splice peer(relay) <-> stream(client). Meter on the owner session
 	// through its bandwidth limiter — identical accounting to the direct
 	// listeners, so a forwarded request bills the customer exactly once.
-	lim := sess.Limiter()
+	lim := sess.LimiterFor(target.ProxyID)
 	type result struct {
 		dir   string
 		bytes int64

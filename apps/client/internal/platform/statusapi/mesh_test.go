@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/calabi/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 )
 
 // fakeMeshSource is a settable MeshStatusSource for handler tests.

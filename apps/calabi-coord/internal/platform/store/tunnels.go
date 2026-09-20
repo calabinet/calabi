@@ -7,10 +7,10 @@ import (
 
 	entsql "entgo.io/ent/dialect/sql"
 
-	"github.com/calabi/calabi/apps/calabi-coord/internal/core"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshtunnel"
-	"github.com/calabi/calabi/apps/calabi-coord/internal/platform/store/ent/meshtunnelusage"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshtunnel"
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshtunnelusage"
 )
 
 // Tunnels a self-hosted daemon reported, and their traffic (core/tunnels.go).

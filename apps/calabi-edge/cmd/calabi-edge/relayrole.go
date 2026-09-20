@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/calabi/calabi/apps/calabi-edge/internal/config"
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
-	"github.com/calabi/calabi/pkg/relay"
-	"github.com/calabi/calabi/pkg/stunserver"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/config"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/pkg/relay"
+	"github.com/calabinet/calabi/pkg/stunserver"
 )
 
 // runRelay serves the mesh-relay (calabi-derp) datapath in-process when role is
@@ -33,7 +33,7 @@ import (
 // node with an org identity.
 //
 // Blocks until ctx is cancelled, then tears its listeners down.
-func runRelay(ctx context.Context, rc config.RelayRole, logger *slog.Logger, reporter *relayUsageReporter) error {
+func runRelay(ctx context.Context, rc config.RelayRole, logger *slog.Logger, reporter *relayUsageReporter, rate *relayRateResolver) error {
 	auth, err := relayAuthConfig(rc)
 	if err != nil {
 		return err
@@ -41,9 +41,16 @@ func runRelay(ctx context.Context, rc config.RelayRole, logger *slog.Logger, rep
 	logger.Info("relay role: starting mesh-relay datapath",
 		"derp_port", rc.RelayDERPPort(), "stun_port", rc.RelaySTUNPort(),
 		"kind", auth.Kind, "require_auth", auth.Require, "label", rc.Label,
-		"usage_report", reporter != nil)
+		"usage_report", reporter != nil, "rate_limit", rate != nil)
 
 	hub := relay.NewHub(logger, auth)
+	// nil resolver = no limiting, which is the self-hosted posture and what
+	// every relay did before 2026-09-20. Passing rate.For unconditionally would
+	// install a non-nil func value wrapping a nil receiver, so the hub would
+	// call it per link instead of skipping the whole path.
+	if rate != nil {
+		hub = hub.WithRateLimiter(rate.For)
+	}
 	go hub.Run(ctx)
 	if reporter != nil {
 		go reporter.reportLoop(ctx, hub.TakeUsage)

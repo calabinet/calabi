@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calabi/calabi/apps/client/internal/mesh"
-	"github.com/calabi/calabi/apps/client/internal/selfhosted"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
+	"github.com/calabinet/calabi/apps/client/internal/selfhosted"
 )
 
 // What a self-hosted server lists — its devices, the tunnels its daemons serve,

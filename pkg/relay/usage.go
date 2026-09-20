@@ -4,7 +4,7 @@ import (
 	"sort"
 	"sync/atomic"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // Relay usage accounting (F2).

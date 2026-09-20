@@ -11,11 +11,11 @@ import (
 
 	"golang.zx2c4.com/wireguard/conn"
 
-	meshproto "github.com/calabi/calabi/pkg/mesh-proto"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 func testBind() *meshBind {
-	return newMeshBind(meshproto.NodeKey{1}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return newMeshBind(meshproto.NodeKey{1}, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
 // fakeRelay records what the relay transport was asked to carry.
@@ -485,12 +485,12 @@ func TestDirectTransportRoundTrip(t *testing.T) {
 	defer bSock.Close()
 
 	aRelay, bRelay := &fakeRelay{}, &fakeRelay{}
-	aBind := newMeshBind(aKey, slog.Default())
+	aBind := newMeshBind(aKey, nil, slog.Default())
 	aBind.attach(aRelay)
 	aBind.attachDirect(aSock, newDiscoProber(aSock, slog.Default()))
 	aBind.setPeers(WGConfig{Peers: []WGPeer{{PublicKey: bKey, DiscoKey: bDisco.Public()}}})
 
-	bBind := newMeshBind(bKey, slog.Default())
+	bBind := newMeshBind(bKey, nil, slog.Default())
 	bBind.attach(bRelay)
 	bBind.attachDirect(bSock, newDiscoProber(bSock, slog.Default()))
 	bBind.setPeers(WGConfig{Peers: []WGPeer{{PublicKey: aKey, DiscoKey: aDisco.Public()}}})
