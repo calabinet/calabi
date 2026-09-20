@@ -41,9 +41,34 @@ func isolateDataDir(t *testing.T) string {
 	t.Setenv("CALABI_EDGE_CA_FILE", "")
 	t.Setenv("CALABI_API_KEY", "")
 	t.Setenv("CALABI_TOKEN", "")
-	// The mesh key (os.UserConfigDir) and the daemon log (the cache dir) too.
-	for _, v := range []string{"APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"} {
+	// The mesh key (os.UserConfigDir) and the daemon log (os.UserCacheDir) too.
+	//
+	// HOME and USERPROFILE are in this list because macOS resolves BOTH of those
+	// directories from $HOME (~/Library/Application Support, ~/Library/Caches)
+	// and reads none of the XDG_* or *APPDATA variables. Without them the four
+	// Setenv calls did nothing at all there, and the mesh key went to the real
+	// per-user directory. Nothing noticed until testhome's guard failed the
+	// package on a macOS CI runner — Linux and Windows stayed green, because on
+	// those two the list happened to be complete.
+	for _, v := range []string{"APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "HOME", "USERPROFILE"} {
 		t.Setenv(v, filepath.Join(dir, strings.ToLower(v)))
+	}
+	// Enumerating the variables is exactly what failed, so check the RESULT
+	// rather than trusting the list. If an OS ever resolves either directory
+	// from something not named above, the test says so here instead of writing
+	// into the developer's own home.
+	for name, resolve := range map[string]func() (string, error){
+		"os.UserConfigDir": os.UserConfigDir,
+		"os.UserCacheDir":  os.UserCacheDir,
+	} {
+		got, err := resolve()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if !strings.HasPrefix(filepath.Clean(got), filepath.Clean(dir)) {
+			t.Fatalf("%s resolves to %s, outside this test's directory %s — "+
+				"the redirection above does not cover this OS", name, got, dir)
+		}
 	}
 	return dir
 }
