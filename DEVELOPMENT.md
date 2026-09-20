@@ -229,7 +229,11 @@ for dir in $(grep -oE '\./[A-Za-z0-9/_.-]+' go.work); do
 done
 ```
 
-That is what CI runs, on Linux, macOS and Windows.
+CI runs the same loop on Linux, macOS and Windows, with `go test -short`. That
+skips five tests whose answer depends on how busy the machine is — two relay
+throughput benchmarks, one that spawns helper processes, one that spans real
+timer ticks, and one that cross-builds for Android and iOS. Run without
+`-short`, as above, on your own machine.
 
 `make verify` checks that the tree is the published open-source tree.
 `make verify-build` rebuilds a release and compares it byte for byte with what

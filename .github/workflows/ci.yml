@@ -55,13 +55,24 @@ jobs:
       # The module list comes from go.work rather than a list pinned here, so a
       # new module is covered the day it is added. The paths in go.work are
       # relative and forward-slashed, which `cd` accepts on Windows too.
+      #
+      # -short, because a hosted runner is a shared 2-core box. It skips exactly
+      # five tests, each of which measures the machine rather than the code:
+      # two relay throughput benchmarks (their own comment says they must not
+      # "turn into a flaky benchmark on a loaded CI box"), one that spawns
+      # helper processes, one that spans real timer ticks, and one that
+      # cross-builds for Android and iOS. Everything else runs.
+      #
+      # This is not a way to silence a failing test. A test that is red because
+      # the code is wrong has to be fixed; -short is for assertions whose answer
+      # depends on how busy the machine is.
       - name: Build, vet and test every module
         shell: bash
         run: |
           set -eu
           for dir in $(grep -oE '\./[A-Za-z0-9/_.-]+' go.work); do
             printf '\n\033[1m== %s\033[0m\n' "$dir"
-            ( cd "$dir" && go build ./... && go vet ./... && go test ./... )
+            ( cd "$dir" && go build ./... && go vet ./... && go test -short ./... )
           done
 
   gofmt:

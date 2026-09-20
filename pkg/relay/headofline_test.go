@@ -156,7 +156,18 @@ func TestDroppedFramesAreNotBilled(t *testing.T) {
 			t.Fatalf("write %d: %v", i, err)
 		}
 	}
-	dropped := h.lookup(keyStalled).sendq.Dropped()
+	// WAIT for the hub to catch up, rather than reading straight after our own
+	// writes. `WriteDERPFrame` returning only means the bytes reached the SOURCE
+	// socket's send buffer; the hub's reader goroutine has still to pick them up
+	// and enqueue them before any drop can be recorded. Reading Dropped() here
+	// asserted a state that had not been established yet, and on a loaded 2-core
+	// CI runner the reader lagged far enough that it was still 0 — the test went
+	// red on a machine, not on a defect.
+	//
+	// Settling (no change across consecutive polls) rather than just "> 0", so
+	// `dropped` and the usage read below describe the same moment: the billing
+	// bound is computed from both.
+	dropped := waitDropsSettle(t, h.lookup(keyStalled).sendq)
 	if dropped == 0 {
 		t.Fatal("expected drops to a peer that never read")
 	}
@@ -171,6 +182,29 @@ func TestDroppedFramesAreNotBilled(t *testing.T) {
 		t.Errorf("billed %d egress bytes for the stalled peer but only %d frames were written (max %d bytes)",
 			out, flood-int(dropped), maxBilled)
 	}
+}
+
+// waitDropsSettle returns the queue's drop count once it has stopped moving —
+// the hub has read what we wrote and the send queue has shed what it will shed.
+// It gives up after the deadline and returns what it has, so a genuine "no
+// drops at all" still reaches the caller's assertion instead of timing out into
+// an unrelated failure.
+func waitDropsSettle(t *testing.T, q *sendQueue) uint64 {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	last, stable := q.Dropped(), 0
+	for time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+		n := q.Dropped()
+		if n == last && n > 0 {
+			if stable++; stable == 3 {
+				return n
+			}
+			continue
+		}
+		last, stable = n, 0
+	}
+	return q.Dropped()
 }
 
 // The Ping echo is a load-bearing contract, not just a keepalive.
