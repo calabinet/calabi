@@ -504,13 +504,21 @@ func TestDirectTransportRoundTrip(t *testing.T) {
 	bAddr := loopback(bSock.LocalPort())
 	prober.Probe([]Peer{{NodeKey: bKey, DiscoKey: bDisco.Public(), Endpoints: []netip.AddrPort{bAddr}}})
 
-	deadline := time.Now().Add(3 * time.Second)
+	// Long enough for the prober to RETRY. A single probe or its pong can be
+	// dropped or simply arrive late on a busy machine, and the next attempt is a
+	// whole probeInterval away — so a deadline shorter than probeInterval makes
+	// the retry unreachable and turns one late packet into a failure. It was 3s
+	// against a 5s interval, and it went red on a hosted CI runner.
+	//
+	// Derived from the constant rather than spelled out, so it follows if the
+	// prober's cadence ever changes.
+	deadline := time.Now().Add(2*probeInterval + time.Second)
 	for {
 		if _, ok := aBind.directPath(bKey); ok {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("A never validated a direct path to B")
+			t.Fatalf("A never validated a direct path to B within %v", 2*probeInterval+time.Second)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
