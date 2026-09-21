@@ -377,6 +377,41 @@ func TestSelfHostedListsWithoutConnecting(t *testing.T) {
 	}
 }
 
+// A server the phone cannot reach is a SENTENCE, not the gRPC dialer's
+// diagnostics. readError used to name the three codes a coordinator can send
+// back and fall through to err.Error() for everything else — and "everything
+// else" is exactly the failure a self-hoster meets most often (server off, or
+// phone off that LAN). The app then printed this at them, on three tabs at once:
+//
+//	rpc error: code = Unavailable desc = connection error: desc = "transport:
+//	Error while dialing: dial tcp 192.168.1.5:7012: connect: network is unreachable"
+func TestAnUnreachableServerIsASentenceNotATransportDump(t *testing.T) {
+	coord := startSHCoord(t, true, "ck_gone")
+	c, _ := newSelfHostedTestCore(t)
+	if code, out := call(t, c, "POST", "/v1/selfhosted/join", fmt.Sprintf(`{"link":%q}`, coord.link("ck_gone"))); code != http.StatusOK {
+		t.Fatalf("join: %d %v", code, out)
+	}
+	coord.stop() // switched off, or this phone is no longer on its network
+
+	for _, path := range []string{"/v1/mesh/nodes", "/v1/tunnels", "/v1/usage/overview"} {
+		code, out := call(t, c, "GET", path, "")
+		if code != http.StatusBadGateway || out["code"] != "unreachable" {
+			t.Errorf("%s: %d %v, want 502 with code unreachable", path, code, out)
+		}
+		msg, _ := out["error"].(string)
+		if msg != "cannot reach the server" {
+			t.Errorf("%s: error = %q, want the one sentence", path, msg)
+		}
+		// The point of the change: whatever the wording becomes, the transport's
+		// own vocabulary must not be in it.
+		for _, leak := range []string{"rpc error", "transport:", "dial tcp", "connection error", "desc ="} {
+			if strings.Contains(msg, leak) {
+				t.Errorf("%s: %q leaked into the message shown to a person: %s", path, leak, msg)
+			}
+		}
+	}
+}
+
 // A coordinator too old to take a device back by proof alone cannot open a view
 // either: the lists wait for a connection, as before.
 func TestSelfHostedListsNeedAConnectionOnOlderCoordinators(t *testing.T) {

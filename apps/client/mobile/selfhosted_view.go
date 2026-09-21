@@ -58,9 +58,21 @@ func (c *Core) readSelfHosted(ctx context.Context, read func(*mesh.CoordClient) 
 func (c *Core) dropView() { c.viewer.Drop() }
 
 // readError answers a read that failed.
-func readError(w http.ResponseWriter, err error) {
+//
+// EVERY code gets a sentence here. The switch used to fall through to
+// err.Error() for anything it did not name, and the one it did not name —
+// "unreachable", the coordinator not answering at all — is the failure a
+// self-hoster hits most: their server is off, or their phone is on mobile data
+// rather than the LAN it lives on. The app printed the gRPC dialer's own words
+// at them, three tabs at a time:
+//
+//	rpc error: code = Unavailable desc = connection error: desc = "transport:
+//	Error while dialing: dial tcp 192.168.1.5:7012: connect: network is unreachable"
+//
+// The raw error still reaches the diagnostic log, which is where it is useful.
+func (c *Core) readError(w http.ResponseWriter, err error) {
 	st, code := selfhosted.ReadFailure(err)
-	msg := err.Error()
+	msg := ""
 	switch code {
 	case "not_connected":
 		msg = "connect to see this"
@@ -68,7 +80,15 @@ func readError(w http.ResponseWriter, err error) {
 		msg = "the server no longer knows this phone"
 	case "disabled":
 		msg = "this phone is disabled on the server"
+	case "unreachable":
+		msg = "cannot reach the server"
 	}
+	if msg == "" {
+		// A code with no sentence is this function's own bug, not the user's.
+		// Say something true rather than nothing, and log what it really was.
+		msg = "cannot read from the server"
+	}
+	c.logger.Warn("self-hosted read failed", "code", code, "err", err)
 	joinError(w, st, code, msg, nil)
 }
 
@@ -83,7 +103,7 @@ func (c *Core) handleSelfHostedTunnels(w http.ResponseWriter, r *http.Request) {
 		list, err = cc.ListTunnels(ctx)
 		return err
 	}); err != nil {
-		readError(w, err)
+		c.readError(w, err)
 		return
 	}
 	items := make([]map[string]any, 0, len(list))
@@ -129,7 +149,7 @@ func (c *Core) handleSelfHostedUsage(w http.ResponseWriter, r *http.Request) {
 		u, err = cc.GetUsage(ctx, r.URL.Query().Get("tz"), 7)
 		return err
 	}); err != nil {
-		readError(w, err)
+		c.readError(w, err)
 		return
 	}
 	out := map[string]any{

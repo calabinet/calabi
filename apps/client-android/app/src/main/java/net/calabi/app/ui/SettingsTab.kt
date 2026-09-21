@@ -109,6 +109,16 @@ fun SettingsTab(model: AppModel, onSignedOut: () -> Unit, onReplace: () -> Unit)
             }
             RowDivider()
             SwitchRow(
+                stringResource(R.string.settings_block_incoming), stringResource(R.string.settings_block_incoming_hint),
+                checked = model.blockIncoming,
+            ) { on ->
+                scope.launch {
+                    val r = model.saveSettings(JSONObject().put("block_incoming", on))
+                    if (!r.ok) toast(context, r.error(failed))
+                }
+            }
+            RowDivider()
+            SwitchRow(
                 stringResource(R.string.settings_connect_on_boot), stringResource(R.string.settings_connect_on_boot_hint),
                 checked = connectOnBoot,
             ) { on ->

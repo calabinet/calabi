@@ -164,6 +164,8 @@ private fun DevicesTab(
         item { ReplacePrompt(model, onReplace) }
         item { CertChangedPrompt(model) }
         item { ApprovalPrompt(model) }
+        item { ShieldsPrompt(model) }
+        item { UnreachablePrompt(model) }
         item { TilePrompt(model) }
         if (model.nodes != null || model.nodesError != null) {
             item {
@@ -493,11 +495,15 @@ fun ExitChoices(model: AppModel, onPicked: () -> Unit = {}) {
         }
     }
     if (candidates.isEmpty()) {
+        // "Nobody offers an exit" is a fact about a list we HAVE. With no list
+        // there is nothing to conclude — saying "this server has none" after
+        // failing to reach that server is stating what we could not read.
         val empty = when {
+            model.nodes != null && model.selfHosted -> R.string.settings_exit_empty_server
+            model.nodes != null -> R.string.settings_exit_empty
             // A self-hosted server's devices come from the live session.
             model.selfHosted && model.nodesNeedConnection -> R.string.settings_exit_connect
-            model.selfHosted -> R.string.settings_exit_empty_server
-            else -> R.string.settings_exit_empty
+            else -> R.string.settings_exit_unknown
         }
         Text(stringResource(empty), style = Styles.hint, modifier = Modifier.padding(horizontal = 8.dp))
     }
@@ -546,6 +552,50 @@ private fun osName(os: String): String = when (os) {
     "android" -> "Android"
     "ios" -> "iOS"
     else -> os
+}
+
+/**
+ * The phone cannot reach what it reads from.
+ *
+ * This is the ONE place that explains it. The tunnels list and the usage card
+ * used to print their own copy of the same failure, so switching tabs taught
+ * the same lesson three times — and what they printed was the gRPC dialer's
+ * error string, in English, at a person holding a phone.
+ */
+@Composable
+private fun UnreachablePrompt(model: AppModel) {
+    if (!model.unreachable) return
+    Group(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(stringResource(R.string.unreachable_title), style = Styles.rowTitle)
+            Text(
+                stringResource(if (model.selfHosted) R.string.unreachable_body_server else R.string.unreachable_body_platform),
+                style = Styles.hint.copy(fontSize = 13.sp),
+            )
+            if (model.selfHosted && model.server.isNotBlank()) {
+                Text(model.server, style = Styles.mono, maxLines = 1)
+            }
+        }
+    }
+}
+
+/**
+ * This phone is refusing every inbound connection.
+ *
+ * A phone with the switch on looks exactly like a healthy one on this screen —
+ * connected, addressed, the whole device list present — and the switch itself is
+ * two taps away on another tab. A setting whose effect is invisible on the page
+ * people actually look at is a support call (mesh-console-ux-plan §27.4).
+ */
+@Composable
+private fun ShieldsPrompt(model: AppModel) {
+    if (!model.blockIncoming) return
+    Group(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(stringResource(R.string.shields_title), style = Styles.rowTitle)
+            Text(stringResource(R.string.shields_body), style = Styles.hint.copy(fontSize = 13.sp))
+        }
+    }
 }
 
 /** Joined, and waiting for the server's administrator to approve this phone. */

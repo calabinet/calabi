@@ -112,6 +112,48 @@ func TestConnectJoinsTheMeshnetAndEstablishesTheVPN(t *testing.T) {
 	}
 }
 
+// "Refuse incoming connections" has to reach the mesh session, not merely the
+// settings file. A switch that only stored its value would pass a settings
+// round-trip test and leave the phone wide open — so this asserts what the
+// COORDINATOR was told, which the controller stamps from the same field the
+// packet filter enforces from.
+func TestRefusingIncomingConnectionsReachesTheMeshSession(t *testing.T) {
+	useMemoryTUNs(t)
+	coord, coordAddr := startFakeCoord(t, &meshpb.NetMap{Self: &meshpb.Peer{NodeId: 11, OverlayAddr: "100.64.0.7"}})
+	bff := &fakeBFF{enrollment: fmt.Sprintf(`{"enabled":true,"coord_addr":%q,"relay_addr":"127.0.0.1:1","org_id":7}`, coordAddr)}
+	c := newTestCore(t, bff, &fakePlatform{})
+	signIn(t, c)
+
+	// Off by default: a phone joins a meshnet in order to be reachable.
+	if _, s := call(t, c, "GET", "/v1/settings", ""); s["block_incoming"] != false {
+		t.Fatalf("default block_incoming = %v, want false", s["block_incoming"])
+	}
+	if code, s := call(t, c, "PUT", "/v1/settings", `{"block_incoming":true}`); code != http.StatusOK || s["block_incoming"] != true {
+		t.Fatalf("PUT = %d %v", code, s)
+	}
+	// Changing one other setting must not clear it: creds keeps a pointer, and
+	// this API sends a field only when the app changed it.
+	if _, s := call(t, c, "PUT", "/v1/settings", `{"exit_node":"home-server"}`); s["block_incoming"] != true {
+		t.Fatalf("an unrelated save cleared it: %v", s)
+	}
+
+	if err := c.Connect(); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the coordinator registration", func() bool { return coord.registration() != nil })
+	if !coord.registration().GetBlockIncoming() {
+		t.Fatal("registered with block_incoming false: the switch never reached the mesh session")
+	}
+
+	// And back off, over a fresh session — the session restart is what applies it.
+	if code, s := call(t, c, "PUT", "/v1/settings", `{"block_incoming":false}`); code != http.StatusOK || s["block_incoming"] != false {
+		t.Fatalf("turning it off = %d %v", code, s)
+	}
+	waitFor(t, "a registration that no longer refuses inbound", func() bool {
+		return !coord.registration().GetBlockIncoming()
+	})
+}
+
 // An org without meshnet access is a state the app shows, not an error loop.
 func TestConnectWithoutMeshnetAccessSaysSo(t *testing.T) {
 	useMemoryTUNs(t)

@@ -66,6 +66,8 @@
     <string name="settings_save_failed">保存失败</string>
     <string name="settings_accept_routes">使用子网路由</string>
     <string name="settings_accept_routes_hint">访问其他设备共享的网络，例如家里的局域网。</string>
+    <string name="settings_block_incoming">拒绝所有入站连接</string>
+    <string name="settings_block_incoming_hint">组网里没有人能连到这台手机，不管访问规则允许什么。这台手机主动发起的连接照常。</string>
     <string name="settings_connect_on_boot">开机自动连接</string>
     <string name="settings_connect_on_boot_hint">手机重启后自动连上。</string>
     <string name="settings_background">后台运行</string>
@@ -78,6 +80,7 @@
     <string name="settings_exit_empty">组织里还没有设备提供出口。</string>
     <string name="settings_exit_empty_server">这台服务器上还没有设备提供出口。</string>
     <string name="settings_exit_connect">连接后显示这台服务器上可作出口的设备。</string>
+    <string name="settings_exit_unknown">还没读到设备名单，暂时没有可选的。</string>
     <string name="settings_support">支持</string>
     <string name="settings_export_logs">分享诊断日志</string>
     <string name="settings_sign_out">退出登录</string>
@@ -272,6 +275,12 @@
     <string name="cert_changed_trust">一致，信任新证书</string>
     <string name="cert_changed_again">服务器出示的证书又变了，请重新核对。</string>
     <string name="devices_connect_to_see">连接后显示这台服务器上的设备。</string>
+    <string name="unreachable_title">连不上服务器</string>
+    <string name="unreachable_body_server">这台手机现在连不上你的服务器。可能是服务器没开，也可能是手机和它不在同一个网络里。</string>
+    <string name="unreachable_body_platform">这台手机现在连不上 calabi.net，检查一下网络。</string>
+    <string name="unreachable_short">连不上服务器，暂时没有可显示的内容。</string>
+    <string name="shields_title">这台手机正在拒绝所有入站连接</string>
+    <string name="shields_body">其他设备看得到它、它也连得出去，但谁都连不进来。要关掉在「设置 → 本机」里。</string>
     <string name="approval_title">等待批准</string>
     <string name="approval_body">服务器管理员批准后，这台手机才能访问其他设备。</string>
     <string name="settings_server">自建服务器</string>

@@ -414,7 +414,7 @@ func (c *Core) handleSelfHostedNodes(w http.ResponseWriter, r *http.Request) {
 		nodes, err = cc.ListNodes(ctx)
 		return err
 	}); err != nil {
-		readError(w, err)
+		c.readError(w, err)
 		return
 	}
 	type service struct {

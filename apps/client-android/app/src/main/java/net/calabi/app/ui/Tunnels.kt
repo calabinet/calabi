@@ -182,6 +182,16 @@ fun TunnelsTab(model: AppModel, onOpen: (Tunnel) -> Unit) {
             item { Text(err, color = Palette.danger, fontSize = 13.sp, modifier = Modifier.padding(start = 6.dp, bottom = 8.dp)) }
         }
         when {
+            // Said in full on the devices tab, so here it is only why this list
+            // is empty — never a second copy of the same error.
+            model.unreachable -> item {
+                Group {
+                    Text(
+                        stringResource(R.string.unreachable_short), style = Styles.hint.copy(fontSize = 14.sp),
+                        textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(24.dp),
+                    )
+                }
+            }
             tunnels == null && model.tunnelsError == null -> item { Loading() }
             tunnels != null && tunnels.isEmpty() -> item {
                 Group {

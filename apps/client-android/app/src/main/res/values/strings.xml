@@ -67,6 +67,8 @@
     <string name="settings_save_failed">Could not save</string>
     <string name="settings_accept_routes">Use subnet routes</string>
     <string name="settings_accept_routes_hint">Reach the networks other devices share, such as a home LAN.</string>
+    <string name="settings_block_incoming">Block incoming connections</string>
+    <string name="settings_block_incoming_hint">Nobody on the mesh can open a connection to this phone, whatever the access rules allow. Connections this phone starts still work.</string>
     <string name="settings_connect_on_boot">Connect after restart</string>
     <string name="settings_connect_on_boot_hint">Connects when the phone restarts.</string>
     <string name="settings_background">Background running</string>
@@ -79,6 +81,7 @@
     <string name="settings_exit_empty">No device in this organization offers to be an exit device.</string>
     <string name="settings_exit_empty_server">No device on this server offers to be an exit device.</string>
     <string name="settings_exit_connect">Connect to see which devices on this server offer to be an exit device.</string>
+    <string name="settings_exit_unknown">The device list could not be read, so there is nothing to choose from yet.</string>
     <string name="settings_support">Support</string>
     <string name="settings_export_logs">Share diagnostic logs</string>
     <string name="settings_sign_out">Sign out</string>
@@ -273,6 +276,12 @@
     <string name="cert_changed_trust">They match — trust it</string>
     <string name="cert_changed_again">The server presents yet another certificate now. Compare again.</string>
     <string name="devices_connect_to_see">Connect to see the devices on this server.</string>
+    <string name="unreachable_title">Cannot reach the server</string>
+    <string name="unreachable_body_server">This phone cannot reach your server right now. It may be switched off, or this phone may be on a different network from it.</string>
+    <string name="unreachable_body_platform">This phone cannot reach calabi.net right now. Check its internet connection.</string>
+    <string name="unreachable_short">Nothing to show while the server cannot be reached.</string>
+    <string name="shields_title">This phone is refusing all incoming connections</string>
+    <string name="shields_body">Other devices can see it and it can still reach them, but nothing can open a connection to it. Turn it off under Settings → This device.</string>
     <string name="approval_title">Waiting for approval</string>
     <string name="approval_body">This phone reaches the other devices once the server\'s administrator approves it.</string>
     <string name="settings_server">Self-hosted server</string>

@@ -10,9 +10,20 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
-## Unreleased
+## 1.14.0 — 2026-09-21
 
-Changes since 1.13.0, going into the next release.
+**Your phone can refuse to be reached**, and a server you run yourself can be
+watched. Most of this release is fixes; the two additions are in **Mobile** and
+**Your server** below.
+
+**What is in this repository and what is not.** Calabi is also a hosted service,
+and one release covers both. **Mesh**, **Your server** and **Mobile** are
+changes in what this release ships, built from this tree. The last section,
+**On calabi.net**, is the hosted control plane: its code is not in this
+repository, and a self-hosted deployment does not get it. This time that section
+is the larger one — bandwidth limits and tunnel approval are decisions a control
+plane makes, and a coordinator with no control plane behind it makes none of
+them.
 
 ### Mesh
 
@@ -23,12 +34,72 @@ Changes since 1.13.0, going into the next release.
   clears the exit device, and so does leaving a self-hosted server on the phone.
   Switching to the organization you are already in keeps it.
 
+### Your server
+
+- **Added** — **Monitoring.** `deploy/server/monitoring` runs Prometheus beside
+  the coordinator and the edge, scraping both over loopback, with three alerts:
+  either program stopped answering, the edge has been failing or shedding
+  visitor traffic for ten minutes, the coordinator has been failing device RPCs
+  for ten minutes. It reaches nothing of ours. The alerts come with unit tests
+  and instructions to run them, because a rule naming a metric nothing emits
+  parses perfectly, loads without a warning, and then never fires — which looks
+  exactly like a healthy server. The README says which failures the alerts
+  deliberately ignore, and how to add your tunnels' upstreams if you run those
+  too.
+
 ### Mobile
 
+The app signs in to calabi.net, or joins a self-hosted server directly.
+
+- **Added** — **Block incoming connections**, under Settings → This device —
+  the same switch the desktop has had since 1.10.0. Nobody on the mesh can open
+  a connection to the phone, whatever the access rules allow; connections the
+  phone starts still work. It is the one access-control decision that belongs to
+  the person holding the device rather than to an administrator. While it is on,
+  the Mesh tab says so — a phone refusing everything otherwise looks exactly
+  like a healthy one.
+- **Changed** — **Device rows no longer list the services on each device.** A
+  service could only be opened in a browser or copied, and most of what runs on
+  a mesh is neither — SSH, a database, a file share. Tapping the browser one
+  while the mesh was off sent you to an address that could not answer.
+- **Fixed** — **A server the phone cannot reach now says so.** It used to print
+  the network stack's own error, in English, on three tabs at once. It is one
+  sentence now, in one place, with the other screens saying only that they have
+  nothing to show.
+- **Fixed** — The exit-device list said *no device on this server offers to be
+  an exit device* after failing to reach that server, and the usage figures
+  showed an empty card for the same reason. Both now say the list could not be
+  read.
 - **Fixed** — *Forgot password* on the sign-in page opened the page the reset
   email links to, which said the link was invalid or expired. It now opens the
   form that sends the email. calabi.net already forwards the old link there, so
   earlier versions of the app work too.
+
+### On calabi.net
+
+The hosted control plane. **None of this is in this repository**, and a
+self-hosted deployment does not get it. The code for the first two entries is
+here, but what switches them on is not: an edge and a coordinator with no
+control plane behind them apply no limits at all.
+
+- **Added** — **Bandwidth is limited in two tiers.** Each tunnel has its own
+  allowance, and everything an organization runs shares a second one above it.
+  Before, the allowance sat on a client connection, so an organization got a
+  multiple of it by opening several.
+- **Added** — **Relayed mesh traffic is limited the same way**, per device and
+  per organization. The client slows itself down to the rate it is given, and
+  the relay enforces it if the client does not — a relay cannot slow traffic
+  down gently, it can only drop, and inside WireGuard a dropped packet costs a
+  round trip.
+- **Added** — **Tunnels created by members can require an administrator's
+  approval**, under Tunnels → Settings. Off by default, and turning it on does
+  not touch tunnels that already exist. A tunnel waiting for approval is created
+  but not served; the daemon and the CLI say which it is instead of reporting a
+  failure. Turning the setting back off releases everything queued.
+- **Changed** — **The website and the console follow your system's light or dark
+  appearance**, and keep the same choice across both. The sign-in and sign-up
+  pages have a dark appearance too, so signing in no longer changes the skin
+  under you.
 
 ## 1.13.0 — 2026-09-19
 

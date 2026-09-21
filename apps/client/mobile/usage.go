@@ -73,6 +73,29 @@ func (c *Core) handleUsageOverview(w http.ResponseWriter, r *http.Request) {
 	paths := []string{"/v1/account/me", "/v1/usage/current", daily, "/v1/mesh/usage", "/v1/mesh/nodes"}
 	got := c.fetchAll(r.Context(), paths)
 
+	// Nothing came back AT ALL — every one of the five failed before it had an
+	// HTTP status, which means the phone reached nothing.
+	//
+	// Leaving out a section that failed is deliberate: half an overview beats
+	// none, and a missing figure must never be drawn as 0. But "all five failed"
+	// is not a thin overview, it is no overview, and answering 200 with every
+	// field absent makes the app render an empty usage card — "I could not read
+	// this" shown as "there is nothing here". Found on a real phone with its
+	// Wi-Fi off, 2026-09-21. fetchAll fills in 401 when not signed in, so that
+	// case still takes the branch below.
+	reachedNothing := true
+	for _, f := range got {
+		if f.status != 0 {
+			reachedNothing = false
+			break
+		}
+	}
+	if reachedNothing {
+		c.logger.Warn("usage overview: every upstream read failed")
+		joinError(w, http.StatusBadGateway, "unreachable", "cannot reach calabi.net", nil)
+		return
+	}
+
 	me := got[0]
 	if me.status == http.StatusUnauthorized {
 		writeRaw(w, me.status, me.body)

@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -42,6 +43,13 @@ fun UsageSection(model: AppModel) {
     when {
         u == null && model.usageError != null ->
             Text(model.usageError!!, color = Palette.danger, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 8.dp))
+        // Explained in full on the devices tab; here just why there are no figures.
+        u == null && model.unreachable -> Group {
+            Text(
+                stringResource(R.string.unreachable_short), style = Styles.hint.copy(fontSize = 14.sp),
+                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(24.dp),
+            )
+        }
         u == null -> Group { Loading() }
         else -> {
             Group {

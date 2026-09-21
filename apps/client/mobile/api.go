@@ -259,6 +259,16 @@ type settings struct {
 	// AcceptRoutes installs the subnet routes peers advertise. ON by default on
 	// a phone, unlike a desktop.
 	AcceptRoutes bool `json:"accept_routes"`
+	// BlockIncoming refuses every inbound CONNECTION to this phone, whatever the
+	// org's access rules allow; replies to conversations this phone started still
+	// come back. It is the one access-control decision that belongs to the person
+	// holding the device rather than to an admin — see mesh-console-ux-plan
+	//
+	// Flat bool here, unlike the desktop's pointer: this API has exactly one
+	// caller, the app in the same process, and it is never older than the core.
+	// creds keeps the pointer, so a phone that has never touched the switch still
+	// reports "unknown" to the console instead of claiming it accepts.
+	BlockIncoming bool `json:"block_incoming"`
 }
 
 // loadSettings reads the settings, minting and saving the device name the first
@@ -271,6 +281,9 @@ func (c *Core) loadSettings() settings {
 	s := settings{DeviceName: cfg.MeshNodeName, ExitNode: cfg.MeshExitNode, AcceptRoutes: true}
 	if cfg.MeshAcceptRoutes != nil {
 		s.AcceptRoutes = *cfg.MeshAcceptRoutes
+	}
+	if cfg.MeshBlockIncoming != nil {
+		s.BlockIncoming = *cfg.MeshBlockIncoming
 	}
 	if s.DeviceName == "" {
 		s.DeviceName = defaultDeviceName(c.cfg.DeviceName)
@@ -302,9 +315,10 @@ func (c *Core) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
 // its value. A running session restarts to apply them.
 func (c *Core) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		DeviceName   *string `json:"device_name"`
-		ExitNode     *string `json:"exit_node"`
-		AcceptRoutes *bool   `json:"accept_routes"`
+		DeviceName    *string `json:"device_name"`
+		ExitNode      *string `json:"exit_node"`
+		AcceptRoutes  *bool   `json:"accept_routes"`
+		BlockIncoming *bool   `json:"block_incoming"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 16*1024)).Decode(&in); err != nil {
 		writeError(w, http.StatusBadRequest, "parse: "+err.Error())
@@ -328,6 +342,10 @@ func (c *Core) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	if in.AcceptRoutes != nil {
 		v := *in.AcceptRoutes
 		cfg.MeshAcceptRoutes = &v
+	}
+	if in.BlockIncoming != nil {
+		v := *in.BlockIncoming
+		cfg.MeshBlockIncoming = &v
 	}
 	if err := creds.Save(cfg); err != nil {
 		writeError(w, http.StatusInternalServerError, "save: "+err.Error())
@@ -368,7 +386,11 @@ func (c *Core) proxyTo(upstream string) http.HandlerFunc {
 		}
 		status, resp, err := c.bffAuthed(r.Context(), r.Method, path, body)
 		if err != nil {
-			writeError(w, http.StatusBadGateway, "upstream: "+err.Error())
+			// Same code the self-hosted reads use, so the app has ONE state for
+			// "the phone could not reach what it reads from" rather than one per
+			// screen. The transport's own words go to the diagnostic log.
+			c.logger.Warn("control-plane read failed", "path", upstream, "err", err)
+			joinError(w, http.StatusBadGateway, "unreachable", "cannot reach calabi.net", nil)
 			return
 		}
 		writeRaw(w, status, resp)

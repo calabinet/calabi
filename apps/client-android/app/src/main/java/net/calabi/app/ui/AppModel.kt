@@ -92,6 +92,17 @@ class AppModel {
     /** Self-hosted and not connected: the device list comes from the live session. */
     var nodesNeedConnection by mutableStateOf(false)
         private set
+    /**
+     * The phone cannot reach what it reads from — a self-hosted server that is
+     * off or on a LAN this phone is not on, or calabi.net over a dead link.
+     *
+     * ONE state for the whole screen, not an error string per tab: it is one
+     * fact about this phone, and the three readers below used to each render
+     * their own copy of it. The devices tab explains it; the other two say only
+     * that they have nothing, and say it in the viewer's language.
+     */
+    var unreachable by mutableStateOf(false)
+        private set
     var activeOrgId by mutableLongStateOf(0L)
         private set
     var orgs by mutableStateOf(emptyList<Org>())
@@ -101,6 +112,9 @@ class AppModel {
     var exitNode by mutableStateOf("")
         private set
     var acceptRoutes by mutableStateOf(true)
+        private set
+    /** This phone refuses every inbound connection, whatever the org's rules allow. */
+    var blockIncoming by mutableStateOf(false)
         private set
     var role by mutableStateOf("")
         private set
@@ -153,12 +167,14 @@ class AppModel {
     suspend fun refreshNodes() {
         val r = CoreClient.call("GET", "/v1/mesh/nodes")
         nodesNeedConnection = r.json().optString("code") == "not_connected"
+        // This one polls whatever tab is up, so it owns the flag both ways.
+        unreachable = r.json().optString("code") == "unreachable"
         when {
             r.ok -> {
                 nodes = r.json().optJSONArray("items") ?: JSONArray()
                 nodesError = null
             }
-            nodesNeedConnection -> {
+            nodesNeedConnection || unreachable -> {
                 nodes = null
                 nodesError = null
             }
@@ -176,6 +192,7 @@ class AppModel {
         deviceName = s.optString("device_name")
         exitNode = s.optString("exit_node")
         acceptRoutes = s.optBoolean("accept_routes", true)
+        blockIncoming = s.optBoolean("block_incoming")
         val me = CoreClient.call("GET", "/v1/me")
         if (me.ok) role = me.json().optString("role")
         val o = CoreClient.call("GET", "/v1/orgs")
@@ -224,6 +241,11 @@ class AppModel {
                 if (items != null) for (i in 0 until items.length()) add(parseTunnel(items.getJSONObject(i)))
             }
             tunnelsError = null
+        } else if (r.json().optString("code") == "unreachable") {
+            // Not this screen's error to tell: see AppModel.unreachable.
+            unreachable = true
+            tunnels = null
+            tunnelsError = null
         } else {
             tunnelsError = r.error("HTTP ${r.status}")
         }
@@ -233,7 +255,14 @@ class AppModel {
         val tz = java.util.TimeZone.getDefault().id
         val r = CoreClient.call("GET", "/v1/usage/overview?tz=" + java.net.URLEncoder.encode(tz, "UTF-8"))
         if (!r.ok) {
-            usageError = r.error("HTTP ${r.status}")
+            if (r.json().optString("code") == "unreachable") {
+                // Not this screen's error to tell: see AppModel.unreachable.
+                unreachable = true
+                usage = null
+                usageError = null
+            } else {
+                usageError = r.error("HTTP ${r.status}")
+            }
             return
         }
         val o = r.json()

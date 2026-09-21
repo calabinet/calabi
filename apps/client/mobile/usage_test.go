@@ -3,7 +3,9 @@ package mobile
 import (
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -111,5 +113,46 @@ func TestUsageOverviewLeavesOutWhatItCouldNotRead(t *testing.T) {
 	}
 	if _, ok := body["devices"]; ok {
 		t.Errorf("devices = %v, want it left out", body["devices"])
+	}
+}
+
+// A section that failed is left out — that is the point of the test above. But
+// when EVERY section failed the phone read nothing, and answering 200 with an
+// overview that is empty in every field made the app draw an empty usage card:
+// "I could not read this" rendered as "there is nothing here".
+//
+// Found on a real phone (2026-09-21) by turning its Wi-Fi off and looking at
+// the settings tab: the 用量 heading with a blank space under it.
+func TestUsageOverviewThatReachedNothingSaysSoInsteadOfComingBackEmpty(t *testing.T) {
+	bff := &fakeBFF{
+		me:        `{"user": {"id": 42}, "role": "owner", "plan": {"code": "pro"}}`,
+		current:   fmt.Sprintf(usageCurrent, 1024),
+		daily:     usageDaily,
+		meshUsage: `{"seats_used": 12, "seats_disabled": 3, "seats_limit": 30}`,
+		nodes:     usageNodes,
+	}
+	srv := httptest.NewServer(bff)
+	c := newTestCoreAt(t, srv.URL, &fakePlatform{})
+	signIn(t, c)
+
+	// While the control plane answers, the overview is an overview.
+	if code, body := call(t, c, "GET", "/v1/usage/overview?tz=UTC", ""); code != http.StatusOK || body["plan"] != "pro" {
+		t.Fatalf("overview while up = %d %v", code, body)
+	}
+
+	srv.Close() // the phone loses its network
+
+	code, body := call(t, c, "GET", "/v1/usage/overview?tz=UTC", "")
+	if code != http.StatusBadGateway || body["code"] != "unreachable" {
+		t.Fatalf("overview while offline = %d %v, want 502 with code unreachable", code, body)
+	}
+	if _, has := body["plan"]; has {
+		t.Errorf("an overview came back for a phone that reached nothing: %v", body)
+	}
+	msg, _ := body["error"].(string)
+	for _, leak := range []string{"rpc error", "transport:", "dial tcp", "connection refused", "EOF"} {
+		if strings.Contains(msg, leak) {
+			t.Errorf("%q leaked into the message shown to a person: %s", leak, msg)
+		}
 	}
 }

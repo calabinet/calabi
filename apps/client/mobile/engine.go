@@ -403,8 +403,11 @@ func (e *engine) session(ctx context.Context, enr meshenroll.Enrollment, priv me
 		},
 		ExitNode: st.ExitNode,
 		Routes:   mesh.RoutePolicy{Accept: st.AcceptRoutes},
-		Timing:   &timing,
-		Logger:   e.c.logger.With("component", "mesh"),
+		// The person holding the phone refuses every inbound connection, over
+		// and above whatever the org's rules allow.
+		BlockIncoming: st.BlockIncoming,
+		Timing:        &timing,
+		Logger:        e.c.logger.With("component", "mesh"),
 	}
 	if st.ExitNode != "" {
 		dp.SetExitBypassHosts([]string{enr.CoordAddr, enr.RelayAddr})
