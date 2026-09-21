@@ -4,6 +4,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -97,6 +98,19 @@ func TestOneStalledPeerDoesNotStallTheSourcesOtherTraffic(t *testing.T) {
 // The negative, and the one that matters most: on a destination that keeps up,
 // NOTHING is dropped. A relay that shed packets on a healthy link would be a
 // rate limit wearing a congestion-control costume.
+//
+// The sender PACES ITSELF against what the destination has acknowledged, and
+// that is the whole difference between this test measuring the relay and it
+// measuring the machine. Writing all n frames as fast as the source socket
+// accepts them does not make the destination "keep up" — it makes it race the
+// hub's read goroutine for a CPU. Lose that race for sendQueueDepth frames in
+// a row and the queue overflows, which is the relay doing exactly what it is
+// designed to do. On a 2-core shared CI runner that is not a remote
+// possibility: it is what happened, 70 frames of 3000 (2026-09-20).
+//
+// Staying a few hundred frames behind the reader keeps the queue from ever
+// filling, so a drop here means the forwarding path dropped something it had
+// room for — which is the only thing this test was ever meant to catch.
 func TestForwardDropsNothingWhenTheDestinationKeepsUp(t *testing.T) {
 	h, addr := serveHub(t)
 	keyA, keyB := key(1), key(2)
@@ -107,7 +121,13 @@ func TestForwardDropsNothingWhenTheDestinationKeepsUp(t *testing.T) {
 	waitConnected(t, h, keyB)
 
 	const n = 3000
+	// Well under sendQueueDepth (512): the queue must never be the thing that
+	// gives way, or the test is back to timing the scheduler.
+	const maxInFlight = 128
+
 	payload := make([]byte, 1280)
+	var received atomic.Int64
+	progress := make(chan struct{}, 1)
 	done := make(chan int, 1)
 	go func() {
 		count := 0
@@ -117,11 +137,24 @@ func TestForwardDropsNothingWhenTheDestinationKeepsUp(t *testing.T) {
 				break
 			}
 			count++
+			received.Store(int64(count))
+			select {
+			case progress <- struct{}{}:
+			default: // the sender is already awake; nothing to report
+			}
 		}
 		done <- count
 	}()
 
 	for i := 0; i < n; i++ {
+		// Wait for the reader to come within maxInFlight before offering more.
+		for int64(i)-received.Load() >= maxInFlight {
+			select {
+			case <-progress:
+			case <-time.After(30 * time.Second):
+				t.Fatalf("destination stopped reading at %d of %d", received.Load(), n)
+			}
+		}
 		if err := meshproto.WriteDERPFrame(src, meshproto.DERPFrameSendPacket,
 			meshproto.EncodePacket(keyB, payload)); err != nil {
 			t.Fatalf("write %d: %v", i, err)
@@ -133,6 +166,13 @@ func TestForwardDropsNothingWhenTheDestinationKeepsUp(t *testing.T) {
 	}
 	if dropped := h.lookup(keyB).sendq.Dropped(); dropped != 0 {
 		t.Errorf("dropped %d frames to a destination that kept up, want 0", dropped)
+	}
+	// The rate limiter is another way to lose a frame on a healthy link, and it
+	// is wired into the same forward(). An un-configured hub must refuse
+	// nothing — if this ever trips, a limiter is being applied where no
+	// allowance was ever installed.
+	if refused := h.RefusedFrames(); refused != 0 {
+		t.Errorf("refused %d frames with no rate limiter wired, want 0", refused)
 	}
 }
 

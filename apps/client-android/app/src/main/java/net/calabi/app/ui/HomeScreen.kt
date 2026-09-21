@@ -1,7 +1,5 @@
 package net.calabi.app.ui
 
-import android.content.Intent
-import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -9,8 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -399,7 +395,6 @@ private fun Hero(model: AppModel, onConnect: () -> Unit, onDisconnect: () -> Uni
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DeviceRow(d: Device, first: Boolean, last: Boolean, isExit: Boolean) {
     val context = LocalContext.current
@@ -442,15 +437,6 @@ private fun DeviceRow(d: Device, first: Boolean, last: Boolean, isExit: Boolean)
             }
             Trailing(d)
         }
-        if (d.services.isNotEmpty()) {
-            FlowRow(
-                Modifier.padding(start = 68.dp, end = 16.dp, bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                d.services.forEach { s -> ServiceChip(d, s) }
-            }
-        }
         if (!last) RowDivider(start = 68.dp)
     }
 }
@@ -482,29 +468,6 @@ private fun Trailing(d: Device) {
                 },
             )
         }
-    }
-}
-
-@Composable
-private fun ServiceChip(d: Device, s: Service) {
-    val context = LocalContext.current
-    val address = "${d.overlay}:${s.port}"
-    val web = s.proto == "tcp"
-    Row(
-        Modifier
-            .height(36.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(Palette.sunken)
-            .clickable(role = Role.Button) {
-                if (web) context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("http://$address")))
-                else copyToClipboard(context, address)
-            }
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text("${s.name} :${s.port}", style = Styles.mono.copy(color = Palette.ink, fontWeight = FontWeight.Medium))
-        Glyph(if (web) R.drawable.ic_open else R.drawable.ic_copy, Palette.ink, 12.dp)
     }
 }
 

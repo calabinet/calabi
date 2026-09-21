@@ -19,13 +19,10 @@ data class Device(
     val online: Boolean,
     /** An admin approved its default route, so it can be chosen as the exit. */
     val offersExit: Boolean,
-    val services: List<Service>,
     /** "direct" / "relay" when this phone has a live path to it, else null. */
     val path: String?,
     val rttMicros: Long,
 )
-
-data class Service(val name: String, val proto: String, val port: Int)
 
 /** This phone's own connection (GET /v1/mesh). */
 data class Connection(
@@ -306,20 +303,13 @@ private fun joinDevices(nodes: JSONArray?, connection: Connection?): List<Device
         if (overlay.isNotBlank() && overlay == self) continue // this phone
         if (n.optBoolean("disabled")) continue
         val peer = peersByOverlay[overlay]
-        val services = ArrayList<Service>()
-        n.optJSONArray("services")?.let { svcs ->
-            for (j in 0 until svcs.length()) {
-                val s = svcs.getJSONObject(j)
-                services += Service(s.optString("name"), s.optString("proto"), s.optInt("port"))
-            }
-        }
         var offersExit = false
         n.optJSONArray("approved_routes")?.let { approved ->
             for (j in 0 until approved.length()) if (approved.getString(j).endsWith("/0")) offersExit = true
         }
         out += Device(
             name = n.optString("name"), os = n.optString("os"), overlay = overlay,
-            online = n.optBoolean("online"), offersExit = offersExit, services = services,
+            online = n.optBoolean("online"), offersExit = offersExit,
             path = peer?.optString("path"), rttMicros = peer?.optLong("rtt_micros") ?: 0,
         )
     }
