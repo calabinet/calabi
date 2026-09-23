@@ -68,6 +68,7 @@ func platformEdgeDialOptions(addr string) transport.DialOptions {
 
 // openSelfHostedEdge is openOneShotEdge for a standalone client.
 func openSelfHostedEdge(logger *slog.Logger, cmd string) (*oneShotEdge, int) {
+	adoptLegacyManagedConfig(logger)
 	path := envOr("CALABI_DAEMON_CONFIG", managedConfigPath())
 	cfg, _, err := loadLocalConfigOrEmpty(path, true)
 	if err != nil {

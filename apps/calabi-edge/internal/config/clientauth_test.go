@@ -68,12 +68,12 @@ func TestEdgeThatCouldAcceptNobodyIsRefused(t *testing.T) {
 		{"no mode, no bff-edge", "node_label: n1\n", "mode: standalone"},
 		{"no mode but a key", "node_label: n1\ncoord_pubkey: " + testCoordKey + "\n", "mode: standalone"},
 		{"standalone relay, no key", "mode: standalone\nnode_label: r1\nregion: lax\nrole: relay\n", "coordinator's public key"},
-		{"standalone with a key", "mode: standalone\nnode_label: n1\ncoord_pubkey: " + testCoordKey + "\n", ""},
-		{"standalone with a key file", "mode: standalone\nnode_label: n1\ncoord_pubkey_file: /coord/coord.pub\n", ""},
-		{"standalone, key in the relay block", "mode: standalone\nnode_label: n1\nrole: both\nrelay:\n  coord_pubkey: " + testCoordKey + "\n", ""},
+		{"standalone with a key", "mode: standalone\nnode_label: n1\npublic:\n  host: n1.example\ncoord_pubkey: " + testCoordKey + "\n", ""},
+		{"standalone with a key file", "mode: standalone\nnode_label: n1\npublic:\n  host: n1.example\ncoord_pubkey_file: /coord/coord.pub\n", ""},
+		{"standalone, key in the relay block", "mode: standalone\nnode_label: n1\npublic:\n  host: n1.example\nrole: both\nrelay:\n  coord_pubkey: " + testCoordKey + "\n", ""},
 		{"platform relay-only", "node_label: r1\nregion: lax\nrole: relay\nrelay:\n  kind: platform\n", ""},
-		{"bff-edge verifies clients", "node_label: n1\nmulti_region:\n  mode: bff-edge\n", ""},
-		{"standalone keeping bff-edge stays platform (BYOI)", "mode: standalone\nnode_label: n1\nmulti_region:\n  mode: bff-edge\n", ""},
+		{"bff-edge verifies clients", "node_label: n1\npublic:\n  host: n1.example\nmulti_region:\n  mode: bff-edge\n", ""},
+		{"standalone keeping bff-edge stays platform (BYOI)", "mode: standalone\nnode_label: n1\npublic:\n  host: n1.example\nmulti_region:\n  mode: bff-edge\n", ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			_, err := loadEffectiveYAML(t, c.body)
@@ -98,6 +98,8 @@ func TestConfigLessEdge(t *testing.T) {
 	}
 	t.Setenv("CALABI_EDGE_MODE", "standalone")
 	t.Setenv("CALABI_EDGE_COORD_PUBKEY", testCoordKey)
+	// A node with no file at all still has to say where it is.
+	t.Setenv("CALABI_EDGE_PUBLIC_HOST", "edge.example")
 	cfg, _, err := LoadEffective("")
 	if err != nil {
 		t.Fatalf("standalone by env with a key: %v", err)
@@ -117,14 +119,14 @@ func TestConfigLessEdge(t *testing.T) {
 func TestCoordPubKeySpellings(t *testing.T) {
 	clearCalabiEnv(t)
 	const other = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-	cfg, err := loadEffectiveYAML(t, "mode: standalone\nnode_label: n1\nrole: both\nrelay:\n  coord_pubkey: "+testCoordKey+"\n")
+	cfg, err := loadEffectiveYAML(t, "mode: standalone\nnode_label: n1\npublic:\n  host: n1.example\nrole: both\nrelay:\n  coord_pubkey: "+testCoordKey+"\n")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.CoordPubKey != testCoordKey || cfg.Relay.CoordPubKey != testCoordKey {
-		t.Fatalf("relay.coord_pubkey not carried over: top %q relay %q", cfg.CoordPubKey, cfg.Relay.CoordPubKey)
+	if cfg.CoordPubKey != testCoordKey || cfg.Mesh.CoordPubKey != testCoordKey {
+		t.Fatalf("relay.coord_pubkey not carried over: top %q relay %q", cfg.CoordPubKey, cfg.Mesh.CoordPubKey)
 	}
-	if _, err := loadEffectiveYAML(t, "mode: standalone\nnode_label: n1\nrole: both\ncoord_pubkey: "+testCoordKey+
+	if _, err := loadEffectiveYAML(t, "mode: standalone\nnode_label: n1\npublic:\n  host: n1.example\nrole: both\ncoord_pubkey: "+testCoordKey+
 		"\nrelay:\n  coord_pubkey: "+testCoordKey+"\n"); err != nil {
 		t.Fatalf("the same key twice: %v", err)
 	}
@@ -147,14 +149,14 @@ func TestStandaloneRelayRequiresGrants(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cfg.Relay.RequireAuth {
+	if !cfg.Mesh.RequireAuth {
 		t.Fatal("a standalone relay does not require grants")
 	}
 	cfg, err = loadEffectiveYAML(t, "node_label: r1\nregion: lax\nrole: relay\nrelay:\n  kind: platform\n  require_auth: false\n")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Relay.RequireAuth {
+	if cfg.Mesh.RequireAuth {
 		t.Fatal("a platform relay's require_auth was changed")
 	}
 }

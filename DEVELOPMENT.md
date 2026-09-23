@@ -195,7 +195,7 @@ and give the coordinator the relay's address, so it builds a one-region map:
 CALABI_COORD_DERP_ADDR=127.0.0.1:3340 CALABI_COORD_DERP_STUN_PORT=3478 …
 ```
 
-The edge then reports `relay role: relay listening` and `STUN responder
+The edge then reports `mesh role: relay listening` and `STUN responder
 listening`.
 
 The client side (`calabi mesh up`) creates a TUN device, so it needs

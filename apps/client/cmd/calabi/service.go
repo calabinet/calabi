@@ -630,7 +630,7 @@ func printConsoleHint(since time.Time) {
 // because user-level systemd is a footgun (different default targets).
 //
 // installArgs are the flags that followed the subcommand (e.g. the
-// `--config tunnels.yaml` in `calabi daemon install --config …`). They decide
+// `--config calabi.yaml` in `calabi daemon install --config …`). They decide
 // what command the installed service launches at boot — see serviceArguments.
 //
 // extraEnv (install only) carries the service credential resolved by
@@ -757,7 +757,7 @@ func hasBoolFlag(args []string, name string) bool {
 
 // serviceArguments computes the command-line the OS service manager launches
 // the binary with at boot. When `calabi daemon install` carried a local-daemon
-// config (`--config tunnels.yaml`), the installed service runs the LOCAL
+// config (`--config calabi.yaml`), the installed service runs the LOCAL
 // supervisor — `daemon --local --config <abs path>` — resolved to an ABSOLUTE
 // path because the service manager starts us from a different working directory
 // (a relative path would silently fail at boot). Without a config it runs the

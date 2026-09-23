@@ -57,7 +57,7 @@ func (c Config) ValidateProductionPosture() error {
 	// coord advertises this node in the PLATFORM DERP map, so without grant
 	// verification it relays for anyone who finds it — traffic that is neither
 	// attributable to an org nor stoppable when one is over quota.
-	if c.RunsRelay() && c.Relay.IsPlatformKind() && !c.Relay.RequireAuth {
+	if c.ServesMesh() && c.Mesh.IsPlatformKind() && !c.Mesh.RequireAuth {
 		bad = append(bad, "relay.kind=platform with relay.require_auth=false: this node is advertised in the "+
 			"platform DERP map but would relay for any client, attributable to no org (set relay.require_auth "+
 			"with relay.coord_pubkey)")

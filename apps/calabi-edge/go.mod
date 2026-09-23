@@ -21,6 +21,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/calabinet/calabi/pkg/certevents v0.0.0
 	github.com/calabinet/calabi/pkg/edge-proto v0.0.0
+	github.com/calabinet/calabi/pkg/edgecert v0.0.0
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
@@ -46,3 +47,5 @@ replace (
 replace github.com/calabinet/calabi/pkg/edge-proto => ../../pkg/edge-proto
 
 replace github.com/calabinet/calabi/pkg/certevents => ../../pkg/certevents
+
+replace github.com/calabinet/calabi/pkg/edgecert => ../../pkg/edgecert

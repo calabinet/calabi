@@ -98,6 +98,8 @@ func TestReloader_RefusesNonWhitelistedField(t *testing.T) {
 coord_pubkey: "`+testCoordKey+`"
 node_id: changed-edge
 region: test
+public:
+  host: test-edge.example
 control:
   addr: ":7443"
 http:
@@ -123,6 +125,8 @@ func formatYAML(base string) string {
 coord_pubkey: "` + testCoordKey + `"
 node_id: test-edge
 region: test
+public:
+  host: test-edge.example
 control:
   addr: ":7443"
 http:

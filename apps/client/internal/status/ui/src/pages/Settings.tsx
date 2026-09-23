@@ -53,7 +53,7 @@ export default function Settings() {
   // Signing out only exists for a daemon a person logged into. An agent runs on
   // the API key its service was installed with and the daemon refuses the call;
   // standalone has no account at all. Same rule as the account menu in Layout.
-  const { agentMode } = useServiceMode();
+  const { agentMode, container } = useServiceMode();
   const { data: me } = useQuery<AccountMe>({
     queryKey: ["me"],
     queryFn: api.me,
@@ -134,29 +134,42 @@ export default function Settings() {
             <Text type="secondary">{t("settings.lastStateChange")}</Text>{" "}
             <code>{health?.since || "—"}</code>
           </div>
-          <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 4 }}>
-            {t("settings.serviceHint")}
-          </Paragraph>
-          {[
-            "calabi daemon install",
-            "calabi daemon start",
-            "calabi daemon status",
-            "calabi daemon stop",
-            "calabi daemon uninstall",
-          ].map((cmd) => (
-            <div key={cmd}>
-              <code style={{ fontSize: 12 }}>{cmd}</code>{" "}
-              <Button
-                size="small"
-                type="link"
-                icon={<CopyOutlined />}
-                onClick={() => copy(cmd)}
-              />
-            </div>
-          ))}
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {t("settings.serviceNote")}
-          </Text>
+          {/* In a container every one of those five commands is refused by
+              this same binary (containerizeDaemonArgs) — the runtime is the
+              supervisor, so there is no service to install, start or remove.
+              Offering copy buttons for them is the console teaching a user to
+              run commands the product will not run. */}
+          {container ? (
+            <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+              {t("settings.serviceContainer")}
+            </Paragraph>
+          ) : (
+            <>
+              <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 4 }}>
+                {t("settings.serviceHint")}
+              </Paragraph>
+              {[
+                "calabi daemon install",
+                "calabi daemon start",
+                "calabi daemon status",
+                "calabi daemon stop",
+                "calabi daemon uninstall",
+              ].map((cmd) => (
+                <div key={cmd}>
+                  <code style={{ fontSize: 12 }}>{cmd}</code>{" "}
+                  <Button
+                    size="small"
+                    type="link"
+                    icon={<CopyOutlined />}
+                    onClick={() => copy(cmd)}
+                  />
+                </div>
+              ))}
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {t("settings.serviceNote")}
+              </Text>
+            </>
+          )}
         </Space>
       </Card>
 
@@ -187,7 +200,9 @@ export default function Settings() {
 
       {agentMode ? (
         <Card title={t("settings.identityCard")} size="small">
-          <Text type="secondary">{t("settings.agentIdentityHint")}</Text>
+          <Text type="secondary">
+            {t(container ? "settings.agentIdentityHintContainer" : "settings.agentIdentityHint")}
+          </Text>
         </Card>
       ) : (
         !standalone && (

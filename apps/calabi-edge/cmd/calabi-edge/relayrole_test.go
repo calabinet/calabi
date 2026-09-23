@@ -18,38 +18,38 @@ func TestRelayAuthConfig(t *testing.T) {
 	pubB64 := base64.StdEncoding.EncodeToString(pub)
 
 	// Default kind = self: a merged BYOI node's relay is the org's own relay.
-	if auth, err := relayAuthConfig(config.RelayRole{}); err != nil {
+	if auth, err := relayAuthConfig(config.MeshService{}); err != nil {
 		t.Fatalf("empty relay role: %v", err)
 	} else if auth.Kind != meshproto.RelayKindSelfHosted || auth.Require {
 		t.Errorf("default auth = %+v, want kind=self require=false", auth)
 	}
 
 	// Explicit platform kind.
-	if auth, err := relayAuthConfig(config.RelayRole{Kind: "platform"}); err != nil {
+	if auth, err := relayAuthConfig(config.MeshService{Kind: "platform"}); err != nil {
 		t.Fatalf("platform kind: %v", err)
 	} else if auth.Kind != meshproto.RelayKindPlatform {
 		t.Errorf("kind=platform gave %v", auth.Kind)
 	}
 
 	// Bad kind is rejected.
-	if _, err := relayAuthConfig(config.RelayRole{Kind: "gateway"}); err == nil {
+	if _, err := relayAuthConfig(config.MeshService{Kind: "gateway"}); err == nil {
 		t.Error("kind=gateway should be rejected")
 	}
 
 	// require_auth without a coord pubkey would black-hole every connection.
-	if _, err := relayAuthConfig(config.RelayRole{RequireAuth: true}); err == nil {
+	if _, err := relayAuthConfig(config.MeshService{RequireAuth: true}); err == nil {
 		t.Error("require_auth without coord_pubkey should be rejected")
 	}
 
 	// Valid pubkey is decoded onto CoordPub.
-	if auth, err := relayAuthConfig(config.RelayRole{RequireAuth: true, CoordPubKey: pubB64}); err != nil {
+	if auth, err := relayAuthConfig(config.MeshService{RequireAuth: true, CoordPubKey: pubB64}); err != nil {
 		t.Fatalf("valid pubkey: %v", err)
 	} else if len(auth.CoordPub) != ed25519.PublicKeySize {
 		t.Errorf("coord pubkey not decoded: len=%d", len(auth.CoordPub))
 	}
 
 	// Malformed pubkey is rejected.
-	if _, err := relayAuthConfig(config.RelayRole{CoordPubKey: "not-base64!!"}); err == nil {
+	if _, err := relayAuthConfig(config.MeshService{CoordPubKey: "not-base64!!"}); err == nil {
 		t.Error("malformed coord_pubkey should be rejected")
 	}
 }

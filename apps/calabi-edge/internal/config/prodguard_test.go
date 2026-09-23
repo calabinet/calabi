@@ -19,7 +19,7 @@ func prodCfg() Config {
 			ClientKey:   "/etc/calabi/edge-client.key",
 			CA:          "/etc/calabi/ca.crt",
 		},
-		Relay: RelayRole{
+		Mesh: MeshService{
 			Kind:        "platform",
 			RequireAuth: true,
 			CoordPubKey: "xMqLvONWcTdghKQ4cwvVQ81FuXDj/0npFphl4BujbdA=",
@@ -40,7 +40,7 @@ func TestProductionPostureAcceptsTheRealDeployment(t *testing.T) {
 // TestProductionPostureIgnoredOutsideProduction: dev and self-hosted edges keep
 // every fallback.
 func TestProductionPostureIgnoredOutsideProduction(t *testing.T) {
-	broken := Config{Role: "both", Relay: RelayRole{Kind: "platform"}}
+	broken := Config{Role: "both", Mesh: MeshService{Kind: "platform"}}
 	for _, env := range []string{"", "dev", "staging"} {
 		t.Run("CALABI_ENV="+env, func(t *testing.T) {
 			t.Setenv("CALABI_ENV", env)
@@ -64,7 +64,7 @@ func TestProductionPostureRejectsFailOpen(t *testing.T) {
 		},
 		{
 			name:        "platform relay that does not verify grants",
-			mutate:      func(c *Config) { c.Relay.RequireAuth = false },
+			mutate:      func(c *Config) { c.Mesh.RequireAuth = false },
 			wantMention: "relay.require_auth",
 		},
 	}
@@ -101,8 +101,8 @@ func TestStandaloneIsAStatedIntent(t *testing.T) {
 func TestSelfHostedRelayMayRunUngranted(t *testing.T) {
 	t.Setenv("CALABI_ENV", "production")
 	cfg := prodCfg()
-	cfg.Relay.Kind = "self"
-	cfg.Relay.RequireAuth = false
+	cfg.Mesh.Kind = "self"
+	cfg.Mesh.RequireAuth = false
 	if err := cfg.ValidateProductionPosture(); err != nil {
 		t.Fatalf("a self-hosted relay may run without grants: %v", err)
 	}
@@ -114,9 +114,9 @@ func TestEdgeOnlyRoleSkipsRelayChecks(t *testing.T) {
 	t.Setenv("CALABI_ENV", "production")
 	cfg := prodCfg()
 	cfg.Role = "edge"
-	cfg.Relay.RequireAuth = false
+	cfg.Mesh.RequireAuth = false
 	if err := cfg.ValidateProductionPosture(); err != nil {
-		t.Fatalf("role=edge runs no relay, so relay.require_auth is irrelevant: %v", err)
+		t.Fatalf("role=tunnel runs no relay, so relay.require_auth is irrelevant: %v", err)
 	}
 }
 
@@ -125,7 +125,7 @@ func TestProductionPostureReportsEveryProblem(t *testing.T) {
 	t.Setenv("CALABI_ENV", "production")
 	cfg := prodCfg()
 	cfg.MultiRegion = MultiRegionConfig{}
-	cfg.Relay.RequireAuth = false
+	cfg.Mesh.RequireAuth = false
 
 	err := cfg.ValidateProductionPosture()
 	if err == nil {

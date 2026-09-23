@@ -12,14 +12,14 @@ import (
 // A relay with no control plane has nowhere to send its usage. Until 1.13 it got
 // a reporter anyway, with a nil bus, and the first minute that carried traffic
 // panicked in relayUsageReporter.record — a standalone relay started the way
-// docs/self-hosting.md shows (CALABI_EDGE_ROLE=relay CALABI_EDGE_RELAY_LABEL=home)
+// docs/self-hosting.md shows (CALABI_EDGE_ROLE=mesh CALABI_EDGE_RELAY_LABEL=home)
 // crashed about a minute after a device first used it.
 func TestStandaloneRelayGetsNoUsageReporter(t *testing.T) {
 	for _, role := range []string{"relay", "both"} {
 		t.Run(role, func(t *testing.T) {
 			cfg := config.Default()
 			cfg.Role = role
-			cfg.Relay.Label = "home"
+			cfg.Mesh.Label = "home"
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			deps, err := wirePlatform(ctx, slog.New(slog.NewTextHandler(io.Discard, nil)), platformInputs{cfg: cfg})

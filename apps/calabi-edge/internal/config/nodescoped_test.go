@@ -31,11 +31,11 @@ func TestNodeScopedTopLevelSpelling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if c.EdgeNodeID != 204 || c.Tunnel.EdgeNodeID != 204 {
-		t.Errorf("edge id: top=%d nested=%d, want both 204", c.EdgeNodeID, c.Tunnel.EdgeNodeID)
+	if c.EdgeNodeID != 204 {
+		t.Errorf("edge id = %d, want 204", c.EdgeNodeID)
 	}
-	if c.BaseDomain != "lax.calabi.online" || c.HTTP.BaseDomain != "lax.calabi.online" {
-		t.Errorf("base domain: top=%q nested=%q, want both lax.calabi.online", c.BaseDomain, c.HTTP.BaseDomain)
+	if c.Tunnel.BaseDomain != "lax.calabi.online" {
+		t.Errorf("base domain: top=%q nested=%q, want both lax.calabi.online", c.Tunnel.BaseDomain, c.Tunnel.BaseDomain)
 	}
 }
 
@@ -46,11 +46,11 @@ func TestNodeScopedLegacyNesting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if c.EdgeNodeID != 104 || c.Tunnel.EdgeNodeID != 104 {
-		t.Errorf("edge id: top=%d nested=%d, want both 104", c.EdgeNodeID, c.Tunnel.EdgeNodeID)
+	if c.EdgeNodeID != 104 {
+		t.Errorf("edge id = %d, want 104", c.EdgeNodeID)
 	}
-	if c.BaseDomain != "sgp.calabi.online" || c.HTTP.BaseDomain != "sgp.calabi.online" {
-		t.Errorf("base domain: top=%q nested=%q, want both sgp.calabi.online", c.BaseDomain, c.HTTP.BaseDomain)
+	if c.Tunnel.BaseDomain != "sgp.calabi.online" {
+		t.Errorf("base domain: top=%q nested=%q, want both sgp.calabi.online", c.Tunnel.BaseDomain, c.Tunnel.BaseDomain)
 	}
 }
 
@@ -59,13 +59,13 @@ func TestNodeScopedBothSpellingsAgreeing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if c.EdgeNodeID != 7 || c.Tunnel.EdgeNodeID != 7 {
-		t.Errorf("edge id: top=%d nested=%d, want both 7", c.EdgeNodeID, c.Tunnel.EdgeNodeID)
+	if c.EdgeNodeID != 7 {
+		t.Errorf("edge id = %d, want 7", c.EdgeNodeID)
 	}
 	// Domains are case-insensitive, so the two spellings agree; the top-level
 	// one wins so the value is at least self-consistent.
-	if c.BaseDomain != "a.example" || c.HTTP.BaseDomain != "a.example" {
-		t.Errorf("base domain: top=%q nested=%q, want both a.example", c.BaseDomain, c.HTTP.BaseDomain)
+	if c.Tunnel.BaseDomain != "a.example" {
+		t.Errorf("base domain: top=%q nested=%q, want both a.example", c.Tunnel.BaseDomain, c.Tunnel.BaseDomain)
 	}
 }
 
@@ -92,15 +92,15 @@ func TestNodeScopedConflictRejected(t *testing.T) {
 // A config-less edge (dev / self-hosted) must stay self-consistent too.
 func TestNodeScopedDefaultIsConsistent(t *testing.T) {
 	d := Default()
-	if d.BaseDomain != d.HTTP.BaseDomain {
-		t.Errorf("Default: top=%q nested=%q, want equal", d.BaseDomain, d.HTTP.BaseDomain)
+	if d.Tunnel.BaseDomain != d.Tunnel.BaseDomain {
+		t.Errorf("Default: top=%q nested=%q, want equal", d.Tunnel.BaseDomain, d.Tunnel.BaseDomain)
 	}
 	c, err := Load("")
 	if err != nil {
 		t.Fatalf("load empty path: %v", err)
 	}
-	if c.BaseDomain != c.HTTP.BaseDomain {
-		t.Errorf("Load(\"\"): top=%q nested=%q, want equal", c.BaseDomain, c.HTTP.BaseDomain)
+	if c.Tunnel.BaseDomain != c.Tunnel.BaseDomain {
+		t.Errorf("Load(\"\"): top=%q nested=%q, want equal", c.Tunnel.BaseDomain, c.Tunnel.BaseDomain)
 	}
 }
 

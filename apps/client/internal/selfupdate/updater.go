@@ -26,6 +26,11 @@ type Updater struct {
 	// say "there is a newer version" — but must never run an installer it cannot
 	// complete. Wired from privilegedForUpdates (cmd/calabi/selfupdate_wire.go).
 	Privileged bool
+	// Container reports whether this daemon runs inside a container. A container
+	// updates by image, so there is nothing here to install into and nothing to
+	// restart — see ReasonContainer. Wired from runningInContainer
+	// (cmd/calabi/selfupdate_wire.go); false in tests unless they say otherwise.
+	Container bool
 	// Apply starts the verified installer and returns without waiting for it.
 	// wait blocks until that installer process exits; nil = nothing to watch
 	// (Linux swaps the binary in this process). Default (nil) = applyInstaller:

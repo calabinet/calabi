@@ -52,7 +52,7 @@ Calabi 让一台没有公网地址的机器变得可以访问——NAT 后面的
         ▼                                          ▼           (no public IP)
  ┌──────────────┐                          ┌───────────────┐
  │    calabi    │ ──► 127.0.0.1:8080       │  calabi-edge  │  relay: ciphertext
- └──────────────┘                          │  role: relay  │  only, never decrypts
+ └──────────────┘                          │  role: mesh   │  only, never decrypts
    your laptop                             └───────────────┘
 
               calabi-coord — 每台设备的身份
@@ -60,7 +60,7 @@ Calabi 让一台没有公网地址的机器变得可以访问——NAT 后面的
 
 - 左边：`calabi-edge` 在公网 IP 上收访问者的流量，`calabi` 从内网拨出一条
   TLS + yamux 连接，流量顺着它回到 `127.0.0.1:8080`。
-- 右边：两台设备能打洞就直连（UDP）；打不通就走 `role: relay` 的
+- 右边：两台设备能打洞就直连（UDP）；打不通就走 `role: mesh` 的
   `calabi-edge` 中继——它只转密文，永远不解密。
 - `calabi-coord` 是每台设备的身份：谁入了网、边缘节点在哪、每台设备的组网地址、谁可以访问谁。
 
@@ -88,7 +88,7 @@ Calabi 让一台没有公网地址的机器变得可以访问——NAT 后面的
 | 组件 | 是什么 | 跑在哪 |
 |---|---|---|
 | `calabi` | 客户端——开隧道、加入组网、提供本地 Web 控制台 | 你的笔记本、服务器、树莓派 |
-| `calabi-edge` | 数据面。`role: edge` 接公网流量做隧道；`role: relay` 是组网中继 + STUN 探测；`role: both` 两者都做 | 有公网 IP 的主机 |
+| `calabi-edge` | 数据面。`role: tunnel` 接公网流量做隧道；`role: mesh` 是组网中继 + STUN 探测；`role: both` 两者都做 | 有公网 IP 的主机 |
 | `calabi-coord` | 协调器——每台设备的身份：邀请、设备登记、地址分配、ACL；告诉设备边缘节点在哪、签发边缘节点认的凭证 | 一台你的设备能连到的主机 |
 | Android App | 把手机作为一台设备加入组网（你自己服务器的，或你在 calabi.net 上的组织的），支持出口设备和快捷设置磁贴；隧道和用量只读 | Android 8.0 及以上的手机（arm64、armv7） |
 
@@ -129,7 +129,7 @@ Android App（`apps/client-android`）是 Kotlin 写的界面，里面是同一�
 
 - **WireGuard**——每台设备自己生成密钥。`calabi-coord` 拿不到私钥，也看不到你的流量。
 - **能直连就直连**——设备找到彼此的地址，穿过 NAT 直接连接；连不上时，流量走中继。
-- **中继是你自己的**——`calabi-edge` 配 `role: relay`（或 `both`，`deploy/server` 就是这么跑的）。
+- **中继是你自己的**——`calabi-edge` 配 `role: mesh`（或 `both`，`deploy/server` 就是这么跑的）。
   它在设备之间转发加密后的包，没有任何能解密的代码。中继可以只跑一台，也可以在多个地区各跑一台。
 - **稳定地址**——每台设备拿到一个 `100.64.0.0/10` 地址，换网络也不变，
   各平台都可用。

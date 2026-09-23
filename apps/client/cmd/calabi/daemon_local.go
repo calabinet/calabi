@@ -1,4 +1,4 @@
-// daemon_local.go — `calabi daemon --local --config tunnels.yaml`.
+// daemon_local.go — `calabi daemon --local --config calabi.yaml`.
 //
 // The LOCAL supervisor daemon: one process that establishes N tunnels from a
 // local YAML config against your own edge, applies each tunnel's security
@@ -56,21 +56,109 @@ func daemonIsLocal(args []string) bool {
 // localConfig is the on-disk YAML schema for the local supervisor daemon —
 // the self-hosted analogue of ngrok.yml.
 //
+// Three blocks, and the order of the fields below is the order they are meant
+// to be read in: WHICH SERVER this device belongs to, then the two data planes
+// it may run once it is there (mesh, tunnels).
+//
 // It says nothing about the edge: a device gets the edge, its certificate and
 // its sign-in from the self-hosted coordinator it joined. The settings that used to name
 // the edge are refused in a hand-written file (removedEdgeKeys).
 type localConfig struct {
+	// Server is the coordinator this device joined and how it proves itself
+	// there. It is NOT part of `mesh:`, and the reason is load-bearing rather
+	// than tidy: `calabi http 8080` — a tunnel, no mesh anywhere — reaches its
+	// edge by asking this coordinator (edge_dial.go). A machine that never turns
+	// the mesh on still needs every field here, so nesting them under a block
+	// named after the mesh made the tunnel path look optional when it is not.
+	//
+	// Until 1.15.0 these lived under `mesh:`. A file written that way still
+	// loads (mergeServerBlock) and is rewritten into this shape the next time
+	// anything saves it.
+	Server serverConfig `yaml:"server,omitempty"`
+	// Mesh is the WireGuard data plane only: whether to bring it up and how it
+	// behaves. Which coordinator it registers with comes from Server.
+	Mesh meshConfig `yaml:"mesh,omitempty"`
 	// Tunnels has no omitempty: an empty list persists as `tunnels: []`, which is
 	// a valid "connect, create tunnels in the console" config worth keeping explicit.
 	Tunnels []localTunnelConfig `yaml:"tunnels"`
-	// Mesh is the self-hosted coordinator this device joined, and its mesh
-	// (WireGuard) settings. No coordinator: not joined, nothing to dial.
-	// daemon_local_mesh.go.
-	Mesh meshConfig `yaml:"mesh,omitempty"`
+}
+
+// serverConfig is the `server:` block: the coordinator, and this device's
+// standing with it.
+//
+// These are the same settings meshConfig carries at runtime — meshConfig is the
+// lease the daemon actually runs on, and the platform path builds one straight
+// from creds with no file involved (daemon_mesh_platform.go). This type exists
+// to give them a home in the FILE that matches what they do.
+type serverConfig struct {
+	Coord   string `yaml:"coord,omitempty"`    // coordinator host:port
+	AuthKey string `yaml:"auth_key,omitempty"` // used on the first join only; afterwards the device key
+	// Trust, Pins and CAFile say how the coordinator's certificate is checked:
+	// "system", "pin" (with pins), "ca" (with ca_file), or unset to let the
+	// daemon decide.
+	Trust  string   `yaml:"trust,omitempty"`
+	Pins   []string `yaml:"pins,omitempty"`
+	CAFile string   `yaml:"ca_file,omitempty"`
+	// Name is this device's name on the coordinator (default: the host name).
+	// It is spent at registration, which happens whether or not the mesh runs —
+	// which is why it belongs here and not with the mesh knobs.
+	Name string `yaml:"name,omitempty"`
+}
+
+// mergeServerBlock folds the file's `server:` block into the runtime lease, so
+// everything downstream keeps reading cfg.Mesh and nothing else has to know the
+// file grew a second place to say "coord".
+//
+// Only the six settings that moved are named here (and in splitServerBlock,
+// which is this inverted). Everything else stays in `mesh:` by not being
+// mentioned — a whitelist of what to KEEP would silently strand every mesh
+// field added after today.
+func (c *localConfig) mergeServerBlock() {
+	// The old shape is the fallback, never the winner: a file with both is one
+	// the console half-rewrote, and `server:` is the half that is current.
+	s := c.Server
+	if s.Coord != "" {
+		c.Mesh.Coord = s.Coord
+	}
+	if s.AuthKey != "" {
+		c.Mesh.AuthKey = s.AuthKey
+	}
+	if s.Trust != "" {
+		c.Mesh.Trust = s.Trust
+	}
+	if len(s.Pins) > 0 {
+		c.Mesh.Pins = s.Pins
+	}
+	if s.CAFile != "" {
+		c.Mesh.CAFile = s.CAFile
+	}
+	if s.Name != "" {
+		c.Mesh.Name = s.Name
+	}
+	c.Server = serverConfig{} // the runtime reads Mesh; keep one truth in memory
+}
+
+// splitServerBlock is mergeServerBlock inverted, for writing: the file gets the
+// new shape no matter which shape it was read from.
+func (c *localConfig) splitServerBlock() {
+	c.Server = serverConfig{
+		Coord:   c.Mesh.Coord,
+		AuthKey: c.Mesh.AuthKey,
+		Trust:   c.Mesh.Trust,
+		Pins:    c.Mesh.Pins,
+		CAFile:  c.Mesh.CAFile,
+		Name:    c.Mesh.Name,
+	}
+	c.Mesh.Coord, c.Mesh.AuthKey, c.Mesh.Trust = "", "", ""
+	c.Mesh.Pins, c.Mesh.CAFile, c.Mesh.Name = nil, "", ""
 }
 
 // removedEdgeKeys are the top-level settings that named the edge and how to
 // sign in to it, before the coordinator did.
+//
+// `server` is on this list as the SCALAR it used to be (`server: https://…`).
+// It is now also the name of a block, so stripRemovedEdgeKeys checks the node's
+// kind before taking it: a mapping is the current schema and is left alone.
 var removedEdgeKeys = []string{"server", "token", "token_env", "insecure", "ca_file", "trust", "pins"}
 
 // localTunnelConfig is one tunnel in the local config.
@@ -116,7 +204,7 @@ func runLocalDaemon(args []string) int {
 	fs := flag.NewFlagSet("daemon --local", flag.ContinueOnError)
 	_ = fs.Bool("local", false, "run the local supervisor daemon (this flag)")
 	configPath := fs.String("config", envOr("CALABI_DAEMON_CONFIG", ""),
-		"path to the local tunnels YAML config (default: the one the console manages, in the data directory)")
+		"path to the daemon's YAML config (default: the one the console manages, in the data directory)")
 	statusAddr := registerStatusAddrFlag(fs)
 	if err := fs.Parse(reorderArgs(args, valueFlagsOf(fs))); err != nil {
 		return 2
@@ -130,6 +218,7 @@ func runLocalDaemon(args []string) int {
 	// runs, and what an unconfigured one starts from. It used to be an error.
 	managed := *configPath == ""
 	if managed {
+		adoptLegacyManagedConfig(nil)
 		*configPath = managedConfigPath()
 	}
 	// Held in this mode by the command line or the environment: the console
@@ -592,11 +681,18 @@ func readLocalConfig(path string) (*localConfig, []string, error) {
 	if err := dec.Decode(&cfg); err != nil {
 		return nil, nil, fmt.Errorf("parse config %s: %w", path, err)
 	}
+	cfg.mergeServerBlock()
 	return &cfg, removed, nil
 }
 
 // stripRemovedEdgeKeys takes removedEdgeKeys out of the document's top level
 // and returns the ones it found.
+//
+// `server` is the exception, and it is the whole reason this function inspects
+// value nodes at all: `server: https://edge…` is the withdrawn edge setting,
+// while `server:` opening a block is the coordinator the device joined. Taking
+// the block would delete a joined device's identity and then blame the person
+// for a setting they never wrote.
 func stripRemovedEdgeKeys(doc *yaml.Node) []string {
 	if doc.Kind != yaml.DocumentNode || len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
 		return nil
@@ -605,11 +701,12 @@ func stripRemovedEdgeKeys(doc *yaml.Node) []string {
 	var removed []string
 	kept := m.Content[:0]
 	for i := 0; i+1 < len(m.Content); i += 2 {
-		if k := m.Content[i].Value; slices.Contains(removedEdgeKeys, k) {
-			removed = append(removed, k)
+		k, v := m.Content[i], m.Content[i+1]
+		if slices.Contains(removedEdgeKeys, k.Value) && !(k.Value == "server" && v.Kind == yaml.MappingNode) {
+			removed = append(removed, k.Value)
 			continue
 		}
-		kept = append(kept, m.Content[i], m.Content[i+1])
+		kept = append(kept, k, v)
 	}
 	m.Content = kept
 	return removed

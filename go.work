@@ -6,6 +6,7 @@ use (
 	./apps/calabi-coord
 	./pkg/certevents
 	./pkg/edge-proto
+	./pkg/edgecert
 	./pkg/hooks-proto
 	./pkg/mesh-proto
 	./pkg/observability

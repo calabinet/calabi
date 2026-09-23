@@ -195,6 +195,13 @@ func printUpdateStatus(s *updateSnap, base string, checkOnly bool) {
 			fmt.Println("           it was not installed by the Calabi installer, so it does not")
 			fmt.Println("           update itself. Update it the way you installed it:")
 			fmt.Println("             brew upgrade calabi   |   scoop update calabi   |   a new archive")
+		case "container":
+			// The image is the unit of update here. `daemon install --system`
+			// is not just unnecessary, it is a command this same binary
+			// refuses inside a container.
+			fmt.Println("           this client runs in a container, so it is updated by pulling a")
+			fmt.Println("           new image — not by installing into it. Pull and recreate:")
+			fmt.Println("             docker pull calabinet/calabi:latest   (then recreate the container)")
 		case "not-privileged":
 			fmt.Println("           this daemon is not running as a privileged OS service, so it")
 			fmt.Println("           cannot replace itself. Reinstall it as one:")

@@ -61,6 +61,11 @@ function reasonKey(reason?: string): string {
     case "no-artifact":
     case "unsupported-platform":
       return "update.reasonManualPlatform";
+    // A container updates by image. Checked before privilege on the daemon
+    // side too, so this is the answer such a machine actually gets — the
+    // "reinstall as a service" line names a command a container refuses.
+    case "container":
+      return "update.reasonContainer";
     case "not-privileged":
       return "update.reasonNotService";
     // Installed by scoop / Homebrew / by hand: running the platform installer

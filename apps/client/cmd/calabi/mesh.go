@@ -793,10 +793,10 @@ Usage:
      transfer between two nodes cannot separate those, because it crosses all
      three at once.
 
-Run mesh as a background SERVICE via the local daemon: add a mesh: block
-(enabled/coord/auth_key/name, optionally relay and trust/pins/ca_file) to the daemon config and run
-'calabi daemon --local --config tunnels.yaml' (installable with
-'calabi daemon install'). status/down talk to that daemon.
+Run mesh as a background SERVICE via the local daemon: give the daemon config a
+server: block (coord/auth_key/name, optionally trust/pins/ca_file) and a mesh:
+block with enabled: true, then run 'calabi daemon --local --config calabi.yaml'
+(installable with 'calabi daemon install'). status/down talk to that daemon.
 
 Notes:
   - Requires a tun device + privileges (wintun.dll on Windows).`)

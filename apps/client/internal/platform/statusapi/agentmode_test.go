@@ -102,6 +102,57 @@ func TestServiceMode_Agent(t *testing.T) {
 	}
 }
 
+// A container answers "container": true, and the identity refusal says how to
+// change the key HERE — recreate the container — instead of naming
+// `daemon install`, which this same binary refuses inside one
+// (containerizeDaemonArgs). The whole console's service advice keys off this
+// flag, so the wire field matters as much as the sentence.
+func TestServiceMode_Container(t *testing.T) {
+	s := New(nil, Config{BFFConsoleURL: "http://127.0.0.1:0", AgentMode: true, Container: true})
+	mux := http.NewServeMux()
+	s.Register(mux)
+
+	req := httptest.NewRequest("GET", "/v1/service-mode", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if want := `"container":true`; !contains(rr.Body.String(), want) {
+		t.Errorf("service-mode body %q missing %q", rr.Body.String(), want)
+	}
+
+	// The refusal a container operator gets when the SPA tries to sign in.
+	req = httptest.NewRequest("POST", "/v1/auth/login", nil)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("login in agent mode: got %d, want 403", rr.Code)
+	}
+	body := rr.Body.String()
+	if !contains(body, "recreate the container") {
+		t.Errorf("403 body %q does not say how to change the identity in a container", body)
+	}
+	if contains(body, "reinstall the service") {
+		t.Errorf("403 body %q still tells a container to reinstall a service", body)
+	}
+}
+
+// Off a container the wording is unchanged — a host install has a service, and
+// that is what it must be told to reinstall.
+func TestServiceMode_NotContainerKeepsServiceWording(t *testing.T) {
+	h := newTestServer(t, true)
+	if want := `"container":false`; !contains(bodyOf(h, "GET", "/v1/service-mode"), want) {
+		t.Errorf("service-mode on a host must report %q", want)
+	}
+	if body := bodyOf(h, "POST", "/v1/auth/login"); !contains(body, "reinstall the service with a different key") {
+		t.Errorf("403 body %q lost the host wording", body)
+	}
+}
+
+func bodyOf(h http.Handler, method, path string) string {
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(method, path, nil))
+	return rr.Body.String()
+}
+
 // service-mode carries the WEB console origin so the SPA's login page can link
 // to registration. It is baked into the daemon (main.defaultConsoleWeb) rather
 // than derived from BFFConsoleURL — in production those are different hosts

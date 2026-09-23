@@ -325,11 +325,11 @@ Usage:
   calabi daemon [--name NAME]
      (stay online without opening any tunnel; the web console shows
       this client as online as long as the process is running)
-  calabi daemon --local --config tunnels.yaml
-     (self-hosted: run every tunnel from a local YAML config, with
-      per-tunnel access control, on the edge of the server this device
-      joined; auto-reconnects. See docs/examples/tunnels.yaml)
-  calabi daemon install --config tunnels.yaml
+  calabi daemon --local --config calabi.yaml
+     (self-hosted: run the server, mesh and tunnels this device is
+      configured for from one YAML file, with per-tunnel access control;
+      auto-reconnects. See docs/examples/calabi.yaml)
+  calabi daemon install --config calabi.yaml
      (install the local daemon as a boot-start OS service; then manage with
       calabi daemon {start|stop|status|restart|uninstall})
   calabi http <local-port> [--name NAME] [--domain DOMAIN]

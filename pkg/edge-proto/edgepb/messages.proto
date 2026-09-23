@@ -315,7 +315,7 @@ message EdgeNode {
   // never touched by the heartbeat upsert.
   int64  reserved_org_id         = 11;
   // Mesh relay endpoint (edge/derp merge): the DERP/STUN ports this edge's
-  // in-process relay listens on when it runs role=relay|both. The relay's host
+  // in-process relay listens on when it runs role=mesh|both. The relay's host
   // is host(public_addr) — a merged node serves control and relay on one host.
   // relay_derp_port == 0 means this edge runs no relay; the coordinator builds
   // its platform DERP map from the rows where it is > 0, so no separate map file
@@ -428,6 +428,20 @@ message ListCertsRequest {
   // certificate list — which shows them as history, greyed and inert — asks
   // for them.
   bool include_revoked = 3;
+  // all_orgs asks for EVERY org's certs, and is the only way to say that:
+  // org_id = 0 stays an error, because "give me everything" and "I forgot to
+  // fill in the tenant" must not be the same request. cert-svc has rejected
+  // org_id <= 0 since the day it was written, which left a platform edge — a
+  // node that terminates TLS for every org by definition — with no way to ask
+  // for the pool it serves. It was given a single org in its config instead,
+  // and quietly served only that one.
+  //
+  // AUTHORIZATION lives in bff-edge, not here: it sets this flag only for a
+  // caller whose mTLS cert carries NO SPIFFE org SAN, which is exactly what
+  // makes a cert a platform edge's. cert-svc is in-cluster and trusts its
+  // callers, the same way it already trusts GetCert to hand back a decrypted
+  // private key.
+  bool all_orgs = 4;
 }
 
 // [mirrored from proto/calabi/v1/control_plane/cert.proto]
@@ -561,7 +575,7 @@ message RegisterEdgeNodeRequest {
   // Pool bucket for plan-tier routing ("shared" | "dedicated"); self-
   // declared from edge config. Empty upserts as "shared". See EdgeNode.
   string edge_class     = 7;
-  // Mesh relay endpoint for a merged node (role=relay|both): the DERP/STUN ports
+  // Mesh relay endpoint for a merged node (role=mesh|both): the DERP/STUN ports
   // its in-process relay listens on. 0 = this edge runs no relay. The relay host
   // is host(public_addr). The coordinator lists these to assemble the platform
   // DERP map from the edge directory, so no static map file is maintained.

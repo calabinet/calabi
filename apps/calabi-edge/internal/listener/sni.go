@@ -1,7 +1,7 @@
 // TLS-SNI passthrough listener.
 //
 // Accepts TLS connections on a dedicated port (default :8443; configurable
-// via cfg.SNI.Addr). For each incoming conn we:
+// via cfg.Tunnel.SNIAddr()). For each incoming conn we:
 //
 //  1. Peek the first ~4 KiB into a buffer (200 ms ReadDeadline, generous
 //     for typical ClientHellos that fit in one or two TCP segments).

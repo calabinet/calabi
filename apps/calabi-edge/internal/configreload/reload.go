@@ -165,12 +165,12 @@ func (r *Reloader) reload() error {
 	// Apply each whitelisted field. The applier is responsible for
 	// being idempotent — we don't gate on "did the value change" because
 	// computing that for slices means deep-equality.
-	r.applier.ApplyBaseDomain(next.HTTP.BaseDomain)
+	r.applier.ApplyBaseDomain(next.Tunnel.BaseDomain)
 
 	r.mu.Lock()
 	r.current = next
 	r.mu.Unlock()
-	r.logger.Info("hot-reload applied", "base_domain", next.HTTP.BaseDomain)
+	r.logger.Info("hot-reload applied", "base_domain", next.Tunnel.BaseDomain)
 	return nil
 }
 
@@ -202,10 +202,7 @@ func requireOnlyWhitelisted(prev, next config.Config) error {
 // withoutHotFields zeroes the fields a reload may change. This IS the
 // whitelist: whatever it doesn't zero is restart-only.
 func withoutHotFields(c config.Config) config.Config {
-	// Two spellings of one setting, kept equal by config.Load — changing
-	// either changes both, so both are hot.
-	c.BaseDomain = ""
-	c.HTTP.BaseDomain = ""
+	c.Tunnel.BaseDomain = ""
 	return c
 }
 

@@ -14,6 +14,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/calabinet/calabi/apps/calabi-edge/internal/config"
@@ -24,8 +25,8 @@ import (
 // The control listener's certificate — what clients check before they send the
 // edge their token.
 //
-//   - control.cert_pem + key_pem: that one (generated there on first start if
-//     neither file exists yet, as before).
+//   - tunnel.control_cert_pem + control_key_pem: that one (generated there on
+//     first start if neither file exists yet, as before).
 //   - Neither, with state.dir: a self-signed certificate generated once and kept
 //     in state.dir, so its fingerprint survives a restart. A self-hosting client
 //     pins that fingerprint;
@@ -51,6 +52,30 @@ type controlCert struct {
 	fresh  bool   // generated just now
 	// ephemeral: generated in memory, gone at the next start.
 	ephemeral bool
+	// files, when non-nil, re-reads the certificate whenever the files change.
+	files *fileCert
+}
+
+// certificate is what the listener's tls.Config asks on every handshake.
+//
+// A certificate loaded from FILES is re-read when those files change, because
+// something else rotates them and nothing restarts this process when it does. A
+// BYOI node's leaf is the clear case: it is valid 90 days and renews itself with
+// 30 left (bffedgeclient.RunCertRenewal writes the new PEM over the same path),
+// so a listener holding the boot-time copy in memory serves a certificate that
+// expires a month after a fresh one was already on disk. The node stays healthy
+// on every other axis — its control-plane client swapped to the new leaf the
+// moment it was written — and the only symptom is devices failing the handshake
+// on day 90. Platform nodes get the same treatment for free, which matters
+// because their edge-control.crt is rotated by hand.
+//
+// A generated / in-memory certificate has no file to watch and is returned as is.
+func (c controlCert) certificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	if c.files != nil {
+		return c.files.get()
+	}
+	cert := c.cert
+	return &cert, nil
 }
 
 func (c controlCert) pin() string {
@@ -66,16 +91,22 @@ func (c controlCert) pin() string {
 
 // resolveControlCert decides what the control listener serves (see above).
 func resolveControlCert(cfg config.Config) (controlCert, error) {
-	certPath, keyPath := cfg.Control.CertPEM, cfg.Control.KeyPEM
+	certPath, keyPath := cfg.Tunnel.ControlCertPEM, cfg.Tunnel.ControlKeyPEM
 	switch {
 	case certPath != "" && keyPath != "":
+		// LoadOrGenerate, not a plain load: these paths have always doubled as
+		// "put a generated one here" when neither file exists yet.
 		cert, err := tlsutil.LoadOrGenerate(certPath, keyPath)
 		if err != nil {
 			return controlCert{}, err
 		}
-		return controlCert{cert: cert, source: certPath}, nil
+		return controlCert{
+			cert:   cert,
+			source: certPath,
+			files:  newFileCert(certPath, keyPath, cert),
+		}, nil
 	case certPath != "" || keyPath != "":
-		return controlCert{}, errors.New("control.cert_pem and control.key_pem must both be set or both empty")
+		return controlCert{}, errors.New("tunnel.control_cert_pem and tunnel.control_key_pem must both be set or both empty")
 	case cfg.State.Dir == "":
 		cert, err := tlsutil.LoadOrGenerate("", "")
 		if err != nil {
@@ -117,12 +148,8 @@ func controlCertNames(cfg config.Config) (dns []string, ips []net.IP) {
 		}
 		dns = append(dns, host)
 	}
-	add(cfg.HTTP.BaseDomain)
-	if host, _, err := net.SplitHostPort(cfg.Public.Addr); err == nil {
-		add(host)
-	} else {
-		add(cfg.Public.Addr)
-	}
+	add(cfg.Tunnel.BaseDomain)
+	add(strings.TrimSpace(cfg.Public.Host))
 	if h, err := os.Hostname(); err == nil {
 		add(h)
 	}

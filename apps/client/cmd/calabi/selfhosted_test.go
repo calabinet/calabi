@@ -27,7 +27,7 @@ import (
 )
 
 // isolateDataDir gives the test its own data directory and credentials file:
-// the console's tunnels.yaml, the reauth record and the lock all live there.
+// the console's calabi.yaml, the reauth record and the lock all live there.
 func isolateDataDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -212,9 +212,17 @@ func TestConsoleSwitchesBetweenCalabiNetAndASelfHostedServer(t *testing.T) {
 	if c, _ := creds.Load(); c == nil || c.Mode != clientModeStandalone {
 		t.Fatalf("mode after joining: %+v", c)
 	}
-	yml, err := os.ReadFile(filepath.Join(dir, "tunnels.yaml"))
-	if err != nil || !strings.Contains(string(yml), coord.pin) || strings.Contains(string(yml), "server:") || strings.Contains(string(yml), edge.pin) {
-		t.Fatalf("the console's tunnels.yaml should name the coordinator and nothing about the edge: %v\n%s", err, yml)
+	// The file names the coordinator and NOTHING about the edge. `server:` used
+	// to be how a file named the edge, and is now the block that holds the
+	// coordinator — so the edge is checked by its own address and fingerprint,
+	// which is what this assertion was always reaching for through that key name.
+	yml, err := os.ReadFile(filepath.Join(dir, "calabi.yaml"))
+	if err != nil || !strings.Contains(string(yml), coord.pin) ||
+		strings.Contains(string(yml), edge.pin) || strings.Contains(string(yml), edge.addr) {
+		t.Fatalf("the console's calabi.yaml should name the coordinator and nothing about the edge: %v\n%s", err, yml)
+	}
+	if !strings.Contains(yamlBlock(string(yml), "server:"), coord.addr) {
+		t.Fatalf("the coordinator belongs in the server block, not loose and not under mesh:\n%s", yml)
 	}
 
 	// The mesh off: the device leaves the meshnet and keeps its tunnels, and it
@@ -222,7 +230,7 @@ func TestConsoleSwitchesBetweenCalabiNetAndASelfHostedServer(t *testing.T) {
 	if code, res = consoleCall(t, base, "POST", "/v1/mesh/down", token(), nil); code != http.StatusOK {
 		t.Fatalf("mesh down: %d %v", code, res)
 	}
-	if yml, _ = os.ReadFile(filepath.Join(dir, "tunnels.yaml")); strings.Contains(string(yml), "enabled: true") {
+	if yml, _ = os.ReadFile(filepath.Join(dir, "calabi.yaml")); strings.Contains(string(yml), "enabled: true") {
 		t.Fatalf("the mesh is off but the config still turns it on:\n%s", yml)
 	}
 	before := edge.sessions()
@@ -234,7 +242,7 @@ func TestConsoleSwitchesBetweenCalabiNetAndASelfHostedServer(t *testing.T) {
 	if code, res = consoleCall(t, base, "POST", "/v1/mesh/up", token(), nil); code != http.StatusOK {
 		t.Fatalf("mesh up: %d %v", code, res)
 	}
-	if yml, _ = os.ReadFile(filepath.Join(dir, "tunnels.yaml")); !strings.Contains(string(yml), "enabled: true") {
+	if yml, _ = os.ReadFile(filepath.Join(dir, "calabi.yaml")); !strings.Contains(string(yml), "enabled: true") {
 		t.Fatalf("the mesh is on again but the config does not say so:\n%s", yml)
 	}
 
@@ -252,8 +260,8 @@ func TestConsoleSwitchesBetweenCalabiNetAndASelfHostedServer(t *testing.T) {
 		_, st = consoleCall(t, base, "GET", "/v1/selfhosted", "", nil)
 		return st["mode"] == "platform"
 	})
-	if _, err := os.Stat(filepath.Join(dir, "tunnels.yaml")); !os.IsNotExist(err) {
-		t.Fatalf("the console's tunnels.yaml survived leaving: %v", err)
+	if _, err := os.Stat(filepath.Join(dir, "calabi.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("the console's calabi.yaml survived leaving: %v", err)
 	}
 	if c, _ := creds.Load(); c == nil || c.Mode != "" {
 		t.Fatalf("mode after leaving: %+v", c)

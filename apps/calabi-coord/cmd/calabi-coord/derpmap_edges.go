@@ -18,7 +18,7 @@ import (
 
 // Deriving the platform DERP map from the edge directory (edge/derp merge).
 //
-// Since calabi-edge grew a relay role (role=relay|both), a platform relay IS a
+// Since calabi-edge grew a mesh role (role=mesh|both), a platform relay IS a
 // platform edge. Rather than maintain a SECOND relay registry (a hand-kept
 // derp-map.json), coord reads identity-svc's edge directory — the one place
 // every edge already registers on boot — and builds its platform DERP map from

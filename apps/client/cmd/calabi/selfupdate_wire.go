@@ -70,12 +70,17 @@ func newUpdateAgent(logger *slog.Logger, version, bffConsoleURL string, busy fun
 		return nil
 	}
 	privileged := privilegedForUpdates()
+	// A container has no service manager and no init: it updates by image. The
+	// agent still CHECKS (the console's version card is made of that), but the
+	// answer it gives has to be "pull a new image", not "reinstall as a service".
+	container := runningInContainer()
 	u := &selfupdate.Updater{
 		ManifestURL:    manifest,
 		CurrentVersion: version,
 		PubKey:         ed25519.PublicKey(pub),
 		DownloadDir:    filepath.Join(dir, "updates"),
 		Privileged:     privileged,
+		Container:      container,
 		Logf:           func(f string, a ...any) { logger.Info(fmt.Sprintf(f, a...)) },
 		// U5a: results go to the platform this daemon is logged into.
 		Report: newUpdateReporter(bffConsoleURL),
@@ -86,7 +91,7 @@ func newUpdateAgent(logger *slog.Logger, version, bffConsoleURL string, busy fun
 	p := agent.Policy()
 	logger.Info("selfupdate enabled",
 		"manifest", manifest, "interval", updateCheckInterval.String(),
-		"can_install", privileged, "mode", p.Mode,
+		"can_install", privileged, "container", container, "mode", p.Mode,
 		"window", fmt.Sprintf("%02d:00-%02d:00 %s", p.WindowStartHour, p.WindowEndHour, time.Now().Format("MST")),
 		"max_defer_days", p.MaxDeferDays)
 	return agent

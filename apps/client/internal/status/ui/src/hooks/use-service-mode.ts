@@ -16,10 +16,15 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { AccountMe, ServiceMode } from "../api/types";
 
+// container = the daemon runs inside a container (the image sets
+// CALABI_IN_CONTAINER=1; the daemon also sniffs the usual markers). The console
+// keys its OS-service advice off it: in a container there is nothing to install
+// and nothing to uninstall, and a new identity means a new container.
 export function useServiceMode(): {
   agentMode: boolean;
   loginEnabled: boolean;
   canManage: boolean;
+  container: boolean;
   consoleWebUrl: string;
 } {
   const { data } = useQuery<ServiceMode>({
@@ -42,6 +47,7 @@ export function useServiceMode(): {
     agentMode,
     loginEnabled: data?.login_enabled ?? true,
     canManage,
+    container: data?.container ?? false,
     // "" when the daemon didn't supply one (older build, or explicitly unset) —
     // callers hide the affordance rather than linking somewhere dead.
     consoleWebUrl: (data?.console_web ?? "").replace(/\/+$/, ""),

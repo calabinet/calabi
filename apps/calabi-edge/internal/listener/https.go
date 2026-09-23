@@ -74,7 +74,7 @@ func NewHTTPS(logger *slog.Logger, opts HTTPSOptions) *HTTPS {
 }
 
 // Run blocks until ctx cancels or Listen fails. Empty Addr is a no-op
-// (HTTPS is opt-in via cfg.HTTPS.Addr).
+// (HTTPS is opt-in via cfg.Tunnel.HTTPSAddr()).
 func (h *HTTPS) Run(ctx context.Context) error {
 	if h.opts.Addr == "" {
 		<-ctx.Done()

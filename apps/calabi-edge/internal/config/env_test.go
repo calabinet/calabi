@@ -34,16 +34,16 @@ func TestApplyEnvRelayOnlyNodeNeedsNoFile(t *testing.T) {
 	if !cfg.IsStandaloneMode() {
 		t.Error("mode not applied from env")
 	}
-	if !cfg.RunsRelay() || cfg.RunsEdge() {
-		t.Errorf("want relay-only, got RunsRelay=%v RunsEdge=%v", cfg.RunsRelay(), cfg.RunsEdge())
+	if !cfg.ServesMesh() || cfg.ServesTunnels() {
+		t.Errorf("want mesh-only, got ServesMesh=%v ServesTunnels=%v", cfg.ServesMesh(), cfg.ServesTunnels())
 	}
-	if cfg.Relay.Kind != "self" || cfg.Relay.Label != "hk1" {
-		t.Errorf("relay kind/label = %q/%q", cfg.Relay.Kind, cfg.Relay.Label)
+	if cfg.Mesh.Kind != "self" || cfg.Mesh.Label != "hk1" {
+		t.Errorf("relay kind/label = %q/%q", cfg.Mesh.Kind, cfg.Mesh.Label)
 	}
-	if cfg.Relay.RelayDERPPort() != 3340 || cfg.Relay.RelaySTUNPort() != 3478 {
-		t.Errorf("ports = %d/%d", cfg.Relay.RelayDERPPort(), cfg.Relay.RelaySTUNPort())
+	if cfg.Mesh.RelayDERPPort() != 3340 || cfg.Mesh.RelaySTUNPort() != 3478 {
+		t.Errorf("ports = %d/%d", cfg.Mesh.RelayDERPPort(), cfg.Mesh.RelaySTUNPort())
 	}
-	if !cfg.Relay.RequireAuth || cfg.Relay.CoordPubKey == "" {
+	if !cfg.Mesh.RequireAuth || cfg.Mesh.CoordPubKey == "" {
 		t.Error("grant verification not applied from env")
 	}
 	// Two edge-image containers share a host in the self-hosted stack, so the
@@ -51,10 +51,19 @@ func TestApplyEnvRelayOnlyNodeNeedsNoFile(t *testing.T) {
 	if cfg.Admin.Addr != ":9200" {
 		t.Errorf("admin addr = %q, want :9200 (port collision with the edge container)", cfg.Admin.Addr)
 	}
-	// The whole point of kind=self + standalone: no control plane is reached.
+	// The whole point of kind=self + standalone: no control plane is reached,
+	// and grants are required whatever the file said.
+	//
+	// This used to assert that NormalizeForMode blanked identity.addr. That
+	// field is gone — the edge has reached the control plane only through
+	// bff-edge since F3 — so the reachable-control-plane question is now
+	// entirely multi_region's, and that is what gets asserted.
 	normalized, _ := cfg.NormalizeForMode()
-	if normalized.Identity.Addr != "" {
-		t.Errorf("standalone relay still carries a control-plane address: %q", normalized.Identity.Addr)
+	if normalized.MultiRegion.IsBFFEdge() {
+		t.Error("a standalone relay must reach no control plane, but multi_region says bff-edge")
+	}
+	if !normalized.Mesh.RequireAuth {
+		t.Error("a standalone relay serves its coordinator's devices only; grants must be required")
 	}
 }
 
@@ -72,14 +81,14 @@ func TestApplyEnvUnsetChangesNothing(t *testing.T) {
 	}
 	before := Default()
 	before.Role = "both"
-	before.Relay = RelayRole{Kind: "platform", DERPPort: 3340, RequireAuth: true, CoordPubKey: "k"}
+	before.Mesh = MeshService{Kind: "platform", DERPPort: 3340, RequireAuth: true, CoordPubKey: "k"}
 
 	after, err := ApplyEnv(before)
 	if err != nil {
 		t.Fatalf("ApplyEnv: %v", err)
 	}
-	if after.Role != before.Role || after.Relay != before.Relay || after.Mode != before.Mode {
-		t.Errorf("unset env changed the config: %+v -> %+v", before.Relay, after.Relay)
+	if after.Role != before.Role || after.Mesh != before.Mesh || after.Mode != before.Mode {
+		t.Errorf("unset env changed the config: %+v -> %+v", before.Mesh, after.Mesh)
 	}
 }
 
@@ -116,7 +125,7 @@ func TestApplyEnvStunPortZeroDisables(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ApplyEnv: %v", err)
 	}
-	if cfg.Relay.STUNPort != 0 {
-		t.Errorf("STUNPort = %d, want 0 (disabled)", cfg.Relay.STUNPort)
+	if cfg.Mesh.STUNPort != 0 {
+		t.Errorf("STUNPort = %d, want 0 (disabled)", cfg.Mesh.STUNPort)
 	}
 }

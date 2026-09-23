@@ -14,7 +14,7 @@ func TestRoleGating_WhoBelongsInTheEdgeDirectory(t *testing.T) {
 		relayKind string
 		wantInDir bool
 	}{
-		// Empty role means "edge" — every config written before roles existed.
+		// Empty role means "tunnel" — every config written before roles existed.
 		{"legacy config, no role", "", "", true},
 		{"entry only", "edge", "", true},
 		{"entry + relay", "both", "", true},
@@ -28,8 +28,8 @@ func TestRoleGating_WhoBelongsInTheEdgeDirectory(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			cfg := Config{Role: c.role, Relay: RelayRole{Kind: c.relayKind}}
-			got := cfg.RunsEdge() || cfg.Relay.IsPlatformKind()
+			cfg := Config{Role: c.role, Mesh: MeshService{Kind: c.relayKind}}
+			got := cfg.ServesTunnels() || cfg.Mesh.IsPlatformKind()
 			if got != c.wantInDir {
 				t.Errorf("role=%q kind=%q: belongs in edge directory = %v, want %v",
 					c.role, c.relayKind, got, c.wantInDir)

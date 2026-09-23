@@ -8,7 +8,7 @@ import (
 // Switching the daemon between calabi.net and a self-hosted server, in place.
 //
 // The two daemons are different programs — the platform daemon syncs with
-// bff-console, the local one supervises a tunnels.yaml — so a switch ends the one
+// bff-console, the local one supervises a calabi.yaml — so a switch ends the one
 // running and starts the other. It happens inside the process rather than by
 // exiting: a Windows service whose body returns keeps the process alive with
 // nothing in it, systemd waits its RestartSec before bringing a service back, and

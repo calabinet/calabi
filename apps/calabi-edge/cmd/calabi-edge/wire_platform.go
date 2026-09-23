@@ -15,7 +15,6 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"time"
 
 	bffedge "github.com/calabinet/calabi/pkg/edge-proto/edgepb"
 
@@ -96,7 +95,7 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 	tunnelWired := cpBFF != nil
 	if tunnelWired {
 		tc := tunnelstore.Wrap(logger, cpBFF.Client,
-			cfg.Tunnel.EdgeNodeID, cfg.NodeLabel, cfg.HTTP.BaseDomain)
+			cfg.EdgeNodeID, cfg.NodeLabel, cfg.Tunnel.BaseDomain)
 		logger.Info("tunnel wired via bff-edge", "edge_node_id", tc.EdgeNodeID())
 		tunnelCli = tc
 		deps.persister = &tunnelPersisterAdapter{
@@ -129,7 +128,7 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 		// re-issue them just the same.
 		if cfg.MultiRegion.IsBFFEdge() {
 			logger.Info("bff-edge mode: skipping the subdomain-seq DB seed (not served by the gateway); using local state",
-				"base", cfg.HTTP.BaseDomain)
+				"base", cfg.Tunnel.BaseDomain)
 		} else {
 			// Seed the SubdomainAllocator above the highest u<N>.<base> seq already
 			// in tunnel-svc. Without this, a file-backed seq that's out-of-sync (or
@@ -137,12 +136,12 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 			// collides with another row's domain.
 			// TODO(multi-org): hardcoded org=1 for dev. Multi-tenant edges need to
 			// iterate every org served (or add a dedicated RPC).
-			if dbMax, err := tc.MaxManagedSubdomainSeq(context.Background(), cfg.HTTP.BaseDomain, 1); err != nil {
+			if dbMax, err := tc.MaxManagedSubdomainSeq(context.Background(), cfg.Tunnel.BaseDomain, 1); err != nil {
 				logger.Warn("subdomain seq DB-sync failed; staying on file-backed value",
-					"base", cfg.HTTP.BaseDomain, "err", err)
+					"base", cfg.Tunnel.BaseDomain, "err", err)
 			} else if dbMax > 0 {
 				in.domains.SeedIfBehind(dbMax)
-				logger.Info("subdomain seq DB-synced", "base", cfg.HTTP.BaseDomain, "db_max", dbMax)
+				logger.Info("subdomain seq DB-synced", "base", cfg.Tunnel.BaseDomain, "db_max", dbMax)
 			}
 		}
 
@@ -168,7 +167,7 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 		}
 
 		if cpBFF == nil {
-			logger.Info("tunnel-svc wired", "addr", cfg.Tunnel.Addr, "edge_node_id", tc.EdgeNodeID())
+			logger.Info("tunnel-svc wired", "edge_node_id", tc.EdgeNodeID())
 		}
 	} else {
 		logger.Info("tunnel-svc not configured; routes are edge-local only")
@@ -176,7 +175,7 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 
 	// Post-handshake catch-up hook (pushes the client's owned tunnels on AUTH).
 	// nil when tunnel-svc isn't wired.
-	deps.postHandshake = makePostHandshake(logger, tunnelCli, cfg.HTTP.BaseDomain)
+	deps.postHandshake = makePostHandshake(logger, tunnelCli, cfg.Tunnel.BaseDomain)
 
 	// Optional config-svc subscription. hot-apply local deletes;
 	// remote deltas logged cross-edge proxying.
@@ -189,7 +188,7 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 			index:      localIndex,
 			logger:     logger.With("component", "route-applier"),
 			secrets:    oauthSecretsOf(tunnelCli),
-			baseDomain: cfg.HTTP.BaseDomain,
+			baseDomain: cfg.Tunnel.BaseDomain,
 			ports:      in.ports,
 		}
 		cc, err := configclient.StartWithClient(ctx, logger,
@@ -235,7 +234,7 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 	//   self-hosted (single-tenant BYOI): bills the one org under a "self-<label>"
 	//     region (excluded from the cap). The org is NOT taken from config — a BYOI
 	//     node needn't know its own org id; bff-edge stamps it from the mTLS cert.
-	//     cfg.Cert.OrgID (0 for a BYOI edge) is only the cluster-mode fallback.
+	//     cfg.OrgID (0 for a BYOI edge) is only the cluster-mode fallback.
 	//
 	// Skipped when no relay label is set (nothing to attribute to), and when
 	// there is no control plane to report to. The second one was missing until
@@ -243,21 +242,21 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 	// with CALABI_EDGE_RELAY_LABEL=home — got a reporter with a nil bus, and the
 	// first minute that carried any traffic crashed the process.
 	switch {
-	case cfg.RunsRelay() && cfg.Relay.Label != "" && bus == nil:
-		logger.Info("relay usage is not reported: no control plane to report it to", "label", cfg.Relay.Label)
-	case cfg.RunsRelay() && cfg.Relay.Label != "":
-		if cfg.Relay.IsPlatformKind() {
-			region := cfg.Relay.Label
+	case cfg.ServesMesh() && cfg.Mesh.Label != "" && bus == nil:
+		logger.Info("relay usage is not reported: no control plane to report it to", "label", cfg.Mesh.Label)
+	case cfg.ServesMesh() && cfg.Mesh.Label != "":
+		if cfg.Mesh.IsPlatformKind() {
+			region := cfg.Mesh.Label
 			deps.relayReporter = newPlatformRelayUsageReporter(bus, region, logger)
-			if !cfg.Relay.RequireAuth {
+			if !cfg.Mesh.RequireAuth {
 				logger.Warn("platform relay usage will NOT be attributed: relay.require_auth is off, so nodes present no grant and the relay cannot tell whose bytes it forwards",
 					"region", region)
 			}
 			logger.Info("relay usage reporter wired (platform, per-org)", "region", region)
 		} else {
-			region := "self-" + cfg.Relay.Label
-			deps.relayReporter = newRelayUsageReporter(bus, cfg.Cert.OrgID, region, logger)
-			logger.Info("relay usage reporter wired (self-hosted)", "region", region, "cluster_fallback_org", cfg.Cert.OrgID)
+			region := "self-" + cfg.Mesh.Label
+			deps.relayReporter = newRelayUsageReporter(bus, cfg.OrgID, region, logger)
+			logger.Info("relay usage reporter wired (self-hosted)", "region", region, "cluster_fallback_org", cfg.OrgID)
 		}
 	}
 
@@ -282,13 +281,13 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 	// owner's traffic on their own VPS, which the platform neither may nor can
 	// meter. Note this sits AFTER quotaCached exists — wiring it up with the
 	// relay reporter above would have read a nil that is declared later.
-	if cfg.RunsRelay() && cfg.Relay.IsPlatformKind() {
+	if cfg.ServesMesh() && cfg.Mesh.IsPlatformKind() {
 		switch {
 		case quotaCached == nil:
 			logger.Info("relay rate limiting NOT wired: no quota client; the relay forwards unlimited")
 		default:
 			deps.relayRate = newRelayRateResolver(quotaCached, logger)
-			logger.Info("relay rate limiting wired (per-device + per-org)", "label", cfg.Relay.Label)
+			logger.Info("relay rate limiting wired (per-device + per-org)", "label", cfg.Mesh.Label)
 		}
 	}
 
@@ -322,19 +321,19 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 	// intra-region edge mesh resolver. Enabled when mesh config is set AND
 	// both control-plane deps are wired; nil otherwise (502-on-miss).
 	var meshResolverImpl *meshresolver.Resolver
-	if cfg.MeshEnabled() {
+	if cfg.PeerForwardEnabled() {
 		if tunnelCli != nil && identityCli != nil {
 			meshResolverImpl = meshresolver.New(meshresolver.Config{
 				SelfEdgeID: in.edgeID,
 				Region:     cfg.Region,
-				BaseDomain: cfg.HTTP.BaseDomain,
+				BaseDomain: cfg.Tunnel.BaseDomain,
 				Owners:     meshOwnerSource{tc: tunnelCli},
 				Dir:        meshEdgeDirectory{v: identityCli},
 				Logger:     logger,
 			})
 			deps.meshResolver = meshResolverImpl
 			logger.Info("mesh resolver enabled",
-				"self_edge", in.edgeID, "region", cfg.Region, "base_domain", cfg.HTTP.BaseDomain)
+				"self_edge", in.edgeID, "region", cfg.Region, "base_domain", cfg.Tunnel.BaseDomain)
 		} else {
 			logger.Warn("mesh enabled in config but tunnel-svc / identity-svc not wired; peer forwarding disabled",
 				"tunnel_wired", tunnelCli != nil, "identity_wired", identityCli != nil)
@@ -346,11 +345,11 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 	var certCli *certclient.Client
 	switch {
 	case cpBFF != nil:
-		refresh := time.Duration(cfg.Cert.RefreshSeconds) * time.Second
+		// RefreshInterval left at zero: certclient.DefaultRefreshInterval. It was
+		// a config knob until 1.15.0 and no deployed file ever set it.
 		cc, cErr := certclient.StartWithClient(ctx, logger, cpBFF.Client, certclient.Options{
-			OrgID:           cfg.Cert.OrgID,
-			RefreshInterval: refresh,
-			Bus:             bus,
+			OrgID: cfg.OrgID,
+			Bus:   bus,
 		})
 		if cErr != nil {
 			return fail(fmt.Errorf("cert via bff-edge: %w", cErr))
@@ -401,10 +400,15 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 
 	// keep the edge directory entry fresh so daemons doing ListEdges
 	// always see this node. Public addr falls back to Control.Addr in dev.
-	publicAddr, unreachable := advertisedAddr(cfg)
-	if unreachable {
-		logger.Warn("public.addr not set; advertising the control BIND address, which no daemon can dial — set public.addr to a public host:port that resolves to this node and matches the control cert SAN",
-			"advertised", publicAddr)
+	// One host, one port, composed here: public.host plus the port the control
+	// listener binds. A tunnel-serving node cannot reach this with an empty host
+	// (ValidatePublicHost refuses it), so an empty one is a relay whose file
+	// names no host — found through the coordinator's DERP map instead.
+	publicAddr := cfg.AdvertisedAddr()
+	if publicAddr == "" {
+		logger.Warn("public.host not set: this node advertises no address of its own")
+	} else {
+		logger.Info("advertising this node", "addr", publicAddr)
 	}
 
 	// Background runners. Each self-disables when its dep is nil (presence /
@@ -416,9 +420,9 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 	// per-org via bff-edge (runRelayRegistrar below) instead, and must not appear
 	// as a platform relay. Relay host = host(publicAddr).
 	var platformRelayDerp, platformRelayStun int32
-	if cfg.RunsRelay() && cfg.Relay.IsPlatformKind() {
-		platformRelayDerp = int32(cfg.Relay.RelayDERPPort())
-		platformRelayStun = int32(cfg.Relay.RelaySTUNPort())
+	if cfg.ServesMesh() && cfg.Mesh.IsPlatformKind() {
+		platformRelayDerp = int32(cfg.Mesh.RelayDERPPort())
+		platformRelayStun = int32(cfg.Mesh.RelaySTUNPort())
 	}
 
 	deps.runners = []namedRunner{
@@ -435,7 +439,7 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 		}},
 		{"deny-sweeper", func(ctx context.Context) error { return runDenySweeper(ctx, logger, in.mgr, denyHook) }},
 		{"presence-reporter", func(ctx context.Context) error {
-			return runPresenceReporter(ctx, logger, identityCli, in.mgr, in.edgeID, cfg.NodeLabel, cfg.Presence.PresenceInterval(), in.presenceKick)
+			return runPresenceReporter(ctx, logger, identityCli, in.mgr, in.edgeID, cfg.NodeLabel, defaultPresenceInterval, in.presenceKick)
 		}},
 		{"edge-registrar", func(ctx context.Context) error {
 			// A node that doesn't run the TUNNEL datapath must not appear in the
@@ -447,8 +451,19 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 			// A PLATFORM relay is the exception and still registers: coord builds
 			// the platform DERP map FROM the edge directory (relay_derp_port on
 			// the row), so skipping it there would take the relay out of the map.
-			if !cfg.RunsEdge() && !cfg.Relay.IsPlatformKind() {
+			if !cfg.ServesTunnels() && !cfg.Mesh.IsPlatformKind() {
 				logger.Info("relay-only self-hosted node: not registering in the edge directory (no tunnel listener to dial)")
+				<-ctx.Done()
+				return nil
+			}
+			// A platform relay that got this far with nothing to advertise has
+			// no public.addr and no control listener to borrow one from. The row
+			// exists so coord can put this relay in the DERP map, keyed on the
+			// host in this very field — registering an empty one would list a
+			// relay at nowhere. Say so and stay out of the map.
+			if publicAddr == "" {
+				logger.Error("not registering in the edge directory: nothing to advertise — set public.host to the address devices reach this relay at",
+					"relay_derp_port", platformRelayDerp)
 				<-ctx.Done()
 				return nil
 			}
@@ -460,9 +475,8 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 				// The suffix a tunnel created on this node gets. Console reads it
 				// back from the directory to show "<prefix>.<this>" before the
 				// tunnel exists.
-				BaseDomain:    cfg.BaseDomain,
-				InternalAddr:  cfg.Mesh.AdvertiseAddr,
-				EdgeClass:     cfg.EdgeClass,
+				BaseDomain:    cfg.Tunnel.BaseDomain,
+				InternalAddr:  cfg.Tunnel.PeerForward.AdvertiseAddr,
 				RelayDerpPort: platformRelayDerp,
 				RelayStunPort: platformRelayStun,
 				Version:       version,
@@ -496,20 +510,20 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 	// process/config-provisioned (coord's map file), not self-registered per org —
 	// and bff-edge's RegisterRelay is BYOI-only, so a platform edge calling it would
 	// just collect a PermissionDenied every heartbeat. Gate it out.
-	if cpBFF != nil && cfg.RunsRelay() && cfg.Relay.Label != "" && !cfg.Relay.IsPlatformKind() {
+	if cpBFF != nil && cfg.ServesMesh() && cfg.Mesh.Label != "" && !cfg.Mesh.IsPlatformKind() {
 		relayHost, _, splitErr := net.SplitHostPort(publicAddr)
 		if splitErr != nil {
 			relayHost = publicAddr // publicAddr may already be a bare host
 		}
 		if relayHost == "" {
-			logger.Warn("relay self-registration skipped: no public host (set public.addr)")
+			logger.Warn("relay self-registration skipped: no public host (set public.host)")
 		} else {
 			client := cpBFF.Client
 			req := &bffedge.RegisterRelayRequest{
-				Label:    cfg.Relay.Label,
+				Label:    cfg.Mesh.Label,
 				Host:     relayHost,
-				DerpPort: int32(cfg.Relay.RelayDERPPort()),
-				StunPort: int32(cfg.Relay.RelaySTUNPort()),
+				DerpPort: int32(cfg.Mesh.RelayDERPPort()),
+				StunPort: int32(cfg.Mesh.RelaySTUNPort()),
 			}
 			deps.runners = append(deps.runners, namedRunner{"relay-registrar", func(ctx context.Context) error {
 				return runRelayRegistrar(ctx, logger, func(ctx context.Context) error {
@@ -518,7 +532,7 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 				})
 			}})
 			logger.Info("relay self-registration wired",
-				"region", "self-"+cfg.Relay.Label, "host", relayHost, "derp_port", req.DerpPort)
+				"region", "self-"+cfg.Mesh.Label, "host", relayHost, "derp_port", req.DerpPort)
 		}
 	}
 

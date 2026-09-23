@@ -33,12 +33,12 @@ import (
 // node with an org identity.
 //
 // Blocks until ctx is cancelled, then tears its listeners down.
-func runRelay(ctx context.Context, rc config.RelayRole, logger *slog.Logger, reporter *relayUsageReporter, rate *relayRateResolver) error {
+func runRelay(ctx context.Context, rc config.MeshService, logger *slog.Logger, reporter *relayUsageReporter, rate *relayRateResolver) error {
 	auth, err := relayAuthConfig(rc)
 	if err != nil {
 		return err
 	}
-	logger.Info("relay role: starting mesh-relay datapath",
+	logger.Info("mesh role: starting mesh-relay datapath",
 		"derp_port", rc.RelayDERPPort(), "stun_port", rc.RelaySTUNPort(),
 		"kind", auth.Kind, "require_auth", auth.Require, "label", rc.Label,
 		"usage_report", reporter != nil, "rate_limit", rate != nil)
@@ -60,11 +60,11 @@ func runRelay(ctx context.Context, rc config.RelayRole, logger *slog.Logger, rep
 	if rc.RelaySTUNPort() > 0 {
 		stunAddr := ":" + strconv.Itoa(rc.RelaySTUNPort())
 		if ua, uerr := net.ResolveUDPAddr("udp", stunAddr); uerr != nil {
-			logger.Warn("relay role: STUN disabled (bad stun_port)", "addr", stunAddr, "err", uerr)
+			logger.Warn("mesh role: STUN disabled (bad stun_port)", "addr", stunAddr, "err", uerr)
 		} else if sc, lerr := net.ListenUDP("udp", ua); lerr != nil {
-			logger.Warn("relay role: STUN disabled (bind failed)", "addr", stunAddr, "err", lerr)
+			logger.Warn("mesh role: STUN disabled (bind failed)", "addr", stunAddr, "err", lerr)
 		} else {
-			logger.Info("relay role: STUN responder listening", "addr", stunAddr)
+			logger.Info("mesh role: STUN responder listening", "addr", stunAddr)
 			go stunserver.Serve(sc, logger)
 			go func() { <-ctx.Done(); _ = sc.Close() }()
 		}
@@ -76,7 +76,7 @@ func runRelay(ctx context.Context, rc config.RelayRole, logger *slog.Logger, rep
 	if err != nil {
 		return fmt.Errorf("relay listen %s: %w", derpAddr, err)
 	}
-	logger.Info("relay role: relay listening", "addr", derpAddr)
+	logger.Info("mesh role: relay listening", "addr", derpAddr)
 	go func() { <-ctx.Done(); _ = ln.Close() }()
 
 	for {
@@ -85,7 +85,7 @@ func runRelay(ctx context.Context, rc config.RelayRole, logger *slog.Logger, rep
 			if ctx.Err() != nil {
 				return nil // clean shutdown
 			}
-			logger.Warn("relay role: accept error", "err", aerr)
+			logger.Warn("mesh role: accept error", "err", aerr)
 			continue
 		}
 		go hub.Serve(conn)
@@ -98,7 +98,7 @@ func runRelay(ctx context.Context, rc config.RelayRole, logger *slog.Logger, rep
 // Kind defaults to "self": a merged BYOI node's relay is the org's own relay, and
 // defaulting to platform would let it serve traffic an over-quota grant meant to
 // stop.
-func relayAuthConfig(rc config.RelayRole) (relay.AuthConfig, error) {
+func relayAuthConfig(rc config.MeshService) (relay.AuthConfig, error) {
 	auth := relay.AuthConfig{Require: rc.RequireAuth}
 	switch strings.ToLower(strings.TrimSpace(rc.Kind)) {
 	case "", "self", "self-hosted", "selfhosted":

@@ -43,6 +43,13 @@ export interface ServiceMode {
   agent?: boolean;
   read_only?: boolean;
   login_enabled: boolean;
+  // container: this daemon runs inside a container, where the container runtime
+  // is the supervisor. Everything the console says about installing,
+  // reinstalling or uninstalling an OS service is wrong there — the same binary
+  // refuses `daemon install` in a container — so those sentences switch on this.
+  // Absent (older daemon) → false, i.e. the host wording, which is what every
+  // daemon that predates the flag actually is.
+  container?: boolean;
   // WEB console origin (e.g. https://console.calabi.net) — where the login page
   // links for registration. Baked into the daemon at build time and overridable
   // via $CALABI_CONSOLE_WEB, so self-hosted deployments point at their own
@@ -718,7 +725,7 @@ export interface UpdateInfo {
   can_apply: boolean;
   rollback?: boolean;
   // Why can_apply is false: no-artifact | artifact-unsigned | artifact-foreign |
-  // unsupported-platform | not-privileged.
+  // unsupported-platform | managed-elsewhere | not-privileged | container.
   reason?: string;
   checked_at: string;
   // Security release: installs under "security only" and skips the window.

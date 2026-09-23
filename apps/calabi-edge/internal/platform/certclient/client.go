@@ -4,9 +4,9 @@
 //
 // PRIMARY PATH
 // ----------------------------
-//   - On Start(), dial cert-svc, ListCerts(org=0 → all orgs), then for
-//     every cert call GetCert to pull the decrypted private key. Build
-//     the initial pool.
+//   - On Start(), dial cert-svc, ListCerts for this node's scope, then
+//     for every cert call GetCert to pull the decrypted private key.
+//     Build the initial pool.
 //   - Subscribe to calabi.cert.upsert.> and calabi.cert.delete.> on
 //     NATS. Each event names a (cert_id, org_id, sans...) tuple; the
 //     handler refetches that one cert (or evicts on delete) and swaps
@@ -22,9 +22,14 @@
 // the change forwards-compatible: a single-binary dev runner without
 // NATS still works.
 //
-// org_id scoping: still fetches the whole catalog because edge doesn't
-// yet know which org owns which tunnel domain (tunnel-svc holds that
-// map, not surfaced to edge). will tighten it.
+// SCOPE: which certs "this node's scope" covers is bff-edge's decision,
+// taken from the node's own mTLS certificate — its own org for a BYOI
+// node, every org for a platform one, which is the set of tenants a
+// platform node actually terminates TLS for. The edge cannot widen it.
+// That matters more than it looks: refresh() REBUILDS the pool from the
+// listing and swaps it in, so anything the listing omits is dropped from
+// the pool every reconcile, including certs a push event had added.
+// See TestAReconcileReplacesThePool.
 package certclient
 
 import (
@@ -65,7 +70,20 @@ var ErrNoCertForSNI = errors.New("certclient: no certificate for SNI")
 type Options struct {
 	// Addr is the cert-svc gRPC endpoint, e.g. "127.0.0.1:7005".
 	Addr string
-	// OrgID limits the fetch to one org. 0 = all orgs.
+	// OrgID limits the fetch to one org. ZERO means this node is a PLATFORM
+	// edge — it serves every org and wants every org's certs.
+	//
+	// Both halves of that are decided by bff-edge from the caller's mTLS cert,
+	// not here: it overwrites org_id and sets all_orgs before the request
+	// reaches cert-svc. So this value is what the node believes about itself
+	// (config.Config.OrgID, itself read from the same certificate) and cannot
+	// widen the node's own scope.
+	//
+	// It used to say "0 = all orgs". That was never true: cert-svc
+	// has rejected org_id <= 0 since the day it was written, so a node that left
+	// this at zero got an error from every refresh and served an empty pool. The
+	// platform edges were given a single org in their config to work around it,
+	// and quietly served only that org's certificates.
 	OrgID int64
 	// RefreshInterval overrides the default poll cadence. Zero picks
 	// the right default for the wiring: 5 minutes when a Bus is set

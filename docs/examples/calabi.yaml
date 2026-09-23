@@ -1,0 +1,75 @@
+# An example calabi.yaml for a device of your own server:
+#
+#   calabi daemon --config calabi.yaml
+#
+# Three blocks, in the order they matter: which SERVER this device belongs to,
+# then the two things it can do once it is there — join the MESH, serve TUNNELS.
+# Only the first is required. A file with `server:` and nothing else is a
+# complete config for a machine that just needs to be on your server.
+#
+# A file like this is for machines you set up from a file (a server, or many
+# machines built from one image). Otherwise run `calabi join <invite>` and
+# manage everything in the console.
+#
+# The daemon runs every tunnel below in one process and reconnects on its own.
+# Your edge applies each tunnel's `security:` block: IP allow/deny on every
+# tunnel type, and on HTTP tunnels also Basic auth, rate limits, header rewrite
+# and OAuth sign-in. Passwords are bcrypt-hashed on this machine before they are
+# sent.
+
+# --- which server this device belongs to, and how it proves itself -----------
+#
+# Required. The coordinator names the edge, so nothing here names the edge, and
+# nothing below works without this block: a tunnel reaches its edge by asking
+# this coordinator, with or without the mesh.
+server:
+  coord: coord.example.com:7012
+  # How its certificate is checked: the fingerprint `calabi-coord fingerprint`
+  # prints on the server (or `trust: system` for a publicly trusted certificate).
+  trust: pin
+  pins: ["sha256:0000000000000000000000000000000000000000000000000000000000000000"]
+  # A key from `calabi-coord authkey create` (reusable for a fleet). It is used
+  # the first time only: afterwards the device comes back by its own key.
+  auth_key: ck_replace_me
+  # This device's name on the server. Default: the host name.
+  # name: build-01
+
+# --- the mesh (WireGuard), optional ------------------------------------------
+#
+# Leave this out and the device is still on your server and still serves the
+# tunnels below; it simply does not join the overlay network.
+# mesh:
+#   enabled: true
+#   # Offer this machine's LAN to the rest of the mesh (Linux).
+#   advertise_routes: ["192.168.1.0/24"]
+
+# --- tunnels, optional -------------------------------------------------------
+#
+# May be empty (`tunnels: []`) or left out. The daemon still joins and serves
+# the console at http://127.0.0.1:7400, where you can create and delete tunnels
+# and edit their security; changes are written back to this file.
+tunnels:
+  # HTTP tunnel with a login wall (Basic auth) + an IP allowlist.
+  - name: app
+    type: http
+    local: 127.0.0.1:8080        # bare port also works: `local: 8080`
+    domain: app.example.com
+    security:
+      ip_allow: ["10.0.0.0/8", "203.0.113.4"]
+      basic_auth: ["admin:s3cret", "ops:hunter2"]   # bcrypt-hashed locally
+      # Also: rate, set_header / del_header, oauth_* — see docs/self-hosting.md.
+
+  # TCP tunnel (e.g. SSH) on a fixed port — open it on the edge too. TCP and UDP
+  # tunnels take IP rules only; basic_auth is for HTTP tunnels.
+  - name: ssh
+    type: tcp
+    local: 127.0.0.1:22
+    remote_port: 2222
+    security:
+      ip_deny: ["192.0.2.0/24"]
+
+  # UDP tunnel.
+  - name: dns
+    type: udp
+    local: 127.0.0.1:53
+    remote_port: 5353

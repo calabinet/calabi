@@ -62,6 +62,10 @@ const (
 	// archive), so running that artifact would install something ELSE rather
 	// than update this. See installerManagedFrom.
 	ReasonManagedElsewhere = "managed-elsewhere"
+	// ReasonContainer: this daemon runs inside a container, which is updated by
+	// pulling a new IMAGE. There is no OS service manager to reinstall into and
+	// no init to restart, so none of the other advice applies here.
+	ReasonContainer = "container"
 )
 
 // Check runs the read-only half of a cycle: fetch the manifest, verify its
@@ -202,6 +206,21 @@ func (u *Updater) check(ctx context.Context) (Status, PlatformArtifact, error) {
 
 	// Everything above is about the manifest; what follows is about US.
 	switch {
+	// FIRST, ahead of every other answer. A container is replaced, not patched:
+	// its binary comes from an image, the container runtime is its supervisor,
+	// and there is no init to restart. Every other line this switch can produce
+	// is a chore that cannot work there — "reinstall it as a system service"
+	// names a command the CLI ITSELF refuses in a container
+	// (containerizeDaemonArgs), which is the contradiction a user reported.
+	//
+	// It also closes the case that would otherwise pass every gate below: root
+	// in a container, started by an entrypoint (so not "interactive"), is
+	// Privileged by the rule in selfupdate_wire.go. That daemon downloads and
+	// verifies an installer on every cycle and only then discovers there is no
+	// systemctl to restart anything with (apply_linux.go). Refusing up front
+	// costs it nothing and says something true.
+	case u.Container:
+		st.Reason = ReasonContainer
 	case !u.applierAvailable():
 		st.Reason = ReasonUnsupportedOS
 	// BEFORE the privilege question, on purpose. For a scoop or Homebrew

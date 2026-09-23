@@ -198,59 +198,130 @@ CALABI_COORD_DERP_STUN_PORT=3478 \
 边缘节点读一个 YAML 文件（`./calabi-edge -config edge.yaml`）：
 
 ```yaml
+# --- 这台节点：是谁、归谁管、跑什么 ---
 mode: standalone             # 属于你自己的协调器；必填
-role: both                   # 隧道和组网中继在一个进程里
+role: both                   # tunnel | mesh | both
 coord_pubkey_file: ./coord.pub   # 协调器的凭证公钥（或 coord_pubkey: <base64>）
 node_label: my-server        # 这个节点在日志里的名字
-base_domain: tunnels.example.com  # HTTP 隧道成为 <名字>.<base_domain>
-
-control:
-  addr: ":7443"              # 设备连这里
-  cert_pem: ""               # 证书；留空 = 自签，放在 state.dir
-  key_pem: ""
-
-http:
-  addr: ":80"                # 访问者
-https:
-  addr: ":443"               # 见下面的 HTTPS
-
-relay:
-  derp_port: 3340            # 中继
-  stun_port: 3478            # 0 关掉 STUN
-  label: my-server           # 这台中继在日志里的名字
 
 admin:
   addr: "127.0.0.1:9101"     # /healthz + /metrics——不要对外
-
 state:
   dir: ./state               # 子域名计数器和自签证书
+
+# --- 只有隧道服务读这一段 ---
+tunnel:
+  base_domain: tunnels.example.com  # HTTP 隧道成为 <名字>.<base_domain>
+  control_port: 7443         # calabi 客户端连这里
+  control_cert_pem: ""       # 证书；留空 = 自签，放在 state.dir
+  control_key_pem: ""
+  http_port: 80              # 访问者
+  https_port: 443            # 见下面的 HTTPS
+
+# --- 只有组网中继读这一段 ---
+mesh:
+  derp_port: 3340            # 中继
+  stun_port: 3478            # 0 关掉 STUN
+  label: my-server           # 这台中继在日志里的名字
 ```
+
+`role: mesh` 的节点可以把整个 `tunnel:` 段删掉，`role: tunnel` 的可以把整个 `mesh:` 段删掉。
+这就是分成两段的意义：文件本身说清楚了这台机器跑的是哪一半。
 
 - **`mode: standalone`**——必填。边缘节点凭你的协调器签的凭证接受设备，执行每条隧道的安全策略，并允许客户端在
   `base_domain` 下自己选名字。
 - **`coord_pubkey` / `coord_pubkey_file`**——必填。协调器的凭证公钥：直接写（`calabi-coord pubkey` 打印它），
   或者写协调器导出的那个文件。文件还不存在时，边缘节点会等它出现。也可以用环境变量
-  `CALABI_EDGE_COORD_PUBKEY` / `CALABI_EDGE_COORD_PUBKEY_FILE`。`relay.coord_pubkey` 是旧写法，两处都写时必须一致。
-- **证书。** 没有 `control.cert_pem`/`key_pem` 时，边缘节点首次启动生成一张自签证书，放在 `state.dir`
+  `CALABI_EDGE_COORD_PUBKEY` / `CALABI_EDGE_COORD_PUBKEY_FILE`。
+- **证书。** 没有 `tunnel.control_cert_pem`/`control_key_pem` 时，边缘节点首次启动生成一张自签证书，放在 `state.dir`
   （`control.crt`、`control.key`）。`./calabi-edge -config edge.yaml -fingerprint` 打印它的指纹。
-  设备从协调器拿到这个指纹。没有 `state.dir` 时，每次启动都换一张新证书，并给出警告。
+  客户端从协调器拿到这个指纹。没有 `state.dir` 时，每次启动都换一张新证书，并给出警告。
 - **TCP 和 UDP 隧道**的公网端口从 20000–20999 里分配，或者用客户端指定的端口（`--remote-port`、`remote_port:`）。
   那个端口也要开放。
-- **热加载。** `base_domain` 可以在运行中改（编辑文件即可）。其他字段改了要重启；运行中改它们，这次重载会被拒绝并记日志。
-- **旧写法。** `node_id`、`http.base_domain` 照样能读，等同于 `node_label`、`base_domain`；两种写法都写了且值不同会被拒绝。
+- **热加载。** `tunnel.base_domain` 可以在运行中改（编辑文件即可）。其他字段改了要重启；运行中改它们，这次重载会被拒绝并记日志。
+- **一个地址，每个服务各自的端口。** `public.host` 说这个节点在外面怎么被找到，端口由监听它的那个服务命名。
+  客户端拨的地址是两者拼出来的，所以没有任何端口写两遍。
+- **有两个来源的设置**会互相核对，文件里两处答案不一致就拒绝启动，并把两个都点名：接了控制面的节点，
+  `region` 和 `edge_node_id` 对这个节点自己的证书——控制面就是从那里读的。
+- **旧写法**，升级上来的话要知道。挪过位置的设置全都还能从原来的地方读：监听器的 `control:`、`http:`、
+  `https:`、`sni:` 四段等同于 `control_port`、`http_port`、`https_port`、`sni_port` 四个端口，
+  `public.addr` 等同 `public.host`（里面的端口必须和控制监听器一致），`base_domain` 和
+  `coord_pubkey` 可以在 `http:`、`relay:` 底下，`node_id` 等同 `node_label`，整个 `relay:` 段等同 `mesh:`。
+  角色名 `edge`、`relay` 仍然分别表示 `tunnel`、`mesh`。同一个设置两种写法都写了且值不同，会被拒绝并告诉你该留哪个。
   `accepted_tokens` 在 1.13 删除了：空列表会被忽略，列着 token 的会被拒绝。
+
+### 全部设置
+
+三组：两个服务都用的、只有隧道用的、只有组网中继用的。`role: mesh` 的节点可以整段不写 `tunnel:`，
+`role: tunnel` 的可以整段不写 `mesh:`。
+
+**适用**这一列说明这项是给谁的。标 **calabi.net** 的是托管服务用的，自建服务器一项都不读，
+那些行可以整行跳过。其余的要么任何节点都适用，要么只对你自己的服务器有意义。
+
+**这台节点——两个服务都读，或者都不读**
+
+| 设置 | 适用 | 默认 | 作用 |
+|---|---|---|---|
+| `node_label` | 任何节点 | `edge-dev-1` | 这个节点给人看的名字（`lax-1`、`sgp-01`）。它会到达你的客户端、日志和每一条用量记录 |
+| `region` | 任何节点 | `local` | 这个节点在哪个区域。中继的区域码也从它来，`self-<region>` |
+| `mode` | 任何节点 | `platform` | 每条隧道的安全策略信谁的：`standalone`（你自己的服务器）信客户端的，`platform` 信控制面的 |
+| `role` | 任何节点 | `tunnel` | 这台节点提供两种服务里的哪种：`tunnel`、`mesh` 或 `both` |
+| `coord_pubkey` | 任何节点 | — | 你的协调器的凭证公钥，base64。`calabi-coord pubkey` 打印它 |
+| `coord_pubkey_file` | 任何节点 | — | 同一把公钥，改成读文件。边缘节点会等它出现 |
+| `public.host` | 任何节点 | — | 这个节点在外面怎么被找到，写主机名或 IP、不带端口——客户端从这里连它的隧道，设备从这里连它的中继。**服务隧道的节点必填** |
+| `admin.addr` | 任何节点 | `:9101` | `/healthz`、`/readyz`、`/metrics`。不要放到公网上 |
+| `state.dir` | 任何节点 | — | 重启后还要在的小东西：子域名计数器和自签证书 |
+| `multi_region.*` | calabi.net | `mode: cluster` | 托管平台连控制面用的：`mode: bff-edge`、`bff_edge_addr`、`client_cert`、`client_key`、`ca`、`server_name` |
+| `log.level` / `log.format` | 任何节点 | `info` / `text` | `debug`/`info`/`warn`/`error`，以及 `text`/`json` |
+
+**`tunnel:`——只有隧道服务读**
+
+| 设置 | 适用 | 默认 | 作用 |
+|---|---|---|---|
+| `base_domain` | 任何节点 | `localtest.me` | 这个节点服务的泛域名：隧道成为 `<名字>.<base_domain>` |
+| `control_port` | 任何节点 | `7443` | `calabi` 客户端连到哪里 |
+| `control_cert_pem` / `control_key_pem` | 任何节点 | — | 这个监听器的证书。不写的话边缘节点自签一张，放在 `state.dir`。文件变化时会重读 |
+| `http_port` | 任何节点 | `8080` | HTTP 隧道的访问者 |
+| `https_port` | 任何节点 | `8443` | HTTPS 隧道的访问者，TLS 在这里终止。写 `0` 关掉 HTTPS |
+| `https_self_signed` | 你的服务器 | `false` | 没有真证书时回落到自签证书。**只给开发用** |
+| `sni_port` | 任何节点 | — | TLS 原样透传给客户端，不在这里解密。不写就关掉 |
+| `peer_forward.forward_addr` | calabi.net | — | 这台在哪里接收邻居转发来的访客流量。**是内网地址，绝不能用公网的那个** |
+| `peer_forward.advertise_addr` | calabi.net | — | 邻居拨过来用的内网 `host:port`。两个都要设 |
+
+**`mesh:`——只有组网中继读**
+
+| 设置 | 适用 | 默认 | 作用 |
+|---|---|---|---|
+| `derp_port` | 任何节点 | `3340` | 设备从哪里连到中继 |
+| `stun_port` | 任何节点 | `3478` | 设备用来挑最近中继的 STUN 应答口。`0` 关掉它 |
+| `label` | 任何节点 | 节点的 `region` | 这台中继广播的区域名，形式是 `self-<label>`。一个区域里放了两台中继时才设 |
+| `kind` | 任何节点 | `self` | `self` 是你自己的中继，`platform` 是我们的 |
+| `require_auth` | 任何节点 | `false` | 拒绝没有有效凭证的设备。`standalone` 节点上永远是开的 |
+
+**会被拒绝的设置。** 边缘节点不再直连控制面，所以 `identity:`、`quota:`、`config_svc:`、`nats:`、
+`tunnel.addr` 和 `cert.addr` 都不起作用了。`presence.interval_seconds` 和 `cert.refresh_seconds` 也一样，
+1.15.0 删了：两个都有默认值，而且没有任何一份已部署的配置设过它们。`edge_class` 同理——
+现在由托管平台自己决定，节点没有权力挑选哪些付费套餐被路由到它这里。`org_id`（以及旧写法 `cert.org_id`）
+也一样：节点属于哪个组织由它自己的证书决定，而我们自己的节点服务所有组织、不指定其中某一个。
+文件里还留着其中任何一个，边缘节点不会启动，并告诉你是哪一个——而不是启动起来、然后悄悄不做文件里写的事。
+唯一一个不被读取而是被拒绝的旧写法，是顶层带 `forward_addr` / `advertise_addr` 的 `mesh:` 段：
+那是边缘之间转发隧道流量，而 `mesh:` 现在配置的是中继，把两者中任何一个读成另一个都比直说更糟。
+
+**用环境变量**，让一台中继完全不需要配置文件：`CALABI_EDGE_MODE`、`CALABI_EDGE_ROLE`、
+`CALABI_EDGE_ADMIN_ADDR`、`CALABI_EDGE_PUBLIC_HOST`、`CALABI_EDGE_COORD_PUBKEY`、`CALABI_EDGE_COORD_PUBKEY_FILE`，
+以及 `CALABI_EDGE_RELAY_` 加 `KIND`、`LABEL`、`DERP_PORT`、`STUN_PORT`、`REQUIRE_AUTH`、`COORD_PUBKEY`。
 
 ### HTTPS
 
-设了 `base_domain`、又没有自己的证书时，边缘节点在 `https.addr` 上用它在 `state.dir` 里生成的自签泛域名证书
+设了 `base_domain`、又没有自己的证书时，边缘节点在 `tunnel.https_port` 上用它在 `state.dir` 里生成的自签泛域名证书
 （`edge-https.crt`）提供 HTTPS。浏览器会显示警告，除非你导入这张证书。自建边缘节点暂时不能自动申请 Let's Encrypt 证书。
 
 ### 单独一台中继
 
-要在别处加一台中继（离你某些设备更近），用 `role: relay` 运行边缘节点，不需要配置文件：
+要在别处加一台中继（离你某些设备更近），用 `role: mesh` 运行边缘节点，不需要配置文件：
 
 ```bash
-CALABI_EDGE_MODE=standalone CALABI_EDGE_ROLE=relay \
+CALABI_EDGE_MODE=standalone CALABI_EDGE_ROLE=mesh \
 CALABI_EDGE_RELAY_LABEL=tokyo CALABI_EDGE_COORD_PUBKEY=<calabi-coord pubkey> \
 ./calabi-edge
 ```
@@ -297,7 +368,7 @@ CALABI_EDGE_RELAY_LABEL=tokyo CALABI_EDGE_COORD_PUBKEY=<calabi-coord pubkey> \
   `calabi-edge -config edge.yaml -fingerprint` 得到）。边缘节点用公开受信的证书时，改设 `CALABI_COORD_EDGE_TRUST=system`。
   换边缘节点证书时，同时更新这个指纹。
 - **边缘节点上：** 直接写协调器的公钥：`coord_pubkey: <calabi-coord pubkey 的输出>`。
-- **中继：** 协调器告诉设备的中继（`CALABI_COORD_DERP_ADDR`），是跑 `role: both` 或 `role: relay` 的边缘节点。
+- **中继：** 协调器告诉设备的中继（`CALABI_COORD_DERP_ADDR`），是跑 `role: both` 或 `role: mesh` 的边缘节点。
 
 ---
 
@@ -326,23 +397,24 @@ calabi join "calabi://join?…"
 **服务器和批量设备。** 需要自己入网的机器——一台服务器，或同一个镜像装出来的一批机器——用配置文件代替邀请：
 
 ```yaml
-# tunnels.yaml
-mesh:
+# calabi.yaml
+server:
   coord: server.example.com:7012
   trust: pin
   pins: ["sha256:…"]          # calabi-coord fingerprint
   auth_key: ck_…              # calabi-coord authkey create --reusable --tag tag:server
   name: build-01
-  # enabled: true             # 同时加入组网；隧道不受影响
+# mesh:
+#   enabled: true             # 同时加入组网；隧道不受影响
 tunnels: []
 ```
 
 ```bash
-calabi daemon install --config tunnels.yaml    # 开机自启的服务；之后 calabi daemon start|stop|status
+calabi daemon install --config calabi.yaml    # 开机自启的服务；之后 calabi daemon start|stop|status
 ```
 
 密钥只在第一次入网时用。之后守护进程用设备私钥重连；它把自己是哪台设备记在数据目录的 `mesh-reauth.json` 里。
-这个文件以明文保存密钥，请设成只有服务能读。带注释的示例见 [`docs/examples/tunnels.yaml`](examples/tunnels.yaml)。
+这个文件以明文保存密钥，请设成只有服务能读。带注释的示例见 [`docs/examples/calabi.yaml`](examples/calabi.yaml)。
 
 ---
 
@@ -358,7 +430,7 @@ calabi udp  53
 ```
 
 它们以这个客户端入网时的设备身份运行，不用再设别的。没入网的客户端会直接说明。
-`CALABI_DAEMON_CONFIG=tunnels.yaml` 让它们改用某个配置文件里那台设备的身份。
+`CALABI_DAEMON_CONFIG=calabi.yaml` 让它们改用某个配置文件里那台设备的身份。
 
 ### 按隧道的安全策略
 
@@ -379,10 +451,10 @@ Basic 认证的密码在你的机器上做 bcrypt 哈希后才发出去。命令
 ### 守护进程
 
 守护进程在一个进程里跑一台设备的所有隧道、自己重连，并提供控制台。`calabi join` 之后它就在运行；`calabi daemon` 启动它。
-你在控制台里建的隧道存在它自己的 `tunnels.yaml`，在它的数据目录里。
+你在控制台里建的隧道存在它自己的 `calabi.yaml`，在它的数据目录里。
 
-用 `--config tunnels.yaml` 运行时，它改从这个文件读隧道（以及要入网的服务器），见[服务器和批量设备](#入网)
-和 [`docs/examples/tunnels.yaml`](examples/tunnels.yaml)：
+用 `--config calabi.yaml` 运行时，它改从这个文件读隧道（以及要入网的服务器），见[服务器和批量设备](#入网)
+和 [`docs/examples/calabi.yaml`](examples/calabi.yaml)：
 
 ```yaml
 tunnels:
@@ -420,7 +492,7 @@ tunnels:
 存在数据目录的 `console-secret` 里，也可以用 `CALABI_STATUS_SECRET` 指定你自己的。控制台是明文 HTTP；
 在不信任的网络上，放在 SSH 隧道或 HTTPS 代理后面。
 
-**手写 `tunnels.yaml`。** 控制台的编辑会改写这个文件：值保留，注释不保留，还会加一行「由控制台管理」的文件头。
+**手写 `calabi.yaml`。** 控制台的编辑会改写这个文件：值保留，注释不保留，还会加一行「由控制台管理」的文件头。
 放在版本控制里的文件，请直接编辑它再重启守护进程。
 
 ---
@@ -436,14 +508,16 @@ NAT 允许时设备之间直连，不允许时经边缘节点的中继。
 **运行条件。** 以服务运行守护进程，或以 root / 管理员身份运行：组网要创建一块网卡。Windows 上 `wintun.dll` 已经内置在程序里。
 设备的 WireGuard 私钥在设备上生成并保存（`key_file:` 指定位置），所以设备的身份和地址不变。
 
-守护进程 `tunnels.yaml` 里的组网设置——控制台改的也是这些：
+守护进程 `calabi.yaml` 里的组网设置——控制台改的也是这些。
+设备归哪台服务器管在 `server:` 里，不在这一段：组网开不开，设备都需要它。
 
 ```yaml
-mesh:
-  enabled: true
+server:
   coord: server.example.com:7012
   pins: ["sha256:…"]
   name: laptop
+mesh:
+  enabled: true
   advertise_routes: ["192.168.1.0/24"]   # 共享一个局域网
   advertise_exit_node: true              # 愿意当出口设备
   exit_node: home-server                 # 这台设备的流量经某台设备出去
@@ -470,7 +544,7 @@ mesh:
 
 | | Linux | Windows、macOS |
 |---|---|---|
-| 共享子网，或当出口设备 | 可以——转发和 NAT 自动配好 | 只能在 `tunnels.yaml` 里设（`advertise_routes:`、`advertise_exit_node:`），转发和 NAT 要自己配；控制台里不提供 |
+| 共享子网，或当出口设备 | 可以——转发和 NAT 自动配好 | 只能在 `calabi.yaml` 里设（`advertise_routes:`、`advertise_exit_node:`），转发和 NAT 要自己配；控制台里不提供 |
 | 访问别的设备共享的子网 | 可以 | 可以 |
 | 使用出口设备 | 可以 | 可以 |
 
@@ -500,7 +574,7 @@ mesh:
 
 - 协调器把设备标记为已离开，要新的邀请才能回来。
 - App 忘掉这台服务器。
-- 控制台还会删除它的 `tunnels.yaml` 和里面的隧道（先告诉你有几条），然后回到 calabi.net 登录页。
+- 控制台还会删除它的 `calabi.yaml` 和里面的隧道（先告诉你有几条），然后回到 calabi.net 登录页。
 - 设备私钥保留：再加入同一个协调器，还是同一台设备。
 
 ---
@@ -562,9 +636,9 @@ ssh -L 9090:127.0.0.1:9090 you@your-server   # 然后打开 http://127.0.0.1:909
 
 - **边缘节点不再用 token。** 它需要 `mode: standalone` 和协调器的公钥，凭协调器的凭证接受设备。
   仍列着 `accepted_tokens` 的配置启动时会被拒绝。
-- **`tunnels.yaml` 不再写边缘节点。** 顶层的 `server`、`token`、`token_env`、`insecure`、`ca_file`、`trust`、`pins`
-  在你手写的文件里会被拒绝，控制台自己的文件里会被去掉并给出警告。入网到协调器（`calabi join`，或 `mesh:` 块），
-  边缘节点就从协调器来。
+- **守护进程配置不再写边缘节点。** 顶层的 `server: <url>`、`token`、`token_env`、`insecure`、`ca_file`、`trust`、`pins`
+  在你手写的文件里会被拒绝，控制台自己的文件里会被去掉并给出警告。入网到协调器（`calabi join`，或 `server:` 块），
+  边缘节点就从协调器来。（`server:` 后面跟一个块是协调器，照常读取——只有旧的单行写法会被拒绝。）
 - **一次性命令**在自建设备上不再读 `CALABI_SERVER`、`CALABI_TOKEN`、`CALABI_EDGE_PIN`、`CALABI_EDGE_TRUST`。
 - **自建的中继一律核对凭证。** 给它协调器的公钥。
 - **协调器提供 TLS。** 没有证书文件时，以前提供明文，现在生成自签证书。在设备上钉住它的指纹，或设 `CALABI_COORD_TLS=off`。

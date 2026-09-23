@@ -47,31 +47,39 @@ func TestTrustsClientPolicy(t *testing.T) {
 	}
 }
 
-// TestNormalizeForMode covers the standalone normalization that fixes the
-// config.Default() interaction: a config-less standalone edge (which inherits
-// dev-localhost identity/tunnel addrs from Default) must end up with NO control
-// plane wired so the trust guard fires correctly; a BYOI (bff-edge) edge must be
-// refused standalone and downgraded to platform.
+// TestNormalizeForMode covers the standalone normalization: a standalone fork
+// must end up with NO control plane wired so the trust guard fires correctly,
+// and its relay must require grants whatever the file said; a BYOI (bff-edge)
+// edge must be refused standalone and downgraded to platform.
+//
+// This used to be written in terms of clearing identity.addr / tunnel.addr /
+// quota.addr, which config.Default() injected. Those settings are gone — the
+// edge has reached the control plane only through bff-edge since F3 — so
+// "is a control plane wired" is now multi_region's question alone.
 func TestNormalizeForMode(t *testing.T) {
-	t.Run("standalone fork clears control-plane addrs", func(t *testing.T) {
+	t.Run("standalone fork keeps standalone and forces grants", func(t *testing.T) {
 		in := Config{Mode: "standalone"}
-		in.Identity.Addr = "127.0.0.1:7001" // as config.Default() injects
-		in.Tunnel.Addr = "127.0.0.1:7003"
-		in.Quota.Addr = "127.0.0.1:7004"
 		out, refused := in.NormalizeForMode()
 		if refused {
 			t.Fatal("fork must not be byoiRefused")
 		}
-		if out.Identity.Addr != "" || out.Tunnel.Addr != "" || out.Quota.Addr != "" {
-			t.Fatalf("control-plane addrs not cleared: %+v", out)
-		}
 		if !out.IsStandaloneMode() {
 			t.Fatal("fork should stay standalone")
 		}
-		// And the trust guard now trusts (no control plane wired).
-		wired := out.Identity.Addr != "" || out.Tunnel.Addr != ""
-		if !out.TrustsClientPolicy(wired) {
+		if !out.Mesh.RequireAuth {
+			t.Fatal("a standalone node's relay serves its coordinator's devices only; grants must be forced on")
+		}
+		if !out.TrustsClientPolicy(false) {
 			t.Fatal("standalone fork should trust client policy after normalize")
+		}
+	})
+
+	t.Run("standalone cannot switch the trust guard off by saying so", func(t *testing.T) {
+		// The guard takes controlPlaneWired from the CALLER, not from the config,
+		// so a node that does have one cannot talk its way out of platform rules.
+		out, _ := Config{Mode: "standalone"}.NormalizeForMode()
+		if out.TrustsClientPolicy(true) {
+			t.Fatal("a wired control plane must override mode: standalone")
 		}
 	})
 
@@ -92,10 +100,10 @@ func TestNormalizeForMode(t *testing.T) {
 	})
 
 	t.Run("platform unchanged", func(t *testing.T) {
-		in := Config{Mode: "platform"}
-		in.Identity.Addr = "127.0.0.1:7001"
+		in := Config{Mode: "platform", NodeLabel: "edge-1"}
+		in.Mesh.RequireAuth = false
 		out, refused := in.NormalizeForMode()
-		if refused || out.Identity.Addr != "127.0.0.1:7001" {
+		if refused || out.NodeLabel != "edge-1" || out.Mesh.RequireAuth {
 			t.Fatalf("platform must pass through unchanged: refused=%v out=%+v", refused, out)
 		}
 	})

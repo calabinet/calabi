@@ -127,6 +127,62 @@ func TestUnprivilegedDaemonChecksButNeverApplies(t *testing.T) {
 	}
 }
 
+// A container is told to pull an image, not to install a service.
+//
+// The bug this exists for: a user running the published client image saw the
+// console say "this daemon is not running as a privileged system service —
+// reinstall it with `calabi daemon install --system`". That command is one THIS
+// BINARY refuses in a container (containerizeDaemonArgs prints "there is no OS
+// service to install"), so the only advice the product gave was advice it would
+// not carry out.
+//
+// Privileged is deliberately TRUE here. It is not the interesting case for the
+// message, it is the interesting case for the GATE: root under an entrypoint is
+// privileged by the rule in selfupdate_wire.go, so without the container arm
+// this daemon downloads and verifies an installer on every cycle before
+// apply_linux.go refuses it for having no systemctl. Both halves — the sentence
+// and the refusal — come from the one `case u.Container` in check(); drop it and
+// this goes red twice.
+func TestAContainerIsToldToPullAnImageNotToInstallAService(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(nil)
+	installer := []byte("fake calabi installer payload")
+	sig := base64.StdEncoding.EncodeToString(ed25519.Sign(priv, installer))
+	srv := testServer(t, "1.15.0", installer, sig, "", priv)
+	defer srv.Close()
+
+	u := &Updater{
+		ManifestURL:    srv.URL + "/latest.json",
+		CurrentVersion: "1.14.0",
+		PubKey:         pub,
+		DownloadDir:    t.TempDir(),
+		Privileged:     true, // root in a container clears the privilege bar
+		Container:      true,
+		Managed:        managedForTest,
+		Apply: func(context.Context, string) (func() error, error) {
+			t.Fatal("apply must not run in a container")
+			return nil, nil
+		},
+	}
+	st, err := u.Check(context.Background())
+	if err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	// Still learns it is out of date: that is what the console's version card
+	// is made of, and "you cannot install it here" is not "you cannot know".
+	if !st.Available || !st.HasArtifact || st.Latest != "1.15.0" {
+		t.Fatalf("want the update seen: available=%v hasArtifact=%v latest=%q", st.Available, st.HasArtifact, st.Latest)
+	}
+	if st.CanApply || st.Reason != ReasonContainer {
+		t.Errorf("want (cannot apply, %q), got can=%v reason=%q", ReasonContainer, st.CanApply, st.Reason)
+	}
+	if st.Reason == ReasonNotPrivileged {
+		t.Errorf("a container must not be told to reinstall as a system service")
+	}
+	if applied, err := u.CheckAndApply(context.Background()); applied || err != nil {
+		t.Fatalf("CheckAndApply=(%v,%v), want (false,nil) — nothing to install in a container", applied, err)
+	}
+}
+
 // The version floor is a ledger of what this machine has been OFFERED, so a
 // daemon that only ever checks still has to write it. Otherwise a machine that
 // later gains the ability to install (user daemon → system service) would start

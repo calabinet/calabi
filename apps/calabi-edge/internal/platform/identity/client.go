@@ -123,13 +123,12 @@ type EdgeRegistration struct {
 	NodeLabel  string
 	Region     string
 	PublicAddr string
-	// BaseDomain is this node's visitor wildcard (cfg.BaseDomain) — the suffix a
+	// BaseDomain is this node's visitor wildcard (cfg.Tunnel.BaseDomain) — the suffix a
 	// tunnel hostname created on this node gets. Published so the console can
 	// render "<prefix>.<base_domain>" from the directory alone.
 	BaseDomain    string
 	InternalAddr  string // VPC-internal addr for same-region peer forwarding; "" = no mesh
 	ActiveClients int32
-	EdgeClass     string // plan-tier pool: "shared" (default) | "dedicated"
 	// edge/derp merge: the in-process mesh-relay endpoint, reported ONLY by a
 	// PLATFORM merged node (role=both/relay + relay.kind=platform) so the
 	// coordinator can list it in the platform DERP map. A self-hosted (BYOI)
@@ -159,7 +158,6 @@ func (v *Verifier) RegisterEdgeNode(ctx context.Context, in EdgeRegistration) er
 		BaseDomain:    in.BaseDomain,
 		InternalAddr:  in.InternalAddr,
 		ActiveClients: in.ActiveClients,
-		EdgeClass:     in.EdgeClass,
 		RelayDerpPort: in.RelayDerpPort,
 		RelayStunPort: in.RelayStunPort,
 		Version:       in.Version,

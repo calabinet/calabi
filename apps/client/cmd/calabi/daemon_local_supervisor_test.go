@@ -47,7 +47,7 @@ func TestSupervisor_TunnelsOverlaysAssignedAddr(t *testing.T) {
 func testSupervisor(t *testing.T) (*localSupervisor, string) {
 	t.Helper()
 	dir := t.TempDir()
-	path := filepath.Join(dir, "tunnels.yaml")
+	path := filepath.Join(dir, "calabi.yaml")
 	base := localConfig{Mesh: meshConfig{Enabled: true, Coord: "coord.example.com:7012", Trust: "pin", Pins: []string{testPinA}}}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	planned := planTunnels(logger, []localTunnelConfig{
@@ -62,7 +62,7 @@ func testSupervisor(t *testing.T) (*localSupervisor, string) {
 // stable across reconnects/restarts; a later assignment doesn't overwrite it.
 func TestSupervisor_PinsAssignedDomain(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "tunnels.yaml")
+	path := filepath.Join(dir, "calabi.yaml")
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	planned := planTunnels(logger, []localTunnelConfig{
 		{Name: "stage", Type: "http", Local: "192.168.1.5:8080"}, // no configured domain
@@ -95,7 +95,7 @@ func TestSupervisor_PinsAssignedDomain(t *testing.T) {
 // edge-assigned address is pinned — and the file must still load.
 func TestSupervisor_PersistOmitsUnsetFields(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "tunnels.yaml")
+	path := filepath.Join(dir, "calabi.yaml")
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	planned := planTunnels(logger, []localTunnelConfig{
 		{Name: "web", Type: "http", Local: "8080"}, // no domain → edge assigns one

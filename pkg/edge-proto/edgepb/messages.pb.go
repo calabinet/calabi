@@ -1250,7 +1250,7 @@ type EdgeNode struct {
 	// never touched by the heartbeat upsert.
 	ReservedOrgId int64 `protobuf:"varint,11,opt,name=reserved_org_id,json=reservedOrgId,proto3" json:"reserved_org_id,omitempty"`
 	// Mesh relay endpoint (edge/derp merge): the DERP/STUN ports this edge's
-	// in-process relay listens on when it runs role=relay|both. The relay's host
+	// in-process relay listens on when it runs role=mesh|both. The relay's host
 	// is host(public_addr) — a merged node serves control and relay on one host.
 	// relay_derp_port == 0 means this edge runs no relay; the coordinator builds
 	// its platform DERP map from the rows where it is > 0, so no separate map file
@@ -2045,8 +2045,22 @@ type ListCertsRequest struct {
 	// certificate list — which shows them as history, greyed and inert — asks
 	// for them.
 	IncludeRevoked bool `protobuf:"varint,3,opt,name=include_revoked,json=includeRevoked,proto3" json:"include_revoked,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// all_orgs asks for EVERY org's certs, and is the only way to say that:
+	// org_id = 0 stays an error, because "give me everything" and "I forgot to
+	// fill in the tenant" must not be the same request. cert-svc has rejected
+	// org_id <= 0 since the day it was written, which left a platform edge — a
+	// node that terminates TLS for every org by definition — with no way to ask
+	// for the pool it serves. It was given a single org in its config instead,
+	// and quietly served only that one.
+	//
+	// AUTHORIZATION lives in bff-edge, not here: it sets this flag only for a
+	// caller whose mTLS cert carries NO SPIFFE org SAN, which is exactly what
+	// makes a cert a platform edge's. cert-svc is in-cluster and trusts its
+	// callers, the same way it already trusts GetCert to hand back a decrypted
+	// private key.
+	AllOrgs       bool `protobuf:"varint,4,opt,name=all_orgs,json=allOrgs,proto3" json:"all_orgs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListCertsRequest) Reset() {
@@ -2096,6 +2110,13 @@ func (x *ListCertsRequest) GetPage() *PageRequest {
 func (x *ListCertsRequest) GetIncludeRevoked() bool {
 	if x != nil {
 		return x.IncludeRevoked
+	}
+	return false
+}
+
+func (x *ListCertsRequest) GetAllOrgs() bool {
+	if x != nil {
+		return x.AllOrgs
 	}
 	return false
 }
@@ -2881,7 +2902,7 @@ type RegisterEdgeNodeRequest struct {
 	// Pool bucket for plan-tier routing ("shared" | "dedicated"); self-
 	// declared from edge config. Empty upserts as "shared". See EdgeNode.
 	EdgeClass string `protobuf:"bytes,7,opt,name=edge_class,json=edgeClass,proto3" json:"edge_class,omitempty"`
-	// Mesh relay endpoint for a merged node (role=relay|both): the DERP/STUN ports
+	// Mesh relay endpoint for a merged node (role=mesh|both): the DERP/STUN ports
 	// its in-process relay listens on. 0 = this edge runs no relay. The relay host
 	// is host(public_addr). The coordinator lists these to assemble the platform
 	// DERP map from the edge directory, so no static map file is maintained.
@@ -4264,11 +4285,12 @@ const file_edgepb_messages_proto_rawDesc = "" +
 	"not_before\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tnotBefore\x127\n" +
 	"\tnot_after\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\bnotAfter\x12 \n" +
 	"\fedge_node_id\x18\a \x01(\x03R\n" +
-	"edgeNodeId\"\x87\x01\n" +
+	"edgeNodeId\"\xa2\x01\n" +
 	"\x10ListCertsRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\x03R\x05orgId\x123\n" +
 	"\x04page\x18\x02 \x01(\v2\x1f.calabi.v1.bff_edge.PageRequestR\x04page\x12'\n" +
-	"\x0finclude_revoked\x18\x03 \x01(\bR\x0eincludeRevoked\"}\n" +
+	"\x0finclude_revoked\x18\x03 \x01(\bR\x0eincludeRevoked\x12\x19\n" +
+	"\ball_orgs\x18\x04 \x01(\bR\aallOrgs\"}\n" +
 	"\x11ListCertsResponse\x122\n" +
 	"\x05items\x18\x01 \x03(\v2\x1c.calabi.v1.bff_edge.CertMetaR\x05items\x124\n" +
 	"\x04page\x18\x02 \x01(\v2 .calabi.v1.bff_edge.PageResponseR\x04page\"?\n" +

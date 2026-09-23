@@ -53,7 +53,7 @@ behind NAT, a server behind CGNAT, a box inside a corporate network. Two ways:
         ▼                                          ▼           (no public IP)
  ┌──────────────┐                          ┌───────────────┐
  │    calabi    │ ──► 127.0.0.1:8080       │  calabi-edge  │  relay: ciphertext
- └──────────────┘                          │  role: relay  │  only, never decrypts
+ └──────────────┘                          │  role: mesh   │  only, never decrypts
    your laptop                             └───────────────┘
 
               calabi-coord — every device's identity: who has joined, where
@@ -89,7 +89,7 @@ a web console. That part is a separate product and is not in this repository.
 | component | what it is | where it runs |
 |---|---|---|
 | `calabi` | the client — opens tunnels, joins the mesh, serves the local web console | your laptop, a server, a Pi |
-| `calabi-edge` | the data plane. `role: edge` accepts public traffic for tunnels; `role: relay` is a mesh relay + STUN responder; `role: both` does both | a host with a public IP |
+| `calabi-edge` | the data plane. `role: tunnel` accepts public traffic for tunnels; `role: mesh` is a mesh relay + STUN responder; `role: both` does both | a host with a public IP |
 | `calabi-coord` | the coordinator — every device's identity: invites, device registry, IP allocation, ACLs; names the edge and signs the grants it accepts | one host, reachable by your devices |
 | Android app | puts the phone in a mesh as a device — your own server's or a calabi.net organization's — with exit devices and a Quick Settings tile; tunnels and usage read-only | an Android 8.0+ phone (arm64, armv7) |
 
@@ -139,7 +139,7 @@ code, bound in with gomobile (`apps/client/mobile`).
   private key and never sees your traffic.
 - **Direct when possible** — devices find each other's addresses and connect
   directly through NAT. When that fails, traffic goes through a relay.
-- **Your own relay** — `calabi-edge` with `role: relay` (or `both`, as
+- **Your own relay** — `calabi-edge` with `role: mesh` (or `both`, as
   `deploy/server` runs it). It forwards encrypted packets between devices and has
   no code that could decrypt them. Run one relay or several, in different
   regions.

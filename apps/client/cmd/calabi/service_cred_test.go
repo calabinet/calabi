@@ -21,7 +21,7 @@ func stubKeyVerify(t *testing.T) {
 // A local-config service authenticates from its YAML, so install must not try
 // to resolve a platform API key for it.
 func TestServiceInstallEnv_LocalConfigSkips(t *testing.T) {
-	env, err := serviceInstallEnv([]string{"--config", "tunnels.yaml"})
+	env, err := serviceInstallEnv([]string{"--config", "calabi.yaml"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -10,6 +10,215 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## Unreleased
+
+### Updates
+
+- **Fixed** — **A client in a container was told to reinstall itself as a system
+  service.** Running the `calabinet/calabi` image, the local console and
+  `calabi update` said the daemon was not a privileged system service and to
+  reinstall it with `calabi daemon install --system` — a command the same binary
+  refuses inside a container, because a container supervises its own process and
+  has no OS service to install. A container is now recognised before anything
+  else is decided, and gets the answer that works: pull the new image and
+  recreate the container. It still checks, so the console still says a newer
+  version exists. A container running as root was also a case where the daemon
+  believed it could install: it downloaded and verified an installer on every
+  cycle and only then found there was no service manager to restart. It no
+  longer starts.
+
+### Local console
+
+- **Fixed** — **The console gave a container four more pieces of advice it
+  could not follow.** Settings listed `calabi daemon install / start / status /
+  stop / uninstall` with copy buttons — every one of which this binary refuses
+  in a container — and the pinned-identity notes said to reinstall or uninstall
+  the service to change the key or take the machine offline. The daemon now
+  tells the console it runs in a container, and those four places say what
+  works there instead: recreate the container with a different
+  `CALABI_API_KEY`, stop or remove it, manage it with your container runtime.
+  The same correction reaches the log a container operator actually reads: a
+  rejected API key no longer answers with `calabi daemon install --api-key`.
+  Clients installed on a machine are unchanged, wording included.
+
+### On calabi.net
+
+- **Fixed** — **A payment that settled slowly could leave your order
+  unpaid.** Paying in USD goes through Paddle, and its local payment methods
+  (WeChat Pay, Alipay and similar) confirm the money some minutes after you are
+  finished — long enough, occasionally, to miss the 30-minute window an order
+  stayed open for. The order was marked expired, the payment then arrived with
+  nothing left to apply it to, and the money had been taken. USD orders now stay
+  open for two hours, and a payment that still arrives after that completes the
+  order instead of being dropped. Orders you canceled yourself are not affected:
+  a payment on one is reported for a human to look at, never turned into a
+  subscription behind you.
+
+### Your server
+
+- **Changed** — **One address for the node, one port for each service.** The
+  edge's listeners were configured by address — `control: { addr: ":7443" }` —
+  but the host half was always empty, because every one of them has to be
+  reachable from outside the machine. They named ports while looking like
+  addresses, sitting among the settings that really are addresses. And the port
+  was written twice: once on the listener, once inside `public.addr`, with
+  nothing comparing them — move the listener, forget the other line, and every
+  device goes on dialing a port nothing is listening on.
+
+  Where this node can be reached is now one setting, and each service names only
+  the port it wants — which is what `mesh:` already did:
+
+  ```yaml
+  public:
+    host: server.example.com
+
+  tunnel:
+    base_domain: tunnels.example.com
+    control_port: 7443
+    http_port: 80
+    https_port: 443
+  ```
+
+  `public.host` is **required** on a node that serves tunnels. It is what
+  clients dial and the name its certificate is issued for. It used to be
+  optional, falling back to the listener's bind address — a usable dial string
+  only on the one machine that is also the client. A node that only relays mesh
+  traffic still does not need it; it is named in your coordinator's relay map.
+  From the environment: `CALABI_EDGE_PUBLIC_HOST`.
+
+  **An existing file keeps working.** `control: { addr: ":7443" }` loads as
+  `control_port: 7443`, `https: { self_signed: true }` as
+  `https_self_signed: true`, and `public.addr` as `public.host` — provided the
+  port written into it matches the listener's. A file where those two disagree
+  is refused, naming both, because that is the file that would otherwise come up
+  unreachable.
+
+  One thing this shape cannot express: an external port different from the one
+  bound. If you reach your edge through a mapping like that, bind the external
+  port directly. A bind address that names a host — `control.addr:
+  "10.0.0.5:7443"` — is refused rather than quietly widened to every interface.
+
+- **Changed** — **A replaced control certificate is picked up without a
+  restart.** The edge read `control_cert_pem` / `control_key_pem` once at start.
+  Renewing those files, or swapping a self-signed certificate for a real one,
+  changed nothing until the next restart — the edge went on presenting the copy
+  it had read, and kept presenting it after it expired. It now re-reads them
+  when they change. A rotation caught half-done (the certificate written, the
+  key not yet) keeps serving the pair that still works and tries again on the
+  next connection, rather than turning a moment into a refused device.
+
+- **Changed** — **The daemon's config file is now `calabi.yaml`, and the
+  coordinator moved to a `server:` block.** The file stopped being about
+  tunnels a while ago: a machine that only joins your server has a complete,
+  working config in which `tunnels:` is empty. And the coordinator — which
+  server the device belongs to, and how it proves itself there — was nested
+  under `mesh:`, which read as though a device that never turns the mesh on
+  did not need it. It does: `calabi http 8080` reaches its edge by asking that
+  same coordinator. So `coord`, `trust`, `pins`, `ca_file`, `auth_key` and
+  `name` now sit in a top-level `server:` block, and `mesh:` keeps only the
+  overlay's own settings.
+
+  ```yaml
+  server:
+    coord: server.example.com:7012
+    trust: pin
+    pins: ["sha256:…"]
+    auth_key: ck_…
+  mesh:
+    enabled: true          # optional — tunnels work without it
+  tunnels: []
+  ```
+
+  **You do not have to do anything.** A file in the old shape still loads, and
+  is rewritten into the new one the next time anything saves it. The file the
+  console manages in your data directory is renamed from `tunnels.yaml` to
+  `calabi.yaml` the first time this version runs; if that rename cannot be
+  performed, it keeps using the old name. A file you pass with `--config` or
+  `CALABI_DAEMON_CONFIG` is yours and is never renamed — call it whatever you
+  like.
+
+  One thing to know if you go back: an older client looks for `tunnels.yaml`
+  and does not understand `server:`, so after downgrading it will believe the
+  machine has not joined. Renaming the file back restores it; nothing is lost.
+
+- **Changed** — **The edge's two roles are now called `tunnel` and `mesh`.**
+  `role: edge` said nothing useful inside a program called `calabi-edge`, and
+  since the relay merged into that program the setting has not been asking
+  which binary you are running — it asks which of the two services this machine
+  provides. Those services are called tunnels and mesh everywhere else, so the
+  roles are now `tunnel`, `mesh` and `both`.
+
+  **Nothing to change.** `edge` and `relay` are still accepted and will stay
+  accepted — including `CALABI_EDGE_ROLE=relay`, which is the line this guide
+  has always given for running a relay on its own. An existing machine keeps
+  working across the upgrade untouched.
+
+- **Changed** — **The edge config is grouped by service: `tunnel:`, `mesh:`,
+  and the settings both use.** Everything used to sit at the top level, so
+  nothing in a file told you which half of the program would even read a given
+  setting — a relay-only config looked exactly like an edge's. Now
+  `base_domain`, `edge_class`, `control:`, `http:`, `https:`, `sni:`, `cert:`
+  and peer forwarding live under `tunnel:`; the old `relay:` block is `mesh:`;
+  and what both services read (the node's name, region and id, `mode`, `role`,
+  the coordinator's key, `public:`, `admin:`, `state:`, `presence:`,
+  `multi_region:`, `log:`) stays at the top.
+
+  A node running `role: mesh` can now delete its whole `tunnel:` block, and one
+  running `role: tunnel` its whole `mesh:` block.
+
+  ```yaml
+  node_label: my-server
+  role: both
+  mode: standalone
+  coord_pubkey_file: ./coord.pub
+  state: { dir: ./state }
+
+  public:
+    host: server.example.com
+
+  tunnel:
+    base_domain: tunnels.example.com
+    control_port: 7443
+    http_port: 80
+    https_port: 443
+
+  mesh:
+    derp_port: 3340
+    stun_port: 3478
+  ```
+
+  **An existing file keeps working unchanged** — every setting still loads from
+  where it was. A file that spells one setting *both* ways is refused rather
+  than guessed at, naming the one to keep.
+
+  Some settings are now refused outright, because they have not done anything
+  for some time and a file that still carries one describes a node that does not
+  exist. The `identity:`, `quota:`, `config_svc:` and `nats:` blocks and
+  `tunnel.addr` / `cert.addr` went when the edge stopped reaching the control
+  plane directly. `presence.interval_seconds` and `cert.refresh_seconds` go now:
+  both had a working default, and in the whole history of this repository no
+  deployed config ever set either one. Delete them from your file.
+
+  `edge_class` and `org_id` go the same way, for a different reason: which
+  paying plans are routed to a node, and which organization it belongs to, are
+  not decisions a node should be making from a file on its own disk. On
+  calabi.net both come from the certificate that node authenticates with. A
+  server you run yourself never used either.
+
+  They are refused rather than ignored on purpose. Removing the settings alone
+  would have been enough to stop them working — a key the edge does not know is
+  skipped — and that is the outcome worth avoiding: you would set a cadence, get
+  the default, and never be told.
+
+  One more rename, for anyone running several edges in one region: the edge
+  config's `mesh:` block used to mean **edge-to-edge forwarding of tunnel
+  traffic**, which has nothing to do with the mesh. It is now
+  `tunnel.peer_forward:`. This is the one old spelling that is *not* migrated
+  silently — `mesh:` means the relay now, and quietly reading a peer-forward
+  block as relay settings would take a node out of its region's forwarding pool
+  without saying so. A file that still has it is refused, and the error says
+  what to rename it to.
+
 ## 1.14.0 — 2026-09-21
 
 **Your phone can refuse to be reached**, and a server you run yourself can be

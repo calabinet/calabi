@@ -142,6 +142,14 @@ type Config struct {
 	// live and the logged-in human IS the identity. Derived once at daemon
 	// boot from the resolved credential kind — stable for the process.
 	AgentMode bool
+
+	// Container: this daemon runs inside a container, where the container runtime
+	// is the supervisor. Surfaced to the SPA via /v1/service-mode because half the
+	// console's advice is otherwise wrong there: "install the service", "reinstall
+	// the service with another key" and "uninstall the service" all name commands
+	// this same binary refuses in a container (containerizeDaemonArgs). Wired by
+	// main from runningInContainer; false on every host install.
+	Container bool
 }
 
 // InspectorSource is what statusapi needs from the daemon's inspector.
@@ -551,9 +559,16 @@ func (s *Server) agentBlock(next http.HandlerFunc) http.HandlerFunc {
 			// Say how to change it, not where: the web console cannot re-bind a
 			// running agent either — only reinstalling the service with another
 			// key does.
+			// WHICH way depends on how it was started: a container has no service
+			// to reinstall, and sending its operator at `daemon install` sends them
+			// at a command this same binary refuses.
+			how := "reinstall the service with a different key"
+			if s.cfg.Container {
+				how = "recreate the container with a different CALABI_API_KEY"
+			}
 			writeError(w, http.StatusForbidden,
 				"this client runs as a service on the API key it was installed with, so it cannot sign in, sign out or switch orgs; "+
-					"to change its identity, reinstall the service with a different key")
+					"to change its identity, "+how)
 			return
 		}
 		next(w, r)
@@ -574,6 +589,10 @@ func (s *Server) handleServiceMode(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"mode":  mode,
 		"agent": s.cfg.AgentMode,
+		// Whether the OS-service advice the console gives applies here at all. A
+		// container's supervisor is the container runtime: nothing to install,
+		// nothing to uninstall, and a new identity means a new container.
+		"container": s.cfg.Container,
 		// read_only retained for one release as an alias of agent so a stale
 		// cached SPA bundle doesn't mis-render; new SPA reads "agent".
 		"read_only":     s.cfg.AgentMode,

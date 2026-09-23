@@ -460,6 +460,9 @@ func runPlatformDaemon(args []string) int {
 		BFFConsoleURL: bffConsoleURL,
 		ConsoleWebURL: consoleWebURL,
 		AgentMode:     agentMode,
+		// The console's OS-service advice does not apply in a container;
+		// statusapi.Config.Container.
+		Container:     runningInContainer(),
 		HealthMonitor: healthMon,
 		Inspector:     insp,
 		Mesh:          meshCtl,
@@ -872,9 +875,15 @@ func runPlatformDaemon(args []string) int {
 			// end of the ladder.
 			reconnectFails = 0
 			if usingAPIKey {
+				// In a container the first half of that sentence names a command
+				// this binary refuses (containerizeDaemonArgs), and the key comes
+				// from the environment — which is the whole of the fix there.
+				fix := "reinstall the service with a valid key, e.g. `calabi daemon install --api-key tk_…` (or fix CALABI_API_KEY), then start it again."
+				if runningInContainer() {
+					fix = "recreate this container with a valid CALABI_API_KEY (docker run -e CALABI_API_KEY=tk_…)."
+				}
 				logger.Warn("auth failed: the API key was rejected (invalid or revoked) — "+
-					"reinstall the service with a valid key, e.g. `calabi daemon install --api-key tk_…` "+
-					"(or fix CALABI_API_KEY), then start it again. Create keys in the console (Account → API keys). "+
+					fix+" Create keys in the console (Account → API keys). "+
 					"Signing in through the dashboard will NOT fix a key-based service.", "err", err)
 			} else {
 				logger.Warn("auth failed; SPA can /v1/auth/login to refresh creds, then daemon will pick up", "err", err)

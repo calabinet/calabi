@@ -21,7 +21,7 @@ func TestJoinCommandWithoutADaemon(t *testing.T) {
 	if code := runJoin([]string{"--no-start-daemon", "--name", "nas", coord.link("invite-1")}); code != 0 {
 		t.Fatalf("join: exit %d", code)
 	}
-	cfg, err := loadLocalConfig(filepath.Join(dir, "tunnels.yaml"))
+	cfg, err := loadLocalConfig(filepath.Join(dir, "calabi.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}

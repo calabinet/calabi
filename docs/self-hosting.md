@@ -223,33 +223,39 @@ proxy that terminates TLS. Invites for it need
 The edge reads a YAML file (`./calabi-edge -config edge.yaml`):
 
 ```yaml
+# --- this node: who it is, whose it is, what it runs ---
 mode: standalone             # belongs to your coordinator; required
-role: both                   # tunnels and the mesh relay in one process
+role: both                   # tunnel | mesh | both
 coord_pubkey_file: ./coord.pub   # the coordinator's grant key (or coord_pubkey: <base64>)
 node_label: my-server        # this node's name in its logs
-base_domain: tunnels.example.com  # HTTP tunnels become <name>.<base_domain>
 
-control:
-  addr: ":7443"              # devices connect here
-  cert_pem: ""               # a certificate; empty = self-signed, kept in state.dir
-  key_pem: ""
-
-http:
-  addr: ":80"                # visitors
-https:
-  addr: ":443"               # see HTTPS below
-
-relay:
-  derp_port: 3340            # the relay
-  stun_port: 3478            # 0 turns STUN off
-  label: my-server           # this relay's name in its logs
+public:
+  host: server.example.com   # where this node is reached; required if it serves tunnels
 
 admin:
   addr: "127.0.0.1:9101"     # /healthz + /metrics — keep it private
-
 state:
   dir: ./state               # the subdomain counter and the self-signed certificates
+
+# --- only the TUNNEL service reads this ---
+tunnel:
+  base_domain: tunnels.example.com  # HTTP tunnels become <name>.<base_domain>
+  control_port: 7443         # the calabi client connects here
+  control_cert_pem: ""       # a certificate; empty = self-signed, kept in state.dir
+  control_key_pem: ""
+  http_port: 80              # visitors
+  https_port: 443            # see HTTPS below
+
+# --- only the MESH relay reads this ---
+mesh:
+  derp_port: 3340            # the relay
+  stun_port: 3478            # 0 turns STUN off
+  label: my-server           # this relay's name in its logs
 ```
+
+A node with `role: mesh` can delete the whole `tunnel:` block, and one with
+`role: tunnel` the whole `mesh:` block. That is what the two blocks are for: the
+file says which half of the program this machine runs.
 
 - **`mode: standalone`** — required. The edge admits devices with your
   coordinator's grants, applies each tunnel's security policy, and lets clients
@@ -258,38 +264,123 @@ state:
   grant key: inline (`calabi-coord pubkey` prints it), or the file the
   coordinator writes. If the file does not exist yet, the edge waits for it.
   From the environment: `CALABI_EDGE_COORD_PUBKEY` /
-  `CALABI_EDGE_COORD_PUBKEY_FILE`. `relay.coord_pubkey` is the older spelling;
-  if both are set they must match.
-- **The certificate.** Without `control.cert_pem`/`key_pem`, the edge makes a
+  `CALABI_EDGE_COORD_PUBKEY_FILE`.
+- **The certificate.** Without `tunnel.control_cert_pem`/`control_key_pem`, the edge makes a
   self-signed certificate on its first start and keeps it in `state.dir`
   (`control.crt`, `control.key`). `./calabi-edge -config edge.yaml -fingerprint`
-  prints its fingerprint. Devices get the fingerprint from the coordinator.
+  prints its fingerprint. Clients get the fingerprint from the coordinator.
   Without a `state.dir`, the edge makes a new certificate at every start and
   warns.
 - **TCP and UDP tunnels** get a public port from 20000–20999, or the one the
   client asks for (`--remote-port`, `remote_port:`). Open that port too.
-- **Reloading.** `base_domain` can be changed while the edge runs (edit the
-  file). Every other field needs a restart; an edit to one while it runs is
+- **Reloading.** `tunnel.base_domain` can be changed while the edge runs (edit
+  the file). Every other field needs a restart; an edit to one while it runs is
   refused and logged.
-- **Older spellings.** `node_id` and `http.base_domain` still load, as
-  `node_label` and `base_domain`; both spellings with different values are
-  refused. `accepted_tokens` was removed in 1.13: an empty list is ignored, and a
-  list of tokens is refused.
+- **One address, one port each.** `public.host` says where this node can be
+  reached; every port is named by the service that listens on it. What clients
+  dial is composed from the two, so no port is written twice.
+- **Settings with two sources** are compared, and a file that answers
+  differently in the two is refused, naming both: on a node with a control
+  plane, `region` and `edge_node_id` against that node's own certificate, which
+  is where the control plane reads them from.
+- **Older spellings**, if you are upgrading. Every setting that moved still
+  loads from where it was: the listener blocks `control:`, `http:`,
+  `https:` and `sni:` as the ports `control_port`, `http_port`, `https_port`
+  and `sni_port`, `public.addr` as `public.host` (its port has to match the
+  control listener's), `base_domain` and `coord_pubkey` from under `http:` and
+  `relay:`, `node_id` as `node_label`, the whole `relay:` block as `mesh:`. The
+  role names `edge` and `relay` still mean `tunnel` and `mesh`. A
+  file that spells one setting both ways with different values is refused,
+  naming the one to keep. `accepted_tokens` was removed in 1.13: an empty list
+  is ignored, and a list of tokens is refused.
+
+### Every setting
+
+Three groups: what both services use, what only tunnels use, and what only the
+mesh relay uses. A node running `role: mesh` can leave out the whole `tunnel:`
+block; one running `role: tunnel` can leave out `mesh:`.
+
+The **for** column says who a setting is for. **calabi.net** marks the ones the
+hosted service uses: a server you run reads none of them, and you can skip those
+rows entirely. Everything else is either for any node, or only for a server of
+your own.
+
+**This node — read by both services, or by neither**
+
+| setting | for | default | what it does |
+|---|---|---|---|
+| `node_label` | any node | `edge-dev-1` | This node's name for people (`lax-1`, `sgp-01`). It reaches your clients, the logs and every usage record |
+| `region` | any node | `local` | Which region this node is in. Also gives the relay its region code, `self-<region>` |
+| `mode` | any node | `platform` | Whose per-tunnel security policy the edge trusts: `standalone` — a server you run — the client's, `platform` the control plane's |
+| `role` | any node | `tunnel` | Which of the two services this node provides: `tunnel`, `mesh`, or `both` |
+| `coord_pubkey` | any node | — | Your coordinator's public grant key, base64. `calabi-coord pubkey` prints it |
+| `coord_pubkey_file` | any node | — | The same key read from a file. The edge waits for it to appear |
+| `public.host` | any node | — | Where this node is reached from outside it, a name or IP with no port — clients reach its tunnels here and devices reach its relay. **Required on a node that serves tunnels** |
+| `admin.addr` | any node | `:9101` | `/healthz`, `/readyz`, `/metrics`. Keep it off the public internet |
+| `state.dir` | any node | — | Where small things survive a restart: the subdomain counter and the self-signed certificates |
+| `multi_region.*` | calabi.net | `mode: cluster` | The hosted platform's control-plane connection: `mode: bff-edge`, `bff_edge_addr`, `client_cert`, `client_key`, `ca`, `server_name` |
+| `log.level` / `log.format` | any node | `info` / `text` | `debug`/`info`/`warn`/`error`, and `text`/`json` |
+
+**`tunnel:` — read only by the tunnel service**
+
+| setting | for | default | what it does |
+|---|---|---|---|
+| `base_domain` | any node | `localtest.me` | The wildcard domain this node serves: tunnels become `<name>.<base_domain>` |
+| `control_port` | any node | `7443` | Where the `calabi` client connects |
+| `control_cert_pem` / `control_key_pem` | any node | — | That listener's certificate. Left out, the edge makes a self-signed one in `state.dir`. Re-read when the files change |
+| `http_port` | any node | `8080` | Visitors to HTTP tunnels |
+| `https_port` | any node | `8443` | Visitors to HTTPS tunnels, with TLS terminated here. `0` turns HTTPS off |
+| `https_self_signed` | your server | `false` | Fall back to a self-signed certificate when there is no real one. **Development only** |
+| `sni_port` | any node | — | TLS passed straight through to the client without being decrypted here. Leave it out to turn it off |
+| `peer_forward.forward_addr` | calabi.net | — | Where this edge accepts visitor traffic relayed by its neighbours. **An internal address, never the public one** |
+| `peer_forward.advertise_addr` | calabi.net | — | The internal `host:port` its neighbours dial to reach that. Both must be set |
+
+**`mesh:` — read only by the mesh relay**
+
+| setting | for | default | what it does |
+|---|---|---|---|
+| `derp_port` | any node | `3340` | Where devices reach the relay |
+| `stun_port` | any node | `3478` | The STUN responder devices measure to pick their nearest relay. `0` turns it off |
+| `label` | any node | the node's `region` | The region name this relay advertises, as `self-<label>`. Set it only when one region has two relays |
+| `kind` | any node | `self` | `self` for a relay of your own, `platform` for one of ours |
+| `require_auth` | any node | `false` | Refuse devices without a valid grant. Always on for a `standalone` node |
+
+**Settings that are refused.** The edge stopped reaching the control plane
+directly, so `identity:`, `quota:`, `config_svc:`, `nats:`, `tunnel.addr` and
+`cert.addr` no longer do anything. Neither do `presence.interval_seconds` and
+`cert.refresh_seconds`, removed in 1.15.0: both had a default, and no deployed
+config had ever set either. Nor does `edge_class`, which the hosted platform now
+decides for itself — a node does not get to choose which paying plans are routed
+to it. Nor `org_id` (or its older spelling `cert.org_id`): a node's organization
+comes from its own certificate, and a node of ours serves every organization
+rather than naming one. A file that still has any of them does not start, and
+says which it is — rather than starting and quietly not doing what the file
+describes. The one older spelling that is refused rather than read is a
+top-level `mesh:` block carrying `forward_addr` / `advertise_addr`: that was
+edge-to-edge forwarding of tunnel traffic, `mesh:` now configures the relay, and
+reading either as the other would be worse than saying so.
+
+**From the environment**, for a relay that needs no file at all:
+`CALABI_EDGE_MODE`, `CALABI_EDGE_ROLE`, `CALABI_EDGE_ADMIN_ADDR`,
+`CALABI_EDGE_PUBLIC_HOST`, `CALABI_EDGE_COORD_PUBKEY`,
+`CALABI_EDGE_COORD_PUBKEY_FILE`, and
+`CALABI_EDGE_RELAY_` + `KIND`, `LABEL`, `DERP_PORT`, `STUN_PORT`,
+`REQUIRE_AUTH`, `COORD_PUBKEY`.
 
 ### HTTPS
 
 With `base_domain` set and no certificate of its own for it, the edge serves
-HTTPS on `https.addr` with a self-signed wildcard certificate it makes in
+HTTPS on `tunnel.https_port` with a self-signed wildcard certificate it makes in
 `state.dir` (`edge-https.crt`). Browsers show a warning unless you import it. A
 self-hosted edge does not get Let's Encrypt certificates automatically yet.
 
 ### A relay on its own
 
 To add a relay in another place — closer to some of your devices — run the edge
-with `role: relay`. It needs no config file:
+with `role: mesh`. It needs no config file:
 
 ```bash
-CALABI_EDGE_MODE=standalone CALABI_EDGE_ROLE=relay \
+CALABI_EDGE_MODE=standalone CALABI_EDGE_ROLE=mesh \
 CALABI_EDGE_RELAY_LABEL=tokyo CALABI_EDGE_COORD_PUBKEY=<calabi-coord pubkey> \
 ./calabi-edge
 ```
@@ -350,7 +441,7 @@ It prints a `calabi://join?…` link, a QR code, and the same as a
 - **On the edge:** the coordinator's public key inline:
   `coord_pubkey: <what calabi-coord pubkey prints>`.
 - **The relay** the coordinator names (`CALABI_COORD_DERP_ADDR`) is an edge that
-  runs `role: both` or `role: relay`.
+  runs `role: both` or `role: mesh`.
 
 ---
 
@@ -389,25 +480,26 @@ unused.
 many machines built from one image — gets a config file instead of an invite:
 
 ```yaml
-# tunnels.yaml
-mesh:
+# calabi.yaml
+server:
   coord: server.example.com:7012
   trust: pin
   pins: ["sha256:…"]          # calabi-coord fingerprint
   auth_key: ck_…              # calabi-coord authkey create --reusable --tag tag:server
   name: build-01
-  # enabled: true             # also join the mesh; tunnels work either way
+# mesh:
+#   enabled: true             # also join the mesh; tunnels work either way
 tunnels: []
 ```
 
 ```bash
-calabi daemon install --config tunnels.yaml    # a boot-start service; then: calabi daemon start|stop|status
+calabi daemon install --config calabi.yaml    # a boot-start service; then: calabi daemon start|stop|status
 ```
 
 The key is used for the first join only. After that the daemon reconnects with
 its device key; it keeps which device it is in `mesh-reauth.json` in its data
 directory. The file holds the key in plain text, so make it readable only by the
-service. [`docs/examples/tunnels.yaml`](examples/tunnels.yaml) is an annotated
+service. [`docs/examples/calabi.yaml`](examples/calabi.yaml) is an annotated
 example.
 
 ---
@@ -424,7 +516,7 @@ calabi udp  53
 ```
 
 They run as the device this client joined as; nothing else needs setting. On a
-client that has not joined, they say so. `CALABI_DAEMON_CONFIG=tunnels.yaml`
+client that has not joined, they say so. `CALABI_DAEMON_CONFIG=calabi.yaml`
 makes them run as the device a config file names instead.
 
 ### Per-tunnel security policy
@@ -450,11 +542,11 @@ command prints whether the edge applied the policy.
 The daemon runs all of a device's tunnels in one process, reconnects on its own,
 and serves the console. After `calabi join` it is running; `calabi daemon`
 starts it. It keeps the tunnels you create in the console in its own
-`tunnels.yaml`, in its data directory.
+`calabi.yaml`, in its data directory.
 
-Run with `--config tunnels.yaml`, it takes its tunnels (and the server it joins)
+Run with `--config calabi.yaml`, it takes its tunnels (and the server it joins)
 from that file instead — see [Servers and fleets](#joining) and
-[`docs/examples/tunnels.yaml`](examples/tunnels.yaml):
+[`docs/examples/calabi.yaml`](examples/calabi.yaml):
 
 ```yaml
 tunnels:
@@ -500,7 +592,7 @@ the daemon prints it at startup and keeps it in `console-secret` in its data
 directory, or takes yours from `CALABI_STATUS_SECRET`. The console is plain HTTP;
 across a network you don't trust, put it behind an SSH tunnel or an HTTPS proxy.
 
-**Editing `tunnels.yaml` by hand.** Console edits rewrite the file: values stay,
+**Editing `calabi.yaml` by hand.** Console edits rewrite the file: values stay,
 comments do not, and a managed-by header is added. For a file you keep under
 version control, edit it and restart the daemon instead.
 
@@ -523,14 +615,17 @@ mesh creates a network interface. On Windows, `wintun.dll` is built into the
 binary. The device's WireGuard key is made on the device and kept there
 (`key_file:` sets where), so the device keeps its identity and its address.
 
-Mesh settings in a daemon's `tunnels.yaml` — the console edits the same ones:
+Mesh settings in a daemon's `calabi.yaml` — the console edits the same ones.
+Which server the device belongs to is in `server:`, not here: the device needs
+it whether or not the mesh runs.
 
 ```yaml
-mesh:
-  enabled: true
+server:
   coord: server.example.com:7012
   pins: ["sha256:…"]
   name: laptop
+mesh:
+  enabled: true
   advertise_routes: ["192.168.1.0/24"]   # share a LAN
   advertise_exit_node: true              # offer to be an exit device
   exit_node: home-server                 # send this device's traffic out through a peer
@@ -563,7 +658,7 @@ carries another device's internet traffic.
 
 | | Linux | Windows, macOS |
 |---|---|---|
-| Share a subnet, or be an exit device | yes — forwarding and NAT are set up for you | only from `tunnels.yaml` (`advertise_routes:`, `advertise_exit_node:`), with forwarding and NAT set up by you; the console does not offer it |
+| Share a subnet, or be an exit device | yes — forwarding and NAT are set up for you | only from `calabi.yaml` (`advertise_routes:`, `advertise_exit_node:`), with forwarding and NAT set up by you; the console does not offer it |
 | Reach a subnet another device shares | yes | yes |
 | Use an exit device | yes | yes |
 
@@ -606,7 +701,7 @@ server* on the phone:
 
 - The coordinator marks the device as left. It needs a new invite to come back.
 - The app forgets the server.
-- The console also deletes its `tunnels.yaml` and the tunnels in it (it shows how
+- The console also deletes its `calabi.yaml` and the tunnels in it (it shows how
   many first), then goes back to the calabi.net sign-in page.
 - The device key stays: joining the same coordinator again is the same device.
 
@@ -682,10 +777,12 @@ the mesh.
 - **The edge takes no tokens.** It needs `mode: standalone` and the
   coordinator's public key, and admits devices with the coordinator's grants. A
   config that still lists `accepted_tokens` is refused at start.
-- **`tunnels.yaml` no longer names the edge.** `server`, `token`, `token_env`,
-  `insecure`, `ca_file`, `trust` and `pins` at the top level are refused in a
-  file you wrote, and dropped with a warning from the console's own file. Join
-  the coordinator (`calabi join`, or a `mesh:` block) and the edge comes from it.
+- **The daemon config no longer names the edge.** `server: <url>`, `token`,
+  `token_env`, `insecure`, `ca_file`, `trust` and `pins` at the top level are
+  refused in a file you wrote, and dropped with a warning from the console's own
+  file. Join the coordinator (`calabi join`, or a `server:` block) and the edge
+  comes from it. (`server:` opening a BLOCK is the coordinator, and is read
+  normally — only the old one-line form is refused.)
 - **The one-shot commands** no longer read `CALABI_SERVER`, `CALABI_TOKEN`,
   `CALABI_EDGE_PIN` or `CALABI_EDGE_TRUST` on a self-hosted device.
 - **A self-hosted relay always checks grants.** Give it the coordinator's key.

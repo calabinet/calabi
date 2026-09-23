@@ -11,8 +11,7 @@ import (
 
 // hotPaths is what a reload may change. Everything else must be refused.
 var hotPaths = map[string]bool{
-	"base_domain":      true,
-	"http.base_domain": true,
+	"tunnel.base_domain": true,
 }
 
 // edgeEnv is every variable the load pipeline reads (config.ApplyEnv plus
@@ -95,9 +94,16 @@ func TestEveryFieldButTheWhitelistIsRestartOnly(t *testing.T) {
 	// Guard the walker itself: these are the fields the old hand-picked
 	// comparison never looked at. If they weren't visited, the loop above
 	// proved nothing.
-	for _, p := range []string{"mode", "role", "relay.require_auth", "relay.coord_pubkey",
-		"multi_region.mode", "public.addr", "state.dir", "mesh.forward_addr", "edge_class",
-		"edge_node_id", "coord_pubkey", "coord_pubkey_file", "base_domain", "http.base_domain"} {
+	// "OrgID", not "org_id": the setting left the file (a node's org comes from
+	// its certificate now, so config.Config tags it yaml:"-") and yamlName falls
+	// back to the Go field name. It stays on this list rather than coming off —
+	// no longer being writable is not a reason to stop checking that a change to
+	// it is refused, and the day something starts deriving it per reload, this
+	// is the test that notices.
+	for _, p := range []string{"mode", "role", "mesh.require_auth", "mesh.coord_pubkey",
+		"multi_region.mode", "public.host", "state.dir", "tunnel.peer_forward.forward_addr",
+		"edge_node_id", "OrgID", "coord_pubkey", "coord_pubkey_file",
+		"tunnel.base_domain", "tunnel.control_port", "tunnel.https_self_signed"} {
 		if !visited[p] {
 			t.Errorf("walker never reached %s", p)
 		}
@@ -131,6 +137,8 @@ func leafFields(typ reflect.Type, prefix string, index []int) map[string][]int {
 
 const reloadCommon = `node_label: test-edge
 region: test
+public:
+  host: test-edge.example
 control:
   addr: ":7443"
 http:
@@ -173,17 +181,28 @@ func TestReloadRefusesRestartOnlyFieldsFromTheFile(t *testing.T) {
 		before, after string
 		relayOnly     bool
 	}{
-		{"relay.require_auth", platformRelay, platformRelay + "  require_auth: true\n", true},
-		{"relay.coord_pubkey", platformRelay + "  coord_pubkey: \"" + testCoordKey + "\"\n", platformRelay + "  coord_pubkey: \"" + otherKey + "\"\n", true},
-		{"relay.kind", platformRelay, strings.Replace(platformRelay, "kind: platform", "kind: self", 1), true},
+		{"mesh.require_auth", platformRelay, platformRelay + "  require_auth: true\n", true},
+		{"mesh.coord_pubkey", platformRelay + "  coord_pubkey: \"" + testCoordKey + "\"\n", platformRelay + "  coord_pubkey: \"" + otherKey + "\"\n", true},
+		{"mesh.kind", platformRelay, strings.Replace(platformRelay, "kind: platform", "kind: self", 1), true},
 		{"coord_pubkey", standaloneEdge, strings.Replace(standaloneEdge, testCoordKey, otherKey, 1), false},
 		{"mode", standaloneEdge, "multi_region:\n  mode: bff-edge\n  bff_edge_addr: \"bff-edge.example.com:443\"\n", false},
-		{"role", standaloneEdge + "role: edge\n", standaloneEdge + "role: both\n", false},
+		{"role", standaloneEdge + "role: tunnel\n", standaloneEdge + "role: both\n", false},
 		{"multi_region.mode", standaloneEdge, "multi_region:\n  mode: bff-edge\n  bff_edge_addr: \"bff-edge.example.com:443\"\n", false},
-		{"public.addr", standaloneEdge, standaloneEdge + "public:\n  addr: \"edge.example.com:7443\"\n", false},
+		// public.host is not in this table: reloadCommon fixes it, so a case here
+		// could only ADD a second public: block, which YAML refuses before the
+		// reload check ever runs. TestEveryFieldButTheWhitelistIsRestartOnly
+		// covers it by mutating the field directly.
 		{"state.dir", standaloneEdge, standaloneEdge + "state:\n  dir: /var/lib/calabi-edge\n", false},
-		{"mesh.forward_addr", standaloneEdge, standaloneEdge + "mesh:\n  forward_addr: \":7090\"\n  advertise_addr: \"edge-a.example.com:7090\"\n", false},
-		{"edge_class", standaloneEdge, standaloneEdge + "edge_class: dedicated\n", false},
+		{"tunnel.peer_forward.forward_addr", standaloneEdge, standaloneEdge + "peer_forward:\n  forward_addr: \":7090\"\n  advertise_addr: \"edge-a.example.com:7090\"\n", false},
+		// The pre-1.15 top-level spelling reaches the same comparison, because
+		// reload goes through config.Load and therefore through migrateLayout. A
+		// block that slipped past this gate would log "hot-reload applied" and
+		// bind nothing until the next restart.
+		{"tunnel.peer_forward.advertise_addr", standaloneEdge, standaloneEdge + "peer_forward:\n  forward_addr: \":7090\"\n  advertise_addr: \"edge-a.example.com:7090\"\n", false},
+		// edge_class used to be here. It is not restart-only any more, it is
+		// refused outright (the control plane owns the routing pool since
+		// 1.15.0), so the case would have passed on the wrong error —
+		// config.TestObsoleteDirectDialBlocksAreRefused covers the refusal.
 	}
 	for _, tc := range cases {
 		t.Run(tc.field, func(t *testing.T) {
@@ -205,7 +224,7 @@ func TestReloadRefusesRestartOnlyFieldsFromTheFile(t *testing.T) {
 			if n := ap.basesCount.Load(); n != 0 {
 				t.Errorf("refused reload still called the applier %d time(s)", n)
 			}
-			if got := r.current.HTTP.BaseDomain; got != "localtest.me" {
+			if got := r.current.Tunnel.BaseDomain; got != "localtest.me" {
 				t.Errorf("baseline replaced by a refused reload: base_domain %q", got)
 			}
 		})
@@ -218,6 +237,8 @@ func TestReloadAppliesTopLevelBaseDomain(t *testing.T) {
 	hermeticEnv(t)
 	const tmpl = `node_label: test-edge
 region: test
+public:
+  host: test-edge.example
 base_domain: "%s"
 admin:
   addr: ":9101"

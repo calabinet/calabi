@@ -49,7 +49,7 @@ func TestServiceInstallEnv_StandaloneWithConfigIsFine(t *testing.T) {
 	t.Setenv("CALABI_CONFIG", filepath.Join(t.TempDir(), "creds.json"))
 	t.Setenv("CALABI_MODE", "standalone")
 
-	env, err := serviceInstallEnv([]string{"--config", "tunnels.yaml"})
+	env, err := serviceInstallEnv([]string{"--config", "calabi.yaml"})
 	if err != nil {
 		t.Fatalf("standalone install WITH --config should be the supported path: %v", err)
 	}

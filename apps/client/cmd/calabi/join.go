@@ -161,10 +161,11 @@ func joinHere(ctx context.Context, in joinRequest) (int, map[string]any) {
 	if c, _ := creds.Load(); c != nil && (c.AccessToken != "" || c.RefreshToken != "" || c.APIKey != "") {
 		return http.StatusConflict, map[string]any{"code": "signed_in", "email": c.User.Email}
 	}
+	adoptLegacyManagedConfig(nil)
 	path := managedConfigPath()
 	cur, _, err := loadLocalConfigOrEmpty(path, true)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "  (the saved tunnels.yaml is unreadable; starting over:", err, ")")
+		fmt.Fprintln(os.Stderr, "  (the saved config is unreadable; starting over:", err, ")")
 		cur = &localConfig{}
 	}
 	// Read before joining: a new coordinator's record replaces it.

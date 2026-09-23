@@ -7,6 +7,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -15,17 +16,73 @@ import (
 	"github.com/calabinet/calabi/apps/client/internal/trust"
 )
 
-// managedConfigPath is the tunnels.yaml the console writes when a person
+// managedConfigPath is the calabi.yaml the console writes when a person
 // connects this machine to a self-hosted server, and the one the local daemon
 // reads when it is given no --config. Whoever passes --config (or
 // CALABI_DAEMON_CONFIG) keeps their own file, and the console does not move them
 // between servers.
+//
+// It resolves to the legacy name while that is the only file present, so a
+// machine whose rename could not be performed keeps running off the file it
+// has instead of silently starting from empty.
 func managedConfigPath() string {
 	dir, err := creds.DataDir()
 	if err != nil {
-		return "tunnels.yaml"
+		return managedConfigName
 	}
-	return filepath.Join(dir, "tunnels.yaml")
+	p := filepath.Join(dir, managedConfigName)
+	if _, err := os.Stat(p); err != nil {
+		if legacy := filepath.Join(dir, legacyManagedConfigName); fileExists(legacy) {
+			return legacy
+		}
+	}
+	return p
+}
+
+func fileExists(p string) bool { _, err := os.Stat(p); return err == nil }
+
+// The file was called tunnels.yaml until 1.15.0, when it stopped being about
+// tunnels: `tunnels: []` with a `server:` block is a complete, ordinary config
+// for a machine that only joins.
+const (
+	managedConfigName       = "calabi.yaml"
+	legacyManagedConfigName = "tunnels.yaml"
+)
+
+// adoptLegacyManagedConfig renames a tunnels.yaml left by an earlier version.
+// Called before anything reads the managed config.
+//
+// A rename rather than leaving both: two files with the same job, one of them
+// stale, is the state that produces "I edited the config and nothing happened".
+// Best-effort — if it fails, managedConfigPath keeps resolving to the old file
+// and the machine goes on working under the old name.
+//
+// The interesting case is two PROCESSES arriving together — the daemon starting
+// while `calabi http` runs is the ordinary way this machine looks — so the loser
+// of the rename is not an error to report: it is told apart from a real failure
+// by asking whether the new file is there now, which is all the caller wanted.
+// A sync.Once would have looked like it covered this and covered nothing.
+func adoptLegacyManagedConfig(logger *slog.Logger) {
+	dir, err := creds.DataDir()
+	if err != nil {
+		return
+	}
+	newPath := filepath.Join(dir, managedConfigName)
+	oldPath := filepath.Join(dir, legacyManagedConfigName)
+	if fileExists(newPath) || !fileExists(oldPath) {
+		return // already migrated, written fresh, or nothing to adopt
+	}
+	switch err := os.Rename(oldPath, newPath); {
+	case err == nil:
+		if logger != nil {
+			logger.Info("config renamed", "from", oldPath, "to", newPath)
+		}
+	case fileExists(newPath):
+		// Someone else got there first.
+	case logger != nil:
+		logger.Warn("could not rename the config to its new name; still reading the old one",
+			"from", oldPath, "to", newPath, "err", err)
+	}
 }
 
 // loadLocalConfigOrEmpty is loadLocalConfig for the managed file, which may not
@@ -78,7 +135,7 @@ func firstPin(t trust.Config) string {
 
 // meshReauthRecord is which node this device is on a self-hosted coordinator
 // and whether the coordinator takes it back by proof alone. It is kept apart
-// from tunnels.yaml so a hand-written config is never rewritten for it, and so a
+// from calabi.yaml so a hand-written config is never rewritten for it, and so a
 // device that joined by a one-time invite can come back after a restart without
 // the key the invite spent.
 type meshReauthRecord struct {

@@ -499,7 +499,12 @@ func (sv *localSupervisor) updateBase(change func(*localConfig)) error {
 }
 
 // marshalLocalConfig renders a config the way the console writes it.
+//
+// cfg is by value, and that matters: splitServerBlock moves six settings out of
+// the runtime lease and into the `server:` block, which is right for the file
+// and wrong for anything still running off this config.
 func marshalLocalConfig(cfg localConfig) ([]byte, error) {
+	cfg.splitServerBlock()
 	data, err := yaml.Marshal(&cfg)
 	if err != nil {
 		return nil, fmt.Errorf("marshal config: %w", err)

@@ -33,7 +33,7 @@ import (
 // line, so it isn't visible in `sc qc`).
 func serviceInstallEnv(installArgs []string) (map[string]string, error) {
 	if extractFlagValue(installArgs, "config") != "" {
-		return nil, nil // local supervisor daemon — creds come from tunnels.yaml
+		return nil, nil // local supervisor daemon — creds come from calabi.yaml
 	}
 	// THE CLIENT MODE DOES NOT RIDE ALONG ON ITS OWN.
 	//
@@ -60,7 +60,7 @@ func serviceInstallEnv(installArgs []string) (map[string]string, error) {
 				"service — and the mode does not follow the install (a service reads its own data directory,\n" +
 				"resolves to \"platform\", and starts talking to the control plane).\n" +
 				"Install the local supervisor instead:\n" +
-				"  calabi daemon install --config tunnels.yaml\n" +
+				"  calabi daemon install --config calabi.yaml\n" +
 				"or, if you did mean the platform service:\n" +
 				"  calabi mode platform     (then re-run the install)")
 	}

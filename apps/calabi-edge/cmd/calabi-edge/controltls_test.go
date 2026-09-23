@@ -24,8 +24,8 @@ func leafOf(t *testing.T, c controlCert) *x509.Certificate {
 func TestControlCertSurvivesARestart(t *testing.T) {
 	cfg := config.Default()
 	cfg.State.Dir = t.TempDir()
-	cfg.HTTP.BaseDomain = "tunnel.example.com"
-	cfg.Public.Addr = "203.0.113.7:7443"
+	cfg.Tunnel.BaseDomain = "tunnel.example.com"
+	cfg.Public.Host = "203.0.113.7"
 
 	first, err := resolveControlCert(cfg)
 	if err != nil {
@@ -43,7 +43,9 @@ func TestControlCertSurvivesARestart(t *testing.T) {
 	}
 
 	// The names let a client that is given this file as its CA check the name it
-	// dials: the base domain and the public address.
+	// dials: the base domain and the host this node publishes. public.host is a
+	// host now — it used to carry the control port too, and this test passed it
+	// through unsplit.
 	leaf := leafOf(t, first)
 	roots := x509.NewCertPool()
 	roots.AddCert(leaf)
@@ -94,8 +96,8 @@ func TestControlCertFromConfiguredPaths(t *testing.T) {
 	dir := t.TempDir()
 	cfg := config.Default()
 	cfg.State.Dir = t.TempDir()
-	cfg.Control.CertPEM = filepath.Join(dir, "c.pem")
-	cfg.Control.KeyPEM = filepath.Join(dir, "k.pem")
+	cfg.Tunnel.ControlCertPEM = filepath.Join(dir, "c.pem")
+	cfg.Tunnel.ControlKeyPEM = filepath.Join(dir, "k.pem")
 	a, err := resolveControlCert(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -104,7 +106,7 @@ func TestControlCertFromConfiguredPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.pin() != b.pin() || a.source != cfg.Control.CertPEM {
+	if a.pin() != b.pin() || a.source != cfg.Tunnel.ControlCertPEM {
 		t.Fatalf("configured paths: pins %s / %s from %s", a.pin(), b.pin(), a.source)
 	}
 	if _, err := os.Stat(filepath.Join(cfg.State.Dir, controlCertName)); err == nil {

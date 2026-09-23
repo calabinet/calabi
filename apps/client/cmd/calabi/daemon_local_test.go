@@ -15,7 +15,7 @@ const testPinA = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 func TestLoadLocalConfig_Valid(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "tunnels.yaml")
+	path := filepath.Join(dir, "calabi.yaml")
 	yaml := `mesh:
   coord: coord.example.com:7012
   trust: pin
@@ -54,7 +54,7 @@ tunnels:
 // them; the console's own file has them set aside (the daemon rewrites it).
 func TestLoadLocalConfig_RemovedEdgeSettings(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "tunnels.yaml")
+	path := filepath.Join(dir, "calabi.yaml")
 	body := "server: edge.example.com:7443\ntoken: s3cret\ntrust: pin\npins: [" + testPinA + "]\n" +
 		"mesh:\n  coord: coord.example.com:7012\n  trust: pin\n  pins: [" + testPinA + "]\n" +
 		"tunnels:\n  - name: web\n    type: http\n    local: 8080\n"
@@ -96,7 +96,7 @@ func TestLoadLocalConfig_RemovedEdgeSettings(t *testing.T) {
 // client accepts, every tunnel in it included. It went stale once already: it
 // named the edge and a token after the client stopped reading either.
 func TestTheExampleConfigLoads(t *testing.T) {
-	cfg, err := loadLocalConfig(filepath.Join("..", "..", "..", "..", "docs", "examples", "tunnels.yaml"))
+	cfg, err := loadLocalConfig(filepath.Join("..", "..", "..", "..", "docs", "examples", "calabi.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}

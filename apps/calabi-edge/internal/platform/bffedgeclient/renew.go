@@ -26,6 +26,7 @@ import (
 	"time"
 
 	pb "github.com/calabinet/calabi/pkg/edge-proto/edgepb"
+	"github.com/calabinet/calabi/pkg/edgecert"
 )
 
 const (
@@ -72,19 +73,15 @@ func (h *certHolder) notAfter() time.Time {
 }
 
 // isBYOI reports whether the current leaf carries a SPIFFE org SAN (a BYOI
-// edge). Platform edges have no URI SAN.
+// edge). Platform edges have no URI SAN. The test itself lives in pkg/edgecert
+// with the code that WRITES the SAN and the code that reads the org out of it.
 func (h *certHolder) isBYOI() bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	if h.cert == nil || h.cert.Leaf == nil {
 		return false
 	}
-	for _, u := range h.cert.Leaf.URIs {
-		if u != nil && u.Scheme == "spiffe" {
-			return true
-		}
-	}
-	return false
+	return edgecert.HasOrgSAN(h.cert.Leaf.URIs)
 }
 
 // loadLeafKeyPair is tls.LoadX509KeyPair plus a parsed Leaf, so the holder can

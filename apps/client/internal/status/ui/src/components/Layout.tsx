@@ -127,7 +127,7 @@ export default function Layout() {
   // CAN change them from the local console (they just pick which edge/region the
   // pinned identity connects to). canManage distinguishes a management key
   // (writable console) from a read-only key (read-only chip).
-  const { agentMode, canManage } = useServiceMode();
+  const { agentMode, canManage, container } = useServiceMode();
 
   // M11.7 multi-Org: list the user's memberships so the topbar can
   // expose a switcher. Cached for the lifetime of the SPA — orgs
@@ -964,7 +964,16 @@ export default function Layout() {
             {agentMode && (
               <Tooltip
                 title={t(
-                  canManage ? "serviceMode.agentManageTooltip" : "serviceMode.agentTooltip",
+                  // Four strings, not two: the tail of each says how to change
+                  // the pinned key, and in a container that is "recreate the
+                  // container", never "reinstall the service".
+                  canManage
+                    ? container
+                      ? "serviceMode.agentManageTooltipContainer"
+                      : "serviceMode.agentManageTooltip"
+                    : container
+                      ? "serviceMode.agentTooltipContainer"
+                      : "serviceMode.agentTooltip",
                   {
                     // An agent is an ORG credential (no human user_id), so the
                     // identity is the org it's pinned to. me.org is always set

@@ -83,7 +83,7 @@ func run() error {
 	// checks. The hot-reloader runs the SAME function on every reload and diffs
 	// against this cfg, so derive nothing from the file outside it —
 	// config.LoadEffective.
-	cfg, byoiRefused, err := config.LoadEffective(*configPath)
+	cfg, notes, err := config.LoadEffective(*configPath)
 	if err != nil {
 		return err
 	}
@@ -91,24 +91,30 @@ func run() error {
 		return printControlFingerprint(cfg)
 	}
 	logger := newLogger(cfg.Log)
-	if byoiRefused {
+	if notes.BYOIRefused {
 		logger.Warn("mode=standalone ignored: edge is configured for bff-edge (BYOI / control-plane cert); keeping platform semantics")
+	}
+	// Settings the certificate already answers, and anything the load could not
+	// check. One line each, straight from config.LoadEffective —
+	// config/certidentity.go.
+	for _, w := range notes.Warnings {
+		logger.Warn(w)
 	}
 	// A relay with no label can run, but it cannot be registered in the org's
 	// DERP map (region code is "self-"+label) and its usage reports have no
 	// self-<label> region to attribute to — so no mesh node will ever home on
 	// it. Warn loudly rather than start a relay nobody can reach.
-	if cfg.RunsRelay() && cfg.Relay.Label == "" {
-		logger.Warn("relay role has no relay.label: the relay runs but cannot be registered in the DERP map or reported for usage — set relay.label")
+	if cfg.ServesMesh() && cfg.Mesh.Label == "" {
+		logger.Warn("relay role has no mesh.label: the relay runs but cannot be registered in the DERP map or reported for usage — set mesh.label")
 	}
 
 	logger.Info("starting calabi-edge",
 		"version", version,
 		"node_label", cfg.NodeLabel,
 		"region", cfg.Region,
-		"control_addr", cfg.Control.Addr,
-		"http_addr", cfg.HTTP.Addr,
-		"base_domain", cfg.HTTP.BaseDomain,
+		"control_addr", cfg.Tunnel.ControlAddr(),
+		"http_addr", cfg.Tunnel.HTTPAddr(),
+		"base_domain", cfg.Tunnel.BaseDomain,
 		"mode", func() string {
 			if cfg.IsStandaloneMode() {
 				return "standalone"
@@ -123,7 +129,7 @@ func run() error {
 	}
 	switch {
 	case ctrlCert.ephemeral:
-		logger.Warn("control listener: a new self-signed certificate at every start (no state.dir, no control.cert_pem) — clients cannot pin it; set state.dir",
+		logger.Warn("control listener: a new self-signed certificate at every start (no state.dir, no tunnel.control_cert_pem) — clients cannot pin it; set state.dir",
 			"fingerprint", ctrlCert.pin())
 	case ctrlCert.fresh:
 		logger.Info("control listener: generated a self-signed certificate; clients pin its fingerprint",
@@ -132,9 +138,13 @@ func run() error {
 		logger.Info("control listener certificate", "cert", ctrlCert.source, "fingerprint", ctrlCert.pin())
 	}
 	tlsCfg := &tls.Config{
-		Certificates: []tls.Certificate{ctrlCert.cert},
-		MinVersion:   tls.VersionTLS13,
-		NextProtos:   []string{"calabi/1"},
+		// GetCertificate rather than a static Certificates slice: a certificate
+		// held in files is rotated under this process (a BYOI node renews its
+		// own with 30 days left of 90) and nothing restarts the edge when it is.
+		// See controlCert.certificate.
+		GetCertificate: ctrlCert.certificate,
+		MinVersion:     tls.VersionTLS13,
+		NextProtos:     []string{"calabi/1"},
 	}
 
 	obs := observability.New(logger, observability.Options{
@@ -146,7 +156,7 @@ func run() error {
 
 	r := router.New()
 	mgr := session.NewManager(logger, metricsSet)
-	domains := router.NewSubdomainAllocator(cfg.HTTP.BaseDomain)
+	domains := router.NewSubdomainAllocator(cfg.Tunnel.BaseDomain)
 	// Persist the seq counter across restarts when state.dir is
 	// configured (recommended). Without it, a fresh boot would rewind
 	// to u000001 and collide with rows still in tunnel-svc — Claim
@@ -188,23 +198,27 @@ func run() error {
 		syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	// edgeID is shared by config-svc subscription and presence reporting;
-	// zero means "this edge has no numeric id in config" — we hash the
-	// string node_id to get a stable int64 that won't collide with the
-	// dev defaults.
-	edgeID := cfg.Tunnel.EdgeNodeID
+	// edgeID is this node's numeric self-id: the config-svc route filter, the
+	// mesh resolver, the session-evict subject and the port-claim seed all
+	// key on it, and every one of them compares against control-plane data
+	// stamped from this node's CERTIFICATE. On a node wired to a control plane
+	// cfg.EdgeNodeID therefore comes from that certificate too
+	// config/certidentity.go) and the two cannot disagree.
+	//
+	// Zero means nobody assigned one: a standalone / dev edge, legitimately, or
+	// a bff-edge node whose certificate could not be read — which
+	// resolveCertIdentity has already warned about by the time we get here. The
+	// hash keeps such a node internally consistent (it is the only one using
+	// the number) without pretending it is anybody in particular.
+	edgeID := cfg.EdgeNodeID
 	if edgeID == 0 {
 		edgeID = hashNodeIDForConfig(cfg.NodeLabel)
-		// The hash always lands in the >= 1e9 BYOI reserved range, so with a
-		// control plane wired this fallback is never what the operator meant:
-		// in cluster mode the edge registers under an id bff-console's
-		// /v1/edges hides from every client, and in bff-edge mode bff-edge
-		// overwrites the wire id from the cert CN, leaving this node's local
-		// self-id disagreeing with what the control plane recorded. Both boot
-		// clean and fail invisibly. A config-less standalone / dev edge has no
-		// id legitimately, so this warns rather than refusing to start.
-		if cfg.Tunnel.Addr != "" || cfg.MultiRegion.IsBFFEdge() {
-			logger.Warn("edge_node_id not set; derived from a hash of node_label, which lands in the BYOI reserved range — set a small unique edge_node_id",
+		// The hash always lands in the >= 1e9 BYOI reserved range, which
+		// bff-console's /v1/edges hides from every client — fine for a node no
+		// control plane knows about, wrong for one that should have had an
+		// identity and did not.
+		if cfg.MultiRegion.IsBFFEdge() {
+			logger.Warn("no edge_node_id: this node's certificate did not give one, so it is running under a hash of node_label that no client can see",
 				"node_label", cfg.NodeLabel, "derived_edge_node_id", edgeID)
 		}
 	}
@@ -271,7 +285,7 @@ func run() error {
 		grants = coordGrants{pub: coordKey}
 		logger.Info("devices are accepted by their coordinator's grants",
 			"coord_pubkey", base64.StdEncoding.EncodeToString(coordKey))
-	case cfg.RunsEdge():
+	case cfg.ServesTunnels():
 		// ValidateClientAuth refuses this configuration; this is the backstop.
 		return errors.New("no way to accept a client: no control plane (bff-edge) and no coordinator key")
 	}
@@ -294,7 +308,7 @@ func run() error {
 	orgBandwidth := ratelimit.NewOrgRegistry()
 
 	ctrl := listener.NewControl(logger, listener.ControlOptions{
-		Addr:     cfg.Control.Addr,
+		Addr:     cfg.Tunnel.ControlAddr(),
 		TLS:      tlsCfg,
 		ServerID: cfg.NodeLabel,
 		Region:   cfg.Region,
@@ -303,9 +317,9 @@ func run() error {
 		// `localhost:<port>`. Reuses HTTPListener.BaseDomain since TCP and
 		// HTTP traffic both terminate on the same edge IP — a separate
 		// tcp.<base> CNAME is fine but isn't needed for the URL display.
-		BaseDomain:         cfg.HTTP.BaseDomain,
-		HTTPPort:           portFromAddr(cfg.HTTP.Addr),
-		HTTPSPort:          portFromAddr(cfg.HTTPS.Addr),
+		BaseDomain:         cfg.Tunnel.BaseDomain,
+		HTTPPort:           portFromAddr(cfg.Tunnel.HTTPAddr()),
+		HTTPSPort:          portFromAddr(cfg.Tunnel.HTTPSAddr()),
 		TrustClientPolicy:  trustClientPolicy,
 		Manager:            mgr,
 		Verifier:           verifier,
@@ -331,7 +345,7 @@ func run() error {
 		},
 	})
 	http := listener.NewHTTP(logger, listener.HTTPOptions{
-		Addr:                  cfg.HTTP.Addr,
+		Addr:                  cfg.Tunnel.HTTPAddr(),
 		Router:                r,
 		Observer:              metricsSet,
 		MeshResolver:          deps.meshResolver,
@@ -340,7 +354,7 @@ func run() error {
 		ACMEChallengeResolver: deps.acmeChallengeResolver,
 	})
 	sni := listener.NewSNI(logger, listener.SNIOptions{
-		Addr:          cfg.SNI.Addr,
+		Addr:          cfg.Tunnel.SNIAddr(),
 		Router:        r,
 		Observer:      metricsSet,
 		MeshResolver:  deps.meshResolver,
@@ -348,18 +362,18 @@ func run() error {
 		GlobalLimiter: globalLimiter,
 	})
 	// peer-forward listener (owner side). Binds the VPC-internal
-	// mesh.forward_addr and serves visitor connections relayed by a
-	// same-region peer for tunnels THIS edge owns. Empty addr (mesh
-	// disabled / single-edge region) makes Run a no-op.
+	// peer_forward.forward_addr and serves visitor connections relayed by a
+	// same-region peer for tunnels THIS edge owns. Empty addr (peer
+	// forwarding disabled / single-edge region) makes Run a no-op.
 	forward := listener.NewForward(logger, listener.ForwardOptions{
-		Addr:     cfg.Mesh.ForwardAddr,
+		Addr:     cfg.Tunnel.PeerForward.ForwardAddr,
 		Router:   r,
 		Observer: metricsSet,
 	})
-	if cfg.MeshEnabled() {
+	if cfg.PeerForwardEnabled() {
 		logger.Info("edge mesh enabled",
-			"forward_addr", cfg.Mesh.ForwardAddr,
-			"advertise_addr", cfg.Mesh.AdvertiseAddr)
+			"forward_addr", cfg.Tunnel.PeerForward.ForwardAddr,
+			"advertise_addr", cfg.Tunnel.PeerForward.AdvertiseAddr)
 	}
 
 	// HTTPS terminator: compose the platform cert-svc source (deps.getCertificate,
@@ -382,11 +396,11 @@ func run() error {
 	}, logger)
 
 	errCh := make(chan error, 16)
-	// Edge (tunnel) datapath — started only for role edge/both. For role=relay
+	// Tunnel datapath — started only for role tunnel/both. For role=mesh
 	// these listeners are built above but never bind a port, so a relay-only node
-	// serves no tunnels. Empty role ⇒ RunsEdge()=true ⇒ every existing edge is
+	// serves no tunnels. Empty role ⇒ ServesTunnels()=true ⇒ every existing edge is
 	// unchanged.
-	if cfg.RunsEdge() {
+	if cfg.ServesTunnels() {
 		go func() { errCh <- labelErr("control", ctrl.Run(ctx)) }()
 		go func() { errCh <- labelErr("http", http.Run(ctx)) }()
 		go func() { errCh <- labelErr("https", httpsListener.Run(ctx)) }()
@@ -397,17 +411,17 @@ func run() error {
 	// against reality (`ss -ltnp` should show ONLY these two ports). Since the
 	// standalone derp-node binary was retired this is what replaces "you can
 	// it is a different process" — see internal/config/roleguard.go.
-	if cfg.RunsRelay() && !cfg.RunsEdge() {
+	if cfg.ServesMesh() && !cfg.ServesTunnels() {
 		logger.Info("relay-only node: NO TLS-terminating listener bound; this process serves the mesh relay data port and the STUN responder only",
-			"derp_port", cfg.Relay.RelayDERPPort(), "stun_port", cfg.Relay.RelaySTUNPort())
+			"derp_port", cfg.Mesh.RelayDERPPort(), "stun_port", cfg.Mesh.RelaySTUNPort())
 	}
 	// Mesh-relay datapath — started for role relay/both. Ciphertext-only, isolated
 	// from the edge's TLS termination.
-	if cfg.RunsRelay() {
+	if cfg.ServesMesh() {
 		// The relay checks the same coordinator's grants; a key read from a file
 		// is handed to it here rather than written into cfg, which is the
 		// hot-reload baseline.
-		relayCfg := cfg.Relay
+		relayCfg := cfg.Mesh
 		if coordKey != nil {
 			relayCfg.CoordPubKey = base64.StdEncoding.EncodeToString(coordKey)
 		}
@@ -444,7 +458,7 @@ func run() error {
 
 // buildHTTPSListener composes the HTTPS terminator. The platform cert-svc
 // source (certFromPlatform, may be nil) is tried first; a self-signed wildcard
-// for cfg.HTTP.BaseDomain is the dev/standalone fallback. Mirrors the pre-split
+// for cfg.Tunnel.BaseDomain is the dev/standalone fallback. Mirrors the pre-split
 // inline logic exactly: cert-svc + self-signed (dev), cert-svc only (prod),
 // self-signed only (standalone), or an addr-less no-op listener when HTTPS is
 // disabled. The self-signed path is CORE so a self-hosted / standalone edge can
@@ -459,7 +473,7 @@ func buildHTTPSListener(
 	edgeID int64,
 	globalLimiter *ratelimit.GlobalLimiter,
 ) (*listener.HTTPS, error) {
-	if cfg.HTTPS.Addr == "" {
+	if cfg.Tunnel.HTTPSAddr() == "" {
 		// Pass an addr-less listener so the goroutine slot stays uniform.
 		return listener.NewHTTPS(logger, listener.HTTPSOptions{}), nil
 	}
@@ -472,7 +486,7 @@ func buildHTTPSListener(
 			certPath = filepath.Join(cfg.State.Dir, "edge-https.crt")
 			keyPath = filepath.Join(cfg.State.Dir, "edge-https.key")
 		}
-		cert, certErr := tlsutil.LoadOrGenerateWildcard(certPath, keyPath, cfg.HTTP.BaseDomain)
+		cert, certErr := tlsutil.LoadOrGenerateWildcard(certPath, keyPath, cfg.Tunnel.BaseDomain)
 		if certErr != nil {
 			return nil, certErr
 		}
@@ -482,7 +496,7 @@ func buildHTTPSListener(
 
 	var getCert func(*tls.ClientHelloInfo) (*tls.Certificate, error)
 	switch {
-	case certFromPlatform != nil && cfg.HTTPS.SelfSigned && cfg.HTTP.BaseDomain != "":
+	case certFromPlatform != nil && cfg.Tunnel.HTTPSSelfSigned && cfg.Tunnel.BaseDomain != "":
 		// Dev (multi-edge / bff-edge): serve cert-svc certs when the bridge has
 		// one for the requested SNI, else fall back to a self-signed wildcard so
 		// HTTPS works locally without provisioning a real cert. Gated by
@@ -498,12 +512,12 @@ func buildHTTPSListener(
 			return fallback, nil
 		}
 		logger.Warn("https listener: cert-svc certs + self-signed wildcard fallback (dev only)",
-			"addr", cfg.HTTPS.Addr, "base_domain", cfg.HTTP.BaseDomain)
+			"addr", cfg.Tunnel.HTTPSAddr(), "base_domain", cfg.Tunnel.BaseDomain)
 	case certFromPlatform != nil:
 		// Production path: real certs streamed from cert-svc, hot rotated as new
 		// orgs/domains come online.
 		getCert = certFromPlatform
-	case cfg.HTTP.BaseDomain != "":
+	case cfg.Tunnel.BaseDomain != "":
 		// Dev / standalone path: self-signed wildcard for the base domain.
 		// Cached under state.dir so the trust-store import survives restarts;
 		// without state.dir the cert is regenerated each boot.
@@ -513,15 +527,15 @@ func buildHTTPSListener(
 		}
 		getCert = func(*tls.ClientHelloInfo) (*tls.Certificate, error) { return cached, nil }
 		logger.Warn("https listener using self-signed wildcard cert (dev fallback)",
-			"addr", cfg.HTTPS.Addr,
-			"base_domain", cfg.HTTP.BaseDomain,
+			"addr", cfg.Tunnel.HTTPSAddr(),
+			"base_domain", cfg.Tunnel.BaseDomain,
 			"hint", "import the generated edge-https.crt under state.dir into your OS trust store to silence browser warnings")
 	default:
-		return nil, fmt.Errorf("config error: https.addr=%q requires either cert.addr (prod) or http.base_domain (dev self-signed)", cfg.HTTPS.Addr)
+		return nil, fmt.Errorf("config error: https.addr=%q requires either cert.addr (prod) or http.base_domain (dev self-signed)", cfg.Tunnel.HTTPSAddr())
 	}
 
 	return listener.NewHTTPS(logger, listener.HTTPSOptions{
-		Addr:           cfg.HTTPS.Addr,
+		Addr:           cfg.Tunnel.HTTPSAddr(),
 		Router:         r,
 		Observer:       metricsSet,
 		GetCertificate: getCert,
@@ -631,25 +645,6 @@ func labelErr(name string, err error) error {
 
 // hashNodeIDForConfig mirrors tunnelstore.hashToID so the same edge_node_id
 // is used in both tunnel-svc and config-svc registrations.
-// advertisedAddr returns the host:port this edge registers in the edge
-// directory — the address daemons get from /v1/edges and dial directly, and the
-// host a platform relay's DERP endpoint is derived from.
-//
-// control.addr is a BIND address and public.addr an ADVERTISED one; they are
-// not interchangeable, which is why falling back from one to the other is only
-// safe in a specific case. On a single host ":7443" happens to work as a dial
-// string (Go reads it as localhost), so dev configs legitimately omit
-// public.addr. Anywhere the node reaches the control plane through bff-edge it
-// is by definition NOT on the same host as its daemons, and advertising a bind
-// address there registers the edge as reachable when nothing can reach it —
-// that is what the second return value flags.
-func advertisedAddr(cfg config.Config) (addr string, unreachable bool) {
-	if a := strings.TrimSpace(cfg.Public.Addr); a != "" {
-		return a, false
-	}
-	return cfg.Control.Addr, cfg.MultiRegion.IsBFFEdge()
-}
-
 func hashNodeIDForConfig(label string) int64 {
 	if label == "" {
 		return 1

@@ -43,14 +43,20 @@ func ApplyEnv(cfg Config) (Config, error) {
 	if v := envStr("CALABI_EDGE_ADMIN_ADDR"); v != "" {
 		cfg.Admin.Addr = v
 	}
+	// Where this node can be reached — required of any node that serves tunnels
+	// (ValidatePublicHost), so a node configured entirely from the environment
+	// needs a way to say it. A host, no port: the port is tunnel.control_port.
+	if v := envStr("CALABI_EDGE_PUBLIC_HOST"); v != "" {
+		cfg.Public.Host = v
+	}
 	if v := envStr("CALABI_EDGE_RELAY_KIND"); v != "" {
-		cfg.Relay.Kind = v
+		cfg.Mesh.Kind = v
 	}
 	if v := envStr("CALABI_EDGE_RELAY_LABEL"); v != "" {
-		cfg.Relay.Label = v
+		cfg.Mesh.Label = v
 	}
 	if v := envStr("CALABI_EDGE_RELAY_COORD_PUBKEY"); v != "" {
-		cfg.Relay.CoordPubKey = v
+		cfg.Mesh.CoordPubKey = v
 	}
 	// The coordinator this edge belongs to.
 	if v := envStr("CALABI_EDGE_COORD_PUBKEY"); v != "" {
@@ -64,21 +70,21 @@ func ApplyEnv(cfg Config) (Config, error) {
 		if err != nil {
 			return cfg, err
 		}
-		cfg.Relay.DERPPort = n
+		cfg.Mesh.DERPPort = n
 	}
 	if v := envStr("CALABI_EDGE_RELAY_STUN_PORT"); v != "" {
 		n, err := parsePort("CALABI_EDGE_RELAY_STUN_PORT", v)
 		if err != nil {
 			return cfg, err
 		}
-		cfg.Relay.STUNPort = n
+		cfg.Mesh.STUNPort = n
 	}
 	if v := envStr("CALABI_EDGE_RELAY_REQUIRE_AUTH"); v != "" {
 		b, err := parseBool("CALABI_EDGE_RELAY_REQUIRE_AUTH", v)
 		if err != nil {
 			return cfg, err
 		}
-		cfg.Relay.RequireAuth = b
+		cfg.Mesh.RequireAuth = b
 	}
 	return cfg, nil
 }

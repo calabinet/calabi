@@ -257,7 +257,7 @@ func (h *platformSelfHosted) handleStatus(w http.ResponseWriter, _ *http.Request
 }
 
 // handleJoin switches this machine to a self-hosted server: the device joins
-// its coordinator, the console's tunnels.yaml is written, the mode saved, and
+// its coordinator, the console's calabi.yaml is written, the mode saved, and
 // the daemon starts again as the local one. Signed in to calabi.net, it answers
 // signed_in first — the page signs out, then asks again.
 func (h *platformSelfHosted) handleJoin(w http.ResponseWriter, r *http.Request) {
@@ -281,11 +281,12 @@ func (h *platformSelfHosted) handleJoin(w http.ResponseWriter, r *http.Request) 
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
+	adoptLegacyManagedConfig(h.logger)
 	path := managedConfigPath()
 	cur, _, err := loadLocalConfigOrEmpty(path, true)
 	if err != nil {
 		// A file the console cannot read is not one to merge into; start over.
-		h.logger.Warn("the console's tunnels.yaml is unreadable; replacing it", "err", err)
+		h.logger.Warn("the console's config is unreadable; replacing it", "err", err)
 		cur = &localConfig{}
 	}
 	next, fail := joinSelfHosted(ctx, *cur, in)

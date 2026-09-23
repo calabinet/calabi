@@ -6,7 +6,8 @@ Contributions are welcome.
 
 To build and run the three programs against each other on one machine, see
 **[DEVELOPMENT.md](DEVELOPMENT.md)**. To report a vulnerability, see
-**[SECURITY.md](SECURITY.md)** — not a public issue.
+**[SECURITY.md](SECURITY.md)** — not a public issue. Taking part here means
+following the **[Code of Conduct](CODE_OF_CONDUCT.md)**.
 
 ## How this repository is updated
 

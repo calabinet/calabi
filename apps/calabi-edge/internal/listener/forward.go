@@ -1,6 +1,6 @@
 // Peer-forward listener.
 //
-// This listener binds a VPC-internal port (cfg.mesh.forward_addr, e.g.
+// This listener binds a VPC-internal port (cfg.peer_forward.forward_addr, e.g.
 // ":7090") and accepts connections from SAME-REGION peer edges. A peer dials
 // here when a visitor landed on it but the requested tunnel is owned by THIS
 // edge (the peer learned the owner from tunnel-svc.ResolveOwners).

@@ -9,14 +9,14 @@ import (
 // service Arguments, with the config path made absolute (the service manager
 // launches us from a different working directory).
 func TestServiceArguments_LocalConfig(t *testing.T) {
-	got := serviceArguments([]string{"--local", "--config", "tunnels.yaml"})
+	got := serviceArguments([]string{"--local", "--config", "calabi.yaml"})
 	if len(got) != 4 || got[0] != "daemon" || got[1] != "--local" || got[2] != "--config" {
 		t.Fatalf("got %v, want [daemon --local --config <abs>]", got)
 	}
 	if !filepath.IsAbs(got[3]) {
 		t.Errorf("config path not absolutized: %q", got[3])
 	}
-	if filepath.Base(got[3]) != "tunnels.yaml" {
+	if filepath.Base(got[3]) != "calabi.yaml" {
 		t.Errorf("config basename lost: %q", got[3])
 	}
 }

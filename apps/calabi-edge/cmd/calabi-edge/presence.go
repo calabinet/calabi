@@ -11,8 +11,9 @@ import (
 	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
 )
 
-// defaultPresenceInterval is the fallback heartbeat cadence used when
-// the operator doesn't override it via edge.yaml `presence.interval_seconds`.
+// defaultPresenceInterval is the heartbeat cadence. It was configurable via
+// edge.yaml `presence.interval_seconds` until 1.15.0, which no deployed config
+// ever set; that key is refused now (layout.go).
 // 15s pairs with the 35s default freshness window in
 // identity-svc.GetClientStatuses (≈2× heartbeat + slack).
 //
@@ -28,8 +29,8 @@ const defaultPresenceInterval = 15 * time.Second
 // silently skipped — the console will simply show those rows as offline,
 // which matches user expectation for clients that never registered.
 //
-// interval=0 falls back to defaultPresenceInterval. Values below 5s are
-// clamped at the config layer (see PresenceConfig.PresenceInterval).
+// interval=0 falls back to defaultPresenceInterval. It stopped being
+// configurable in 1.15.0 — the parameter stays so this stays testable.
 //
 // identityCli is optional; nil disables reporting entirely (dev path
 // where identity-svc isn't wired). The loop exits when ctx is cancelled.

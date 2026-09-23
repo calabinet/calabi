@@ -87,26 +87,32 @@ services:
         node_label: ${CALABI_NODE_NAME:-calabi-server}
         mode: standalone
         role: both
-        # Devices get in with grants the coordinator signs, for tunnels and relay alike.
+        # Devices get in with grants the coordinator signs, for tunnels and mesh alike.
         coord_pubkey_file: /coord/coord.pub
-        base_domain: "${CALABI_TUNNEL_DOMAIN:-}"
+        # Where devices and clients reach this node. The coordinator is told the
+        # same host above (CALABI_COORD_EDGE_ADDR); this is the edge's own copy,
+        # and the port comes from tunnel.control_port below rather than being
+        # written twice.
+        public:
+          host: ${CALABI_PUBLIC_HOST}
         state:
           dir: /var/lib/calabi-edge
-        control:
-          addr: ":7443"
-        http:
-          addr: ":80"
-        https:
-          addr: ":443"
-        relay:
-          derp_port: 3340
-          stun_port: 3478
-          label: ${CALABI_NODE_NAME:-calabi-server}
         admin:
           addr: 127.0.0.1:9101
         log:
           level: info
           format: text
+        # Only the tunnel service reads this block.
+        tunnel:
+          base_domain: "${CALABI_TUNNEL_DOMAIN:-}"
+          control_port: 7443
+          http_port: 80
+          https_port: 443
+        # Only the mesh relay reads this one.
+        mesh:
+          derp_port: 3340
+          stun_port: 3478
+          label: ${CALABI_NODE_NAME:-calabi-server}
         EOF
         exec /usr/local/bin/app -config /tmp/edge.yaml
 
