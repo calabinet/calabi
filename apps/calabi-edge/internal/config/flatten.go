@@ -1,6 +1,6 @@
 package config
 
-// flatten.go — the 1.16 shape of `tunnel:` and `public:`, and how a file
+// flatten.go — the 2.0.0 shape of `tunnel:` and `public:`, and how a file
 // written for the old one still loads.
 //
 // Every tunnel listener was configured by an `addr`, and in every config ever
@@ -96,7 +96,7 @@ func flattenTunnelBlock(root *yaml.Node) error {
 		if cur := childOf(tunnel, flat); cur != nil {
 			if !sameScalar(cur, val) {
 				return fmt.Errorf("config sets both tunnel.%s: and tunnel.%s: — %s was replaced by %s "+
-					"in 1.16, so this file says it twice. Keep the %s: one", path, flat, path, flat, flat)
+					"in 2.0.0, so this file says it twice. Keep the %s: one", path, flat, path, flat, flat)
 			}
 			deleteKey(block, key)
 			continue

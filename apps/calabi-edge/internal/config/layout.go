@@ -1,6 +1,6 @@
 package config
 
-// layout.go — the 1.15.0 config layout, and how a file written for the old one
+// layout.go — the 2.0.0 config layout, and how a file written for the old one
 // still loads.
 //
 // The edge grew into two services. The config never split with it: `control:`,
@@ -38,7 +38,7 @@ var movedKeys = map[string]string{
 	"https":        "tunnel",
 	"sni":          "tunnel",
 	"peer_forward": "tunnel",
-	// The 1.16 flat spellings, for a file written by analogy: somebody who had
+	// The 2.0.0 flat spellings, for a file written by analogy: somebody who had
 	// `control:` at the top level and reads that it is `control_port` now will
 	// put `control_port` at the top level. Without these it would land nowhere
 	// and the node would silently use the default port.
@@ -142,7 +142,7 @@ func migrateLayout(doc *yaml.Node) error {
 		return err
 	}
 	// Both generations arrive at moveTopLevelKeys' output in the same shape, so
-	// the 1.16 flattening runs once, after it. See flatten.go.
+	// the 2.0.0 flattening runs once, after it. See flatten.go.
 	if err := flattenTunnelBlock(root); err != nil {
 		return err
 	}
@@ -232,7 +232,7 @@ func renameKey(root *yaml.Node, from, to string) error {
 	if cur := childOf(root, to); cur != nil {
 		if !sameScalar(cur, old) {
 			if cur.Kind == yaml.MappingNode || old.Kind == yaml.MappingNode {
-				return fmt.Errorf("config sets both %s: and %s: — %s: was renamed to %s: in 1.15.0, "+
+				return fmt.Errorf("config sets both %s: and %s: — %s: was renamed to %s: in 2.0.0, "+
 					"so this file configures it twice. Keep the %s: one", from, to, from, to, to)
 			}
 			return fmt.Errorf("config: %s (%s) and %s (%s) disagree; set one of them",
@@ -271,7 +271,7 @@ func moveTopLevelKeys(root *yaml.Node) error {
 		// mid-migration and the two almost certainly differ.
 		if childOf(dest, key) != nil {
 			return fmt.Errorf("config sets both %s: and %s.%s: — the top-level spelling moved under %s: "+
-				"in 1.15.0, so this file says it twice. Keep the %s.%s: one",
+				"in 2.0.0, so this file says it twice. Keep the %s.%s: one",
 				key, block, key, block, block, key)
 		}
 		deleteKey(root, key)

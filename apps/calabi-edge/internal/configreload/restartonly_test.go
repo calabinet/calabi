@@ -201,7 +201,7 @@ func TestReloadRefusesRestartOnlyFieldsFromTheFile(t *testing.T) {
 		{"tunnel.peer_forward.advertise_addr", standaloneEdge, standaloneEdge + "peer_forward:\n  forward_addr: \":7090\"\n  advertise_addr: \"edge-a.example.com:7090\"\n", false},
 		// edge_class used to be here. It is not restart-only any more, it is
 		// refused outright (the control plane owns the routing pool since
-		// 1.15.0), so the case would have passed on the wrong error —
+		// 2.0.0), so the case would have passed on the wrong error —
 		// config.TestObsoleteDirectDialBlocksAreRefused covers the refusal.
 	}
 	for _, tc := range cases {

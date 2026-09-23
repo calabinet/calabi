@@ -41,7 +41,7 @@ func managedConfigPath() string {
 
 func fileExists(p string) bool { _, err := os.Stat(p); return err == nil }
 
-// The file was called tunnels.yaml until 1.15.0, when it stopped being about
+// The file was called tunnels.yaml until 2.0.0, when it stopped being about
 // tunnels: `tunnels: []` with a `server:` block is a complete, ordinary config
 // for a machine that only joins.
 const (

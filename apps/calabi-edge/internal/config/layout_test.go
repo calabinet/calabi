@@ -10,7 +10,7 @@ import (
 
 // The old layout and the new one must produce the SAME Config.
 //
-// This is the test the 1.15.0 layout change stands on. Everything else checks a
+// This is the test the 2.0.0 layout change stands on. Everything else checks a
 // rule; this checks the outcome an operator cares about — that upgrading the
 // binary under an unchanged file changes nothing about how the node behaves.
 //

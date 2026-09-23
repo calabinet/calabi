@@ -71,7 +71,7 @@ type localConfig struct {
 	// the mesh on still needs every field here, so nesting them under a block
 	// named after the mesh made the tunnel path look optional when it is not.
 	//
-	// Until 1.15.0 these lived under `mesh:`. A file written that way still
+	// Until 2.0.0 these lived under `mesh:`. A file written that way still
 	// loads (mergeServerBlock) and is rewritten into this shape the next time
 	// anything saves it.
 	Server serverConfig `yaml:"server,omitempty"`

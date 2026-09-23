@@ -48,7 +48,7 @@ type Config struct {
 	// NodeLabel is a name an operator chooses, this is a key the control plane
 	// assigns. Rule of thumb — label names the node to humans, id addresses it.
 	//
-	// NOT AN OPERATOR SETTING since 1.15.0. On any node wired to a control plane
+	// NOT AN OPERATOR SETTING since 2.0.0. On any node wired to a control plane
 	// this is read out of the node's own mTLS certificate, because that is where
 	// the control plane reads it from too — see certidentity.go, which also
 	// refuses to start a node whose config disagrees with its certificate. A
@@ -148,7 +148,7 @@ type Config struct {
 // listens, what it is called on the public internet, and the certificates it
 // serves. A node running role: mesh reads none of it.
 //
-// Every one of these was a top-level key before 1.15.0, and all of them still
+// Every one of these was a top-level key before 2.0.0, and all of them still
 // load from there (migrateLayout).
 type TunnelService struct {
 	// BaseDomain is the wildcard domain this node serves — u<N>.<base_domain>.
@@ -223,7 +223,7 @@ func (c Config) AdvertisedAddr() string {
 }
 
 // MeshService is everything only the mesh relay reads. Spelled `relay:` before
-// 1.15.0, which still loads (migrateLayout).
+// 2.0.0, which still loads (migrateLayout).
 //
 // The BLOCK is named for the service and its FIELDS for the machinery, which is
 // the same split as `role: mesh` being served by a relay: DERP and STUN ports
@@ -279,7 +279,7 @@ type PublicConfig struct {
 	// It reaches clients (the dial string in the edge directory is this host
 	// plus tunnel.control_port), devices (a relay's endpoint is this host plus
 	// mesh.derp_port) and the self-signed control certificate's SAN. Spelled
-	// `public.addr`, with the control port repeated in it, before 1.16.
+	// `public.addr`, with the control port repeated in it, before 2.0.0.
 	Host string `yaml:"host"`
 }
 
@@ -295,7 +295,7 @@ type PublicConfig struct {
 // forwarding never happens — peers are only ever same-region edges (the owner
 // registry + ListEdges are region-scoped).
 //
-// This block was called `mesh:` until 1.15.0, which was a straight collision:
+// This block was called `mesh:` until 2.0.0, which was a straight collision:
 // it forwards TUNNEL traffic between two edges and has nothing to do with the
 // WireGuard mesh, so the type carried a comment disclaiming the name and
 // `role: mesh` would have put a third meaning of the word in the same file.
@@ -411,7 +411,7 @@ func (c Config) ValidateClientAuth() error {
 }
 
 // resolveCoordPubKey keeps the two spellings of the coordinator's inline key
-// equal: mesh.coord_pubkey (spelled relay.coord_pubkey before 1.15.0) came
+// equal: mesh.coord_pubkey (spelled relay.coord_pubkey before 2.0.0) came
 // first, when only the relay checked grants. Setting both to different values,
 // or an inline key and a key file, is refused rather than picking one.
 func resolveCoordPubKey(c *Config) error {

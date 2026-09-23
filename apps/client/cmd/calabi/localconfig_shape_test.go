@@ -10,7 +10,7 @@ import (
 
 // The config file's two shapes.
 //
-// Until 1.15.0 the coordinator — which server this device belongs to and how it
+// Until 2.0.0 the coordinator — which server this device belongs to and how it
 // proves itself there — sat under `mesh:`, and the file was called
 // tunnels.yaml. Both were wrong in the same way: `calabi http 8080` has no mesh
 // and serves no tunnel from the file, yet it cannot reach an edge without

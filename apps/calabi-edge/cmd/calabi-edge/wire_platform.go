@@ -346,7 +346,7 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 	switch {
 	case cpBFF != nil:
 		// RefreshInterval left at zero: certclient.DefaultRefreshInterval. It was
-		// a config knob until 1.15.0 and no deployed file ever set it.
+		// a config knob until 2.0.0 and no deployed file ever set it.
 		cc, cErr := certclient.StartWithClient(ctx, logger, cpBFF.Client, certclient.Options{
 			OrgID: cfg.OrgID,
 			Bus:   bus,

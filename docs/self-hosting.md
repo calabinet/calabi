@@ -57,6 +57,7 @@ Android app (`apps/client-android`) and the client's console join it too — see
 
 - [Only on calabi.net](#only-on-calabinet)
 - [Production notes](#production-notes)
+- [Upgrading to 2.0](#upgrading-to-20)
 - [Upgrading from 1.12 or earlier](#upgrading-from-112-or-earlier)
 - [Questions](#questions)
 - [License & contributing](#license--contributing)
@@ -348,7 +349,7 @@ your own.
 **Settings that are refused.** The edge stopped reaching the control plane
 directly, so `identity:`, `quota:`, `config_svc:`, `nats:`, `tunnel.addr` and
 `cert.addr` no longer do anything. Neither do `presence.interval_seconds` and
-`cert.refresh_seconds`, removed in 1.15.0: both had a default, and no deployed
+`cert.refresh_seconds`, removed in 2.0.0: both had a default, and no deployed
 config had ever set either. Nor does `edge_class`, which the hosted platform now
 decides for itself — a node does not get to choose which paying plans are routed
 to it. Nor `org_id` (or its older spelling `cert.org_id`): a node's organization
@@ -766,6 +767,58 @@ upstream being down is also ignored by default;
 you run those services yourself.
 
 Nothing in it reaches calabi.net.
+
+---
+
+## Upgrading to 2.0
+
+The edge's config file changed in 2.0. A server that has been running since
+1.14 will not start on the new edge until its config catches up.
+
+**If you run the Docker bundle**, take the new `docker-compose.yml` along with
+the new image. That file writes the edge's config, and the version of it shipped
+before 2.0 wrote one the new edge refuses: it had no `public:` block. Your
+`.env` needs nothing new — the value comes from `CALABI_PUBLIC_HOST`, which you
+already set.
+
+**If you wrote your own edge config**, two things can stop it.
+
+- **`public.host` is required** on a node that serves tunnels. It is the host
+  devices dial and the name the control certificate is issued for. It used to be
+  optional, falling back to the listener's bind address — a usable dial string
+  only on the one machine that is also the device. A relay-only node does not
+  need it.
+- **Settings that had stopped doing anything are refused**, rather than skipped:
+  the `identity:`, `quota:`, `config_svc:` and `nats:` blocks, `tunnel.addr`,
+  `cert.addr`, `presence.interval_seconds`, `cert.refresh_seconds`,
+  `edge_class` and `org_id`. Delete them. The edge names the offending line at
+  startup.
+
+Everything else migrates. The file is now grouped by service — `tunnel:` for
+what only tunnels read, `mesh:` (formerly `relay:`) for the relay, the top level
+for what both use — and each listener names a port rather than an address, but
+every old spelling still loads from where it was:
+
+| You wrote | It now reads as |
+|---|---|
+| `control: { addr: ":7443" }` | `tunnel.control_port: 7443` |
+| `control: { cert_pem: … }` | `tunnel.control_cert_pem: …` |
+| `http: { addr: ":80" }` | `tunnel.http_port: 80` |
+| `https: { self_signed: true }` | `tunnel.https_self_signed: true` |
+| `http: { base_domain: … }` | `tunnel.base_domain: …` |
+| `relay:` | `mesh:` |
+| `public: { addr: "host:7443" }` | `public: { host: "host" }` |
+
+Two exceptions to "it migrates". A `public.addr` whose port disagrees with the
+control listener's is refused, naming both — that file would otherwise come up
+unreachable. And a top-level `peer_forward:` block spelled `mesh:` (edge-to-edge
+forwarding of tunnel traffic, which was never about the mesh) is refused rather
+than read as relay settings; it is `tunnel.peer_forward:` now.
+
+The daemon's own config file is renamed from `tunnels.yaml` to `calabi.yaml` in
+this release, and the coordinator moves from `mesh:` to a top-level `server:`
+block. That one needs nothing from you: an old file still loads, and is
+rewritten the next time anything saves it.
 
 ---
 

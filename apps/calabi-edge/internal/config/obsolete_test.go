@@ -79,7 +79,7 @@ multi_region:
 	}
 }
 
-// The two knobs removed in 1.15.0 are refused, not ignored.
+// The two knobs removed in 2.0.0 are refused, not ignored.
 //
 // Neither was set in a single deployed config, both had a default, and both had
 // to be carried through every change to the config layout. Deleting the fields

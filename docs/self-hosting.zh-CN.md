@@ -52,6 +52,7 @@
 
 - [只在 calabi.net 上有的](#只在-calabinet-上有的)
 - [上生产要注意的](#上生产要注意的)
+- [升级到 2.0](#升级到-20)
 - [从 1.12 及更早版本升级](#从-112-及更早版本升级)
 - [常见问题](#常见问题)
 - [许可证与贡献](#许可证与贡献)
@@ -300,7 +301,7 @@ mesh:
 
 **会被拒绝的设置。** 边缘节点不再直连控制面，所以 `identity:`、`quota:`、`config_svc:`、`nats:`、
 `tunnel.addr` 和 `cert.addr` 都不起作用了。`presence.interval_seconds` 和 `cert.refresh_seconds` 也一样，
-1.15.0 删了：两个都有默认值，而且没有任何一份已部署的配置设过它们。`edge_class` 同理——
+2.0.0 删了：两个都有默认值，而且没有任何一份已部署的配置设过它们。`edge_class` 同理——
 现在由托管平台自己决定，节点没有权力挑选哪些付费套餐被路由到它这里。`org_id`（以及旧写法 `cert.org_id`）
 也一样：节点属于哪个组织由它自己的证书决定，而我们自己的节点服务所有组织、不指定其中某一个。
 文件里还留着其中任何一个，边缘节点不会启动，并告诉你是哪一个——而不是启动起来、然后悄悄不做文件里写的事。
@@ -627,6 +628,50 @@ ssh -L 9090:127.0.0.1:9090 you@your-server   # 然后打开 http://127.0.0.1:909
 [README](../deploy/server/monitoring/README.md) 里写了怎么把它加进来。
 
 这套东西不连 calabi.net 的任何地方。
+
+---
+
+## 升级到 2.0
+
+2.0 改了 edge 的配置文件。一台从 1.14 一直跑着的服务器，配置不跟着改，新版 edge
+不会启动。
+
+**用 Docker 发布包的**：换镜像的同时把新的 `docker-compose.yml` 一起换掉。edge
+的配置是这个文件写出来的，而 2.0 之前那版写出来的配置新版 edge 会拒绝——它没有
+`public:` 块。`.env` 不用加东西，值取自你本来就设了的 `CALABI_PUBLIC_HOST`。
+
+**自己写 edge 配置的**：有两处会让它起不来。
+
+- **跑隧道的节点 `public.host` 必填**。它是设备拨的那个主机名，也是控制证书签给
+  的那个名字。以前它可以不写、回落到监听器的绑定地址——那个地址只在「设备就是本
+  机」时才拨得通。只做中继的节点不需要它。
+- **早就不起作用的设置改成拒绝**，不再是跳过：`identity:`、`quota:`、
+  `config_svc:`、`nats:` 四个块，以及 `tunnel.addr`、`cert.addr`、
+  `presence.interval_seconds`、`cert.refresh_seconds`、`edge_class`、`org_id`。
+  删掉即可，edge 启动时会点名是哪一行。
+
+其余都会自动迁移。文件现在按服务分层——`tunnel:` 放只有隧道读的，`mesh:`（原
+`relay:`）放中继读的，两个都读的留在顶层——每个监听器写端口而不是地址，但所有旧
+写法都还从原位加载：
+
+| 你写的 | 现在读作 |
+|---|---|
+| `control: { addr: ":7443" }` | `tunnel.control_port: 7443` |
+| `control: { cert_pem: … }` | `tunnel.control_cert_pem: …` |
+| `http: { addr: ":80" }` | `tunnel.http_port: 80` |
+| `https: { self_signed: true }` | `tunnel.https_self_signed: true` |
+| `http: { base_domain: … }` | `tunnel.base_domain: …` |
+| `relay:` | `mesh:` |
+| `public: { addr: "host:7443" }` | `public: { host: "host" }` |
+
+「自动迁移」有两个例外。`public.addr` 里的端口和控制监听器对不上的，会被拒绝并
+同时点名两处——那种文件起来了也没人拨得通。还有顶层写成 `mesh:` 的
+`peer_forward:` 块（edge 之间转发隧道流量，跟组网无关），不会被当成中继配置读，
+而是直接拒绝；它现在叫 `tunnel.peer_forward:`。
+
+客户端自己的配置文件这一版从 `tunnels.yaml` 改名为 `calabi.yaml`，协调器也从
+`mesh:` 提到顶层的 `server:`。这一处你不用管：旧文件照常加载，下次有任何东西保存
+它时会自动写成新格式。
 
 ---
 

@@ -12,7 +12,7 @@ import (
 )
 
 // defaultPresenceInterval is the heartbeat cadence. It was configurable via
-// edge.yaml `presence.interval_seconds` until 1.15.0, which no deployed config
+// edge.yaml `presence.interval_seconds` until 2.0.0, which no deployed config
 // ever set; that key is refused now (layout.go).
 // 15s pairs with the 35s default freshness window in
 // identity-svc.GetClientStatuses (≈2× heartbeat + slack).
@@ -30,7 +30,7 @@ const defaultPresenceInterval = 15 * time.Second
 // which matches user expectation for clients that never registered.
 //
 // interval=0 falls back to defaultPresenceInterval. It stopped being
-// configurable in 1.15.0 — the parameter stays so this stays testable.
+// configurable in 2.0.0 — the parameter stays so this stays testable.
 //
 // identityCli is optional; nil disables reporting entirely (dev path
 // where identity-svc isn't wired). The loop exits when ctx is cancelled.
