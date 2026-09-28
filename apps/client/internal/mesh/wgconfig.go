@@ -183,8 +183,9 @@ func ResolveExitNode(nm NetMap, sel string) meshproto.NodeKey {
 }
 
 // droppedRoute records an advertised subnet that selectSubnetRoutes declined to
-// route into the mesh because it is IDENTICAL to a local network — surfaced as a
-// WARN so the operator can see WHY a peer's subnet isn't reachable (local wins).
+// route into the mesh because it is EQUAL TO or CONTAINED IN a local network
+// (see localSubnetWins) — surfaced as a WARN so the operator can see WHY a
+// peer's subnet isn't reachable (local wins).
 type droppedRoute struct {
 	Advertised netip.Prefix
 	Local      netip.Prefix
@@ -287,7 +288,7 @@ func applyRoutePolicy(cfg WGConfig, rp RoutePolicy) (WGConfig, []RefusedRoute) {
 // is the whole local subnet or one host inside it.
 //
 // The last case reads simply: nothing a peer says should send traffic into
-// WireGuard for an address reachable on this machine's own wire.
+// WireGuard for an address reachable on this machine's own wire. See
 // localSubnetWins for why the host-inside-our-LAN half was added, what it costs
 // on client-isolated links, and why it leaves the alias mechanism alone.
 //

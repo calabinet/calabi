@@ -16,7 +16,7 @@ import (
 // nat table of the CURRENT network namespace, so set it only somewhere
 // disposable — a privileged container, or `unshare -n`:
 //
-//	CALABI_TEST_REAL_NETFILTER=1 go test -run 'NAT'./internal/mesh/
+//	CALABI_TEST_REAL_NETFILTER=1 go test -run 'NAT' ./internal/mesh/
 //
 // CALABI_TEST_IPTABLES lists extra iptables binaries to run them against too
 // (e.g. "iptables-legacy iptables-nft"); the production runner, which calls

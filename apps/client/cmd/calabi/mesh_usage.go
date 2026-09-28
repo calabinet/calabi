@@ -195,7 +195,7 @@ func (m *meshUsageMeter) daily(n int) []meshUsageDay {
 
 // handleMeshUsage serves GET /v1/usage/mesh?days=N →
 //
-//	{"today":{relay,direct},"month":{relay,direct},"daily":[{date,relay,direct}...]}
+//	{"today":{relay,direct},"month":{relay,direct},"daily":[{date,relay,direct},...]}
 //
 // Read-only; registered on the status server's mux in package main (both
 // deployments) so it never rides the platform's server-side usage proxy.

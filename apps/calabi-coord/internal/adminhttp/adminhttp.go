@@ -270,7 +270,7 @@ func (h *handler) seatUsage(w http.ResponseWriter, r *http.Request) {
 // to join against, so duplicating them here would be a second copy that can
 // disagree with the first.
 //
-// There is no endpoint field and there must never be one —
+// There is no endpoint field and there must never be one — see
 // core/connrecord.go for why that line is what lets this exist as history.
 type connRecordView struct {
 	SrcNodeID int64  `json:"src_node_id"`

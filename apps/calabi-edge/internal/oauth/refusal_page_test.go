@@ -14,7 +14,7 @@
 // exist, and this file is what stops it drifting back: it asserts through
 // handleCallback, not through writeError, so removing the call site fails it.
 //
-// RUN: go test./apps/calabi-edge/internal/oauth/ -run TestRefusalPage -v
+// RUN: go test ./apps/calabi-edge/internal/oauth/ -run TestRefusalPage -v
 package oauth
 
 import (

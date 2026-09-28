@@ -13,7 +13,7 @@ import (
 // means a typo in it ships and is found by a stranger.
 //
 // It is also the file most likely to be left behind by a config change, because
-// it is not a.yaml anyone greps: the config lives inside a heredoc inside a
+// it is not a .yaml anyone greps: the config lives inside a heredoc inside a
 // shell command inside the compose file.
 
 var bundleEnv = map[string]string{

@@ -42,7 +42,7 @@ const maxInstallerBytes = 512 << 20 // 512 MiB
 
 // versionPattern is the ONLY shape a manifest version may take. It exists
 // because the version string used to be concatenated into a filesystem path
-// while only its numeric prefix was validated, so "9.9.9+/././victim" wrote
+// while only its numeric prefix was validated, so "9.9.9+/../../victim" wrote
 // (and then deleted) a file outside the download directory with service
 // privileges. The download path no longer embeds the version at all; this is
 // the second lock on the same door, and it also keeps a hostile string out of

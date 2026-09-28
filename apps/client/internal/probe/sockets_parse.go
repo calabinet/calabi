@@ -19,7 +19,7 @@ const tcpStateListen = 0x0A
 
 // parseProcNetTCP parses a /proc/net/tcp (v6=false) or /proc/net/tcp6 (v6=true)
 // dump and returns its LISTENing sockets. The address column is a packed hex
-// form in the kernel's own (little-endian, per-32-bit-word) byte order;
+// form in the kernel's own (little-endian, per-32-bit-word) byte order; see
 // parseHexAddr.
 func parseProcNetTCP(data []byte, v6 bool) ([]listener, error) {
 	var out []listener

@@ -52,7 +52,7 @@ type meshConfig struct {
 	AdvertiseRoutes []string `yaml:"advertise_routes,omitempty"`
 	// AliasRoutes is IGNORED. Every advertised route is now published under a
 	// stand-in prefix wherever the host can install the rewrite, so there is no
-	// subset to pick (see runMeshFromConfig). The field is kept only so a config
+	// subset to pick (see mesh.AliasRequest). The field is kept only so a config
 	// file written when this WAS a choice still parses instead of failing the
 	// daemon on an unknown key.
 	AliasRoutes []string `yaml:"alias_routes,omitempty"`
@@ -114,7 +114,7 @@ type meshConfig struct {
 	// A DECLARATION, not an authorization: the coordinator records each entry as
 	// pending and an admin confirms it in the console before any ACL "svc:" rule
 	// matches. Written by a person (or by IaC), never discovered by scanning the
-	// machine — and
+	// machine —
 	Services []meshServiceDecl `yaml:"services,omitempty"`
 }
 
@@ -385,35 +385,10 @@ func (r *meshRunner) startDataPlane() (*meshDataPlane, error) {
 		r.logger.Warn("mesh: ignoring unusable subnet routes from the config",
 			"advertise_routes", mesh.ProblemStrings(badRoutes))
 	}
-	// EVERY published route is aliased — this is not a setting.
-	//
-	// A route published under its real CIDR is unreachable from any peer whose
-	// own LAN happens to use the same addresses, and neither the publisher nor
-	// the coordinator can see whose does. Leaving that as a switch meant the
-	// person who had to predict the collision was the one who could not observe
-	// it, and the default (off) was the answer that breaks. Aliasing everything
-	// costs one NAT hop and makes the rule uniform: peers always reach a subnet
-	// at its stand-in prefix.
-	//
-	// The only remaining question is whether THIS machine can install the
-	// rewrite, which is a fact about the host, not a preference — so it is
-	// probed rather than configured. A host that cannot keeps publishing real
-	// CIDRs, exactly as before aliases existed.
-	var aliasRoutes []netip.Prefix
-	if len(routes) > 0 {
-		// Not-a-no, rather than a yes: an inconclusive probe (iptables could not
-		// run just now) must not silently drop this node back to publishing real
-		// CIDRs. Asking for the alias and failing to install it logs a warning
-		// naming the reason; declining to ask logs nothing and looks like a
-		// deliberate configuration.
-		support, why := mesh.SubnetAliasSupport(r.logger)
-		if support == mesh.AliasSupportNo {
-			r.logger.Warn("mesh: this host cannot install subnet-alias rules; subnets are published under their "+
-				"real addresses, so peers whose own LAN collides with them cannot reach them", "why", why)
-		} else {
-			aliasRoutes = routes
-		}
-	}
+	// EVERY published route is aliased — this is not a setting. The one open
+	// question, whether this host can install the rewrite, is probed in
+	// mesh.AliasRequest, which `calabi mesh up` asks too.
+	aliasRoutes := mesh.AliasRequest(routes, r.logger)
 	if r.cfg.AdvertiseExitNode {
 		routes = append(routes, netip.PrefixFrom(netip.IPv4Unspecified(), 0)) // 0.0.0.0/0
 	}

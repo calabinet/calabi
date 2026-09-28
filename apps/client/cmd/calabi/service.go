@@ -525,7 +525,7 @@ const defaultServiceName = "calabi"
 //	--service-name flag  →  CALABI_SERVICE_NAME env  →  "calabi" (default).
 //
 // The env fallback is how a service launched by the SCM/systemd learns its OWN
-// name: install bakes CALABI_SERVICE_NAME into the service env
+// name: install bakes CALABI_SERVICE_NAME into the service env (see
 // buildService), so the in-service Run path — which calls buildService(nil,nil)
 // with no args — resolves the same name the install used, and the control
 // dispatcher matches. Letting users name services is what allows several
@@ -819,7 +819,7 @@ func (p *serviceProgram) Stop(s service.Service) error {
 	// Cancel the daemon directly rather than via an OS signal: on Windows a
 	// service has no console, and (*os.Process).Signal(os.Interrupt) on self is
 	// unsupported there, so the old self-SIGINT was a silent no-op and Stop
-	// hung. Closing serviceStop cancels the daemon body's context
+	// hung. Closing serviceStop cancels the daemon body's context (see
 	// withSignalContext), and its deferred lock.Release then cleans up.
 	serviceStopOnce.Do(func() { close(serviceStop) })
 	<-p.doneCh

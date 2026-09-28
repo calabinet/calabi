@@ -34,7 +34,7 @@ var ErrInvalidLabel = errors.New("invalid label")
 // the lowercase form keeps uniqueness checks and resolution consistent.
 func NormalizeLabel(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
 
-// ValidateLabel checks 1.63 characters of [a-z0-9-], not starting or ending
+// ValidateLabel checks 1..63 characters of [a-z0-9-], not starting or ending
 // with "-". Expects an already-normalized value. Pure.
 //
 // The returned error names the offending character: "invalid" alone leaves

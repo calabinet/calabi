@@ -19,7 +19,7 @@
 // secret is supplied, and says so, rather than quietly becoming a policy with
 // no OAuth in it.
 //
-// RUN: go test./apps/calabi-edge/internal/policy/ -run TestOAuthRef -v
+// RUN: go test ./apps/calabi-edge/internal/policy/ -run TestOAuthRef -v
 package policy
 
 import "testing"

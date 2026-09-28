@@ -20,7 +20,7 @@ const applySupported = true
 // and the file operation that failed, to the system install log.
 const installerLogHint = " — see /var/log/install.log"
 
-// applyInstaller runs the macOS installer for the downloaded.pkg. The daemon is
+// applyInstaller runs the macOS installer for the downloaded .pkg. The daemon is
 // root (LaunchDaemon), so `installer` can write /Applications + /Library and the
 // pkg's postinstall re-bootstraps the LaunchDaemon — which restarts US. We start
 // it in a NEW SESSION (Setsid) so tearing the daemon down mid-install doesn't

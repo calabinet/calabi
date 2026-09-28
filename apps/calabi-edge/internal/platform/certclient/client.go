@@ -245,7 +245,7 @@ func (c *Client) subscribeEvents() error {
 
 // onUpsert handles a single calabi.cert.upsert.<org> message: refetch
 // the named cert + merge into the pool atomically. We pull a fresh
-// pool snapshot, mutate the copy, store the swap — readers never
+// pool snapshot, mutate the copy, store the swap — readers never see
 // a torn map.
 //
 // Errors during refetch are warned, not retried. The 5-minute poll

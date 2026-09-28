@@ -17,15 +17,17 @@ type Status struct {
 	// node was configured with: the node re-homes onto the one it measured closest.
 	Relay string
 	Peers []PeerStatus
-	// SubnetAliases are the stand-in prefixes published for THIS node's own
-	// subnet routes, when it is a subnet router for a LAN that collides with
-	// consumers' own. Reported so the console can show "192.168.1.0/24 is
-	// reachable at 100.96.5.0/24" — without that, nobody knows what to dial.
+	// SubnetAliases are the stand-in prefixes the coordinator granted THIS node's
+	// own subnet routes. Every subnet it advertises asks for one (AliasRequest),
+	// so this is filled for an ordinary subnet router — not only for one whose
+	// LAN collides with a consumer's. Reported so the console can show
+	// "192.168.1.0/24 is reachable at 100.96.5.0/24" — without that, nobody knows
+	// what to dial.
 	SubnetAliases []SubnetAlias
 	// UnaliasedRoutes are this node's own routes that asked for a stand-in prefix
 	// and did not get one. They publish under their real CIDR, so only consumers
-	// whose own LAN collides with them lose access — silently. Reported so the
-	// operator who asked for the alias can see it and act.
+	// whose own LAN collides with them lose access — silently. Reported so this
+	// node's operator can see it and act.
 	UnaliasedRoutes []SubnetAlias
 	// AliasBudgetAddrs / AliasUsedAddrs are the org's alias budget and usage in
 	// addresses, so the console can say why rather than only that.

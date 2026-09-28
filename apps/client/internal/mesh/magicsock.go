@@ -115,7 +115,7 @@ func (m *magicSock) readLoop() {
 
 // looksLikeWireGuard is the cheap shape check that keeps stray datagrams out of
 // the WireGuard receive queue: every WireGuard message starts with a type byte
-// (1.4) followed by three reserved zero bytes. It is a filter, not
+// (1..4) followed by three reserved zero bytes. It is a filter, not
 // authentication — WireGuard itself decides what is genuine.
 func looksLikeWireGuard(pkt []byte) bool {
 	return len(pkt) >= 4 && pkt[0] >= 1 && pkt[0] <= 4 && pkt[1] == 0 && pkt[2] == 0 && pkt[3] == 0

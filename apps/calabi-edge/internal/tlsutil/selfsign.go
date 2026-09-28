@@ -46,7 +46,7 @@ func LoadOrGenerate(certPath, keyPath string) (tls.Certificate, error) {
 //   - `localhost` + 127.0.0.1 / ::1 for the direct-IP curl smoke
 //
 // Browsers will still warn (it's self-signed); for a frictionless dev
-// experience the user imports the.crt into their OS trust store once.
+// experience the user imports the .crt into their OS trust store once.
 // The cert is regenerated only if certPath/keyPath don't both exist on
 // disk, so the trust import survives restarts.
 func LoadOrGenerateWildcard(certPath, keyPath, baseDomain string) (tls.Certificate, error) {

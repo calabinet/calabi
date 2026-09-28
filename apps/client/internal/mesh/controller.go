@@ -652,7 +652,7 @@ func appendUniqueAddrPort(eps []netip.AddrPort, ap netip.AddrPort) []netip.AddrP
 }
 
 // wakeLoop watches for the machine having been suspended, and rebuilds what a
-// suspend invalidates. The detection is shared with the edge session
+// suspend invalidates. The detection is shared with the edge session (see
 // internal/wake); what a resume costs, and how it is repaired, differs per
 // datapath and lives in onWake.
 func (c *Controller) wakeLoop(ctx context.Context, nodeID int64, ms *magicSock, prober *discoProber) {

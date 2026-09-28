@@ -1,7 +1,7 @@
 // scaffold for the writable client UI.
 //
 // deliverable (this file):
-//   - go:embed the static SPA shipped under./ui/dist
+//   - go:embed the static SPA shipped under ./ui/dist
 //   - expose UIFileSystem() so can mount it on the status server
 //   - keep an explicit "do not import this status.go"
 //     boundary so the placeholder HTML doesn't accidentally take over

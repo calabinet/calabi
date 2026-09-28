@@ -179,8 +179,9 @@ type RegisterInput struct {
 	// A claim; approval is the admin's (see Node.ApprovedRoutes).
 	AdvertisedRoutes []netip.Prefix
 	// AliasedRoutes are the advertised CIDRs the node asks to publish under a
-	// unique stand-in prefix, because it expects them to collide with consumers'
-	// own LANs. A request, like the claim above; see Node.AliasedRoutes.
+	// unique stand-in prefix — from a current client, every advertised subnet
+	// unless its host cannot install the rewrite. A request, like the claim
+	// above; see Node.AliasedRoutes.
 	AliasedRoutes []netip.Prefix
 	// EnrolledBy is Identity.Principal of the auth key this enrollment used.
 	EnrolledBy string

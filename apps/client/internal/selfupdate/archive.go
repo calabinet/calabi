@@ -21,7 +21,7 @@ import (
 // correctly would otherwise fill the disk the service lives on.
 const maxBinaryBytes = 512 << 20
 
-// extractBinary pulls the `calabi` executable out of a.tar.gz into dest.
+// extractBinary pulls the `calabi` executable out of a .tar.gz into dest.
 func extractBinary(archivePath, dest string) error {
 	f, err := os.Open(archivePath)
 	if err != nil {
@@ -47,7 +47,7 @@ func extractBinary(archivePath, dest string) error {
 			continue
 		}
 		// Match on the BASE NAME and ignore the rest of the path. The entry is
-		// never written at the name the archive gives it, so a hostile "./."
+		// never written at the name the archive gives it, so a hostile "../.."
 		// in there cannot reach outside the destination — the classic tar
 		// traversal simply has nothing to traverse.
 		if filepath.Base(filepath.Clean(h.Name)) != "calabi" {

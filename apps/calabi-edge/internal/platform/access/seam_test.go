@@ -8,7 +8,7 @@
 // every record of that kind is dropped by Note's Valid() check. No build error,
 // no log line, just a category of visitor that stops appearing in the console.
 //
-// RUN: go test./apps/calabi-edge/internal/platform/access/ -run TestSeam -v
+// RUN: go test ./apps/calabi-edge/internal/platform/access/ -run TestSeam -v
 package access
 
 import (

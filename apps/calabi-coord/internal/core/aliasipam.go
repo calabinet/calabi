@@ -17,7 +17,7 @@ import (
 // machines and no routing table can tell them apart. The fix is to stop asking
 // it to: the coordinator hands the consumer a UNIQUE stand-in prefix of the same
 // size, and the router rewrites 1:1 on the way in. 100.96.5.222 is that site's
-//.222; the consumer's own.222 is untouched.
+// .222; the consumer's own .222 is untouched.
 //
 // Same size, host bits preserved, is not a convenience — it is what makes the
 // rewrite a stateless `iptables -j NETMAP --to <real>` instead of a table.
@@ -81,7 +81,7 @@ func aliasAllocUnit(alias netip.Prefix) netip.Prefix {
 }
 
 // Allocate returns a free alias block the same size as real. The mapping is
-// positional: alias.N is real.N, so a caller that knows the LAN host is.222
+// positional: alias.N is real.N, so a caller that knows the LAN host is .222
 // knows the alias without a lookup.
 //
 // meshnetID is accepted and ignored, like the node allocator's: v0 aliases are

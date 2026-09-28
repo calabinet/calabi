@@ -614,9 +614,9 @@ export interface MeshPeer {
 }
 
 export interface MeshStatus {
-  // subnet_aliases is the mapping for THIS node's own subnet routes when it
-  // publishes a LAN that collides with consumers' own. Shown because nobody can
-  // dial an address they cannot see.
+  // subnet_aliases is the mapping for THIS node's own subnet routes — every
+  // route the coordinator granted an alias, not only a LAN that collides with
+  // consumers' own. Shown because nobody can dial an address they cannot see.
   subnet_aliases?: { alias: string; real: string }[];
   // Routes that asked for a stand-in prefix and did not get one. They still work
   // for consumers that do not collide with them; the ones that DO collide cannot

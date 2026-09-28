@@ -17,7 +17,7 @@
 //
 // So the answer goes on the wire, from the only party that knows it.
 //
-// RUN: go test./apps/calabi-edge/internal/session/ -run TestClientPolicyReport -v
+// RUN: go test ./apps/calabi-edge/internal/session/ -run TestClientPolicyReport -v
 package session
 
 import (

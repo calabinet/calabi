@@ -12,7 +12,7 @@ import (
 
 // errSubnetRouterUnsupported: the subnet-router glue (IP forwarding + NAT) isn't
 // automated off Linux yet, like the tun route + MagicDNS integration. The :7400
-// console therefore refuses to TAKE ON these roles here
+// console therefore refuses to TAKE ON these roles here (see
 // statusapi.newAdvertisementRefused) — advertising without forwarding is a
 // blackhole for the peers that believe it. --advertise-routes and the config file
 // still work, for an operator who has wired up forwarding by hand.

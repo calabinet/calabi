@@ -16,7 +16,7 @@ import (
 // has no artifact for linux-x86_64" as an error, so those daemons logged a
 // failure every 6 hours and never told anyone a newer version existed. Knowing
 // you are old is useful even where you cannot fix it yourself — that is what the
-// console's "有新版本，请手动更新" state is made of. and
+// console's "有新版本，请手动更新" state is made of.
 type Status struct {
 	Current string `json:"current"`
 	// Latest is the manifest's version. Empty only when the check failed.

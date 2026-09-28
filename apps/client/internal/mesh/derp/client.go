@@ -120,7 +120,7 @@ type Client struct {
 
 	// ready is closed once the relay has shown it carries this link's packets:
 	// the first Pong or relayed packet. A relay that challenges the link discards
-	// every frame before the proof and registers the node only after it
+	// every frame before the proof and registers the node only after it (see
 	// pkg/relay's authenticate), so a frame sent the moment Dial returns goes
 	// nowhere — a node's first WireGuard handshake did, and waited out its
 	// 5-second retry. A Ping written right behind the proof is answered only once

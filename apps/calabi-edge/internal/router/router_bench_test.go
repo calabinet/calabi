@@ -12,7 +12,7 @@ import (
 //   - 1k registered tunnels: lookup < 200ns/op, 0 allocs
 //   - parallel (GOMAXPROCS=8): no measurable contention (RWMutex)
 //
-// Run via: go test -bench=Router -benchmem./apps/calabi-edge/internal/router/...
+// Run via: go test -bench=Router -benchmem ./apps/calabi-edge/internal/router/...
 func BenchmarkRouter_LookupHTTP(b *testing.B) {
 	for _, n := range []int{1, 10, 100, 1000, 10000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {

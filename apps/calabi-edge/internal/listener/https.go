@@ -239,7 +239,7 @@ func (h *HTTPS) handle(visitor net.Conn) {
 
 	// Stamp reverse-proxy forwarding headers (real visitor IP, scheme=https,
 	// host) on every request so the backend sees the real client; a per-tunnel
-	// header rewrite, if any, runs AFTER. Request #1 here; #2.N via the wrapper
+	// header rewrite, if any, runs AFTER. Request #1 here; #2..N via the wrapper
 	// below.
 	visitorIP := extractIP(visitor.RemoteAddr())
 	headXform := func(h []byte) []byte {
@@ -274,7 +274,7 @@ func (h *HTTPS) handle(visitor net.Conn) {
 	errCh := make(chan result, 2)
 	// Live byte metering — see metered.go and the matching block in http.go
 	// for why both halves are wrapped instead of posting totals on close.
-	// Wrap the visitor→stream half with the request-boundary counter
+	// Wrap the visitor→stream half with the request-boundary counter (see
 	// reqcount.go) so keepalive requests are metered against the per-day cap.
 	reqCounter := newRequestCounter(head, sess.AllowHTTPReq)
 	vsrc := wrapHeadTransform(br, headXform, head)

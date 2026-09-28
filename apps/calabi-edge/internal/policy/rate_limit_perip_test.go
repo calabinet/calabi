@@ -15,7 +15,7 @@
 // shipped number as per-IP would multiply every existing limit by the number of
 // visitors, and nobody would find out until the bill or the upstream did.
 //
-// RUN: go test./apps/calabi-edge/internal/policy/ -run TestRateLimitPerIP -v
+// RUN: go test ./apps/calabi-edge/internal/policy/ -run TestRateLimitPerIP -v
 package policy
 
 import (

@@ -59,7 +59,7 @@ type meshBind struct {
 	rxDirect  atomic.Uint64
 	rxRelay   atomic.Uint64
 	rxDropped atomic.Uint64
-	// Totals from sockets that have already been retired
+	// Totals from sockets that have already been retired (see
 	// retireSockStatsLocked). stats() adds the LIVE socket's counts on top.
 	sockRxPackets atomic.Uint64
 	sockRxBytes   atomic.Uint64

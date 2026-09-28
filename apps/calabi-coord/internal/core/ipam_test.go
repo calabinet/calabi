@@ -11,7 +11,7 @@ import (
 func TestMemIPAMWarmAvoidsPersistedCollision(t *testing.T) {
 	p := NewMemIPAM()
 	ctx := context.Background()
-	// Simulate a restart: nodes.1 and.2 already exist in the store.
+	// Simulate a restart: nodes .1 and .2 already exist in the store.
 	p.Warm([]netip.Addr{netip.MustParseAddr("100.64.0.1"), netip.MustParseAddr("100.64.0.2")})
 	got, err := p.Allocate(ctx, 1)
 	if err != nil {

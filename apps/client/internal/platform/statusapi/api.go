@@ -166,7 +166,7 @@ type Server struct {
 	cfg        Config
 	httpClient *http.Client
 
-	// cache memoizes GET responses for the high-poll endpoints.
+	// cache memoizes GET responses for the high-poll endpoints. See
 	// cache.go for the TTL table and invalidation rules.
 	cache *responseCache
 }
@@ -1905,7 +1905,7 @@ func (s *Server) handleInspectConnections(w http.ResponseWriter, r *http.Request
 		return
 	}
 	// Normalize nil → [] so the SPA sees "items":[] instead of
-	// "items":null. A null.items crashes JS.length /.map() and
+	// "items":null. A null .items crashes JS .length / .map() and
 	// blanks the InspectorDrawer for tunnels that haven't seen any
 	// traffic yet — same shape bug as on /tunnels.
 	items := s.cfg.Inspector.SnapshotConnections(pid)

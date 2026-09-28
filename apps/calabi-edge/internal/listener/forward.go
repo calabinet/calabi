@@ -5,7 +5,7 @@
 // here when a visitor landed on it but the requested tunnel is owned by THIS
 // edge (the peer learned the owner from tunnel-svc.ResolveOwners).
 //
-// Wire protocol: a mesh.ForwardHeader + sniffed head bytes prefix
+// Wire protocol: a mesh.ForwardHeader + sniffed head bytes prefix (see
 // internal/mesh/frame.go), then the raw bidirectional visitor stream. This
 // listener does its OWN router lookup on the header's Host — the local router
 // is authoritative for which proxy currently serves that name — opens a yamux

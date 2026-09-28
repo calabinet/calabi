@@ -10,9 +10,10 @@ import (
 // Reconciling a node's subnet aliases.
 //
 // An alias exists for a route only while BOTH halves hold: the node asked for it
-// (AliasedRoutes — only the publisher knows its LAN collides with anything) and
-// an admin approved the route (ApprovedRoutes — approving hands this node other
-// people's traffic). Either half going away releases the block.
+// (AliasedRoutes — a current client asks for every subnet it advertises unless
+// its host cannot install the rewrite; see Node.AliasedRoutes) and an admin
+// approved the route (ApprovedRoutes — approving hands this node other people's
+// traffic). Either half going away releases the block.
 //
 // Both halves are checked every time rather than on transitions, because the
 // events that change them are a daemon re-registering with an edited config and
@@ -34,8 +35,8 @@ import (
 //
 // A subnet router commonly advertises individual hosts (192.168.1.222/32), not
 // the whole LAN. Allocating a same-size block for those — one address — throws
-// away the property the whole scheme is sold on: alias.222 IS real.222, so
-// somebody who knows the NAS is.222 finds it without consulting a table. The
+// away the property the whole scheme is sold on: alias .222 IS real .222, so
+// somebody who knows the NAS is .222 finds it without consulting a table. The
 // first build did exactly that and produced `192.168.1.222/32 -> 100.96.0.0/32`,
 // which the console displayed directly under the sentence promising the last
 // octet would not change.

@@ -9,7 +9,7 @@
 // launchctl is faked; its output below is the shape `launchctl print` gives on
 // macOS. Nothing here has been run against a real Mac yet.
 //
-// RUN: go test./apps/client/cmd/calabi/ -run 'TestMacInstaller|TestDrivesMacInstaller' -v
+// RUN: go test ./apps/client/cmd/calabi/ -run 'TestMacInstaller|TestDrivesMacInstaller' -v
 package main
 
 import (

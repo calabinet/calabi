@@ -121,7 +121,7 @@ func injectForwardHeaders(head []byte, visitorIP, host string, https bool) []byt
 }
 
 // headTransformReader applies `transform` to each request head on a keep-alive
-// visitor→client byte stream (requests #2.N; request #1's head is transformed
+// visitor→client byte stream (requests #2..N; request #1's head is transformed
 // by the caller before replay). Bodies pass through verbatim. It mirrors
 // requestCounter's framing + fail-open contract: on ANY ambiguity (chunked /
 // upgrade / runaway head / EOF mid-head) it switches to verbatim passthrough and

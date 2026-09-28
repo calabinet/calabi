@@ -31,7 +31,7 @@
 // portLedger below models it exactly that way, which is why these tests
 // reproduce the user's UDP-after-TCP shape.
 //
-// RUN: go test./apps/calabi-edge/internal/session/ -run TestPortReuse -v
+// RUN: go test ./apps/calabi-edge/internal/session/ -run TestPortReuse -v
 package session
 
 import (

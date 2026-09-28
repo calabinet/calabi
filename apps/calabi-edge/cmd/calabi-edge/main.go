@@ -81,7 +81,7 @@ func run() error {
 
 	// File → env overrides → mode normalization → role + production-posture
 	// checks. The hot-reloader runs the SAME function on every reload and diffs
-	// against this cfg, so derive nothing from the file outside it —
+	// against this cfg, so derive nothing from the file outside it — see
 	// config.LoadEffective.
 	cfg, notes, err := config.LoadEffective(*configPath)
 	if err != nil {
@@ -95,7 +95,7 @@ func run() error {
 		logger.Warn("mode=standalone ignored: edge is configured for bff-edge (BYOI / control-plane cert); keeping platform semantics")
 	}
 	// Settings the certificate already answers, and anything the load could not
-	// check. One line each, straight from config.LoadEffective —
+	// check. One line each, straight from config.LoadEffective — see
 	// config/certidentity.go.
 	for _, w := range notes.Warnings {
 		logger.Warn(w)
@@ -202,7 +202,7 @@ func run() error {
 	// mesh resolver, the session-evict subject and the port-claim seed all
 	// key on it, and every one of them compares against control-plane data
 	// stamped from this node's CERTIFICATE. On a node wired to a control plane
-	// cfg.EdgeNodeID therefore comes from that certificate too
+	// cfg.EdgeNodeID therefore comes from that certificate too (see
 	// config/certidentity.go) and the two cannot disagree.
 	//
 	// Zero means nobody assigned one: a standalone / dev edge, legitimately, or
@@ -414,7 +414,7 @@ func run() error {
 	}
 	// Relay-only: state the isolation claim in the log so it can be checked
 	// against reality (`ss -ltnp` should show ONLY these two ports). Since the
-	// standalone derp-node binary was retired this is what replaces "you can
+	// standalone derp-node binary was retired this is what replaces "you can see
 	// it is a different process" — see internal/config/roleguard.go.
 	if cfg.ServesMesh() && !cfg.ServesTunnels() {
 		logger.Info("relay-only node: NO TLS-terminating listener bound; this process serves the mesh relay data port and the STUN responder only",

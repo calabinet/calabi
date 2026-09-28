@@ -13,7 +13,7 @@
 //
 // A flag may not silence a fact it has no part in deciding.
 //
-// RUN: go test./apps/client/cmd/calabi/ -run TestSecurityNote -v
+// RUN: go test ./apps/client/cmd/calabi/ -run TestSecurityNote -v
 package main
 
 import (

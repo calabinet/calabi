@@ -37,12 +37,12 @@ func fileExists(p string) bool {
 //
 // The manifest is keyed by PLATFORM, but what it carries for a platform is the
 // artifact of one particular WAY of installing: the NSIS setup.exe on Windows,
-// the.pkg on macOS, the plain tarball on Linux. Nothing used to check that the
+// the .pkg on macOS, the plain tarball on Linux. Nothing used to check that the
 // running binary had been installed that way. A scoop install running as a
 // Windows service was handed the desktop installer — which put a whole desktop
 // app on the machine, failed to register its service over scoop's, left the
 // daemon at the old version, and tried again at the next restart. A Homebrew
-// install on macOS was handed the.pkg the same way.
+// install on macOS was handed the .pkg the same way.
 //
 // An install we cannot replace correctly must SAY so (ReasonManagedElsewhere),
 // not attempt it: the right updater for it is whatever put it there.
@@ -53,7 +53,7 @@ func installerManagedFrom(goos, exe string, exists func(string) bool) bool {
 		// $INSTDIR. scoop, a hand-extracted zip, or a source build do not.
 		return exists(siblingOf(exe, "calabi-desktop.exe"))
 	case "darwin":
-		// The.pkg installs exactly one daemon path, and the LaunchDaemon execs
+		// The .pkg installs exactly one daemon path, and the LaunchDaemon execs
 		// exactly that path.
 		return strings.EqualFold(exe, "/Library/Application Support/Calabi/bin/calabi")
 	case "linux":

@@ -5,7 +5,7 @@
 // one the daemon WON, not the one it asked for — and when they differ, the user
 // deserves to know why :7400 is not theirs.
 //
-// RUN: go test./apps/client/cmd/calabi/ -run "TestConsoleAddrOf|TestPortRolledNote" -v
+// RUN: go test ./apps/client/cmd/calabi/ -run "TestConsoleAddrOf|TestPortRolledNote" -v
 package main
 
 import (

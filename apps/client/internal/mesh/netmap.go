@@ -41,9 +41,11 @@ type Peer struct {
 }
 
 // SubnetAlias is one real subnet behind this node and the unique prefix the mesh
-// reaches it by, because the real one collides with consumers' own LANs.
+// reaches it by — so that a consumer whose own LAN uses the same addresses can
+// still reach it. Granted for every advertised route that can get one, not only
+// for LANs known to collide, since nobody can see which ones do.
 //
-// Same size, always: host bits are positional, so alias.222 IS real.222. That
+// Same size, always: host bits are positional, so alias .222 IS real .222. That
 // is what makes the rewrite a single stateless rule instead of a table.
 type SubnetAlias struct {
 	Alias netip.Prefix

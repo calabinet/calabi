@@ -44,10 +44,10 @@ import (
 // to ask another service what a rule means, on a path that has to keep working
 // when that service is down. Tags are how this model names privilege.
 //
-// Ports live in the rule's own Ports field, not glued onto a dst selector.
+// Ports live in the rule's own Ports field, not glued onto a dst selector. See
 // ACLRule for why, and parsePortSpec for the spellings.
 //
-// LEGACY FORMS still READ (docs stored before the split; rejected on write,
+// LEGACY FORMS still READ (docs stored before the split; rejected on write, see
 // ValidateACLPolicy): a dst selector could carry a ":<port>" suffix, and
 // "svc:<name>" could appear in dst to mean "every node declaring that service,
 // on whatever port it declared".

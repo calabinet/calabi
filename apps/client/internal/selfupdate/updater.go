@@ -39,7 +39,7 @@ type Updater struct {
 	Apply func(ctx context.Context, installerPath string) (wait func() error, err error)
 	Logf  func(format string, args ...any)
 	// Managed reports whether the running binary is the copy this platform's
-	// update artifact replaces (installed by the desktop installer /.pkg /
+	// update artifact replaces (installed by the desktop installer / .pkg /
 	// tarball, not by scoop or Homebrew). nil = the real check, which is the
 	// fail-safe default: forgetting to wire it cannot switch the gate off.
 	// Tests set it.
@@ -200,7 +200,7 @@ func sameOriginArtifact(manifestURL, artifactURL string) error {
 
 // installerExt names the downloaded artifact. It is cosmetic for macOS and
 // Windows (the file is handed to an installer either way) but NOT for Linux:
-// there the applier opens it as a gzip tarball, and calling it.pkg would make
+// there the applier opens it as a gzip tarball, and calling it .pkg would make
 // every log line about it a small lie.
 func installerExt() string {
 	switch runtime.GOOS {

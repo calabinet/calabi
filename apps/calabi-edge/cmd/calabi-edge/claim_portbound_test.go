@@ -14,7 +14,7 @@
 //	do NOT fall through     — Persist would adopt the row that holds the port
 //	                          and soft-delete the one the user just created
 //
-// RUN: go test./apps/calabi-edge/cmd/calabi-edge/ -run TestClaimPortBound -v
+// RUN: go test ./apps/calabi-edge/cmd/calabi-edge/ -run TestClaimPortBound -v
 package main
 
 import (

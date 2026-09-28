@@ -7,7 +7,7 @@
 //
 // Each test below names the line whose removal turns it red.
 //
-// RUN: go test./apps/client/cmd/calabi/ -run TestRequireEdgeAddr -v
+// RUN: go test ./apps/client/cmd/calabi/ -run TestRequireEdgeAddr -v
 package main
 
 import (

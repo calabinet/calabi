@@ -262,7 +262,7 @@ func (h *HTTP) handle(visitor net.Conn) {
 	// Replay the bytes we consumed during sniffing. Every request head gets the
 	// reverse-proxy forwarding headers (real visitor IP, scheme, host) stamped
 	// on so the backend sees the real client; a per-tunnel header rewrite, if
-	// configured, runs AFTER so an operator can still override. Requests #2.N on
+	// configured, runs AFTER so an operator can still override. Requests #2..N on
 	// this keep-alive connection are transformed by the wrap below.
 	visitorIP := extractIP(visitor.RemoteAddr())
 	headXform := func(h []byte) []byte {

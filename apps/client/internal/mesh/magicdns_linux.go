@@ -27,7 +27,7 @@ const (
 // than mistaken for the host's config. Both exist because the restore can only
 // run on a graceful stop: a kill, a crash or a reboot leaves the rewritten file
 // in place, and without the backup the original is simply gone — the machine
-// then has no DNS at all until someone writes one by hand.
+// then has no DNS at all until someone writes one by hand. See
 // magicdns_plan.go, where the decision lives (and is tested).
 func setupOSResolver(listenIP, suffix string) (upstream string, cleanup func(), err error) {
 	current, _ := os.ReadFile(resolvConfPath)

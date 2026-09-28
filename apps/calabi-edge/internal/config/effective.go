@@ -91,7 +91,7 @@ func LoadEffective(path string) (cfg Config, notes Notes, err error) {
 	}
 	// CALABI_ENV=production: none of the dev fallbacks (no control plane where
 	// one was meant, an ungranted platform relay) may be active. Checked AFTER NormalizeForMode so "no control plane" reads as the
-	// stated standalone intent rather than a missing dependency.
+	// stated standalone intent rather than a missing dependency. See
 	// prodguard.go + F0.2.
 	if err := cfg.ValidateProductionPosture(); err != nil {
 		return Config{}, notes, err

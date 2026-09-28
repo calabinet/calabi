@@ -9,7 +9,7 @@ package statusapi
 // isolateCreds" on a file that had not been touched. A helper two tests share
 // must not live in a file that only exists in the private tree.
 //
-// RUN: go test./apps/client/internal/platform/statusapi/
+// RUN: go test ./apps/client/internal/platform/statusapi/
 
 import (
 	"path/filepath"

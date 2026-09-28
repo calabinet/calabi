@@ -1,7 +1,7 @@
 // access_test.go — the four things that decide whether this table stays a
 // bounded audit trail or becomes a liability.
 //
-// RUN: go test./apps/calabi-edge/internal/platform/access/ -v
+// RUN: go test ./apps/calabi-edge/internal/platform/access/ -v
 package access
 
 import (

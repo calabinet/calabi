@@ -170,7 +170,7 @@ func TestUpdater_UnsignedManifestRefused(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(nil)
 	installer := []byte("real payload")
 	sig := base64.StdEncoding.EncodeToString(ed25519.Sign(priv, installer))
-	srv := testServer(t, "1.7.0", installer, sig, "", nil) // no.sig served
+	srv := testServer(t, "1.7.0", installer, sig, "", nil) // no .sig served
 	defer srv.Close()
 
 	called := false

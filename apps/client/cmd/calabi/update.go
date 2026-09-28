@@ -252,7 +252,7 @@ func printUpdateStatus(s *updateSnap, base string, checkOnly bool) {
 		switch s.Reason {
 		case "managed-elsewhere":
 			// Running the platform installer here would install something
-			// ELSE (a desktop app beside a scoop install, a.pkg beside a
+			// ELSE (a desktop app beside a scoop install, a .pkg beside a
 			// Homebrew one) rather than update this binary.
 			fmt.Println("           it was not installed by the Calabi installer, so it does not")
 			fmt.Println("           update itself. Update it the way you installed it:")

@@ -7,7 +7,7 @@
 // fetched. We asked the service manager; there is no reason to pass the
 // uncertainty on to somebody with less information than us.
 //
-// RUN: go test./apps/client/cmd/calabi/ -run TestServiceNote -v
+// RUN: go test ./apps/client/cmd/calabi/ -run TestServiceNote -v
 package main
 
 import (

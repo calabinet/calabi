@@ -67,7 +67,7 @@ func TestMemAliasIPAMAllocatesAlignedSameSizeBlocks(t *testing.T) {
 	}
 }
 
-// alias.N is real.N. This is what lets a user who knows the NAS is.222 reach it
+// alias.N is real.N. This is what lets a user who knows the NAS is .222 reach it
 // at <alias prefix>.222 without consulting a table, and what NETMAP implements.
 func TestMemAliasIPAMHostBitsArePositional(t *testing.T) {
 	p := NewMemAliasIPAM()

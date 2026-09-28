@@ -10,6 +10,25 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## Unreleased
+
+Changes since 2.0.0, going into the next release.
+
+### Mesh
+
+- **Fixed** — **A subnet router started with `calabi mesh up` published its
+  subnets under their real addresses.** Since 1.8.0 a subnet router asks for a
+  stand-in prefix on every route it publishes, but the foreground command still
+  asked only for the routes named in `--alias-routes` — a flag its own help
+  calls ignored, and empty unless given. So `calabi mesh up --advertise-routes`
+  asked for none, and a peer whose own LAN uses the same range could not reach
+  the subnet. It now asks the way the daemon does: once such a router is
+  upgraded, peers reach its subnets at a stand-in address in `100.96.0.0/11`
+  rather than the real one. Routers run by the daemon, including installed
+  services, were not affected. `--alias-routes` is still accepted, so existing
+  scripts keep running, and is now actually ignored: a value it cannot parse no
+  longer stops the command.
+
 ## 2.0.0 — 2026-09-23
 
 **The edge's config file changed.** A server that has been running since 1.14.0

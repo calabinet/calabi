@@ -12,7 +12,7 @@
 // one-off status page listed testcli02 twice, the two rows differing only in
 // whether the public address carried its scheme.
 //
-// RUN: go test./apps/client/internal/session/ -run TestConfigPushPending -v
+// RUN: go test ./apps/client/internal/session/ -run TestConfigPushPending -v
 package session
 
 import (

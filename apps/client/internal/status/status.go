@@ -636,7 +636,7 @@ func (s *State) AddConnection(proxyID string) {
 // Tunnels is explicitly initialized to a non-nil empty slice so the
 // JSON wire shape is "tunnels": [] (not "tunnels": null) when no
 // tunnels are registered yet. The SPA assumes tunnels is iterable
-// and crashes on.reduce()/.forEach() of null — costs a wasted alloc
+// and crashes on .reduce()/.forEach() of null — costs a wasted alloc
 // per snapshot to save the SPA an `?? []` everywhere.
 func (s *State) SnapshotNow() Snapshot {
 	s.mu.RLock()

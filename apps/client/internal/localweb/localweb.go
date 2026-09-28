@@ -120,8 +120,9 @@ type MeshStatus struct {
 	Name     string     `json:"name,omitempty"`
 	Overlay  string     `json:"overlay,omitempty"`
 	Peers    []MeshPeer `json:"peers"`
-	// SubnetAliases is the stand-in mapping for this node's OWN subnet routes,
-	// when it publishes a LAN that collides with consumers' own.
+	// SubnetAliases is the stand-in mapping for this node's OWN subnet routes:
+	// every route the coordinator granted an alias. The daemon asks for one on
+	// every subnet it advertises, so this is not limited to LANs that collide.
 	SubnetAliases []MeshSubnetAlias `json:"subnet_aliases,omitempty"`
 	// UnaliasedRoutes are routes that asked for a stand-in prefix and did not get
 	// one. They still work for consumers that do not collide with them; the ones

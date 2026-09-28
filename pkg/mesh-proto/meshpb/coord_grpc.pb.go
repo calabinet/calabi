@@ -3,7 +3,7 @@
 // ⚠ DELIBERATELY NOT under the repo's top-level proto/ tree. The root buf module
 // (proto/buf.yaml) generates EVERYTHING it sees into pkg/api — the control-plane
 // module that is NEVER open-sourced. Generating the mesh coordination contract
-// there would defeat the isolation invariant (see./doc.go). So this file lives
+// there would defeat the isolation invariant (see ../doc.go). So this file lives
 // inside the pkg/mesh-proto module with its OWN buf module + gen config, using
 // LOCAL plugins (no network, no protoc). Regenerate with:
 //
@@ -166,7 +166,7 @@ type CoordinatorClient interface {
 	// pair plus a byte count is an access trail, which is the thing an enterprise
 	// buyer is asking for when they ask for audit.
 	//
-	// Still metadata, never content: the coordinator's promise that it cannot
+	// Still metadata, never content: the coordinator's promise that it cannot see
 	// what flows between nodes is unchanged, and nothing here comes close to it.
 	//
 	// SELF-REPORTED, like every other declaration. A compromised endpoint can
@@ -450,7 +450,7 @@ type CoordinatorServer interface {
 	// pair plus a byte count is an access trail, which is the thing an enterprise
 	// buyer is asking for when they ask for audit.
 	//
-	// Still metadata, never content: the coordinator's promise that it cannot
+	// Still metadata, never content: the coordinator's promise that it cannot see
 	// what flows between nodes is unchanged, and nothing here comes close to it.
 	//
 	// SELF-REPORTED, like every other declaration. A compromised endpoint can

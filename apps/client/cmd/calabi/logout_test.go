@@ -11,7 +11,7 @@
 // button uses), which tears all of that down. These pin the wire contract of
 // that call.
 //
-// RUN: go test./apps/client/cmd/calabi/ -run TestLogout -v
+// RUN: go test ./apps/client/cmd/calabi/ -run TestLogout -v
 package main
 
 import (

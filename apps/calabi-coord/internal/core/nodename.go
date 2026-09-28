@@ -123,7 +123,7 @@ func dedupeNodeName(name string, taken map[string]bool) string {
 	return name
 }
 
-// ValidateNodeName checks that name is a usable MagicDNS label: 1.63 chars of
+// ValidateNodeName checks that name is a usable MagicDNS label: 1..63 chars of
 // [a-z0-9-], not starting or ending with "-". Expects an already-normalized
 // name. Pure.
 // The rule itself lives in the shared contract module so the CLIENT can apply

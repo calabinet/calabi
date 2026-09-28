@@ -3,7 +3,7 @@ package main
 import "context"
 
 // refreshAfterDenial renews the daemon's credential after the coordinator
-// refused it, at most once per meshenroll.RefreshCooldown
+// refused it, at most once per meshenroll.RefreshCooldown (see
 // meshenroll.RefreshGate for why the mesh cannot wait for anything else to). It
 // reports whether it came back with a new credential, so the loop can retry at
 // once instead of waiting out its backoff.

@@ -52,14 +52,14 @@ func TestParseUAPIEmptyOrNoPeers(t *testing.T) {
 func TestSortPeersByOverlay(t *testing.T) {
 	// Overlay IPs out of order; peer "b" carries a subnet route BEFORE its overlay
 	// /32 (the sort must key on the overlay, not the first allowed-ip); "z" has no
-	// overlay (sorts last);.10 must land AFTER.5 (numeric, not lexicographic).
+	// overlay (sorts last); .10 must land AFTER .5 (numeric, not lexicographic).
 	peers := []PeerStatus{
 		{PublicKey: "e", AllowedIPs: []string{"100.64.0.10/32"}},
 		{PublicKey: "b", AllowedIPs: []string{"192.168.9.0/24", "100.64.0.4/32"}},
 		{PublicKey: "z", AllowedIPs: []string{"10.0.0.0/8"}},
 		{PublicKey: "c", AllowedIPs: []string{"100.64.0.5/32"}},
 	}
-	const want = "b,c,e,z" // 100.64.0.4,.5,.10 (numeric), then the overlay-less peer
+	const want = "b,c,e,z" // 100.64.0.4, .5, .10 (numeric), then the overlay-less peer
 	join := func() string {
 		s := ""
 		for i, p := range peers {

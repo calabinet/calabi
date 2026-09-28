@@ -18,7 +18,7 @@
 //
 // The daemon does NOT start any HTTP/TCP listener of its own. The
 // `local_addr` carried by the tunnel is a DIAL target — whatever app
-// is running there (your dev server, db, etc.) must already be up.
+// is running there (your dev server, db, etc.) must already be up. See
 // the Q/A reply on 2026-05-27 for the explainer we gave the user.
 package main
 
@@ -460,7 +460,7 @@ func runPlatformDaemon(args []string) int {
 		BFFConsoleURL: bffConsoleURL,
 		ConsoleWebURL: consoleWebURL,
 		AgentMode:     agentMode,
-		// The console's OS-service advice does not apply in a container;
+		// The console's OS-service advice does not apply in a container; see
 		// statusapi.Config.Container.
 		Container:     runningInContainer(),
 		HealthMonitor: healthMon,
@@ -1303,7 +1303,7 @@ func isAuthError(err error) bool {
 
 // isDeviceDeletedError is true when the session terminated because the
 // web console (or admin) deleted this device. The edge ships the
-// reason as the FrameError's message ("device_deleted" —
+// reason as the FrameError's message ("device_deleted" — see
 // apps/identity-svc/internal/server/clients.go::DeleteClient publish
 // + apps/calabi-edge/cmd/calabi-edge/evict.go::runEvictConsumer).
 //

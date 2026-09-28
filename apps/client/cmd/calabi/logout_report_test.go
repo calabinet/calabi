@@ -11,7 +11,7 @@
 //     "logged out" sat next to an app that was still signed in;
 //   - there was nothing to log out of, and it wrote an empty creds file anyway.
 //
-// RUN: go test./apps/client/cmd/calabi/ -run 'TestLogout|TestDaemonRefusal' -v
+// RUN: go test ./apps/client/cmd/calabi/ -run 'TestLogout|TestDaemonRefusal' -v
 package main
 
 import (

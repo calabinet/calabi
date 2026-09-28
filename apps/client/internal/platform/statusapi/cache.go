@@ -37,7 +37,7 @@ import (
 // ---------
 // The cache is keyed by (path-with-query, sha256(bearer)[:8]) so:
 //
-//   - Two SPAs talking to different users (multi-tenant dev) don't
+//   - Two SPAs talking to different users (multi-tenant dev) don't see
 //     each other's data.
 //   - Token rotation (logout/login as a different user) automatically
 //     creates a new cache bucket; the old one ages out via TTL.

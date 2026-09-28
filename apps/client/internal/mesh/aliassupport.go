@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"log/slog"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -88,6 +89,54 @@ func SubnetAliasSupport(logger *slog.Logger) (AliasSupport, string) {
 	}
 	logAliasSupportLocked(logger, v, reason)
 	return v, reason
+}
+
+// AliasRequest is what a node asks the coordinator to publish under a stand-in
+// prefix (RegisterParams.AliasRoutes): every subnet route it advertises, unless
+// this host cannot install the rewrite. Pass the whole advertisement; the exit
+// route is left out here, because a default route is not a subnet anyone's LAN
+// can collide with.
+//
+// EVERY route, and not a setting. A route published under its real CIDR is
+// unreachable from any peer whose own LAN happens to use the same addresses, and
+// neither the publisher nor the coordinator can see whose does. Leaving it as a
+// switch meant the person who had to predict the collision was the one who could
+// not observe it, and the default (off) was the answer that breaks. Aliasing
+// everything costs one NAT hop and makes the rule uniform: peers always reach a
+// subnet at its stand-in prefix.
+//
+// The only open question is whether THIS machine can install the rewrite, which
+// is a fact about the host rather than a preference, so it is probed rather than
+// configured. A host that cannot keeps publishing real CIDRs, exactly as before
+// aliases existed. Not-a-no rather than a yes: an inconclusive probe (iptables
+// could not run just now) must not quietly drop the node back to real CIDRs.
+// Asking for the alias and failing to install it logs a warning naming the
+// reason; declining to ask logs nothing and looks like a deliberate choice.
+//
+// One definition for every entry point that advertises routes. The foreground
+// `calabi mesh up` used to decide this on its own, and when aliasing stopped
+// being a choice it went on sending only what the retired --alias-routes flag
+// named: nothing, so its subnets were published under their real CIDRs.
+func AliasRequest(routes []netip.Prefix, logger *slog.Logger) []netip.Prefix {
+	var subnets []netip.Prefix
+	for _, r := range routes {
+		if !isDefaultRoute(r) {
+			subnets = append(subnets, r)
+		}
+	}
+	// Nothing to alias, so nothing to probe: the probe runs iptables, which a
+	// machine that routes no subnet has no business doing.
+	if len(subnets) == 0 {
+		return nil
+	}
+	if support, why := SubnetAliasSupport(logger); support == AliasSupportNo {
+		if logger != nil {
+			logger.Warn("mesh: this host cannot install subnet-alias rules; subnets are published under their "+
+				"real addresses, so peers whose own LAN collides with them cannot reach them", "why", why)
+		}
+		return nil
+	}
+	return subnets
 }
 
 // noteAliasInstall records what happened when the rewrite was ACTUALLY

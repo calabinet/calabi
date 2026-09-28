@@ -11,7 +11,7 @@
 // front of a command whose appeal is that it starts immediately, so it must
 // happen exactly once per machine and never where it would be useless.
 //
-// RUN: go test./apps/client/cmd/calabi/ -run TestShouldRegisterDevice -v
+// RUN: go test ./apps/client/cmd/calabi/ -run TestShouldRegisterDevice -v
 package main
 
 import (

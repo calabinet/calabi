@@ -3,7 +3,7 @@
 // ⚠ DELIBERATELY NOT under the repo's top-level proto/ tree. The root buf module
 // (proto/buf.yaml) generates EVERYTHING it sees into pkg/api — the control-plane
 // module that is NEVER open-sourced. Generating the mesh coordination contract
-// there would defeat the isolation invariant (see./doc.go). So this file lives
+// there would defeat the isolation invariant (see ../doc.go). So this file lives
 // inside the pkg/mesh-proto module with its OWN buf module + gen config, using
 // LOCAL plugins (no network, no protoc). Regenerate with:
 //
@@ -68,16 +68,19 @@ type RegisterNodeRequest struct {
 	// need no console visit to propose what they offer.
 	DeclaredServices []*DeclaredService `protobuf:"bytes,9,rep,name=declared_services,json=declaredServices,proto3" json:"declared_services,omitempty"`
 	// aliased_routes are the advertised_routes this node asks to be published to
-	// peers under a UNIQUE stand-in prefix instead of their own addresses, because
-	// it expects them to collide with consumers' own LANs — 192.168.1.0/24 is
-	// everywhere, and a consumer that is itself on it can never reach this one.
-	// Must be a subset of advertised_routes; the coordinator ignores the rest.
+	// peers under a UNIQUE stand-in prefix instead of their own addresses, so a
+	// consumer whose own LAN uses the same addresses can still reach them —
+	// 192.168.1.0/24 is everywhere, and a consumer that is itself on it can never
+	// reach this one under its real range. Must be a subset of advertised_routes;
+	// the coordinator ignores the rest.
 	//
 	// A REQUEST, like advertised_routes: an alias is granted only once an admin
-	// has also approved the route. Only the publisher can know its LAN is one of
-	// the crowded ones — the coordinator cannot see consumers' local subnets, so
-	// it cannot guess, and aliasing a route that does not collide costs everyone a
-	// change of address for nothing.
+	// has also approved the route. A current client sends EVERY advertised subnet
+	// here unless its host cannot install the rewrite — which consumers collide
+	// is visible to nobody, so it is not a per-route guess. The coordinator still
+	// aliases only what is asked for, because asking doubles as the capability
+	// signal: 1.7.1 and older never send this field and cannot install the rule,
+	// so aliasing their routes unasked would black-hole them.
 	AliasedRoutes []string `protobuf:"bytes,10,rep,name=aliased_routes,json=aliasedRoutes,proto3" json:"aliased_routes,omitempty"`
 	// Proof of possession (mesh protocol v2): the challenge this registration
 	// answers, and the box sealed over it with the node private key
@@ -2445,7 +2448,7 @@ type NetMap struct {
 	// relays (R0'). Opaque here on purpose: the node forwards the bytes verbatim
 	// to a relay, which verifies them with the coordinator's public key held as
 	// static config — so a relay decides who may connect WITHOUT ever talking to
-	// the control plane. Format and rules in./relaygrant.go.
+	// the control plane. Format and rules in ../relaygrant.go.
 	//
 	// Empty means the node has no authorization to present. That is the normal
 	// state on a coordinator that doesn't issue grants (relays then must not
@@ -2492,8 +2495,8 @@ type NetMap struct {
 	// They still work: they publish under their real CIDR, so every consumer that
 	// does not collide with them reaches them exactly as before. The ones that DO
 	// collide cannot, and that is the failure this field exists to make visible —
-	// the operator who asked for the alias is the only person who can act on it,
-	// and the alternative is a line in the coordinator's log that nobody reads.
+	// this node's operator is the only person who can act on it, and the
+	// alternative is a line in the coordinator's log that nobody reads.
 	UnaliasedRoutes []string `protobuf:"bytes,9,rep,name=unaliased_routes,json=unaliasedRoutes,proto3" json:"unaliased_routes,omitempty"`
 	// alias_budget_addrs / alias_used_addrs are the meshnet's alias budget and
 	// its current usage, in ADDRESSES (a /24 is 256, a /16 is 65536). Sent so the
@@ -2645,9 +2648,9 @@ func (x *NetMap) GetRelayBandwidthBurstKbps() uint32 {
 
 // SubnetAlias is one real subnet and the unique prefix standing in for it.
 //
-// Same size, always: the host bits are positional, so alias.222 IS real.222.
+// Same size, always: the host bits are positional, so alias .222 IS real .222.
 // That is what lets the router rewrite with one stateless rule rather than a
-// lookup table, and what lets a person who knows the NAS is.222 find it without
+// lookup table, and what lets a person who knows the NAS is .222 find it without
 // consulting anything.
 type SubnetAlias struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`

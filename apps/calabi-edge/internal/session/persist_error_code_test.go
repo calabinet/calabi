@@ -24,7 +24,7 @@
 // them. So the adapter tags the error with a sentinel declared here, and this
 // package asks errors.Is.
 //
-// RUN: go test./apps/calabi-edge/internal/session/ -run TestPersistError -v
+// RUN: go test ./apps/calabi-edge/internal/session/ -run TestPersistError -v
 package session
 
 import (

@@ -94,7 +94,7 @@ func runRelay(ctx context.Context, rc config.MeshService, logger *slog.Logger, r
 
 // relayAuthConfig builds the R0' auth posture from the relay config, mirroring
 // the retired calabi-derp's authConfig (its DERP_NODE_KIND / _REQUIRE_AUTH /
-// _COORD_PUBKEY are now relay.kind /.require_auth /.coord_pubkey).
+// _COORD_PUBKEY are now relay.kind / .require_auth / .coord_pubkey).
 // Kind defaults to "self": a merged BYOI node's relay is the org's own relay, and
 // defaulting to platform would let it serve traffic an over-quota grant meant to
 // stop.

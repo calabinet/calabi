@@ -309,7 +309,7 @@ func runLocalDaemon(args []string) int {
 	// Local console: serve the embedded SPA + a LOCAL /v1/* API (no bff-console)
 	// with plain-browser access allowed. The SPA renders in standalone (its
 	// /v1/me reports plan.code="standalone"); create / delete / edit-security
-	// write through the supervisor (live reconcile + YAML persistence).
+	// write through the supervisor (live reconcile + YAML persistence). See
 	// internal/localweb +
 	lw := localweb.New(localweb.Config{
 		Lister:    sv,
@@ -717,7 +717,7 @@ func stripRemovedEdgeKeys(doc *yaml.Node) []string {
 // an open relay).
 //
 // The rule itself lives in internal/probe (localaddr.go) because the wizard's
-// reachability check needs exactly the same guard before it dials —
+// reachability check needs exactly the same guard before it dials — see
 // probe.ValidateLocalTarget for the cases it covers.
 func validateLocalUpstream(local string) error {
 	return probe.ValidateLocalTarget(local)

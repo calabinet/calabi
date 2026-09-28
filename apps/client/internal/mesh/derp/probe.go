@@ -79,7 +79,7 @@ func (r *ProbeResult) Loss() float64 {
 	return float64(r.Sent-r.Echoed) / float64(r.Sent) * 100
 }
 
-// Quantile returns the RTT at q (0.1). RTTs must be sorted; Probe sorts them.
+// Quantile returns the RTT at q (0..1). RTTs must be sorted; Probe sorts them.
 //
 // NEAREST-RANK, rounding UP. Truncating instead (idx = (n-1)*q) systematically
 // under-reports the tail — with five samples it puts p90 on the fourth, so a

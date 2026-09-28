@@ -7,7 +7,7 @@
 // same shell. The refusal means the service is there and its state is out of
 // reach; its console, on loopback, is not.
 //
-// RUN: go test./apps/client/cmd/calabi/ -run TestDaemonStatus -v
+// RUN: go test ./apps/client/cmd/calabi/ -run TestDaemonStatus -v
 package main
 
 import (

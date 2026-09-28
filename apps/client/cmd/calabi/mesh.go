@@ -70,7 +70,9 @@ func runMeshUp(args []string) int {
 	keyFile := fs.String("key-file", defaultMeshKeyPath(), "path to this device's WireGuard private key (created if absent)")
 	magicDNS := fs.Bool("magic-dns", false, "resolve mesh device names by REWRITING this machine's /etc/resolv.conf (Linux only; off by default — an ungraceful exit leaves the host with no DNS)")
 	advertise := fs.String("advertise-routes", "", "comma-separated subnets to advertise as a subnet router, /24 or smaller (e.g. 192.168.1.0/24). A bare address is a single host: 192.168.1.22")
-	aliasRoutes := fs.String("alias-routes", "", "DEPRECATED and ignored: every advertised route is aliased where the host supports it")
+	// Registered so scripts written when aliasing was a choice still parse, and
+	// never read: what to alias is mesh.AliasRequest's decision, below.
+	fs.String("alias-routes", "", "DEPRECATED and ignored: every advertised route is aliased where the host supports it")
 	advertiseExit := fs.Bool("advertise-exit-node", false, "advertise this device as an exit device (offer to forward peers' default route to the internet)")
 	exitNode := fs.String("exit-node", "", "route this device's default traffic through the named exit device (name or overlay IP)")
 	trustMode := fs.String("trust", "", "how to check the coordinator's certificate: system, pin, ca, plaintext or platform. Default: platform for a tk_ key, otherwise system (CALABI_EDGE_CA_FILE = ca, CALABI_INSECURE=1 = plaintext)")
@@ -100,19 +102,17 @@ func runMeshUp(args []string) int {
 		fmt.Fprintf(os.Stderr, "calabi mesh up: --advertise-routes: %v\n", err)
 		return 2
 	}
-	// Which of them to publish under a stand-in prefix. Parsed but not checked
-	// against `routes`: the coordinator grants an alias only for a route it also
-	// approved, so a stray entry is inert rather than fatal.
-	aliased, err := parseCIDRList(*aliasRoutes)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "calabi mesh up: --alias-routes: %v\n", err)
-		return 2
-	}
 	if *advertiseExit {
 		routes = append(routes, netip.PrefixFrom(netip.IPv4Unspecified(), 0)) // 0.0.0.0/0
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+	// Every advertised subnet asks for a stand-in prefix unless this host cannot
+	// install the rewrite: the daemon's rule, from the same function. Asking for
+	// none would publish them under their real CIDRs, where a peer whose own LAN
+	// uses the same range cannot reach them.
+	aliased := mesh.AliasRequest(routes, logger)
 
 	priv, err := mesh.LoadOrCreateKey(*keyFile)
 	if err != nil {

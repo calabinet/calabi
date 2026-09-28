@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// tgz builds a.tar.gz from name→content pairs, in order.
+// tgz builds a .tar.gz from name→content pairs, in order.
 func tgz(t *testing.T, entries ...[2]string) string {
 	t.Helper()
 	var buf bytes.Buffer
@@ -53,7 +53,7 @@ func TestExtractBinaryPullsCalabiOut(t *testing.T) {
 }
 
 // A path in the archive must not be able to steer where we write. The entry is
-// written at a destination the CALLER chose, so the classic "././etc/cron.d"
+// written at a destination the CALLER chose, so the classic "../../etc/cron.d"
 // has nothing to traverse — this pins that the name is only ever matched, never
 // joined.
 func TestExtractBinaryIgnoresThePathInTheArchive(t *testing.T) {

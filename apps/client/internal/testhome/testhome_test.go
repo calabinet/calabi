@@ -1,6 +1,6 @@
 package testhome
 
-// RUN: go test./apps/client/internal/testhome/
+// RUN: go test ./apps/client/internal/testhome/
 
 import (
 	"os"

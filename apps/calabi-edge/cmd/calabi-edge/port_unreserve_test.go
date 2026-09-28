@@ -12,7 +12,7 @@
 // routeApplier.OnLocalDelta, not through PortPool.Unreserve. A pool method
 // nobody calls would pass a test of the method and leak in production.
 //
-// RUN: go test./apps/calabi-edge/cmd/calabi-edge/ -run TestLocalDelta -v
+// RUN: go test ./apps/calabi-edge/cmd/calabi-edge/ -run TestLocalDelta -v
 package main
 
 import (

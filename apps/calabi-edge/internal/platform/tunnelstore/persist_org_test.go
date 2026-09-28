@@ -15,7 +15,7 @@
 // Idempotency across a reconnect is the branch's purpose and still works: the
 // SAME org resolving the SAME domain gets the same row back.
 //
-// RUN: go test./apps/calabi-edge/internal/platform/tunnelstore/ -run TestPersist -v
+// RUN: go test ./apps/calabi-edge/internal/platform/tunnelstore/ -run TestPersist -v
 package tunnelstore_test
 
 import (

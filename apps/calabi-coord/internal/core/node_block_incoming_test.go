@@ -11,7 +11,7 @@
 // every un-upgraded machine in the fleet into a positive claim that it accepts
 // connections.
 //
-// RUN: go test./apps/calabi-coord/internal/core/ -run TestNodeBlockIncoming -v
+// RUN: go test ./apps/calabi-coord/internal/core/ -run TestNodeBlockIncoming -v
 package core
 
 import (

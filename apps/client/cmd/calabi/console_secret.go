@@ -1,7 +1,7 @@
 package main
 
 // The local console's unlock secret: what a visitor who is NOT on this machine
-// must enter before the console's /v1 API answers them
+// must enter before the console's /v1 API answers them (see
 // internal/status/console_unlock.go for how it is enforced).
 //
 // Callers on this machine never need it — the desktop shell and a local browser

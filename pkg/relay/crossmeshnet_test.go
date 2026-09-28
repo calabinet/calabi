@@ -6,7 +6,7 @@ package relay
 // delivered it by then, and relay usage is billed as the RECEIVER egress - so a
 // node of another org could run up your bill with junk addressed to your key.
 //
-//   go test./pkg/relay/ -run TestRelayRefusesCrossMeshnet -v
+//   go test ./pkg/relay/ -run TestRelayRefusesCrossMeshnet -v
 
 import (
 	"log/slog"

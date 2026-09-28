@@ -78,7 +78,7 @@ type IPAM interface {
 // AliasIPAM allocates stand-in PREFIXES for subnet routes whose real addresses
 // would collide with a consumer's own LAN — the same shape as IPAM, one level
 // up. The returned prefix is the same size as real, so the subnet router can
-// rewrite 1:1. See core.MemAliasIPAM and
+// rewrite 1:1. See core.MemAliasIPAM
 //
 // Optional on the Coordinator: a nil AliasIPAM means this deployment does not
 // offer aliasing, and every alias request is simply not granted (the route is

@@ -607,7 +607,7 @@ func (d *WGDatapath) SetConfig(cfg WGConfig) error {
 	// everything else in the log.
 	if fp := droppedFingerprint(dropped); fp != d.curDroppedFP {
 		for _, dr := range dropped {
-			d.logger.Warn("mesh: this machine is already on that network; not routing the advertised prefix into the mesh (local wins — it is reachable on the wire)",
+			d.logger.Warn("mesh: this machine is already on that network; not routing the advertised prefix into the mesh (local wins — its traffic stays on the local link, so the peer's subnet is unreachable from here if it is another site using this LAN's addresses, or if this link isolates clients)",
 				"advertised", dr.Advertised, "local", dr.Local, "peer", dr.Peer.String())
 		}
 		// The transition back is worth exactly one line: without it, a log that

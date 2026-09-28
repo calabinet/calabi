@@ -9,7 +9,7 @@
 // correct after the next hire. Without a person dimension the same policy has to
 // be spelled out per human and rewritten on every new laptop.
 //
-// RUN: go test./apps/calabi-coord/internal/core/ -run 'TestACLUser|TestACLAutogroup|TestSelectorPort' -v
+// RUN: go test ./apps/calabi-coord/internal/core/ -run 'TestACLUser|TestACLAutogroup|TestSelectorPort' -v
 package core
 
 import (

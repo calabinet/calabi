@@ -182,7 +182,7 @@ func (q *sendQueue) enqueue(frame []byte) {
 //
 // It also measures itself: bytes out and time spent blocked, bucketed into
 // windows and handed to ctl (nil = no adaptive sizing) so the kernel send buffer
-// behind this socket can be sized from what the link actually does.
+// behind this socket can be sized from what the link actually does. See
 // sndbuf.go for why that measurement belongs here -- this loop is the only place
 // that knows both how much went out and how hard it was to get it out.
 func (q *sendQueue) run(conn net.Conn, wmu *sync.Mutex, closed <-chan struct{}, ctl *sndbufCtl) {

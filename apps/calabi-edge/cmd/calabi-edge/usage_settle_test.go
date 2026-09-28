@@ -7,7 +7,7 @@
 // closed between two ticks reported not one byte and then sat in the console as
 // an offline tunnel with no traffic. This test drives the real hook.
 //
-// RUN: go test./apps/calabi-edge/cmd/calabi-edge/ -run TestProxyClose -v
+// RUN: go test ./apps/calabi-edge/cmd/calabi-edge/ -run TestProxyClose -v
 package main
 
 import (

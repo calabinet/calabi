@@ -1,7 +1,7 @@
 // errorpage_test.go — what a stranger is allowed to learn from a refusal, and
 // what shape it arrives in.
 //
-// RUN: go test./apps/calabi-edge/internal/listener/ -run TestErrorPage -v
+// RUN: go test ./apps/calabi-edge/internal/listener/ -run TestErrorPage -v
 package listener
 
 import (

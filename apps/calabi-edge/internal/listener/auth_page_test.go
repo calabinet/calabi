@@ -17,7 +17,7 @@
 // drops the header and silently breaks password-protected tunnels: no prompt
 // ever appears again. So this file pins BOTH halves against each other.
 //
-// RUN: go test./apps/calabi-edge/internal/listener/ -run TestAuthPage -v
+// RUN: go test ./apps/calabi-edge/internal/listener/ -run TestAuthPage -v
 package listener
 
 import (

@@ -20,7 +20,7 @@ import (
 // degradations stop being degradations and become startup failures.
 //
 // The signal is CALABI_ENV=production, set in docker-compose.yml itself rather
-// than in.env — a deployment is production BY CONSTRUCTION, not because an
+// than in .env — a deployment is production BY CONSTRUCTION, not because an
 // operator remembered to add a line.
 
 // isProduction reports whether this process claims a production deployment.

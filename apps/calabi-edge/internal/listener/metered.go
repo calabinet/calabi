@@ -25,7 +25,7 @@ func proxyMeters(sess *session.Session, proxyID string) (in, out *atomic.Uint64)
 // each successful Write. Used to make sess.BytesIn / sess.BytesOut update
 // *while* bytes are flowing, not only when the proxy direction terminates.
 //
-// Why this is needed (and not just a post-Copy.Add):
+// Why this is needed (and not just a post-Copy .Add):
 //
 // The usage reporter ticks every 60s and publishes deltas of
 // sess.BytesIn / sess.BytesOut. If those counters only grow when a

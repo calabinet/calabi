@@ -51,9 +51,10 @@ type RegisterParams struct {
 	// AdvertiseRoutes are subnet-router CIDRs this node offers to forward (MESH.7).
 	AdvertiseRoutes []netip.Prefix
 	// AliasRoutes are the AdvertiseRoutes this node asks to be published under a
-	// unique stand-in prefix, because it expects them to collide with consumers'
-	// own LANs. Only the publisher can know that — the coordinator cannot
-	// anyone's local subnets. A request: it takes route approval to be granted.
+	// unique stand-in prefix: all of its subnets, unless this host cannot install
+	// the rewrite. Fill it from AliasRequest, never by hand: left nil beside a
+	// subnet advertisement, it publishes those subnets under their real CIDRs. A
+	// request: it takes route approval to be granted.
 	AliasRoutes []netip.Prefix
 	// DeviceFingerprint is this install's Publish-side device id. Sent so the
 	// console can link this mesh device to its client record; empty when the

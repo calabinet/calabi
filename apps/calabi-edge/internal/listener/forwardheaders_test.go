@@ -77,7 +77,7 @@ func TestInjectForwardHeaders(t *testing.T) {
 	})
 }
 
-// Keep-alive requests #2.N get the forwarding headers too, via wrapHeadTransform.
+// Keep-alive requests #2..N get the forwarding headers too, via wrapHeadTransform.
 func TestWrapHeadTransform_ForwardHeadersAllRequests(t *testing.T) {
 	xform := func(h []byte) []byte { return injectForwardHeaders(h, "203.0.113.7", "h", false) }
 	firstHead := []byte("POST /1 HTTP/1.1\r\nContent-Length: 5\r\n\r\n")

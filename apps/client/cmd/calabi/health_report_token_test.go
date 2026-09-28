@@ -23,7 +23,7 @@
 // function; clientreg is only ever called on the post-login path, where the file
 // always has a token.
 //
-// RUN: go test./apps/client/cmd/calabi/ -run TestUpstreamHealthToken -v
+// RUN: go test ./apps/client/cmd/calabi/ -run TestUpstreamHealthToken -v
 package main
 
 import (

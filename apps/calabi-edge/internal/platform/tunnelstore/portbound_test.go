@@ -14,7 +14,7 @@
 //
 // The sentinel is what lets OnProxyOpened hard-fail instead of falling through.
 //
-// RUN: go test./apps/calabi-edge/internal/platform/tunnelstore/ -run TestClaimPortBound -v
+// RUN: go test ./apps/calabi-edge/internal/platform/tunnelstore/ -run TestClaimPortBound -v
 package tunnelstore_test
 
 import (

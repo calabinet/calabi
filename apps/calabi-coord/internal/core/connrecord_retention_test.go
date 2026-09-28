@@ -4,7 +4,7 @@
 // The console limits its input box too, but that only constrains whoever is
 // typing. Anything reaching the admin surface with curl meets this.
 //
-// RUN: go test./apps/calabi-coord/internal/core/ -run TestConnRecordRetention -v
+// RUN: go test ./apps/calabi-coord/internal/core/ -run TestConnRecordRetention -v
 package core
 
 import (

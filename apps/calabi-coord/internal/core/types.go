@@ -4,7 +4,7 @@
 // self-hosted coordinator (MESH.9) ships. The platform build wraps these
 // interfaces with multi-tenant / billing / SSO stores; the self-hosted build
 // wires the in-memory / file-backed stubs in this file. See the wire_*.go seam
-// in cmd/calabi-coord and
+// in cmd/calabi-coord
 package core
 
 import (
@@ -19,7 +19,7 @@ import (
 type MeshnetID int64
 
 // RouteAlias pairs one advertised subnet with the unique prefix that stands in
-// for it on the mesh. Same size, so host bits are positional: alias.222 IS real
+// for it on the mesh. Same size, so host bits are positional: alias .222 IS real
 // .222, which is what lets the subnet router rewrite with a single stateless
 // NETMAP rule rather than a lookup table.
 type RouteAlias struct {
@@ -58,12 +58,15 @@ type Node struct {
 	// works today — see Coordinator.Register.
 	RoutesReviewed bool
 	// AliasedRoutes are the advertised CIDRs this node ASKS to be published under
-	// a unique stand-in prefix instead of their own addresses, because it expects
-	// them to collide with consumers' own LANs (192.168.1.0/24 is everywhere).
-	// A request, like AdvertisedRoutes: it takes approval to become RouteAliases.
-	// Off by default — the coordinator cannot see a consumer's local subnets and
-	// so cannot guess whether a collision exists, and aliasing a route that does
-	// not collide only costs everyone a change of address for nothing.
+	// a unique stand-in prefix instead of their own addresses. A request, like
+	// AdvertisedRoutes: it takes approval to become RouteAliases.
+	//
+	// A current client asks for EVERY subnet it advertises unless its host cannot
+	// install the 1:1 rewrite: whether a route collides with some consumer's LAN
+	// is visible to nobody, so it is no longer a per-route guess. The coordinator still
+	// aliases only what is asked for, because the request doubles as the signal
+	// that the node CAN rewrite: 1.7.1 and older never send it and cannot install
+	// the rule, so aliasing their routes unasked would black-hole every one.
 	AliasedRoutes []netip.Prefix
 	// RouteAliases is the allocation: the stand-in prefix this coordinator gave
 	// each aliased route. Assigned when the route is both approved and requested,
@@ -156,9 +159,9 @@ type NetMap struct {
 	// They are published under their real CIDR, so nothing is broken for the
 	// consumers that do not collide with them; the ones that DO collide simply
 	// cannot reach them, silently. That silence is the problem this field exists
-	// to end: the operator who asked for the alias is the only person who can act
-	// (ask an admin to raise the budget, or advertise a narrower subnet), and
-	// until now the only trace was a line in the coordinator's own log.
+	// to end: this node's operator is the only person who can act (ask an admin
+	// to raise the budget, or advertise a narrower subnet), and until now the
+	// only trace was a line in the coordinator's own log.
 	//
 	// Derived, never stored: "wanted" minus "allocated" is exactly the set.
 	UnaliasedRoutes []netip.Prefix

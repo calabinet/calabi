@@ -110,7 +110,7 @@ func nftMasqueradeRules(routes []netip.Prefix) []string {
 //	iptables -t nat -A PREROUTING -d 100.96.5.0/24 -j NETMAP --to 192.168.1.0/24
 //
 // NETMAP is a 1:1 block rewrite: it maps the network part and leaves the host
-// part alone, which is exactly the alias contract (alias.222 is real.222) and
+// part alone, which is exactly the alias contract (alias .222 is real .222) and
 // is why no state or lookup table is involved. The reply direction needs no rule
 // of its own — conntrack reverses this automatically, so the consumer sees the
 // answer coming from the alias it dialled.

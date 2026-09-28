@@ -30,7 +30,7 @@ import (
 //   - the next 30s window picks them up; AUTHs admitted during the
 //     window with a stale value will still get the right answer on
 //     their next reconnect
-//   - billing-svc publishes calabi.usage.deny.<org> /.allow.<org> on
+//   - billing-svc publishes calabi.usage.deny.<org> / .allow.<org> on
 //     hard transitions; this cache subscribes and invalidates the
 //     affected org immediately for those high-stakes changes
 //

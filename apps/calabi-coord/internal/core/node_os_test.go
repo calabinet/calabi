@@ -7,7 +7,7 @@
 // constantly — so "apply only when non-empty" is the whole difference between a
 // column that fills in and one that flickers empty for half a fleet.
 //
-// RUN: go test./apps/calabi-coord/internal/core/ -run TestNodeOS -v
+// RUN: go test ./apps/calabi-coord/internal/core/ -run TestNodeOS -v
 package core
 
 import (

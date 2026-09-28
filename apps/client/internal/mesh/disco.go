@@ -22,7 +22,7 @@ import (
 //	[6]  discoMagic
 //	[32] sender disco public key   (lets the receiver pick the box key)
 //	[24] nonce
-//	[.] NaCl box(plaintext) sealed to (sender disco priv, receiver disco pub)
+//	[..] NaCl box(plaintext) sealed to (sender disco priv, receiver disco pub)
 //
 // The sealed plaintext is a discoMessage. The box gives confidentiality + sender
 // authentication + tamper detection in one step.

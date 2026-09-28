@@ -27,7 +27,7 @@ import (
 // coordinator issues no grants — the posture until the relays are ready to
 // require them.
 //
-// A self-hosted coordinator always signs, with./coord-grant.key unless told
+// A self-hosted coordinator always signs, with ./coord-grant.key unless told
 // otherwise: its edge accepts devices only by this signature, so a self-hosted server
 // without a key would have no way to let anyone serve a tunnel. A relay that
 // does not require grants ignores them, so signing costs nothing where they are
@@ -36,7 +36,7 @@ import (
 const (
 	relayGrantKeyEnv = "RELAY_GRANT_KEY_FILE"
 	// defaultGrantKeyFile is the self-hosted default, in the working directory
-	// like the self-signed certificate's./coord-tls.
+	// like the self-signed certificate's ./coord-tls.
 	defaultGrantKeyFile = "coord-grant.key"
 	// grantPubkeyFileEnv names a file the coordinator (re)writes with the public
 	// half at start — for an edge that reads it from a volume the two share.

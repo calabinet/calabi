@@ -69,8 +69,10 @@ type meshAdvertise struct {
 	Routes   []string // subnet-router CIDRs this node advertises (MESH.7a)
 	ExitNode bool     // advertise this node AS an exit node (MESH.7b)
 	ExitPeer string   // route THIS node's default traffic through this exit peer
-	// AliasRoutes is the subset of Routes to publish under a unique stand-in
-	// prefix, for LANs that collide with consumers' own.
+	// AliasRoutes is IGNORED, as is the meshConfig.AliasRoutes it is copied into:
+	// every advertised subnet is published under a stand-in prefix wherever the
+	// host can install the rewrite (see mesh.AliasRequest). It only carries the
+	// deprecated --alias-routes / creds value along; nothing acts on it.
 	AliasRoutes []string
 }
 

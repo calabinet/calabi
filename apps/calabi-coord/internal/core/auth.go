@@ -48,7 +48,7 @@ type Authenticator interface {
 	Reauthorize(ctx context.Context, meshnet MeshnetID, principal string) error
 	// Spend is called once an enrollment with an auth key has proved the
 	// device, just before it is recorded, with the principal Resolve named. A
-	// key with a limited number of uses (a coordinator-minted one,
+	// key with a limited number of uses (a coordinator-minted one, see
 	// authkeys.go) counts one here, and the returned func takes it back if the
 	// enrollment then fails. Keys without uses return a no-op func.
 	//

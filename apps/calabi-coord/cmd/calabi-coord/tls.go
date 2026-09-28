@@ -38,7 +38,7 @@ import (
 //     CLIENT credential (mTLS into bff-edge), which would widen the blast radius
 //     of a coord compromise. One of the two set without the other aborts.
 //   - Neither set: a self-signed certificate, generated once and kept in
-//     CALABI_COORD_TLS_DIR (default./coord-tls) so its fingerprint survives a
+//     CALABI_COORD_TLS_DIR (default ./coord-tls) so its fingerprint survives a
 //     restart. Devices pin that fingerprint (`calabi-coord fingerprint` prints
 //     it; invite links carry it) —
 //     Until 2026-09 this case served PLAINTEXT, and the auth key crossed the

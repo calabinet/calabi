@@ -30,7 +30,7 @@ func applyInstaller(ctx context.Context, archivePath string) (func() error, erro
 
 // swapBinary is the Linux apply: a BINARY SWAP, not an installer run.
 //
-// There is no.pkg or.msi here; the published artifact is the release tarball,
+// There is no .pkg or .msi here; the published artifact is the release tarball,
 // one static binary in it. That turns out to be simpler than either installer:
 // Linux lets you rename a file over a RUNNING executable (the old inode stays
 // alive for the process holding it), so the swap is a single atomic rename and

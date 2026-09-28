@@ -9,7 +9,7 @@
 // The writable API is what separates the two: a daemon attaches one, the
 // one-off commands never do. So that is what decides which page goes out.
 //
-// RUN: go test./apps/client/internal/status/ -run TestOneShot -v
+// RUN: go test ./apps/client/internal/status/ -run TestOneShot -v
 package status
 
 import (

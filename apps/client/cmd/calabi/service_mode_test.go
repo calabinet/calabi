@@ -12,7 +12,7 @@
 // that boundary. The mode — the one preference that decides whether this
 // machine talks to the platform at all — was the one that did not travel.
 //
-// RUN: go test./apps/client/cmd/calabi/ -run TestServiceInstallEnv_Standalone -v
+// RUN: go test ./apps/client/cmd/calabi/ -run TestServiceInstallEnv_Standalone -v
 package main
 
 import (

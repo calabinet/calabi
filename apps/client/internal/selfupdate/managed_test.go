@@ -42,7 +42,7 @@ func TestInstallerManagedMatrix(t *testing.T) {
 		{"windows zip, desktop installed elsewhere", "windows", `C:\tools\calabi\calabi.exe`,
 			has(`C:\Program Files\Calabi\calabi-desktop.exe`), false},
 
-		// macOS: exactly the path the.pkg installs and the LaunchDaemon execs.
+		// macOS: exactly the path the .pkg installs and the LaunchDaemon execs.
 		{"macos pkg", "darwin", "/Library/Application Support/Calabi/bin/calabi", has(), true},
 		{"macos homebrew", "darwin", "/opt/homebrew/Cellar/calabi/1.11.0/bin/calabi", has(), false},
 		{"macos tarball", "darwin", "/usr/local/bin/calabi", has(), false},

@@ -27,7 +27,7 @@ type DialOptions struct {
 	CACertFile string
 	// TLSConfig, when set, replaces Insecure and CACertFile: the caller has
 	// decided how this server's certificate is checked (a self-hosted edge
-	// pinned by fingerprint, or only the operator's own CA —
+	// pinned by fingerprint, or only the operator's own CA — see
 	// internal/trust). Dial still sets the protocol and TLS 1.3 floor.
 	TLSConfig *tls.Config
 	Timeout   time.Duration // overall dial+handshake timeout

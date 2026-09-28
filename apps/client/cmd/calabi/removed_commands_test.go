@@ -10,7 +10,7 @@
 // comment explaining why the command is gone is exactly what should be allowed
 // to name it.
 //
-// RUN: go test./apps/client/cmd/calabi/ -run TestNoHintAdvertisesARemovedCommand -v
+// RUN: go test ./apps/client/cmd/calabi/ -run TestNoHintAdvertisesARemovedCommand -v
 package main
 
 import (

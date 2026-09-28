@@ -8,7 +8,7 @@
 //	+---+---+--------------------------------+
 //	|  len  |          datagram bytes        |
 //	+---+---+--------------------------------+
-//	 2 bytes              0.65535
+//	 2 bytes              0..65535
 //
 // Maximum payload is 65535 bytes; IPv4 UDP is capped at 65507 in practice,
 // so the field is wide enough. The 0-length case is permitted as a

@@ -15,7 +15,7 @@
 //	| RequestID (8B)                |
 //	|                               |
 //	+-------+-------+-------+-------+
-//	| Payload (0.16 MiB)           |
+//	| Payload (0..16 MiB)           |
 //	+-------------------------------+
 //
 // Numbering is big-endian throughout.

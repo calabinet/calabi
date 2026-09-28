@@ -5,7 +5,7 @@
 // something a platform can infer from their plan or their region — guessing
 // either way is wrong in a way they pay for.
 //
-// RUN: go test./apps/calabi-coord/internal/core/ -run TestConnRecordsOptOut -v
+// RUN: go test ./apps/calabi-coord/internal/core/ -run TestConnRecordsOptOut -v
 package core
 
 import (

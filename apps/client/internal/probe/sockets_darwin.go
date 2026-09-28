@@ -9,7 +9,7 @@ import (
 )
 
 // listenerSockets shells out to netstat on macOS. There is no stable public API
-// for the socket table (the private libproc route needs cgo and still can't
+// for the socket table (the private libproc route needs cgo and still can't see
 // other users' sockets without root), and netstat -an is unprivileged, present
 // on every macOS, and prints the bind address we need. The 2s cap keeps a wedged
 // netstat from hanging the diagnostics page — Scan then falls back to dialing.

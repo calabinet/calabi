@@ -6,7 +6,7 @@
 // there first — a second client's `calabi login` saw someone else's daemon,
 // announced success, and never started the one the user wanted.
 //
-// RUN: go test./apps/client/internal/runtime/ -run TestDaemonRunning -v
+// RUN: go test ./apps/client/internal/runtime/ -run TestDaemonRunning -v
 package runtime
 
 import (
