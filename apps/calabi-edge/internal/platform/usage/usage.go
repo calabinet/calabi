@@ -114,6 +114,16 @@ type Reporter struct {
 	// Diff = current - last.
 	mu   sync.Mutex
 	last map[string]counterTotals
+	// pending holds bytes captured OUTSIDE a tick — see SettleProxy. A tick
+	// folds them in and clears them.
+	pendingIn  map[aggKey]uint64
+	pendingOut map[aggKey]uint64
+}
+
+// aggKey is the reporting dimension: bytes are summed per (org, tunnel).
+type aggKey struct {
+	org    int64
+	tunnel int64
 }
 
 type counterTotals struct {
@@ -134,7 +144,58 @@ func NewReporter(logger *slog.Logger, bus eventbus.Bus, mgr *session.Manager, ed
 		nodeLabel:  nodeLabel,
 		interval:   interval,
 		last:       make(map[string]counterTotals),
+		pendingIn:  make(map[aggKey]uint64),
+		pendingOut: make(map[aggKey]uint64),
 	}
+}
+
+// SettleProxy captures what a proxy moved since the last tick, at the moment it
+// closes — before the session manager stops handing it out.
+//
+// The loop below only reads LIVE sessions, so everything a proxy did after the
+// last tick used to vanish with it. That is a bounded loss for a long-running
+// tunnel (one tick, 60s) and a TOTAL one for a short one: a tunnel opened and
+// closed between two ticks was never once walked, so not a single byte of it was
+// ever reported. It then sits in the console as an offline tunnel with no
+// traffic at all, which is how "离线隧道的流量没统计出来" looks from the outside.
+//
+// Called from the proxy-close hook for BOTH close paths (client close and
+// session end). Safe to call for a proxy whose tunnel_id is still 0: those bytes
+// go to the unattributed bucket, which is what keeps org totals whole.
+//
+// Deltas, not totals, so calling it while the session is still alive is
+// harmless: last[] is advanced the same way a tick advances it, and the next
+// tick just reports a smaller remainder.
+func (r *Reporter) SettleProxy(s *session.Session, p *session.Proxy) {
+	if r == nil || s == nil || p == nil {
+		return
+	}
+	org, _ := strconv.ParseInt(s.TenantID, 10, 64)
+	if org <= 0 {
+		return // non-numeric tenant (dev / static-YAML mode), as in tick
+	}
+	r.settle(s.ID+"|p|"+p.ID, org, p.TunnelID, p.BytesIn.Load(), p.BytesOut.Load())
+	// The session-level fallback counter is settled too: on the session-end
+	// path this hook is the last look anyone gets at it.
+	r.settle(s.ID+"|s", org, 0, s.BytesIn.Load(), s.BytesOut.Load())
+}
+
+// settle is accumulate for a counter source that is about to disappear: same
+// diff-and-advance, but the result waits in pending for the next tick rather
+// than being published on its own. Batching keeps a burst of closures from
+// turning into a burst of one-report publishes.
+func (r *Reporter) settle(key string, org, tunnel int64, curIn, curOut uint64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	prev := r.last[key]
+	r.last[key] = counterTotals{curIn, curOut}
+	dIn, dOut := curIn-prev.bytesIn, curOut-prev.bytesOut
+	if dIn == 0 && dOut == 0 {
+		return
+	}
+	k := aggKey{org, tunnel}
+	r.pendingIn[k] += dIn
+	r.pendingOut[k] += dOut
 }
 
 // Run blocks until ctx is cancelled. Ticks every Interval, publishes
@@ -162,12 +223,22 @@ func (r *Reporter) tick() {
 	// Sum by (org_id, tunnel_id), computing deltas vs. the last snapshot
 	// per counter source. We walk each session's proxies (per-tunnel
 	// counters) plus the session-level fallback counter (tunnel_id=0).
-	type aggKey struct {
-		org    int64
-		tunnel int64
-	}
 	deltaIn := map[aggKey]uint64{}
 	deltaOut := map[aggKey]uint64{}
+
+	// Start from what closed since the last tick (SettleProxy). Those counter
+	// sources are gone from the manager, so this is the only place their last
+	// bytes can come from.
+	r.mu.Lock()
+	for k, v := range r.pendingIn {
+		deltaIn[k] += v
+	}
+	for k, v := range r.pendingOut {
+		deltaOut[k] += v
+	}
+	clear(r.pendingIn)
+	clear(r.pendingOut)
+	r.mu.Unlock()
 
 	// live tracks the counter-source keys seen this tick, for GC.
 	live := make(map[string]struct{})

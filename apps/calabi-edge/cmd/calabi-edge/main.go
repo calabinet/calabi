@@ -395,17 +395,22 @@ func run() error {
 		logger:  logger,
 	}, logger)
 
-	errCh := make(chan error, 16)
+	// Everything long-lived this process runs, in one list: superviseTasks
+	// starts them and ends the process when the first one returns, or when a
+	// signal asks it to stop.
+	var tasks []namedRunner
 	// Tunnel datapath — started only for role tunnel/both. For role=mesh
 	// these listeners are built above but never bind a port, so a relay-only node
 	// serves no tunnels. Empty role ⇒ ServesTunnels()=true ⇒ every existing edge is
 	// unchanged.
 	if cfg.ServesTunnels() {
-		go func() { errCh <- labelErr("control", ctrl.Run(ctx)) }()
-		go func() { errCh <- labelErr("http", http.Run(ctx)) }()
-		go func() { errCh <- labelErr("https", httpsListener.Run(ctx)) }()
-		go func() { errCh <- labelErr("sni", sni.Run(ctx)) }()
-		go func() { errCh <- labelErr("forward", forward.Run(ctx)) }()
+		tasks = append(tasks,
+			namedRunner{"control", ctrl.Run},
+			namedRunner{"http", http.Run},
+			namedRunner{"https", httpsListener.Run},
+			namedRunner{"sni", sni.Run},
+			namedRunner{"forward", forward.Run},
+		)
 	}
 	// Relay-only: state the isolation claim in the log so it can be checked
 	// against reality (`ss -ltnp` should show ONLY these two ports). Since the
@@ -425,35 +430,20 @@ func run() error {
 		if coordKey != nil {
 			relayCfg.CoordPubKey = base64.StdEncoding.EncodeToString(coordKey)
 		}
-		go func() {
-			errCh <- labelErr("relay", runRelay(ctx, relayCfg, logger, deps.relayReporter, deps.relayRate))
-		}()
+		tasks = append(tasks, namedRunner{"relay", func(ctx context.Context) error {
+			return runRelay(ctx, relayCfg, logger, deps.relayReporter, deps.relayRate)
+		}})
 	}
-	go func() { errCh <- labelErr("admin", obs.Run(ctx)) }()
-	go func() { errCh <- labelErr("configreload", reloader.Run(ctx)) }()
-	// Platform background goroutines (presence / edge-registrar / usage /
-	// deny-sweeper / evict / mesh-resolver). Empty in the self-hosted build.
-	for _, rn := range deps.runners {
-		rn := rn
-		go func() { errCh <- labelErr(rn.name, rn.run(ctx)) }()
-	}
+	tasks = append(tasks,
+		namedRunner{"admin", obs.Run},
+		namedRunner{"configreload", reloader.Run},
+	)
+	// Platform background goroutines (usage / access / deny-sweeper / presence /
+	// edge-registrar / evict, plus the cert renewer, mesh resolver and relay
+	// registrar where they apply) — see wirePlatform.
+	tasks = append(tasks, deps.runners...)
 
-	// Flip ready once the foreground listeners have called Listen() and
-	// returned no error. We approximate "all up" with a short delay; will plumb explicit ready signals from each listener.
-	obs.SetReady(true)
-
-	select {
-	case <-ctx.Done():
-		logger.Info("shutdown requested")
-		obs.SetReady(false)
-	case err := <-errCh:
-		obs.SetReady(false)
-		if err != nil {
-			logger.Error("listener exited", "err", err)
-			return err
-		}
-	}
-	return nil
+	return superviseTasks(ctx, logger, obs.SetReady, tasks)
 }
 
 // buildHTTPSListener composes the HTTPS terminator. The platform cert-svc
@@ -634,13 +624,6 @@ func newLogger(c config.LogConfig) *slog.Logger {
 		h = slog.NewTextHandler(os.Stdout, handlerOpts)
 	}
 	return slog.New(h)
-}
-
-func labelErr(name string, err error) error {
-	if err == nil {
-		return nil
-	}
-	return fmt.Errorf("%s: %w", name, err)
 }
 
 // hashNodeIDForConfig mirrors tunnelstore.hashToID so the same edge_node_id

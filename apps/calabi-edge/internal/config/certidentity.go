@@ -95,6 +95,16 @@ func resolveCertIdentity(cfg *Config, raw Config) ([]string, error) {
 	switch {
 	case strings.TrimSpace(raw.Region) == "":
 		cfg.Region = id.Region
+		// The relay's region defaults to the node's own — and that default was
+		// taken while the FILE was read, before this certificate was opened. So
+		// a config that leaves region: out (which is exactly what the note in
+		// the next branch tells operators to do) reached here with the relay
+		// already pinned to the built-in default region: a self-hosted relay
+		// would register as self-local, and two of them in different regions
+		// would collide on that one name.
+		if cfg.ServesMesh() && strings.TrimSpace(raw.Mesh.Label) == "" {
+			cfg.Mesh.Label = id.Region
+		}
 	case strings.EqualFold(strings.TrimSpace(raw.Region), id.Region):
 		note("region: %q is what this node's certificate already says; the line can be deleted", id.Region)
 	default:

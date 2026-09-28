@@ -8,10 +8,10 @@
 # WHY THIS EXISTS
 #
 # A pull request needs an answer that does not wait for a maintainer. The
-# export already proves the tree builds (`go mod tidy && go build && go vet`
-# runs on every export), but that check runs on one machine, against the
-# exported tree, and never runs the tests. This one runs them, on a fresh
-# clone, on Linux, macOS and Windows.
+# export already builds, vets and tests the tree every time it runs (the tests
+# with this file's own `go test -short`), but on one machine and one OS,
+# against a tree that was never cloned. This runs them on a fresh clone, on
+# Linux, macOS and Windows.
 #
 # WHAT IT DOES NOT BUILD
 #

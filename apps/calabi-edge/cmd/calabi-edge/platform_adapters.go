@@ -57,6 +57,11 @@ type tunnelPersisterAdapter struct {
 	// what was wrong, and reserving the port is what stops it happening again
 	// for the life of the process.
 	ports portReserver
+	// usage is the metering reporter, held for one job too: a closing proxy is
+	// the last moment its byte counters are readable, and the reporter only
+	// ever walks LIVE sessions. nil on a node that reports no usage (SettleProxy
+	// tolerates it). Set after construction — the reporter is wired later.
+	usage *usage.Reporter
 }
 
 // portReserver is the sliver of router.PortPool this adapter needs. An
@@ -352,6 +357,13 @@ func resolveOAuthSecret(ctx context.Context, logger *slog.Logger, secrets oauthS
 }
 
 func (a *tunnelPersisterAdapter) OnProxyClosed(sess *session.Session, p *session.Proxy, reason string) {
+	// FIRST, and before the tunnel_id check below: this is the last moment the
+	// proxy's byte counters can be read. The usage reporter only walks live
+	// sessions, so whatever moved since its last tick — all of it, for a tunnel
+	// that opened and closed inside one interval — is lost the instant this
+	// returns. Unattributed bytes (tunnel_id 0) count too; they are what keeps
+	// the org total whole.
+	a.usage.SettleProxy(sess, p)
 	if p.TunnelID == 0 {
 		return
 	}

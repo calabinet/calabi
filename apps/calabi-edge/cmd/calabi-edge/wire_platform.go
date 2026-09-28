@@ -392,6 +392,12 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 
 	// Usage reporter + deny hook. Reuses the bus dialed above.
 	usageReporter := usage.NewReporter(logger, bus, in.mgr, in.edgeID, cfg.NodeLabel, usageReportInterval(logger))
+	// Hand it to the persister, which owns the proxy-close hook — the one place
+	// a proxy's final bytes are still readable. Wired here rather than at
+	// construction because the persister is built before the bus is dialed.
+	if p, ok := deps.persister.(*tunnelPersisterAdapter); ok {
+		p.usage = usageReporter
+	}
 	denyHook := usage.NewDenyHook(logger, bus)
 	if err := denyHook.Start(); err != nil {
 		return fail(fmt.Errorf("usage deny start: %w", err))
@@ -430,8 +436,7 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 		{"access-reporter", func(ctx context.Context) error {
 			if accessReporter == nil {
 				// namedRunner contract: block until ctx, never return early —
-				// a bare `return nil` kills the whole edge about a second
-				// after boot, with exit 0 and no log line.
+				// a bare `return nil` stops the whole edge (superviseTasks).
 				<-ctx.Done()
 				return nil
 			}

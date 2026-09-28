@@ -9,12 +9,12 @@ import (
 )
 
 // TestRunCertRenewalPlatformHoldsUntilCtx locks the namedRunner contract that
-// F1 originally broke: RunCertRenewal runs in main's errCh set, where ANY
-// runner returning — even nil — trips the shutdown select and stops the whole
-// edge. A platform edge (no org SAN, nothing to renew) must therefore BLOCK
-// until ctx is cancelled, not return immediately. The original bare `return
-// nil` on the skip path shut every platform edge down ~1s after boot (booted
-// clean, then vanished with no shutdown log).
+// F1 originally broke: RunCertRenewal runs under main's superviseTasks, where
+// ANY task returning — even nil — stops the whole edge. A platform edge (no
+// org SAN, nothing to renew) must therefore BLOCK until ctx is cancelled, not
+// return immediately. The original bare `return nil` on the skip path shut
+// every platform edge down ~1s after boot (booted clean, then vanished with no
+// shutdown log).
 func TestRunCertRenewalPlatformHoldsUntilCtx(t *testing.T) {
 	// cert == nil ⇒ isBYOI() == false ⇒ the platform (skip) path.
 	c := &Conn{holder: &certHolder{}}

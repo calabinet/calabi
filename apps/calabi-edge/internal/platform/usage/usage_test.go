@@ -323,3 +323,93 @@ var _ eventbus.Bus = (*fakeBus)(nil)
 
 // Reference to silence "unused" complaints on minor symbols.
 var _ = atomic.LoadInt64
+
+// A tunnel that opens and closes between two ticks was never once walked by the
+// reporter, so not one byte of it was ever reported. In the console it then sits
+// there as an offline tunnel with no traffic at all — which is exactly how this
+// was found (2026-09-25, 管理后台隧道列表「近30天流量」).
+func TestReporter_AProxyThatLivedAndDiedBetweenTicksIsStillReported(t *testing.T) {
+	mgr := session.NewManager(quietLogger(), nil)
+	s := &session.Session{ID: "s1", TenantID: "42"}
+	mgr.Register(s)
+
+	bus := newFakeBus()
+	r := NewReporter(quietLogger(), bus, mgr, 201, "edge-1", time.Millisecond)
+
+	// Opened, served 900 bytes, closed — all before the first tick, so it is
+	// gone from the session by the time the loop looks.
+	p := &session.Proxy{ID: "p1", TunnelID: 77}
+	p.BytesIn.Store(900)
+	p.BytesOut.Store(90)
+	r.SettleProxy(s, p)
+
+	r.tick()
+
+	bus.mu.Lock()
+	defer bus.mu.Unlock()
+	var rep Report
+	found := false
+	for _, pub := range bus.published {
+		var x Report
+		_ = json.Unmarshal(pub.data, &x)
+		if x.TunnelID == 77 {
+			rep, found = x, true
+		}
+	}
+	if !found {
+		t.Fatalf("the closed tunnel reported nothing: %+v", bus.published)
+	}
+	if rep.BytesIn != 900 || rep.BytesOut != 90 {
+		t.Errorf("got in=%d out=%d, want 900/90", rep.BytesIn, rep.BytesOut)
+	}
+	if rep.OrgID != 42 {
+		t.Errorf("org = %d, want 42", rep.OrgID)
+	}
+	// The counter source is gone; its snapshot must not linger.
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, stale := r.last["s1|p|p1"]; stale {
+		t.Errorf("last[] kept a snapshot for a proxy that no longer exists")
+	}
+}
+
+// Settling advances the same snapshot a tick advances, so a proxy that is still
+// live when it settles must not have those bytes counted twice.
+func TestReporter_SettlingDoesNotDoubleCount(t *testing.T) {
+	mgr := session.NewManager(quietLogger(), nil)
+	s := &session.Session{ID: "s1", TenantID: "42"}
+	mgr.Register(s)
+	p := &session.Proxy{ID: "p1", TunnelID: 77}
+	s.RegisterProxy(p)
+
+	bus := newFakeBus()
+	r := NewReporter(quietLogger(), bus, mgr, 201, "edge-1", time.Millisecond)
+
+	p.BytesIn.Store(100)
+	r.tick() // reports 100
+
+	p.BytesIn.Store(150) // 50 more, then it closes
+	r.SettleProxy(s, p)
+	r.tick()
+
+	bus.mu.Lock()
+	defer bus.mu.Unlock()
+	var total uint64
+	for _, pub := range bus.published {
+		var x Report
+		_ = json.Unmarshal(pub.data, &x)
+		if x.TunnelID == 77 {
+			total += x.BytesIn
+		}
+	}
+	if total != 150 {
+		t.Fatalf("reported %d bytes for a tunnel that moved 150", total)
+	}
+}
+
+// The persister holds a nil reporter on a node that reports no usage, and calls
+// this on every proxy close.
+func TestReporter_SettleOnANilReporterIsANoOp(t *testing.T) {
+	var r *Reporter
+	r.SettleProxy(&session.Session{ID: "s1", TenantID: "42"}, &session.Proxy{ID: "p1"})
+}

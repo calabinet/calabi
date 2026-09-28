@@ -23,11 +23,7 @@ var bundleEnv = map[string]string{
 }
 
 func TestTheSelfHostedBundlesEdgeConfigLoads(t *testing.T) {
-	compose, err := os.ReadFile("../../../../deploy/server/docker-compose.yml")
-	if err != nil {
-		t.Fatalf("the published bundle is not where this test looks: %v", err)
-	}
-	body := edgeYAMLFromCompose(t, string(compose))
+	body := edgeYAMLFromCompose(t, readBundle(t))
 
 	clearCalabiEnv(t)
 	p := writeTemp(t, body)
@@ -63,18 +59,15 @@ func TestTheSelfHostedBundlesEdgeConfigLoads(t *testing.T) {
 // own from public.host + tunnel.control_port. Two places, one answer — this is
 // the check that they agree, because nothing else compares them.
 func TestTheBundleTellsCoordinatorAndEdgeTheSameAddress(t *testing.T) {
-	compose, err := os.ReadFile("../../../../deploy/server/docker-compose.yml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	m := regexp.MustCompile(`CALABI_COORD_EDGE_ADDR:\s*(\S+)`).FindStringSubmatch(string(compose))
+	compose := readBundle(t)
+	m := regexp.MustCompile(`CALABI_COORD_EDGE_ADDR:\s*(\S+)`).FindStringSubmatch(compose)
 	if m == nil {
 		t.Fatal("the bundle no longer tells the coordinator where the edge is")
 	}
 	coordSide := expandBundleEnv(m[1])
 
 	clearCalabiEnv(t)
-	p := writeTemp(t, edgeYAMLFromCompose(t, string(compose)))
+	p := writeTemp(t, edgeYAMLFromCompose(t, compose))
 	cfg, _, err := LoadEffective(p)
 	if err != nil {
 		t.Fatal(err)
@@ -82,6 +75,19 @@ func TestTheBundleTellsCoordinatorAndEdgeTheSameAddress(t *testing.T) {
 	if got := cfg.AdvertisedAddr(); got != coordSide {
 		t.Errorf("the coordinator is told %q and the edge advertises %q", coordSide, got)
 	}
+}
+
+// readBundle reads the compose file with the line endings it is published with:
+// LF. A Windows checkout (core.autocrlf) hands it over as CRLF, and what it
+// holds is the same bundle either way — compose reads the heredoc out of a YAML
+// block scalar, and YAML folds CRLF to LF before the shell ever sees it.
+func readBundle(t *testing.T) string {
+	t.Helper()
+	compose, err := os.ReadFile("../../../../deploy/server/docker-compose.yml")
+	if err != nil {
+		t.Fatalf("the published bundle is not where this test looks: %v", err)
+	}
+	return strings.ReplaceAll(string(compose), "\r\n", "\n")
 }
 
 // edgeYAMLFromCompose pulls the edge's config out of the heredoc the bundle

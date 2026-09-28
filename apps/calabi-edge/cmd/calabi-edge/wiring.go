@@ -31,8 +31,11 @@ type platformInputs struct {
 	presenceKick <-chan struct{}
 }
 
-// namedRunner is a background goroutine the platform layer asks run() to launch
-// alongside the core listeners, labelled for the shared error channel.
+// namedRunner is one long-lived task of the process: a listener, the relay, the
+// admin server, the config reloader, or a background goroutine the platform
+// layer asks run() to launch. run must block until ctx is cancelled, a
+// "nothing to do here" branch included: superviseTasks stops the whole edge
+// when any task returns, and reports a nil return before shutdown as a failure.
 type namedRunner struct {
 	name string
 	run  func(context.Context) error

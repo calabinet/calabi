@@ -102,14 +102,15 @@ func loadLeafKeyPair(certPath, keyPath string) (tls.Certificate, error) {
 // RunCertRenewal keeps the edge's own mTLS client cert fresh until ctx is
 // cancelled, then returns nil.
 //
-// It runs as a background namedRunner in main's errCh set, where ANY runner
-// returning — even nil — trips the shutdown select and stops the whole edge
-// (main.go: `case err := <-errCh` with err==nil falls through to `return nil`,
-// silently). So this MUST NOT return before ctx is done: the platform-edge and
-// no-holder skip paths block on ctx.Done() rather than returning immediately.
-// A bare `return nil` on the skip path shut every PLATFORM edge (no org SAN,
-// so nothing to renew) down ~1s after boot — booted clean, then vanished with
-// no shutdown log. BYOI edges were unaffected (their loop blocks on ctx).
+// It runs as a background namedRunner under main's superviseTasks, where ANY
+// task returning — even nil — stops the whole edge. So this MUST NOT return
+// before ctx is done: the platform-edge and no-holder skip paths block on
+// ctx.Done() rather than returning immediately. A bare `return nil` on the
+// skip path shut every PLATFORM edge (no org SAN, so nothing to renew) down
+// ~1s after boot — booted clean, then vanished with no shutdown log, because
+// main took a nil return for a clean exit back then. It now fails loudly
+// ("task exited before shutdown", exit status 1), but the edge still stops.
+// BYOI edges were unaffected (their loop blocks on ctx).
 func (c *Conn) RunCertRenewal(ctx context.Context, logger *slog.Logger) error {
 	logger = logger.With("component", "edge-cert-renewer")
 	if c == nil || c.holder == nil {

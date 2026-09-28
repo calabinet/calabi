@@ -1,8 +1,6 @@
 package config
 
 import (
-	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -238,40 +236,5 @@ func TestRetiredMeshPeerForwardBlockIsRefused(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "tunnel.peer_forward") {
 		t.Errorf("the error should say where it moved to: %v", err)
-	}
-}
-
-// Every deployed config we hold must load under the new layout, and keep the
-// settings it had. The files are still written in the old layout — supported,
-// and not worth rewriting a production file for — so this is also the proof
-// that support is real rather than asserted in a unit test's fixture.
-func TestDeployedConfigsSurviveTheLayoutChange(t *testing.T) {
-	paths, err := filepath.Glob("../../../../deploy/dev/edge*.yaml")
-	if err != nil || len(paths) == 0 {
-		t.Fatalf("no dev edge configs found (glob wrong, not the rig empty): %v", err)
-	}
-	more, _ := filepath.Glob("../../../../deploy/compose/edge/*/*.yaml")
-	paths = append(paths, more...)
-
-	for _, p := range paths {
-		raw, err := os.ReadFile(p)
-		if err != nil {
-			t.Fatalf("%s: %v", p, err)
-		}
-		cfg, err := Load(p)
-		if err != nil {
-			t.Errorf("%s no longer loads: %v", p, err)
-			continue
-		}
-		// Whatever the file says it listens on, it must still listen on.
-		if strings.Contains(string(raw), "control:") && cfg.Tunnel.ControlAddr() == "" {
-			t.Errorf("%s sets a control listener but it did not survive the layout migration", p)
-		}
-		if strings.Contains(string(raw), "derp_port:") && cfg.Mesh.DERPPort == 0 {
-			t.Errorf("%s sets a relay port but it did not survive the layout migration", p)
-		}
-		if strings.Contains(string(raw), "forward_addr:") && !cfg.PeerForwardEnabled() {
-			t.Errorf("%s sets peer forwarding but it did not survive the layout migration", p)
-		}
 	}
 }

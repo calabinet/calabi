@@ -129,13 +129,75 @@ func postUpdate(base, path, token string) (*updateSnap, error) {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("this daemon has no self-update (a dev build, or updates are disabled)")
+		return nil, noSelfUpdateHere(base)
 	}
 	var snap updateSnap
 	if err := json.Unmarshal(body, &snap); err != nil {
 		return nil, fmt.Errorf("daemon answered %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	return &snap, nil
+}
+
+// noSelfUpdateHere explains a daemon that serves no /v1/update at all. Two very
+// different reasons end up at the same 404, and they need different sentences.
+//
+// A device connected to a SELF-HOSTED server is the common one, and it is a
+// permanent state rather than a misconfiguration: standalone mode runs the local
+// daemon (daemon_local.go), which never builds an update agent — by design, so
+// that a self-hosted deployment makes no request to download.calabi.net at all
+// (docs/self-hosting.md, "What does a device connect to?"). "A dev build, or
+// updates are disabled" names two things that are both false there, and, worse,
+// points at a switch: CALABI_UPDATE_MANIFEST is read INSIDE newUpdateAgent,
+// which this daemon never calls, so no environment variable can turn checking
+// on. The actionable answer is the one this says instead — the version comes
+// from whoever runs the server, because the coordinator, the edge nodes and the
+// devices run the same one (docs/self-hosting.md).
+//
+// The other reason — a dev build, or a release with the manifest emptied — keeps
+// the old wording, which is accurate for it.
+func noSelfUpdateHere(base string) error {
+	if daemonIsSelfHosted(base) {
+		return fmt.Errorf("this device is connected to a self-hosted server, so it does not update itself.\n" +
+			"  Whoever runs that server distributes the client: the coordinator, the edge nodes and\n" +
+			"  the devices run the same version. Get their build, replace this binary, restart the daemon.")
+	}
+	return fmt.Errorf("this daemon has no self-update (a dev build, or updates are disabled)")
+}
+
+// daemonIsSelfHosted asks the DAEMON what it is, rather than reading this
+// process's own config.
+//
+// clientIsStandalone() would be one line and would be wrong on the machines
+// that matter: an installed service keeps its data in the system directory while
+// a terminal reads the invoking user's, so the CLI's idea of the mode can belong
+// to a different client than the one that just answered 404.
+//
+// plan.code is "standalone" only from localweb's /v1/me (internal/localweb) —
+// the platform daemon proxies bff-console, which answers a real plan code
+// (free/basic/pro/…) or 401 when nobody is signed in. So this asks for a
+// POSITIVE signal and treats everything unclear as "not sure", falling back to
+// the wording that claims less.
+func daemonIsSelfHosted(base string) bool {
+	resp, err := (&http.Client{Timeout: 3 * time.Second}).Get(base + "/v1/me")
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+	var body struct {
+		Plan struct {
+			Code string `json:"code"`
+		} `json:"plan"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<16)).Decode(&body); err != nil {
+		return false
+	}
+	// The literal, not clientModeStandalone: this is localweb's PLAN CODE, which
+	// only happens to spell the same word as the client mode. Renaming the mode
+	// must not silently stop matching a wire value it does not own.
+	return strings.EqualFold(strings.TrimSpace(body.Plan.Code), "standalone")
 }
 
 func fetchLocalTokenFrom(base string) (string, error) {

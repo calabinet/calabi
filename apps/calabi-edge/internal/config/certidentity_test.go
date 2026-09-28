@@ -427,3 +427,42 @@ func TestABYOINodeWithNothingToServeSaysSo(t *testing.T) {
 		t.Errorf("the fallback to self-signed must be stated; got %q", notes.Warnings)
 	}
 }
+
+// A relay's region is the node's region, and the node's region comes from the
+// certificate whenever the file leaves it out — which is exactly what the load
+// tells operators to do ("the line can be deleted"). The default was applied
+// while the FILE was read, before the certificate was opened, so taking that
+// advice left the relay advertising the built-in default region: a self-hosted
+// relay registering as self-local, and two of them in different regions
+// colliding on that one name.
+func TestTheRelayRegionFollowsTheCertificateWhenTheFileOmitsIt(t *testing.T) {
+	const id = 1000400002
+	cfg, _, err := loadWithCert(t, edgecert.CommonName(id, "us-losangeles"),
+		[]*url.URL{edgecert.SPIFFEURI(42, id, "us-losangeles")},
+		"node_label: lax-1\nrole: both\ntunnel:\n  base_domain: lax.example\nmesh:\n  derp_port: 3340\n")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Region != "us-losangeles" {
+		t.Fatalf("region = %q, want the certificate's", cfg.Region)
+	}
+	if cfg.Mesh.Label != "us-losangeles" {
+		t.Errorf("mesh.label = %q, want %q — this relay would register as self-%s",
+			cfg.Mesh.Label, "us-losangeles", cfg.Mesh.Label)
+	}
+}
+
+// The control: a label the operator DID write is theirs, cert or no cert. It is
+// the one way to run two relays in one region.
+func TestAWrittenRelayLabelSurvivesTheCertificate(t *testing.T) {
+	const id = 1000400003
+	cfg, _, err := loadWithCert(t, edgecert.CommonName(id, "us-losangeles"),
+		[]*url.URL{edgecert.SPIFFEURI(42, id, "us-losangeles")},
+		"node_label: lax-2\nrole: mesh\nmesh:\n  derp_port: 3340\n  label: lax-second\n")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Mesh.Label != "lax-second" {
+		t.Errorf("mesh.label = %q, want the one the file names", cfg.Mesh.Label)
+	}
+}
