@@ -237,8 +237,12 @@ func init() {
 	meshrelayDescEnabled := meshrelayFields[5].Descriptor()
 	// meshrelay.DefaultEnabled holds the default value on creation for the enabled field.
 	meshrelay.DefaultEnabled = meshrelayDescEnabled.Default.(bool)
+	// meshrelayDescTLS is the schema descriptor for tls field.
+	meshrelayDescTLS := meshrelayFields[6].Descriptor()
+	// meshrelay.DefaultTLS holds the default value on creation for the tls field.
+	meshrelay.DefaultTLS = meshrelayDescTLS.Default.(bool)
 	// meshrelayDescCreatedAt is the schema descriptor for created_at field.
-	meshrelayDescCreatedAt := meshrelayFields[6].Descriptor()
+	meshrelayDescCreatedAt := meshrelayFields[7].Descriptor()
 	// meshrelay.DefaultCreatedAt holds the default value on creation for the created_at field.
 	meshrelay.DefaultCreatedAt = meshrelayDescCreatedAt.Default.(func() time.Time)
 	meshserviceFields := schema.MeshService{}.Fields()

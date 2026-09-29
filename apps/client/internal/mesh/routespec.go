@@ -19,7 +19,8 @@ import (
 // AdvertiseMinBitsV4 is the widest IPv4 subnet route that may be published: a
 // /24. Anything shorter is refused.
 //
-// The limit exists because every published route is aliased, and an alias costs its own size
+// The limit exists because every published route is aliased,
+// and an alias costs its own size
 // in pool addresses: a /24 costs 256, a /16 costs 65,536 — 256x the default
 // per-meshnet budget, so a /16 could never be granted one anyway. Before this
 // rule it was accepted, silently failed to get an alias, and fell back to

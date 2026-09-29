@@ -77,7 +77,9 @@ func (h *heartbeatLog) ok(args ...any) {
 }
 
 // runEdgeRegistrar re-publishes `reg` every registerInterval, refreshing
-// ActiveClients each tick (everything else is static for the process).
+// ActiveClients each tick, and — for a node that advertises a relay —
+// whether that relay's certificate would pass a device's check right now
+// (relayTLS, nil = never). Everything else is static for the process.
 //
 // The identity is passed as a struct, not as a positional list: it had grown to
 // five same-typed strings in a row (label / region / public / internal / class)
@@ -89,6 +91,7 @@ func runEdgeRegistrar(
 	identityCli *identity.Verifier,
 	mgr *session.Manager,
 	reg identity.EdgeRegistration,
+	relayTLS func() bool,
 ) error {
 	if identityCli == nil {
 		<-ctx.Done()
@@ -112,6 +115,9 @@ func runEdgeRegistrar(
 		}
 		tick := reg
 		tick.ActiveClients = int32(n)
+		// Asked per tick, not once: a renewed certificate or a rolled CA can
+		// change the answer under a running node.
+		tick.RelayTLS = reg.RelayDerpPort > 0 && relayTLS != nil && relayTLS()
 		if err := identityCli.RegisterEdgeNode(ctx, tick); err != nil {
 			hb.failed(err)
 			return
@@ -131,7 +137,7 @@ func runEdgeRegistrar(
 
 // runRelayRegistrar self-registers this node's RELAY endpoint into the org DERP
 // map on boot + every registerInterval, mirroring runEdgeRegistrar exactly
-// (edge/derp merge-B): the relay appears automatically, just like the edge.
+// (edge/derp merge): the relay appears automatically, just like the edge.
 // register does one idempotent upsert (coord only re-pushes netmaps when the map
 // actually changes, so a steady-state heartbeat is cheap). nil register =
 // not wired (self-hosted / cluster mode / no org / no relay label) → the loop
@@ -142,9 +148,11 @@ func runRelayRegistrar(ctx context.Context, logger *slog.Logger, register func(c
 		return nil
 	}
 	hb := &heartbeatLog{
-		log:   logger.With("component", "relay-registrar"),
-		what:  "relay",
-		hurts: "this relay stays out of the organization's DERP map; its devices are never offered it",
+		log:  logger.With("component", "relay-registrar"),
+		what: "relay",
+		hurts: "this relay stays out of the organization's DERP map, so its devices are never offered it; " +
+			"and a relay that has not heard back since it started, with no key kept from an earlier run, " +
+			"does not listen — the answer carries the key its devices' grants are checked against",
 	}
 	t := time.NewTicker(registerInterval)
 	defer t.Stop()

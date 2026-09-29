@@ -1,6 +1,7 @@
 package main
 
-// Connecting a desktop to a self-hosted server from the :7400 console or `calabi join`: joining its
+// Connecting a desktop to a self-hosted server from the :7400 console
+// or `calabi join`: joining its
 // coordinator is signing in — the coordinator then names the edge for tunnels
 // and signs this device's way in.
 // The key is checked by enrolling, before anything is saved, and the

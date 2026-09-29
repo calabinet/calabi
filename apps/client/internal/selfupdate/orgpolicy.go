@@ -9,7 +9,8 @@ import (
 	"time"
 )
 
-// OrgPolicy is the organisation's requirement on how eagerly its machines update: at least this mode, and at most
+// OrgPolicy is the organisation's requirement on how eagerly its machines update:
+// at least this mode, and at most
 // this long holding a routine update back.
 //
 // It only TIGHTENS. The machine keeps its own setting, the daemon acts on the

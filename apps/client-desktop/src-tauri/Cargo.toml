@@ -14,8 +14,8 @@ tauri-build = { version = "2.0", features = [] }
 [dependencies]
 tauri = { version = "2.0", features = ["tray-icon", "devtools"] }
 tauri-plugin-shell = "2.0"
-# Updater disabled in M7.1 (no signing keys yet). Re-add when ops
-# generates them per docs/runbook/m7-desktop.md §5:
+# Updater disabled (no signing keys yet). Re-add when ops
+# generates them:
 #   tauri-plugin-updater = "2.0"
 tauri-plugin-autostart = "2.0"
 tauri-plugin-single-instance = "2.0"

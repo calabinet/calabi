@@ -3,7 +3,8 @@
 // coordinator is, dial the coordinator, and decide when a refused credential is
 // worth renewing.
 //
-// It is shared by the desktop daemon (cmd/calabi) and the phone core. What to DO with an enrollment —
+// It is shared by the desktop daemon (cmd/calabi) and the phone core.
+// What to DO with an enrollment —
 // which session to run, when an org switch or a changed setting restarts it —
 // depends on where a client keeps its settings and stays with each client.
 //

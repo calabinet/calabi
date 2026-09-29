@@ -55,8 +55,8 @@ import net.calabi.app.R
 import org.json.JSONObject
 
 /**
- * Joining a self-hosted server instead of calabi.net
- * (docs/runbook/self-hosted-sign-in-plan.md §6.1): scan the invite its
+ * Joining a self-hosted server instead of calabi.net:
+ * scan the invite its
  * administrator made with `calabi-coord invite`, or type the address and key.
  * [link] is an invite that arrived as a calabi://join link; it is joined as soon
  * as the screen opens.
@@ -71,7 +71,7 @@ fun SelfHostedScreen(link: String?, onBack: () -> Unit, onJoined: () -> Unit) {
     var advanced by rememberSaveable { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    // The certificate a person has to compare before the key is sent (§3.3).
+    // The certificate a person has to compare before the key is sent.
     var confirm by remember { mutableStateOf<Confirm?>(null) }
 
     val messages = JoinMessages(
@@ -254,7 +254,7 @@ private class JoinMessages(
  * The self-hosted server presents a certificate other than the one this phone
  * trusts (state cert_changed): its administrator made a new one, or something
  * else answers at its address. The two fingerprints side by side, and the new one
- * trusted only on a person's say-so (docs/runbook/self-hosted-sign-in-plan.md §3.2).
+ * trusted only on a person's say-so.
  */
 @Composable
 fun CertChangedPrompt(model: AppModel) {

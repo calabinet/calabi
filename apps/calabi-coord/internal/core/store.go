@@ -25,7 +25,7 @@ type NodeStore interface {
 	FindByKey(ctx context.Context, t MeshnetID, key meshproto.NodeKey) (*Node, error)
 	// ListMeshnet returns every node in a meshnet (caller filters by ACL).
 	ListMeshnet(ctx context.Context, t MeshnetID) ([]*Node, error)
-	// UpdateEndpoints replaces a node's discovered endpoints (MESH.4).
+	// UpdateEndpoints replaces a node's discovered endpoints.
 	UpdateEndpoints(ctx context.Context, id int64, eps []netip.AddrPort) error
 	// UpdateApprovedRoutes records which advertised routes an admin allowed, and
 	// marks the node reviewed.
@@ -39,8 +39,8 @@ type NodeStore interface {
 	// stops following the node's hostname. Validated + uniqueness-checked by
 	// Coordinator.RenameNode before it gets here.
 	UpdateName(ctx context.Context, id int64, name string) error
-	// UpdateDERPHome records the relay region a node measured as its closest
-	// (MESH.4 B2b). Validated against the published DERP map before it gets here.
+	// UpdateDERPHome records the relay region a node measured as its closest.
+	// Validated against the published DERP map before it gets here.
 	UpdateDERPHome(ctx context.Context, id int64, region string) error
 	// Delete removes a node permanently; ErrNodeNotFound if unknown. The caller
 	// releases the overlay address AFTER this succeeds — releasing first could
@@ -48,9 +48,9 @@ type NodeStore interface {
 	Delete(ctx context.Context, id int64) error
 	// SetTags replaces a node's ACL tags and pins them (see Node.TagsPinned).
 	SetTags(ctx context.Context, id int64, tags []string) error
-	// SetApproved flips device approval (MESH.8e-5).
+	// SetApproved flips device approval.
 	SetApproved(ctx context.Context, id int64, approved bool) error
-	// SetDisabled flips a node's admin kill switch (MESH.8b). Returns
+	// SetDisabled flips a node's admin kill switch. Returns
 	// ErrNodeNotFound for an unknown id.
 	SetDisabled(ctx context.Context, id int64, disabled bool) error
 	// SetSignedOut records a device's sign-out (Node.SignedOut). Returns
@@ -60,9 +60,9 @@ type NodeStore interface {
 
 // PolicyStore compiles a meshnet's ACL into the peer set a given node may reach.
 //
-// v0 (MESH.1) returns allow-all. MESH.5 replaces this with a real ACL engine
-// (groups / tags / src->dst:port) that filters the candidate set. Keeping the
-// interface here from day one means the netmap code never changes when ACLs land.
+// It started as allow-all; the ACL engine (groups / tags /
+// src->dst:port) now filters the candidate set. Keeping the interface
+// here from day one meant the netmap code never changed when ACLs landed.
 type PolicyStore interface {
 	// Filter returns the subset of candidates that self is allowed to reach.
 	Filter(ctx context.Context, t MeshnetID, self *Node, candidates []*Node) ([]*Node, error)
@@ -78,7 +78,7 @@ type IPAM interface {
 // AliasIPAM allocates stand-in PREFIXES for subnet routes whose real addresses
 // would collide with a consumer's own LAN — the same shape as IPAM, one level
 // up. The returned prefix is the same size as real, so the subnet router can
-// rewrite 1:1. See core.MemAliasIPAM
+// rewrite 1:1. See core.MemAliasIPAM.
 //
 // Optional on the Coordinator: a nil AliasIPAM means this deployment does not
 // offer aliasing, and every alias request is simply not granted (the route is
@@ -92,7 +92,7 @@ type AliasIPAM interface {
 // Platform build sources it from the fleet/config; self-hosted build serves a
 // static file.
 //
-// The meshnet parameter is what makes self-hosted relays possible (R1): an org's
+// The meshnet parameter is what makes self-hosted relays possible: an org's
 // map is the platform's regions PLUS the relays that org runs itself, and one
 // org's relays must never appear in another's. A relay sees no plaintext, but it
 // does see the metadata — who talks to whom, how much, when — so handing org B's

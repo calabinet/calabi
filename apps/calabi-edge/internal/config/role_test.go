@@ -88,8 +88,12 @@ func TestRelayPortDefaults(t *testing.T) {
 	if got := zero.RelayDERPPort(); got != 3340 {
 		t.Errorf("default derp_port=%d want 3340", got)
 	}
-	if got := zero.RelaySTUNPort(); got != 3478 {
+	// STUN's default is Default()'s, so that 0 can mean off (stunport_test.go).
+	if got := Default().Mesh.RelaySTUNPort(); got != 3478 {
 		t.Errorf("default stun_port=%d want 3478", got)
+	}
+	if got := zero.RelaySTUNPort(); got != 0 {
+		t.Errorf("stun_port 0 = %d, want 0 (off)", got)
 	}
 	set := MeshService{DERPPort: 4000, STUNPort: 4001}
 	if set.RelayDERPPort() != 4000 || set.RelaySTUNPort() != 4001 {

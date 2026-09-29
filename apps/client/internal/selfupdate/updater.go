@@ -14,7 +14,7 @@ import (
 )
 
 // Updater drives one check→download→verify→apply cycle and the periodic loop
-// around it — the daemon-side orchestrator over the primitives in selfupdate.go. F4.
+// around it — the daemon-side orchestrator over the primitives in selfupdate.go.
 type Updater struct {
 	ManifestURL    string
 	CurrentVersion string
@@ -45,11 +45,11 @@ type Updater struct {
 	// Tests set it.
 	Managed func() bool
 	// Report delivers update results to the platform this daemon is logged
-	// into (U5a). nil = nothing is reported: tests, and every daemon that is not
+	// into. nil = nothing is reported: tests, and every daemon that is not
 	// wired to a control plane. Returning ErrReportRejected drops the batch;
 	// any other error keeps it for the next attempt.
 	Report func(ctx context.Context, events []UpdateEvent) error
-	// OrgPolicy reads the org's update requirement (U5c). nil = no org can set
+	// OrgPolicy reads the org's update requirement. nil = no org can set
 	// one here. Return ErrNoOrg when the daemon belongs to no org; any other
 	// error keeps the last policy.
 	OrgPolicy     func(ctx context.Context) (*OrgPolicy, error)

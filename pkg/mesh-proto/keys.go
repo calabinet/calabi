@@ -19,8 +19,9 @@ type NodeKey [KeyLen]byte
 // DiscoKey is a node's short-lived discovery public key, used to authenticate
 // the NAT-traversal (hole-punching) probes. It is deliberately SEPARATE from
 // NodeKey so endpoint discovery can be exercised without exposing the traffic
-// key. Rotated more aggressively than NodeKey. (Used from MESH.4 onward; the
-// type is defined now so the coordination contract is stable.)
+// key. Rotated more aggressively than NodeKey. (It came with hole punching,
+// and was defined ahead of it so the coordination contract stayed
+// stable.)
 type DiscoKey [KeyLen]byte
 
 // ErrBadKeyLen is returned when parsing a key of the wrong length.

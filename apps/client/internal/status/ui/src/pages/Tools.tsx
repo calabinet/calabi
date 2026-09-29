@@ -1,4 +1,4 @@
-// Tools.tsx — diagnostics page (M7-S5). Currently hosts the port
+// Tools.tsx — diagnostics page. Currently hosts the port
 // scanner; future probes (DNS lookup, TLS chain check, network MTU)
 // would land here as additional cards.
 import {

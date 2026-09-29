@@ -17,7 +17,7 @@ import (
 // your node key" was accepted as YOUR device re-enrolling, and a node key is
 // public - every peer reads it in its netmap - so any member of an org could take
 // over a colleague's device record: rename it, swap its disco key, point its
-// endpoints and relay home elsewhere (security audit 1-C, same-org residual).
+// endpoints and relay home elsewhere (same-org residual).
 //
 // The exchange mirrors the relay handshake in derpauth.go:
 //

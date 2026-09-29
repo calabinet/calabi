@@ -13,7 +13,7 @@ import (
 // MeshACLRevision is one saved version of a meshnet's ACL document. Editing
 // access rules is the single most dangerous action in the console — a wrong doc
 // disconnects every node at once — so each save is appended here and the console
-// can put a previous version back (MESH.8e-3).
+// can put a previous version back.
 //
 // Append-only by design: rows are never updated, so the history is also the
 // record of who changed access and when.

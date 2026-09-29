@@ -15,7 +15,8 @@ import (
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
-// The coordinator this edge belongs to. Its public key is how a standalone edge accepts anyone: devices present
+// The coordinator this edge belongs to.
+// Its public key is how a standalone edge accepts anyone: devices present
 // the grant the coordinator signed, for tunnels and relay alike.
 
 // coordKeyWaitLog is how often loadCoordPubKey says it is still waiting.

@@ -1,6 +1,7 @@
 package main
 
-// What a desktop keeps about the self-hosted server it is connected to: the config the console
+// What a desktop keeps about the self-hosted server it is connected to:
+// the config the console
 // manages, which node this device is on the coordinator, and whether the
 // coordinator's certificate stopped matching.
 

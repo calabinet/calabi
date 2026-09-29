@@ -7,7 +7,7 @@ package meshproto
 // registration proves possession of the node private key
 // (GetRegisterChallenge + register_proof) and returns a session token that
 // every later node-scoped call carries. A coordinator refuses to enroll a node
-// below 2 (security audit 1-C).
+// below 2.
 //
 // A node and a (possibly self-hosted) coordinator negotiate the highest common
 // version via Capabilities.
@@ -15,8 +15,8 @@ const ProtocolVersion uint32 = 2
 
 // Capability is a coarse feature flag exchanged at handshake so a newer client
 // and an older (self-hosted) coordinator — or vice versa — can agree on a
-// working subset without a hard version match. v0 defines none; MESH.4+ will
-// add e.g. CapHolePunch, CapMagicDNS, CapSubnetRoutes.
+// working subset without a hard version match. CapNodeReauth below is the one
+// defined so far.
 type Capability string
 
 // CapNodeReauth: once enrolled, a node may register again by proving it holds

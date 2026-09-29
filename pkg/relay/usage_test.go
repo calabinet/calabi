@@ -9,7 +9,7 @@ import (
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
-// connectAuthed brings a node up through the full R0' handshake and returns its
+// connectAuthed brings a node up through the full handshake and returns its
 // node-side conn. The grant helper (auth_test.go) stamps Meshnet=1, so a node
 // connected this way is attributed to org 1.
 func connectAuthed(t *testing.T, h *Hub, c coord, k meshproto.NodeKey, priv [meshproto.KeyLen]byte) net.Conn {

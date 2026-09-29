@@ -4,10 +4,10 @@ package status
 //
 // The console trusts whoever can load it — it hands the page its write token —
 // and has always made that safe by binding loopback. People bind it wider anyway
-// (the Docker image documents 0.0.0.0), and the loopback-only guard that came
-// with MESH-9 would have taken that away from them. This keeps it, on one
-// condition: a visitor who is not on this machine first proves they know the
-// secret, and holds a session cookie from then on.
+// (the Docker image documents 0.0.0.0), and the loopback-only guard added after
+// the security audit would have taken that away from them. This keeps
+// it, on one condition: a visitor who is not on this machine first proves they
+// know the secret, and holds a session cookie from then on.
 //
 // Why a cookie is enough against DNS rebinding, which is what the loopback-only
 // guard was for: a rebinding page reaches the console under ITS OWN name, and a

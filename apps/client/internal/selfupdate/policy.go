@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Policy is the machine's update setting — U2 of
+// Policy is the machine's update setting.
 //
 // It is a MACHINE setting, not a user or org one: the daemon is shared by every
 // OS user on the box, the logged-in account can change or log out, the machine
@@ -150,7 +150,7 @@ func (p Policy) Decide(st Status, now time.Time, busy bool, waitingSince time.Ti
 	if st.Mandatory {
 		return Decision{Install: true}
 	}
-	// The staged rollout (U5b) holds back everything below the floor, critical
+	// The staged rollout holds back everything below the floor, critical
 	// included: the publisher decides how fast a release spreads, and one that
 	// wants a security fix everywhere at once publishes it without a ramp. It is
 	// checked AFTER the machine's own mode, so a "tell me only" machine is told

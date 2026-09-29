@@ -11,7 +11,8 @@ import (
 // device that changes underneath it.
 //
 // Android hands a VPN its addresses and routes all at once, and changing any of
-// them means establishing the VPN again, which yields a NEW file descriptor. A wireguard-go Device cannot switch
+// them means establishing the VPN again, which yields a NEW file descriptor.
+// A wireguard-go Device cannot switch
 // tun devices, so it gets this instead: Swap installs the new one and closes the
 // old, and a read or write that failed because its device was swapped away is
 // retried on the replacement instead of being reported — WireGuard would take

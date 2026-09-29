@@ -1,5 +1,5 @@
 // Package ent holds the ent-generated database client for calabi-coord's
-// PLATFORM node store (MESH.8c). It lives under internal/platform so the
+// PLATFORM node store. It lives under internal/platform so the
 // deployment-agnostic core (and the self-hosted coordinator) never link it —
 // a self-hosted coordinator keeps the in-memory NodeStore.
 package ent

@@ -39,7 +39,7 @@ type Config struct {
 	// AccessToken is the most recent login session token. Format
 	// matches identity-svc's ValidateToken accepted shapes after the
 	// cutover: JWT (issued by Login) or "tk_..." (API key).
-	// Old creds files written by CLI may still carry "usr_..." here;
+	// Old creds files written by an early CLI may still carry "usr_..." here;
 	// the server now rejects those with an "invalid token" response,
 	// which makes the CLI re-prompt for credentials.
 	AccessToken string `json:"access_token,omitempty"`
@@ -136,7 +136,7 @@ type Config struct {
 	MeshAdvertiseRoutes []string `json:"mesh_advertise_routes,omitempty"` // subnet-router CIDRs
 	// MeshAliasRoutes is IGNORED — aliasing is applied to every advertised route
 	// where the host supports it, not to a chosen subset. Kept so an existing
-	// creds file still loads;
+	// creds file still loads.
 	MeshAliasRoutes       []string `json:"mesh_alias_routes,omitempty"`
 	MeshAdvertiseExitNode bool     `json:"mesh_advertise_exit_node,omitempty"` // advertise AS an exit node
 	MeshExitNode          string   `json:"mesh_exit_node,omitempty"`           // route THIS node's default via this peer
@@ -214,8 +214,8 @@ func SetDataDir(dir string) { dataDirOverride = dir }
 //
 // The per-user default is deliberately left alone: locking it to
 // SYSTEM+Administrators would lock the interactive user out of their own
-// credentials. See secure_windows.go for what this does and why (audit finding
-// ACL-1); it is a no-op off Windows, where the 0o600/0o700 modes already hold.
+// credentials. See secure_windows.go for what this does and why;
+// it is a no-op off Windows, where the 0o600/0o700 modes already hold.
 //
 // Callers on the write path treat failure as best-effort — a machine that
 // refuses the ACL must not become a machine that cannot log in. SecureDataDir

@@ -1,6 +1,6 @@
 package relay
 
-// SECURITY AUDIT 1-D - a relay running with authentication must not forward
+// a relay running with authentication must not forward
 // between meshnets. Before the fix the hub forwarded any SendPacket to any
 // connected key: WireGuard on the far side drops it, but the relay has already
 // delivered it by then, and relay usage is billed as the RECEIVER egress - so a

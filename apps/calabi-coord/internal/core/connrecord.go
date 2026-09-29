@@ -16,7 +16,7 @@ import (
 // hash chain; an auditor asks both questions and we could only answer one.
 //
 // It revises "current value, never a time series",
-// narrowly and on purpose. What protects is spelled out there: a sequence of
+// narrowly and on purpose. What that rule protects: a sequence of
 // a laptop's ENDPOINT ADDRESSES is a location trail, because a public IP
 // reverse-resolves to a place and an ISP. Nothing here carries an endpoint, a
 // public IP or a port — a peer pair plus a byte count is an access trail, which

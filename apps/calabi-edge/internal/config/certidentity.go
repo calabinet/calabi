@@ -130,7 +130,8 @@ func resolveCertIdentity(cfg *Config, raw Config) ([]string, error) {
 	//
 	// A BYOI node's leaf is minted to do both jobs — client credential to the
 	// control plane, server credential to the devices dialing its control
-	// listener. Both deployed
+	// listener.
+	// Both deployed
 	// BYOI configs therefore wrote the same path twice, and nothing tied the two
 	// together: re-issue to a new path, update one line, and the listener keeps
 	// serving the old file until somebody notices devices cannot connect.
@@ -141,10 +142,16 @@ func resolveCertIdentity(cfg *Config, raw Config) ([]string, error) {
 	// client-only leaf on the listener starts cleanly and fails at every device.
 	// A platform node's client leaf is client-only, so this never fires there,
 	// and it names its own server certificate anyway.
+	//
+	// A relay-only node inherits it too. Its relay port presents the node's
+	// control certificate to devices that open TLS (cmd/calabi-edge/relaytls.go),
+	// and devices check it the way they check a node's :7443 — so the node's own
+	// leaf is what makes its relay verifiable. Without it a relay-only node would
+	// present a self-signed certificate, and its devices would go on reaching it
+	// in plaintext.
 	blank := strings.TrimSpace(raw.Tunnel.ControlCertPEM) == "" && strings.TrimSpace(raw.Tunnel.ControlKeyPEM) == ""
 	switch {
-	case !cfg.ServesTunnels():
-	case !id.ServesInbound && blank && id.OrgID > 0:
+	case !id.ServesInbound && blank && id.OrgID > 0 && cfg.ServesTunnels():
 		// Nothing to inherit and nothing configured, on a node whose devices
 		// verify its listener against the edge CA baked into their binary. The
 		// listener will fall back to a self-signed certificate and every one of
@@ -155,14 +162,33 @@ func resolveCertIdentity(cfg *Config, raw Config) ([]string, error) {
 			"(no serverAuth extension, or no name for its public address) — it will present a self-signed " +
 			"certificate that devices verifying against the Calabi edge CA will refuse. Re-issue this " +
 			"node's certificate with its public address, or set tunnel.control_cert_pem / control_key_pem")
+	case !id.ServesInbound && blank && id.OrgID > 0:
+		// The relay-only case of the same thing. Nothing is refused — devices
+		// are only told a relay speaks TLS when its certificate verifies — but
+		// the relay stays on plaintext, and the fix is the same.
+		note("relay: this node's own certificate cannot serve inbound (no serverAuth extension, or no name " +
+			"for its public address), so its relay presents a self-signed certificate and devices keep " +
+			"reaching it in plaintext. Re-issue this node's certificate with its public address")
 	case !id.ServesInbound:
 	case blank:
 		if key := strings.TrimSpace(cfg.MultiRegion.ClientKey); key != "" {
 			cfg.Tunnel.ControlCertPEM, cfg.Tunnel.ControlKeyPEM = path, key
-			note("control listener: serving this node's own certificate (%s), the one it authenticates to the control plane with", path)
+			note("%s: serving this node's own certificate (%s), the one it authenticates to the control plane with",
+				inboundListeners(*cfg), path)
 		}
 	case strings.TrimSpace(raw.Tunnel.ControlCertPEM) == path:
 		note("control_cert_pem names the same file as multi_region.client_cert; the lines can be deleted and the edge will use it anyway")
 	}
 	return notes, nil
+}
+
+// inboundListeners names what presents the node's certificate, for the log.
+func inboundListeners(cfg Config) string {
+	switch {
+	case cfg.ServesTunnels() && cfg.ServesMesh():
+		return "control listener and relay"
+	case cfg.ServesMesh():
+		return "relay"
+	}
+	return "control listener"
 }

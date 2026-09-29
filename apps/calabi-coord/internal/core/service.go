@@ -16,8 +16,9 @@ import (
 )
 
 // Services are what a node OFFERS on the mesh: "this machine serves postgres on
-// 5432". They are DECLARED by a person, never discovered by scanning the node — (a rejected proposal to report a
-// node's listening ports) and the rule it distilled: declaration over discovery.
+// 5432". They are DECLARED by a person, never discovered by scanning the node:
+// declaration over discovery, the rule distilled from a rejected proposal to
+// report a node's listening ports.
 //
 // A service is also the unit access will be granted against (an ACL "svc:<name>"
 // selector), which is why the name is validated like a label and why a node's
@@ -157,7 +158,7 @@ func ValidateServiceTarget(target string) error {
 // device then dials that target every minute and reports whether it answered.
 // With an arbitrary host:port that turns every member's machine into an
 // admin-driven open/closed oracle for whatever it can reach — their home LAN, a
-// cloud metadata address (audit finding MESH-14).
+// cloud metadata address.
 //
 // The feature's own design note draws the line in the right place already: a
 // console entry says no more than "this machine offers this port". Restricting
@@ -344,9 +345,10 @@ func (c *Coordinator) reconcileDeclaredServices(ctx context.Context, node *Node,
 //
 // Why this is safe now and wasn't before: a service name used to decide WHICH
 // MACHINES a rule covered, so inventing one here would have been inventing
-// group membership. demoted "svc:" to naming ports on the declaring
-// device only, so a console entry now says no more than "this machine offers
-// this port" — a statement an admin is entitled to make.
+// group membership. The rule model has since demoted "svc:" to
+// naming ports on the declaring device only, so a console entry now says no
+// more than "this machine offers this port" — a statement an admin is
+// entitled to make.
 func (c *Coordinator) CreateConsoleService(ctx context.Context, t MeshnetID, nodeID int64, name, proto string, port int, target, note string) (*Service, error) {
 	if c.Services == nil {
 		return nil, fmt.Errorf("core: service registry not supported")
@@ -360,7 +362,8 @@ func (c *Coordinator) CreateConsoleService(ctx context.Context, t MeshnetID, nod
 		return nil, err
 	}
 	target = strings.TrimSpace(target)
-	// Stricter than the device-declared path on purpose — see MESH-14 there.
+	// Stricter than the device-declared path on purpose;
+	// ValidateConsoleServiceTarget says why.
 	if err := ValidateConsoleServiceTarget(target); err != nil {
 		return nil, err
 	}
@@ -494,7 +497,7 @@ func (s *MemServiceStore) DeleteService(_ context.Context, id int64) error {
 	return nil
 }
 
-// MeshnetSettings are a meshnet's org-level switches (MESH.8e-5). The zero value
+// MeshnetSettings are a meshnet's org-level switches. The zero value
 // is what every meshnet runs on until an admin changes something.
 type MeshnetSettings struct {
 	RequireDeviceApproval bool `json:"require_device_approval"`
@@ -509,7 +512,7 @@ type MeshnetSettings struct {
 	// it through should be a choice, not what happens when a field is forgotten.
 	//
 	// Exit routes (0.0.0.0/0) are never auto-approved either way, and routes a
-	// peer already publishes wait for an admin regardless (MESH-1).
+	// peer already publishes wait for an admin regardless.
 	AutoApproveRoutes bool `json:"auto_approve_routes"`
 	// ConnRecordsDisabled turns the data-plane audit trail OFF for this org.
 	//
@@ -551,7 +554,7 @@ const DefaultAliasAddrBudget = 256
 // every tenant, so a per-org ceiling of a /16's worth leaves room for ~32 orgs
 // at the maximum and thousands at the default. An operator who genuinely needs
 // more for one customer changes this constant deliberately — friction that
-// belongs on a shared resource (audit finding MESH-4).
+// belongs on a shared resource.
 const MaxAliasAddrBudget = 65536
 
 // SettingsStore persists per-meshnet settings. Optional: without one every

@@ -234,13 +234,13 @@ func run() error {
 	// hook feeds it; the platform reporter on the other end is optional.
 	presenceKick := make(chan struct{}, 32)
 
-	// Phase B global backpressure (2026-06-11): process-wide, org-agnostic
+	// global backpressure (2026-06-11): process-wide, org-agnostic
 	// ceilings that protect THIS box regardless of how per-org caps sum up.
 	// Opt-in via env (0/unset = unlimited, so dev behaves as before):
 	//   EDGE_GLOBAL_MAX_CONNS            total concurrent visitor connections
 	//   EDGE_GLOBAL_ACCEPT_RATE_PER_SEC  total new connections/sec accepted
 	// On trip the listeners shed (close/drop). Core (env-driven) — independent
-	// of the per-org, quota-fed Phase A limiters which the platform layer wires.
+	// of the per-org, quota-fed limiters which the platform layer wires.
 	gMaxConns := envInt64(logger, "EDGE_GLOBAL_MAX_CONNS")
 	gAcceptRate := envInt64(logger, "EDGE_GLOBAL_ACCEPT_RATE_PER_SEC")
 	globalLimiter := ratelimit.NewGlobalLimiter(gMaxConns, gAcceptRate)
@@ -262,6 +262,7 @@ func run() error {
 		registrar:    registrar,
 		edgeID:       edgeID,
 		presenceKick: presenceKick,
+		relayCert:    ctrlCert.certificate,
 	})
 	if err != nil {
 		return err
@@ -417,11 +418,12 @@ func run() error {
 	// standalone derp-node binary was retired this is what replaces "you can see
 	// it is a different process" — see internal/config/roleguard.go.
 	if cfg.ServesMesh() && !cfg.ServesTunnels() {
-		logger.Info("relay-only node: NO TLS-terminating listener bound; this process serves the mesh relay data port and the STUN responder only",
+		logger.Info("relay-only node: NO tunnel listener bound; this process serves the mesh relay data port (TLS or plaintext, the relay's own) and the STUN responder only",
 			"derp_port", cfg.Mesh.RelayDERPPort(), "stun_port", cfg.Mesh.RelaySTUNPort())
 	}
 	// Mesh-relay datapath — started for role relay/both. Ciphertext-only, isolated
-	// from the edge's TLS termination.
+	// from the tunnel's TLS termination; its own TLS toward the
+	// devices is relaytls.go.
 	if cfg.ServesMesh() {
 		// The relay checks the same coordinator's grants; a key read from a file
 		// is handed to it here rather than written into cfg, which is the
@@ -430,8 +432,20 @@ func run() error {
 		if coordKey != nil {
 			relayCfg.CoordPubKey = base64.StdEncoding.EncodeToString(coordKey)
 		}
+		// A node's own relay on calabi.net admits its organization's devices
+		// only: the one its certificate names, by the key its registration
+		// returns (deps.relayAdmission, nil for every other relay).
+		wiring := relayWiring{
+			reporter:  deps.relayReporter,
+			rate:      deps.relayRate,
+			admission: deps.relayAdmission,
+			org:       cfg.OrgID,
+			// The relay port presents the same certificate as the control
+			// listener, followed through renewals the same way (relaytls.go).
+			cert: ctrlCert.certificate,
+		}
 		tasks = append(tasks, namedRunner{"relay", func(ctx context.Context) error {
-			return runRelay(ctx, relayCfg, logger, deps.relayReporter, deps.relayRate)
+			return runRelay(ctx, relayCfg, logger, wiring)
 		}})
 	}
 	tasks = append(tasks,
@@ -562,7 +576,7 @@ type routerBridge struct {
 	logger *slog.Logger
 	tcpObs listener.TCPObserver
 	udpObs listener.UDPObserver
-	// glob is the process-wide backpressure (Phase B), passed to each
+	// glob is the process-wide backpressure, passed to each
 	// per-proxy TCP/UDP listener so their accept paths shed under machine
 	// pressure. Set in run() after the limiter is built (registrar is
 	// constructed earlier); nil = unlimited.
@@ -741,7 +755,8 @@ type bandwidthLookup interface {
 // quotaBandwidthAdapter bridges *quotaclient.Client (or its cached
 // variant) to the listener.BandwidthResolver interface. tenantID is
 // the string form of org_id wire shape (identity-
-// svc emits numeric org ids); non-numeric tenants resolve to 0 = unlimited.
+// svc emits numeric org ids); non-numeric tenants
+// resolve to 0 = unlimited.
 //
 // Core type (no platform import): the self-hosted build constructs it with a
 // nil cli, which still honours the EDGE_DEBUG_BANDWIDTH_BPS dev override and
@@ -789,8 +804,8 @@ type connLimitsLookup interface {
 	DailyLimits(ctx context.Context, orgID int64) (dailyTCPConns, dailyHTTPReqs int64)
 }
 
-// connGuardAdapter implements listener.ConnGuardInstaller (Phase A
-// anti-abuse, 2026-06-11). At handshake it resolves the session's org
+// connGuardAdapter implements listener.ConnGuardInstaller (anti-abuse, 2026-06-11).
+// At handshake it resolves the session's org
 // connection caps from quota-svc and installs a *session.ConnGuard
 // pointing at the process-global limiters.
 //
@@ -849,7 +864,7 @@ func (a *connGuardAdapter) InstallConnGuard(ctx context.Context, sess *session.S
 
 // envInt64 reads a non-negative int64 from env var `key`. Unset / 0 /
 // invalid returns 0 (treated as "unlimited" by the global limiter). A
-// non-numeric value is logged and ignored. Used for the Phase B global
+// non-numeric value is logged and ignored. Used for the global
 // backpressure ceilings (EDGE_GLOBAL_MAX_CONNS / _ACCEPT_RATE_PER_SEC).
 func envInt64(logger *slog.Logger, key string) int64 {
 	v := os.Getenv(key)

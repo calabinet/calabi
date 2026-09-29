@@ -44,7 +44,7 @@ type Tunnel struct {
 // StatusTracker is the small interface the client session uses to push
 // runtime state into the local /status page. A nil tracker is a no-op.
 //
-// UpsertPending / RemovePending power Phase C's server→client tunnel
+// UpsertPending / RemovePending power the server→client tunnel
 // sync: when the edge pushes a CONFIG_PUSH announcing a console-
 // created tunnel for this device, we surface it on the status page
 // so the user can see it's queued even before they activate the
@@ -251,7 +251,7 @@ func (c *Client) RefreshGrant(grant []byte) error {
 
 // SetDeviceID attaches the identity-svc clients.id this session should
 // announce in its AUTH frame for live-presence tracking. Call before
-// Handshake; 0 = unknown (Phase A's fallback for un-registered clients).
+// Handshake; 0 = unknown (the fallback for un-registered clients).
 func (c *Client) SetDeviceID(id int64) {
 	c.mu.Lock()
 	c.deviceID = id

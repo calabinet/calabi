@@ -7,7 +7,7 @@ import (
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
-// Relay usage accounting (F2).
+// Relay usage accounting.
 //
 // Why it exists: relayed mesh traffic is, today, bandwidth the platform pays for
 // and nobody counts. Until it is counted, "run your own relay and it's your own
@@ -38,7 +38,7 @@ import (
 type usageCounter struct {
 	in  atomic.Uint64 // bytes the relay RECEIVED from this node
 	out atomic.Uint64 // bytes the relay SENT to this node
-	// meshnet is the org this node belongs to, taken from the R0' grant it proved
+	// meshnet is the org this node belongs to, taken from the grant it proved
 	// (auth.go). It is the ONE thing that lets a multi-tenant platform relay say
 	// whose bytes it forwarded — the relay is otherwise org-blind. Zero when auth
 	// is off (no grant presented), in which case the bytes are unattributable and

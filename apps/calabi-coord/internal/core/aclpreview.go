@@ -16,9 +16,10 @@ import (
 // ⚠ Reachability here is the NETMAP layer, which is UNDIRECTED: MemPolicy.Filter
 // keeps a peer when self may reach it OR it may reach self, because both ends
 // need each other's key for a WireGuard handshake. So a rule "a → b" today opens
-// the pair in both directions. Directional (and port-level) enforcement is
-// MESH.5b; until then the check result says so explicitly rather than letting an
-// admin believe they wrote a one-way rule.
+// the pair in both directions. Directional (and port-level) enforcement is the
+// node-side packet filter's; this check answers for the netmap layer
+// and says so explicitly rather than letting an admin believe they wrote a
+// one-way rule.
 
 // ReachPair is one node pair whose reachability changed.
 type ReachPair struct {

@@ -113,7 +113,7 @@ func serviceInstallEnv(installArgs []string) (map[string]string, error) {
 var verifyInstallKeyFn = verifyInstallKey
 
 // verifyInstallKey checks the API key against bff-console before install bakes
-// it into the service env. Option A semantics:
+// it into the service env. What each answer means:
 //
 //   - 200 → the key authenticates; proceed.
 //   - 401 → the server rejected it (invalid or revoked) → return an error so

@@ -8,7 +8,7 @@ import (
 
 // prodguard.go — refuse to run a PRODUCTION coordinator in a degraded posture.
 //
-// Why (full-oss-plan F0.2): coord is full of operator-friendly fallbacks — no
+// Why: coord is full of operator-friendly fallbacks — no
 // identity address means "dev static auth", no quota address means "unlimited",
 // an explicit flag means "serve the admin API unauthenticated". Each is correct
 // for a laptop and catastrophic in production, and every one of them announces
@@ -68,8 +68,8 @@ func checkProductionPosture() error {
 			"Without any of them, coord falls back to a single BUILT-IN key that admits any caller into meshnet 1")
 	}
 
-	// Mesh-admin surface. F0.1 already refuses a tokenless surface; production
-	// additionally refuses the escape hatch itself.
+	// Mesh-admin surface. A tokenless surface is already refused;
+	// production additionally refuses the escape hatch itself.
 	if envIsTrue("MESH_ADMIN_ALLOW_NOAUTH") {
 		bad = append(bad, "CALABI_COORD_MESH_ADMIN_ALLOW_NOAUTH is set: the mesh-admin API would serve every "+
 			"meshnet's nodes and ACLs with no credential check (that switch is for local dev only)")

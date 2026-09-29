@@ -1,5 +1,4 @@
-// renew.go — auto-renewal of the edge's OWN mTLS client cert (F1,
-// byoi-seat-and-cert-lifecycle).
+// renew.go — auto-renewal of the edge's OWN mTLS client cert.
 //
 // The edge leaf is short-lived (cert-svc issues BYOI edges at 90 days). This
 // loop calls bff-edge.RenewEdgeCert over the SAME mTLS conn before expiry,

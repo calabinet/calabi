@@ -18,7 +18,8 @@ import (
 // (svc_count × replicas × MaxOpenConns) instead of "theoretically
 // infinite".
 //
-// Sized for the current ~5k-client scale: 20 open is ample headroom over the ~30-50 steady-state
+// Sized for the current ~5k-client scale:
+// 20 open is ample headroom over the ~30-50 steady-state
 // active connections while bounding the worst case. Idle 5 keeps a small
 // warm pool without pinning 20 idle backends per svc. Lifetime 30m rotates
 // connections so a PG failover / DNS change is picked up without a restart.

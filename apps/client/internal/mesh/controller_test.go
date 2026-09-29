@@ -18,7 +18,7 @@ func (d *recordingDatapath) Close() error                 { return nil }
 
 // Run generates a per-session DISCO key and sends its public half on
 // registration, then opens the direct-path socket and reports candidate
-// endpoints (MESH.4 B1). The disco key on register is deterministic; the endpoint
+// endpoints. The disco key on register is deterministic; the endpoint
 // report depends on the host having a usable interface, so it's checked
 // best-effort (this box has one, a locked-down env may not).
 func TestControllerRegistersWithDiscoKeyAndReportsEndpoints(t *testing.T) {

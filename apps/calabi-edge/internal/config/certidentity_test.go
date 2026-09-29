@@ -466,3 +466,59 @@ func TestAWrittenRelayLabelSurvivesTheCertificate(t *testing.T) {
 		t.Errorf("mesh.label = %q, want the one the file names", cfg.Mesh.Label)
 	}
 }
+
+// A relay-only node inherits its own certificate too: the relay port presents
+// the node's control certificate to devices that open TLS, and devices check it
+// against the Calabi edge CA and the host name, as they check a node's :7443.
+// Before, a relay-only node fell to a self-signed certificate (a new one every
+// start, without state.dir) that no device could verify.
+func TestARelayOnlyNodeServesItsOwnCertificateOnTheRelay(t *testing.T) {
+	const id = 1000400004
+	dir := t.TempDir()
+	certPath := filepath.Join(dir, "edge-tls.crt")
+	keyPath := filepath.Join(dir, "edge-tls.key")
+	writeServingCert(t, certPath, edgecert.CommonName(id, "ap-tokyo"),
+		[]*url.URL{edgecert.SPIFFEURI(42, id, "ap-tokyo")}, "relay.customer.example")
+	cfgPath := filepath.Join(dir, "edge.yaml")
+	body := fmt.Sprintf("node_label: tokyo-relay\nrole: mesh\n"+
+		"public:\n  host: relay.customer.example\n"+
+		"mesh:\n  derp_port: 3340\n"+
+		"multi_region:\n  mode: bff-edge\n  client_cert: %s\n  client_key: %s\n", certPath, keyPath)
+	if err := os.WriteFile(cfgPath, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	clearCalabiEnv(t)
+	cfg, notes, err := LoadEffective(cfgPath)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Tunnel.ControlCertPEM != certPath || cfg.Tunnel.ControlKeyPEM != keyPath {
+		t.Fatalf("relay got (%q, %q), want this node's own certificate", cfg.Tunnel.ControlCertPEM, cfg.Tunnel.ControlKeyPEM)
+	}
+	if !anyContains(notes.Warnings, "relay: serving this node's own certificate") {
+		t.Errorf("the relay's certificate should be logged as the relay's; notes = %q", notes.Warnings)
+	}
+}
+
+// The control for the test above: a relay-only node whose own certificate
+// cannot serve inbound keeps the fallback, and says its relay stays on
+// plaintext and how to fix it — nothing about devices refusing it, because
+// devices are only told a relay speaks TLS when its certificate verifies.
+func TestARelayOnlyNodeWithNothingToServeSaysItStaysPlaintext(t *testing.T) {
+	const id = 1000400005
+	cfg, notes, err := loadWithCert(t, edgecert.CommonName(id, "ap-tokyo"),
+		[]*url.URL{edgecert.SPIFFEURI(42, id, "ap-tokyo")},
+		"node_label: tokyo-relay\nrole: mesh\nmesh:\n  derp_port: 3340\n")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Tunnel.ControlCertPEM != "" {
+		t.Fatalf("a client-only certificate was put on the relay: %q", cfg.Tunnel.ControlCertPEM)
+	}
+	if !anyContains(notes.Warnings, "plaintext") || !anyContains(notes.Warnings, "Re-issue") {
+		t.Errorf("want a note that the relay stays plaintext until the certificate is re-issued; got %q", notes.Warnings)
+	}
+	if anyContains(notes.Warnings, "will refuse") {
+		t.Errorf("a relay-only node was told devices will refuse it; got %q", notes.Warnings)
+	}
+}

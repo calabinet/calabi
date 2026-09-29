@@ -61,7 +61,8 @@ func daemonIsLocal(args []string) bool {
 // it may run once it is there (mesh, tunnels).
 //
 // It says nothing about the edge: a device gets the edge, its certificate and
-// its sign-in from the self-hosted coordinator it joined. The settings that used to name
+// its sign-in from the self-hosted coordinator it joined.
+// The settings that used to name
 // the edge are refused in a hand-written file (removedEdgeKeys).
 type localConfig struct {
 	// Server is the coordinator this device joined and how it proves itself
@@ -214,7 +215,8 @@ func runLocalDaemon(args []string) int {
 		fmt.Fprintln(os.Stderr, "calabi daemon --local:", saErr)
 		return 2
 	}
-	// No --config: the console's own file — what a machine connected to a self-hosted server from the console
+	// No --config: the console's own file
+	// — what a machine connected to a self-hosted server from the console
 	// runs, and what an unconfigured one starts from. It used to be an error.
 	managed := *configPath == ""
 	if managed {
@@ -310,7 +312,7 @@ func runLocalDaemon(args []string) int {
 	// with plain-browser access allowed. The SPA renders in standalone (its
 	// /v1/me reports plan.code="standalone"); create / delete / edit-security
 	// write through the supervisor (live reconcile + YAML persistence). See
-	// internal/localweb +
+	// internal/localweb.
 	lw := localweb.New(localweb.Config{
 		Lister:    sv,
 		Writer:    sv,

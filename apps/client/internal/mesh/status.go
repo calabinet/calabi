@@ -13,7 +13,7 @@ import (
 type Status struct {
 	Overlay string // this node's overlay IP (e.g. "100.64.0.2"); "" until assigned
 	// Relay is the address of the relay this node currently homes at — where peers
-	// reach it. With a relay fleet (MESH.4 B2b) this can differ from the relay the
+	// reach it. With a relay fleet this can differ from the relay the
 	// node was configured with: the node re-homes onto the one it measured closest.
 	Relay string
 	Peers []PeerStatus
@@ -41,7 +41,7 @@ type Status struct {
 }
 
 // Transport labels for PeerStatus.Path — how this peer's traffic is reaching it
-// right now (MESH.4): straight over a punched UDP path, or via the relay.
+// right now: straight over a punched UDP path, or via the relay.
 const (
 	PathDirect = "direct"
 	PathRelay  = "relay"

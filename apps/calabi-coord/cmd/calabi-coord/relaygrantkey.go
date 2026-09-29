@@ -15,7 +15,7 @@ import (
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
-// The coordinator's relay-grant signing key (R0′).
+// The coordinator's relay-grant signing key.
 //
 // Its PUBLIC half is what every relay is configured with
 // (relay_coord_pubkey), which is why the key is loaded from a FILE and
@@ -28,7 +28,8 @@ import (
 // require them.
 //
 // A self-hosted coordinator always signs, with ./coord-grant.key unless told
-// otherwise: its edge accepts devices only by this signature, so a self-hosted server
+// otherwise: its edge accepts devices only by this signature,
+// so a self-hosted server
 // without a key would have no way to let anyone serve a tunnel. A relay that
 // does not require grants ignores them, so signing costs nothing where they are
 // not checked.

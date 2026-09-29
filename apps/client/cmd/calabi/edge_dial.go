@@ -36,7 +36,8 @@ type oneShotEdge struct {
 // development stack, or no check with CALABI_INSECURE=1), and the account's
 // token.
 //
-// Standalone: the device's own identity on the self-hosted server it joined — the coordinator names the
+// Standalone: the device's own identity on the self-hosted server it joined
+// — the coordinator names the
 // edge and its certificate and signs the grant the edge takes. There is nothing
 // to set in the environment; a device that has not joined is told to.
 func openOneShotEdge(logger *slog.Logger, cmd string) (*oneShotEdge, int) {

@@ -14,6 +14,7 @@ import (
 
 	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 	pb "github.com/calabinet/calabi/pkg/hooks-proto/hookspb"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // Deriving the platform DERP map from the edge directory (edge/derp merge).
@@ -50,7 +51,7 @@ type edgeLister interface {
 // dialEdgeLister connects to identity-svc for edge-directory reads (same address
 // as auth, CALABI_COORD_IDENTITY_ADDR). A separate lazy conn keeps the auth client
 // narrow. This is an in-cluster hop and stays plaintext — unlike coord's PUBLIC
-// gRPC, which the daemon dials over TLS (see svcboot ServerOptions / R0′).
+// gRPC, which the daemon dials over TLS (svcboot ServerOptions).
 func dialEdgeLister(addr string) (edgeLister, error) {
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -141,11 +142,18 @@ func buildDERPFromEdges(edges []*pb.RelayEndpoint, fallback core.DERPMap) core.D
 		if host == "" || e.GetRegion() == "" {
 			continue
 		}
-		byRegion[e.GetRegion()] = append(byRegion[e.GetRegion()], core.DERPNode{
+		node := core.DERPNode{
 			HostName: host,
 			DERPPort: int(e.GetDerpPort()),
 			STUNPort: int(e.GetStunPort()),
-		})
+		}
+		// The relay's own heartbeat said it speaks TLS with a certificate the
+		// platform CA verifies for this host (it checked). Devices then reach
+		// it over TLS only, checked the way they check the platform's edges.
+		if e.GetTls() {
+			node.TLS = core.DERPTLS{Trust: meshproto.RelayTrustPlatform}
+		}
+		byRegion[e.GetRegion()] = append(byRegion[e.GetRegion()], node)
 	}
 	if len(byRegion) == 0 {
 		return fallback
@@ -197,7 +205,9 @@ func derpMapEqual(a, b core.DERPMap) bool {
 			return false
 		}
 		for j := range ra.Nodes {
-			if ra.Nodes[j] != rb.Nodes[j] {
+			// Equal, TLS included: a relay starting to speak TLS is a change
+			// nodes must be told of promptly, not at the next periodic resend.
+			if !ra.Nodes[j].Equal(rb.Nodes[j]) {
 				return false
 			}
 		}

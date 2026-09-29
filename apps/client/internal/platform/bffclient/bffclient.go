@@ -1,8 +1,7 @@
 // Package bffclient is a minimal HTTP client the calabi CLI uses to talk
-// to bff-console. / retired the per-CLI-command gRPC dial
-// against identity-svc / cert-svc / domain-svc in favour of this thin
-// wrapper, so production only needs a single public endpoint
-// (CALABI_BFF_CONSOLE).
+// to bff-console. This thin wrapper replaced the per-CLI-command gRPC dial
+// against identity-svc / cert-svc / domain-svc, so
+// production only needs a single public endpoint (CALABI_BFF_CONSOLE).
 //
 // Scope is intentionally tiny: no retry, no refresh-on-401 (CLI is one-
 // shot — let it fail loudly and have the user re-run `calabi login`),

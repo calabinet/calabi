@@ -98,8 +98,8 @@ func namesInMeshnet(peers []*Node, exceptID int64) map[string]bool {
 // A node's self-reported hostname is not otherwise policed (see the file
 // comment), but it must not be allowed to COLLIDE: ACL rules and group
 // membership can select a device by name, so a member who names their laptop
-// after a privileged machine inherits whatever that name was granted (audit
-// finding MESH-5). The admin rename path has always refused duplicates
+// after a privileged machine inherits whatever that name was granted.
+// The admin rename path has always refused duplicates
 // (ErrNodeNameTaken); registration silently accepted them.
 //
 // Suffixing rather than refusing is deliberate, and matches how Tailscale

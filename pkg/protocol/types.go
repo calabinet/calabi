@@ -11,7 +11,7 @@ const (
 	// HeaderSize is the fixed serialized length of a frame header in bytes.
 	HeaderSize = 16
 
-	// MaxPayloadSize is the largest legal payload (Length field) per spec
+	// MaxPayloadSize is the largest legal payload (Length field) per spec.
 	MaxPayloadSize = 16 * 1024 * 1024 // 16 MiB
 )
 
@@ -86,7 +86,7 @@ func (t FrameType) String() string {
 }
 
 // IsKnown reports whether t is a registered frame type. Unknown types must
-// be tolerated per the forward-compat rule in spec
+// be tolerated per the forward-compat rule in spec.
 func (t FrameType) IsKnown() bool {
 	return t.String() != "UNKNOWN" && t != FrameUnspecified
 }

@@ -44,7 +44,7 @@ const desktopUAMarker = "CalabiDesktop"
 
 // TunnelInfo is a snapshot of a registered tunnel as the user sees it.
 //
-// Pending=true marks an entry that arrived via Phase C's server→client
+// Pending=true marks an entry that arrived via the server→client
 // CONFIG_PUSH(upsert_proxies) but hasn't been activated yet (no live
 // NEW_PROXY round-trip on the client side). The status UI displays
 // these with an "待接入" tag — the user still needs to run
@@ -483,7 +483,7 @@ func (s *State) ClearAllTunnels() {
 }
 
 // UpsertPending records a server-pushed tunnel that the user hasn't
-// activated locally yet (Phase C). Keyed by tunnel_id since the
+// activated locally yet. Keyed by tunnel_id since the
 // console-created tunnel has no proxy_id until the client actually
 // runs `calabi http ...` and goes through the live NEW_PROXY flow.
 func (s *State) UpsertPending(tunnelID int64, name, kind, localAddr, domain string, remotePort uint32) {
@@ -757,7 +757,7 @@ func (s *Server) SetConsoleSecret(secret string) {
 }
 
 // consoleGuard decides who may use the :7400 console's /v1 API. It began as the
-// fix for two browser-driven holes (audit findings MESH-8 / MESH-9):
+// fix for two browser-driven holes:
 //
 //   - CSRF. POST /v1/auth/login is deliberately un-tokened — the SPA cannot
 //     fetch the local token before the user has identified themselves — and
@@ -899,7 +899,8 @@ func (s *Server) Run(ctx context.Context) error {
 	// build with base="./") references its JS + CSS under /assets/*
 	// when loaded from the root path. Without a /assets/ mount these
 	// requests fall through to the "/" catch-all → 404, the browser
-	// can't load the React bundle, the WebView paints blank. fixed by adding the /assets/ mount.
+	// can't load the React bundle, the WebView paints blank.
+	// fixed by adding the /assets/ mount.
 	//
 	// The /ui/ mount is kept for back-compat (older callers may still
 	// link to /ui/index.html).
@@ -1096,9 +1097,10 @@ const blockedPage = `<!DOCTYPE html>
 `
 
 // serviceMode reports how this daemon was launched, surfaced in /healthz so the
-// desktop shell can tell the machine-wide system service (Option A) apart from a
+// desktop shell can tell the machine-wide system service apart from a
 // foreign or dev daemon squatting :7400 before it attaches. "system" iff the
-// service manager baked the CALABI_SYSTEM_SERVICE marker; otherwise "user".
+// service manager baked the CALABI_SYSTEM_SERVICE marker;
+// otherwise "user".
 func serviceMode() string {
 	if os.Getenv("CALABI_SYSTEM_SERVICE") == "1" {
 		return "system"
@@ -1141,7 +1143,7 @@ func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 		"uptime_seconds": int64(time.Since(started).Seconds()),
 		"version":        s.state.version,
 		"server_addr":    s.state.serverAddr,
-		// F2 attach handshake: lets the desktop shell confirm it's talking to the
+		// attach handshake: lets the desktop shell confirm it's talking to the
 		// machine-wide system service, not a foreign/dev :7400.
 		"service_mode": serviceMode(),
 	}

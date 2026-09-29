@@ -43,6 +43,10 @@ func TestRateLimiter_RefusedFrameIsDroppedAndNotBilled(t *testing.T) {
 	keyA, keyB := key(1), key(2)
 	connA := connectClient(t, h, keyA)
 	connB := connectClient(t, h, keyB)
+	// forward() asks the DESTINATION's limiter, so B's must be in place before
+	// the first frame — otherwise that frame goes out unmetered and the budget
+	// is spent on the second.
+	waitLimiter(t, h, keyB)
 
 	cipher := make([]byte, payload)
 	received := make(chan []byte, 2)
@@ -128,26 +132,57 @@ func TestRateLimiter_UnwiredHubIsUnchanged(t *testing.T) {
 // and the resolver still gets called so a single-tenant operator can rate-limit
 // a relay that issues no grants at all.
 func TestRateLimiter_ResolvedPerLinkWithItsMeshnet(t *testing.T) {
-	var seen []meshproto.NodeKey
-	var meshnets []int64
+	type resolution struct {
+		meshnet int64
+		key     meshproto.NodeKey
+	}
+	// The resolver runs on each link's Serve goroutine, after add(), so
+	// connectClient returning does not mean it has run yet. Collect the calls
+	// over a channel and wait for them rather than share slices with the hub.
+	// Buffered past the two expected calls so an extra one cannot block Serve.
+	calls := make(chan resolution, 4)
 	h := NewHub(slog.Default(), AuthConfig{}).
 		WithRateLimiter(func(mn int64, k meshproto.NodeKey) RateLimiter {
-			seen = append(seen, k)
-			meshnets = append(meshnets, mn)
+			calls <- resolution{meshnet: mn, key: k}
 			return nil // nil limiter = no limit, and must not panic on the hot path
 		})
 
 	connectClient(t, h, key(1))
 	connectClient(t, h, key(2))
 
-	if len(seen) != 2 {
-		t.Fatalf("resolver must run once per link, got %d", len(seen))
-	}
-	for i, mn := range meshnets {
-		if mn != 0 {
-			t.Fatalf("link %d: auth is off so the meshnet must be 0, got %d", i, mn)
+	perLink := map[meshproto.NodeKey]int{}
+	for i := 0; i < 2; i++ {
+		select {
+		case r := <-calls:
+			if r.meshnet != 0 {
+				t.Fatalf("link %s: auth is off so the meshnet must be 0, got %d", r.key, r.meshnet)
+			}
+			perLink[r.key]++
+		case <-time.After(2 * time.Second):
+			t.Fatalf("resolver must run once per link, got %d call(s)", i)
 		}
 	}
+	select {
+	case r := <-calls:
+		t.Fatalf("resolver must run once per link, got an extra call for %s", r.key)
+	default:
+	}
+	if perLink[key(1)] != 1 || perLink[key(2)] != 1 {
+		t.Fatalf("resolver must run once per link, got %v", perLink)
+	}
+}
+
+// waitLimiter blocks until Serve has installed k's rate limiter. connectClient
+// only waits for add(), and Serve resolves the limiter AFTER add() — outside
+// the hub lock, on purpose (hub.go) — so a link can be Connected with no
+// limiter yet. Frames reaching it in that window are forwarded unmetered,
+// which production accepts and a test that counts refusals cannot.
+func waitLimiter(t *testing.T, h *Hub, k meshproto.NodeKey) {
+	t.Helper()
+	eventually(t, func() bool {
+		c := h.lookup(k)
+		return c != nil && c.limiter.Load() != nil
+	}, "the link's rate limiter was never installed")
 }
 
 // A nil limiter from the resolver, and a nil box, both mean "no limit". This is

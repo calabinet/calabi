@@ -86,7 +86,7 @@ func TestDiffPoliciesNoopEdit(t *testing.T) {
 
 // The checker names the rule that decided the answer, and is honest that the
 // netmap layer is undirected: a one-way rule still opens the pair both ways
-// (directional enforcement is MESH.5b).
+// (directional enforcement is the node-side packet filter's).
 func TestCheckAccessNamesTheRuleAndIsHonestAboutDirection(t *testing.T) {
 	c := newTestCoord()
 	store := NewMemACLStore()

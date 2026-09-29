@@ -45,7 +45,7 @@ const updateCheckInterval = 6 * time.Hour
 //     user-mode daemon cannot complete an install and must not start one.
 //
 // Whether it SHOULD install, having established that it can, is the machine's
-// Policy (U2) — mode, maintenance window, and whether traffic is moving. That
+// Policy — mode, maintenance window, and whether traffic is moving. That
 // lives in the agent, not here.
 //
 // Returns nil for a dev/self-built daemon: an unparseable version can never be
@@ -82,9 +82,9 @@ func newUpdateAgent(logger *slog.Logger, version, bffConsoleURL string, busy fun
 		Privileged:     privileged,
 		Container:      container,
 		Logf:           func(f string, a ...any) { logger.Info(fmt.Sprintf(f, a...)) },
-		// U5a: results go to the platform this daemon is logged into.
+		// results go to the platform this daemon is logged into.
 		Report: newUpdateReporter(bffConsoleURL),
-		// U5c: the org's requirement, merged with this machine's own setting.
+		// the org's requirement, merged with this machine's own setting.
 		OrgPolicy: newOrgPolicyFetcher(bffConsoleURL),
 	}
 	agent := selfupdate.NewAgent(u, busy)

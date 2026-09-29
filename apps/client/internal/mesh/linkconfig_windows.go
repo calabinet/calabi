@@ -43,7 +43,7 @@ func configureLink(luid uint64, ifname string, overlay netip.Addr) error {
 
 // addSubnetRoutes routes each advertised CIDR (a subnet-router / exit peer's
 // allowed-ip outside the overlay) at the tun so those destinations flow into
-// WireGuard (MESH.7). Idempotent — an already-present route is not an error.
+// WireGuard. Idempotent — an already-present route is not an error.
 func addSubnetRoutes(luid uint64, ifname string, routes []netip.Prefix) error {
 	if len(routes) == 0 {
 		return nil

@@ -234,7 +234,7 @@ var defaultConsoleWeb = "http://127.0.0.1:5173"
 // the repo-root VERSION file). As a const it was silently un-bakeable — `-X`
 // only patches variables — so every release shipped reporting this dev default.
 // The dev/un-baked default is intentionally "dev" to make non-release builds
-// obvious;
+// obvious.
 var version = "dev"
 
 func main() {

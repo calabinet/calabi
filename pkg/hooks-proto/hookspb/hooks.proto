@@ -1,6 +1,6 @@
 // hooks.proto — what a coordinator needs FROM a platform.
 //
-// WHY THIS EXISTS (docs/runbook/full-oss-plan.md F4)
+// WHY THIS EXISTS
 //
 // calabi-coord used four RPCs off the control-plane contract: identity's
 // ValidateToken and ListEdges, quota's CheckAdmit, metering's ListDeniedOrgs.
@@ -109,6 +109,13 @@ message RelayEndpoint {
   int32  derp_port = 3;
   // STUN responder port, used for reflexive-address discovery. 0 = none.
   int32  stun_port = 4;
+  // The relay speaks TLS on derp_port with a certificate nodes can check the
+  // way they check the platform's edges: the CA compiled into the client, and
+  // host. The coordinator then tells nodes to reach it over TLS only. Set it
+  // only for a relay known to serve such a certificate — a node never falls
+  // back to plaintext on one marked TLS. False keeps the plaintext protocol,
+  // which every relay speaks.
+  bool   tls       = 5;
 }
 
 // CheckEnrollmentRequest names an enrollment: the org and who enrolled.

@@ -114,7 +114,7 @@ type udpFlow struct {
 	lruEl    *list.Element
 
 	// release returns this flow's slot to the org's concurrent-connection
-	// limiter (Phase A anti-abuse). Set when the flow is admitted; called
+	// limiter (anti-abuse). Set when the flow is admitted; called
 	// exactly once on teardown (closeFlowLocked). nil for unguarded
 	// sessions / LRU-evicted-before-admit edge cases.
 	release func()
@@ -130,7 +130,7 @@ type udpProxy struct {
 	sess    *session.Session
 	proxyID string
 	obs     UDPObserver
-	glob    *ratelimit.GlobalLimiter // process-wide backpressure (Phase B); nil = unlimited
+	glob    *ratelimit.GlobalLimiter // process-wide backpressure; nil = unlimited
 
 	mu    sync.Mutex
 	flows map[string]*udpFlow // key = visitor.String()
@@ -222,8 +222,8 @@ func (u *udpProxy) handleDatagram(src net.Addr, pkt []byte) {
 			}
 		}
 		// First datagram from this visitor = a new "connection" for
-		// anti-abuse accounting. Gate machine-wide (Phase B) FIRST, then
-		// per-org (Phase A): TCP/TLS new-connection rate, then a concurrent
+		// anti-abuse accounting. Gate machine-wide FIRST, then
+		// per-org: TCP/TLS new-connection rate, then a concurrent
 		// slot. Unconfigured limiters / unguarded sessions pass through.
 		grel, shed := globalAdmit(u.glob)
 		if shed != "" {

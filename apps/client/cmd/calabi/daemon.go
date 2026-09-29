@@ -213,7 +213,7 @@ func runDaemon(args []string) int {
 	// hand off to the local supervisor daemon when `--local` is passed or
 	// the client is in standalone mode — it runs a self-hosted multi-tunnel
 	// runner from a YAML config instead of the platform-sync daemon below.
-	// See daemon_local.go +
+	// See daemon_local.go.
 	//
 	// In a loop: the console can switch between the two (daemon_restart.go).
 	// The log hub outlives the switch, so a switch reads as one log.
@@ -375,7 +375,7 @@ func runPlatformDaemon(args []string) int {
 	// natural session retry tick instead of restarting immediately.
 	sessionRestartTrigger := func() {}
 
-	// +: write-API + probe/inspector endpoints on :7400.
+	// write-API + probe/inspector endpoints on :7400.
 	// Mounted ONCE up-front so the SPA can serve login/diagnostics
 	// even when the edge connection is failing — critical for the
 	// in-window login flow (user must be able to log in BEFORE
@@ -442,7 +442,7 @@ func runPlatformDaemon(args []string) int {
 		}
 		return ""
 	}, meshRefreshForLogin, meshNodeNameFor(meshName), meshAdv, parseServiceSpecs(logger, *meshServices))
-	// Self-update (F4 + U1): checks on every daemon, applies only on the
+	// Self-update: checks on every daemon, applies only on the
 	// privileged system service.
 	// "Is anything moving through this client" — the signal the update policy
 	// uses to hold a routine restart back. Sampled below; never blocks.
@@ -694,7 +694,7 @@ func runPlatformDaemon(args []string) int {
 	// plane (mode=platform).
 	go runUpstreamHealthReporter(ctx, logger, healthMon, registry.daemonRegistry, bffConsoleURL)
 
-	// + session-restart plumbing. The reconnect loop
+	// session-restart plumbing. The reconnect loop
 	// registers a per-session kill function via setSessionKill; SPA
 	// login / org-switch handlers call sessionRestartTrigger() to
 	// terminate the in-flight session AND skip the post-error back-off
@@ -736,7 +736,7 @@ func runPlatformDaemon(args []string) int {
 
 	// A resumed machine gets the same treatment as a manual restart request.
 	//
-	// The mesh controller has detected suspend/resume since MESH.4 and rebuilds
+	// The mesh controller has detected suspend/resume and rebuilds
 	// its relay links within seconds; the edge session had nothing, so a laptop
 	// that woke up kept a TCP connection the far side had long forgotten. The
 	// note above says why that is not self-correcting: the control loop is
@@ -966,7 +966,7 @@ func runOneSession(
 	// Tier 2/3 trigger an identity-svc.ListEdges(region) lookup; tier 1
 	// or all-misses fall back to defaultServer.
 	//
-	//sticky: also feed creds.LastEdgeNodeID to edgepicker so it
+	// sticky: also feed creds.LastEdgeNodeID to edgepicker so it
 	// prefers the same edge across daemon boots. DNS is per-edge wildcard
 	// — landing on a different edge silently breaks the user's
 	// tunnel URLs, so we only fall off the sticky edge when it's dropped

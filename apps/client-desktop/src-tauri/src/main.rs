@@ -1,6 +1,6 @@
 // main.rs — Tauri 2 desktop shell entry point.
 //
-// Responsibilities (M7-S6):
+// Responsibilities:
 //   - Spawn / supervise the calabi daemon
 //   - Render the main window pointed at http://127.0.0.1:7400
 //   - System tray with status indicator + quick actions
@@ -107,7 +107,7 @@ fn main() {
             // Attach-only: ALWAYS create the Supervisor — it attaches to the
             // machine-wide system service, which needs no local daemon binary.
             // resolve_binary is now just the DEBUG dev-spawn fallback, so its
-            // absence is fine (None ⇒ attach-only). See the plan doc §五 F3.
+            // absence is fine (None ⇒ attach-only).
             let bin = daemon::resolve_binary(daemon_dir.clone()).ok();
             let supervisor: Option<Arc<Supervisor>> = Some(Supervisor::new(bin, daemon_dir));
             app.manage(supervisor.clone());

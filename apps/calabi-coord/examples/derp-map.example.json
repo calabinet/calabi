@@ -1,7 +1,7 @@
 {
   "_comment": [
     "CALABI_COORD_DERP_MAP_FILE — the relay directory calabi-coord distributes to mesh",
-    "nodes (MESH.4 B2b). Use this INSTEAD of CALABI_COORD_DERP_ADDR once the",
+    "nodes. Use this INSTEAD of CALABI_COORD_DERP_ADDR once the",
     "deployment runs more than one calabi-derp.",
     "",
     "Each host_name:derp_port MUST be the public address mesh clients can dial:",

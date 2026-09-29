@@ -585,7 +585,7 @@ private fun UnreachablePrompt(model: AppModel) {
  * A phone with the switch on looks exactly like a healthy one on this screen —
  * connected, addressed, the whole device list present — and the switch itself is
  * two taps away on another tab. A setting whose effect is invisible on the page
- * people actually look at is a support call (mesh-console-ux-plan §27.4).
+ * people actually look at is a support call.
  */
 @Composable
 private fun ShieldsPrompt(model: AppModel) {

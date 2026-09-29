@@ -361,7 +361,7 @@ func TestUpdateNodeDeclarationsUsesTheSession(t *testing.T) {
 }
 
 // A node reports the relay region it measured as closest along with its
-// endpoints (MESH.4 B2b); the coordinator records it and peers see it as that
+// endpoints; the coordinator records it and peers see it as that
 // node's derp_home — which is where they will relay traffic to it.
 func TestReportEndpointsSetsMeasuredHome(t *testing.T) {
 	c := startTestServer(t)

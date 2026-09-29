@@ -37,8 +37,8 @@ func resolveProxyHost(domain, subdomain, base string) string {
 
 // protocolFrameConfigPush is the FrameType for runtime config pushes —
 // aliased so route-applier code doesn't have to import the protocol
-// package directly for a single constant. Phase C uses it to surface
-// console-initiated upserts on the client side.
+// package directly for a single constant. It surfaces console-initiated
+// upserts on the client side.
 const protocolFrameConfigPush = proto.FrameConfigPush
 
 // buildConfigPushFromDelta projects a config-svc Delta into the wire

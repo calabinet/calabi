@@ -47,7 +47,7 @@ const minNodeProtocolVersion uint32 = 2
 //
 // PullNetMap, ReportEndpoints and ReportServiceHealth used to trust node_id
 // alone - sequential ids on an internet-facing listener, so anyone could read
-// any org's netmap or rewrite any node (security audit 1-C). An org key plus a
+// any org's netmap or rewrite any node. An org key plus a
 // node key was not enough either: node keys are public within an org, so any
 // member could speak for a colleague's device. A session exists only for a node
 // that proved it holds its private key at registration.
@@ -229,8 +229,8 @@ func (s *Server) ListNodes(ctx context.Context, req *meshpb.ListNodesRequest) (*
 //
 // Authorized by the session RegisterNode issued (mesh protocol v2), like every
 // other node-scoped call. It used to resolve "auth key + node key", which is
-// exactly what let an org member edit a colleague's device (security audit 1-C,
-// same-org residual). A node_key, when sent, must still name the session's node.
+// exactly what let an org member edit a colleague's device (same-org residual).
+// A node_key, when sent, must still name the session's node.
 //
 // Peers still get bumped: declarations are ACL "svc:" selectors, so the
 // coordinator recompiles each receiver's port filter from them.
@@ -317,7 +317,7 @@ func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeReque
 	// Proof of possession (mesh protocol v2). The auth key above says which org
 	// the caller belongs to; only this says which DEVICE it is. Without it a
 	// member could re-enroll a colleague's node - node keys are public within an
-	// org - and be handed that device's record (security audit 1-C).
+	// org - and be handed that device's record.
 	pending, ok := s.sessions.takeChallenge(req.GetChallengeId(), meshnet, challengeNode)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "registration challenge missing, expired or already used; call GetRegisterChallenge first")
@@ -371,7 +371,8 @@ func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeReque
 			Target: d.GetTarget(), Note: d.GetNote(),
 		})
 	}
-	// disco_key is optional in v0 (hole punching lands in MESH.4); accept empty.
+	// disco_key is optional — a node from before hole punching sends
+	// none; accept empty.
 	if dk := req.GetDiscoKey(); dk != "" {
 		discoKey, err := meshproto.ParseDiscoKey(dk)
 		if err != nil {
@@ -439,8 +440,8 @@ func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeReque
 //
 // The stream is bound to the caller: authorizeNode checks that the session token
 // names this node before a byte of netmap is sent. It used to be keyed by
-// node_id alone (a MESH.1 simplification that outlived its note), which let
-// anyone read any org netmap - security audit 1-C.
+// node_id alone (a simplification that outlived its note), which let
+// anyone read any org netmap.
 func (s *Server) PullNetMap(req *meshpb.PullNetMapRequest, stream meshpb.Coordinator_PullNetMapServer) error {
 	ctx := stream.Context()
 	self, err := s.authorizeNode(ctx, req.GetSessionToken(), req.GetNodeId())
@@ -461,7 +462,7 @@ func (s *Server) PullNetMap(req *meshpb.PullNetMapRequest, stream meshpb.Coordin
 		return err
 	}
 	// The netmap is otherwise event-driven, which is not enough once it carries a
-	// RELAY GRANT (R0'): grants expire, and a meshnet where nothing changes would
+	// RELAY GRANT: grants expire, and a meshnet where nothing changes would
 	// let every node's authorization lapse and drop it off the relays. So re-send
 	// on a timer as well. The tick is well under the grant's TTL, so a missed one
 	// costs a retry rather than an outage.
@@ -486,7 +487,7 @@ func (s *Server) PullNetMap(req *meshpb.PullNetMapRequest, stream meshpb.Coordin
 func (s *Server) sendNetMap(stream meshpb.Coordinator_PullNetMapServer, nodeID int64) error {
 	nm, err := s.coord.NetMapFor(stream.Context(), nodeID)
 	if err != nil {
-		// An admin disable (MESH.8b) fires a notify; recomputing the map then
+		// An admin disable fires a notify; recomputing the map then
 		// returns ErrNodeDisabled. Terminate the stream so the disabled node is
 		// cut immediately, not just dropped from peers' maps.
 		if errors.Is(err, core.ErrNodeDisabled) {
@@ -561,7 +562,7 @@ func (s *Server) ReportConnections(ctx context.Context, req *meshpb.ReportConnec
 }
 
 // ReportEndpoints records a node's discovered candidate endpoints and notifies
-// its peers so they can attempt direct paths (used from MESH.4).
+// its peers so they can attempt direct paths (hole punching).
 //
 // Peers are notified only when something they would see actually moved: the
 // endpoint set or the measured home region. Every node re-reports each minute
@@ -587,7 +588,7 @@ func (s *Server) ReportEndpoints(ctx context.Context, req *meshpb.ReportEndpoint
 	if err := s.coord.Nodes.UpdateEndpoints(ctx, self.ID, eps); err != nil {
 		return nil, status.Errorf(codes.Internal, "update endpoints: %v", err)
 	}
-	// The node also reports the relay region it measured as closest (MESH.4 B2b).
+	// The node also reports the relay region it measured as closest.
 	// Only a region this coordinator published is accepted; a bad one is the
 	// node's bug, not a reason to lose the endpoints it just reported, so the
 	// endpoint update above stands either way — and so does telling the peers.

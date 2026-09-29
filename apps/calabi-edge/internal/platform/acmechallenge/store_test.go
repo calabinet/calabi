@@ -43,7 +43,7 @@ func TestStore_PresentResolveCleanup(t *testing.T) {
 
 // A token is answered only under the domain it was issued for. Every platform
 // edge subscribes to the same broadcast subject, so without this one org's live
-// token would validate another org's domain (audit finding CERT-1).
+// token would validate another org's domain.
 func TestStore_ResolveRefusesForeignHost(t *testing.T) {
 	s := &Store{tokens: map[string]entry{}, ttl: time.Hour, logger: slog.Default()}
 	s.onPresent(&eventbus.Msg{Data: mustJSON(t, certevents.ChallengeEvent{

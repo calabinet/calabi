@@ -10,7 +10,7 @@ import (
 )
 
 // MemNodeStore is an in-memory NodeStore for the self-hosted coordinator and for
-// tests/dev. The platform build swaps in a DB-backed store (MESH.1/MESH.8).
+// tests/dev. The platform build swaps in a DB-backed store.
 type MemNodeStore struct {
 	mu     sync.Mutex
 	nextID int64
@@ -189,8 +189,9 @@ func (s *MemNodeStore) SetDisabled(_ context.Context, id int64, disabled bool) e
 	return nil
 }
 
-// AllowAllPolicy is the v0 PolicyStore: every node may reach every other node in
-// its meshnet. MESH.5 replaces this with the real ACL engine.
+// AllowAllPolicy is the PolicyStore when no ACL is configured: every node may
+// reach every other node in its meshnet. The ACL engine (ACLPolicy)
+// takes over once one is.
 type AllowAllPolicy struct{}
 
 func (AllowAllPolicy) Filter(_ context.Context, _ MeshnetID, _ *Node, candidates []*Node) ([]*Node, error) {
@@ -203,5 +204,5 @@ type StaticDERP struct{ Map DERPMap }
 
 // DERPMap ignores the meshnet: a static map has no per-org relays to add. This
 // is the self-hosted coordinator's behaviour and the platform's until self-hosted
-// relays land (R2).
+// relays land.
 func (s StaticDERP) DERPMap(_ context.Context, _ MeshnetID) (DERPMap, error) { return s.Map, nil }

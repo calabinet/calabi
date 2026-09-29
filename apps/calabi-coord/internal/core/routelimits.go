@@ -37,7 +37,8 @@ func routeTooBroad(p netip.Prefix) bool {
 // broad" only by the measure of the alias pool, and it is never aliased. It
 // "overlaps" the mesh's address space only in the sense that it contains
 // everything: a consumer routes by longest prefix, so it cannot take a single
-// overlay /32 away from the node that owns it (the MESH-1 interception), and a
+// overlay /32 away from the node that owns it (the interception the security
+// audit found), and a
 // consumer sends it traffic only after choosing that device as its exit. From
 // 2026-09-06 until this exemption every exit-device advertisement was refused at
 // registration, on every platform, with nothing but a coordinator log line.
@@ -50,7 +51,7 @@ func isExitRoute(p netip.Prefix) bool {
 //
 // Nothing legitimate advertises these: they are addresses the coordinator
 // hands out, not a network anyone's router serves. Left unchecked they were an
-// interception primitive (audit finding MESH-1): a member could advertise a
+// interception primitive: a member could advertise a
 // colleague's overlay /32 as a "subnet route" — narrow enough to pass the
 // width limit, auto-approved because the node had never been reviewed — and
 // every peer's netmap then carried that prefix under TWO peers. WireGuard
@@ -71,8 +72,8 @@ func routeInOverlaySpace(p netip.Prefix) bool {
 //
 // Auto-approval exists so subnet routers keep working without ceremony, and on
 // its own it is fine — a node vouching for its own LAN. It became half of an
-// interception primitive only in combination with overlap (audit finding
-// MESH-1): claim the CIDR a colleague's router already serves and every
+// interception primitive only in combination with overlap:
+// claim the CIDR a colleague's router already serves and every
 // consumer's netmap carries that prefix under two peers. WireGuard allowed-ips
 // are exclusive, so the peer written last simply takes the traffic. Nobody can
 // tell from the coordinator's side which of two claimants is honest — which is

@@ -1,6 +1,6 @@
 // Package logging owns the calabi client's structured-logging pipeline.
 //
-// Before the client logged to stderr only — fine for foreground
+// The client once logged to stderr only — fine for foreground
 // `calabi http <port>` runs, fatal for `calabi daemon` once we register
 // the binary as a Windows Service / systemd unit: the service manager
 // detaches stderr and the user has nothing to grep when something breaks.

@@ -204,7 +204,7 @@ export default function Tunnels() {
   // buy one — the limits still apply, the copy just stops sending people
   // to a page that is not there.
   const hideCommerce = me?.ui?.hide_commerce === true;
-  // M11.19.1: tunnelCount must reflect the Org-wide count to line up
+  // tunnelCount must reflect the Org-wide count to line up
   // with the plan cap — plan.max_tunnels is enforced against ALL
   // members' tunnels at tunnel-svc.CreateTunnel admit. items.length is
   // already filtered to "本机" by the daemon's handleListMyTunnels, so
@@ -268,7 +268,7 @@ export default function Tunnels() {
   // state (driven by server-provided client_edge_node_id), so currentEdgeID /
   // currentRegion are no longer derived here.
 
-  // M7-S5: fire a desktop notification on the 3rd consecutive bad
+  // fire a desktop notification on the 3rd consecutive bad
   // health check (≈90s of brokenness) so the user knows the local
   // upstream actually died, not just blipped.
   useEffect(() => {
@@ -306,7 +306,7 @@ export default function Tunnels() {
     const pid = live?.proxy_id;
     // live.pending = true means UpsertPending wrote a placeholder entry
     // during catch-up CONFIG_PUSH but the daemon never managed to
-    // OnProxyOpened the proxy (typical cause: M12 zone-edge check
+    // OnProxyOpened the proxy (typical cause: zone-edge check
     // rejected the claim because this tunnel's domain belongs to a
     // different edge than the one we're dialled to). Treating that as
     // "live" gives the user a false-positive "运行中" badge plus health

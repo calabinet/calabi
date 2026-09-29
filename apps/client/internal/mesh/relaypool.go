@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"strconv"
@@ -14,7 +15,7 @@ import (
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
-// relayPool is the node's set of live relay links (MESH.4 B2b — the multi-relay
+// relayPool is the node's set of live relay links (the multi-relay
 // fleet). With one relay in the deployment this is exactly the single link that
 // came before it; with a fleet it is what makes cross-region peers reachable at
 // all.
@@ -44,7 +45,7 @@ type relayPool struct {
 
 	mu      sync.Mutex
 	home    string // address of this node's own home relay (the fallback for sends)
-	grant   []byte // coordinator's current relay authorization (R0'); nil until a netmap arrives
+	grant   []byte // coordinator's current relay authorization; nil until a netmap arrives
 	clients map[string]*derp.Client
 	dialing map[string]bool
 	closed  bool
@@ -61,6 +62,16 @@ type relayPool struct {
 	// packets it could not send for want of one (meshBind.hold) and sends them
 	// then.
 	onLinkUp func(addr string)
+	// transports is how the relay map wants each relay reached (SetTransports);
+	// an address it does not list is plaintext — the bootstrap relay before the
+	// first netmap, or a relay the map does not mark TLS. platform is whether
+	// "platform" trust may be used (WGConfig.RelayPlatformTrust).
+	transports map[string]RelayTLS
+	platform   bool
+	// via is how each current link was dialed. A map that changes it — a relay
+	// that now speaks TLS, another trust, new pins — gets the link replaced, not
+	// kept as the one the map no longer describes.
+	via map[string]RelayTLS
 }
 
 // errNoRelayLink is Send's answer when no relay link can take the packet yet:
@@ -106,7 +117,7 @@ const relayDialTimeout = 10 * time.Second
 
 const (
 	// relayPingInterval is how often each live link is pinged. The relay echoes a
-	// Pong (pkg/relay's hub, since MESH.0 — the whole fleet answers), so a link
+	// Pong (pkg/relay's hub — the whole fleet answers), so a link
 	// that answers is proven alive END TO END, which a successful write is not.
 	relayPingInterval = 15 * time.Second
 	// relayDeadAfter is how long a link may go without a single frame from the
@@ -144,6 +155,7 @@ func newRelayPoolTimed(self meshproto.NodeKey, priv [meshproto.KeyLen]byte, onRe
 		clients:   make(map[string]*derp.Client),
 		dialing:   make(map[string]bool),
 		refusals:  make(map[string]*relayRefusal),
+		via:       make(map[string]RelayTLS),
 	}
 	go p.keepalive()
 	return p
@@ -267,6 +279,7 @@ func (p *relayPool) ResetLinks() {
 	}
 	clients := p.clients
 	p.clients = make(map[string]*derp.Client, len(clients))
+	p.via = make(map[string]RelayTLS, len(clients))
 	home := p.home
 	p.mu.Unlock()
 
@@ -343,7 +356,7 @@ func (p *relayPool) currentGrant() []byte {
 // The address is recorded even when the dial fails, so ordinary send-path
 // re-dialing (clientFor) can pick it up. Two things make an initial failure
 // survivable rather than fatal: hole punching means a node with no relay link is
-// degraded, not unreachable; and under R0' the coordinator's relay grant arrives
+// degraded, not unreachable; and the coordinator's relay grant arrives
 // with the netmap, i.e. legitimately AFTER this first attempt.
 func (p *relayPool) DialHome(ctx context.Context, addr string) error {
 	p.mu.Lock()
@@ -351,16 +364,87 @@ func (p *relayPool) DialHome(ctx context.Context, addr string) error {
 		p.home = addr
 	}
 	p.mu.Unlock()
-	c, err := derp.Dial(ctx, addr, p.self, p.auth(), p.onRecv, p.logger)
+	c, via, err := p.dialLink(ctx, addr)
 	if err != nil {
 		return err
 	}
 	p.mu.Lock()
 	p.clients[addr] = c
+	p.via[addr] = via
 	p.home = addr
 	p.mu.Unlock()
 	go p.whenAdmitted(addr, c)
 	return nil
+}
+
+// dialLink dials addr the way the relay map currently says, and returns how:
+// over TLS with its trust when the map marks the relay TLS, plaintext when it
+// does not. A relay marked TLS whose trust cannot be applied is not dialed at
+// all — see relaytls.go for why that is never a reason to try plaintext.
+func (p *relayPool) dialLink(ctx context.Context, addr string) (*derp.Client, RelayTLS, error) {
+	p.mu.Lock()
+	via, platform := p.transports[addr], p.platform
+	p.mu.Unlock()
+	if !via.Enabled() {
+		c, err := derp.Dial(ctx, addr, p.self, p.auth(), p.onRecv, p.logger)
+		return c, via, err
+	}
+	tlsCfg, err := relayTLSConfig(addr, via, platform)
+	if err != nil {
+		return nil, via, fmt.Errorf("relay %s: %w", addr, err)
+	}
+	c, err := derp.DialTLS(ctx, addr, tlsCfg, p.self, p.auth(), p.onRecv, p.logger)
+	return c, via, err
+}
+
+// SetTransports records how the relay map wants each relay reached, and
+// replaces every link that was dialed another way. The one case that matters in
+// practice is a link opened in plaintext — the bootstrap dial before the first
+// netmap, or an older map — to a relay the map now marks TLS: kept, it would
+// carry this device's traffic metadata in the clear and answer challenges with
+// the proof that names no relay, for as long as it happened to stay up.
+//
+// The home link is re-dialed at once; the others come back on demand, as a
+// reaped link always does. Called on every netmap, before the grant and the
+// dials that netmap starts, so those use it too; an unchanged map replaces
+// nothing.
+func (p *relayPool) SetTransports(m map[string]RelayTLS, platform bool) {
+	type stale struct {
+		addr string
+		c    *derp.Client
+		was  RelayTLS
+	}
+	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return
+	}
+	p.transports, p.platform = m, platform
+	var gone []stale
+	for addr, c := range p.clients {
+		if was := p.via[addr]; !was.Equal(m[addr]) {
+			if p.removeLocked(addr, c) {
+				gone = append(gone, stale{addr, c, was})
+			}
+		}
+	}
+	home := p.home
+	p.mu.Unlock()
+
+	redialHome := false
+	for _, s := range gone {
+		_ = s.c.Close()
+		if s.addr == home {
+			redialHome = true
+		}
+		if p.logger != nil {
+			p.logger.Info("mesh: the relay map changed how this relay is reached; re-dialing it",
+				"relay", s.addr, "tls_was", s.was.Trust, "tls_now", m[s.addr].Trust)
+		}
+	}
+	if redialHome {
+		p.dial(home)
+	}
 }
 
 // whenAdmitted waits for the relay to admit a new link (derp.Client.Ready), then
@@ -480,6 +564,7 @@ func (p *relayPool) removeLocked(addr string, c *derp.Client) bool {
 	p.txDroppedGone += c.TxDropped()
 	p.txBlockedGone += c.TxBlocked()
 	delete(p.clients, addr)
+	delete(p.via, addr)
 	return true
 }
 
@@ -597,22 +682,30 @@ func (p *relayPool) startDial(addr string, pastHold bool) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), relayDialTimeout)
 		defer cancel()
-		c, err := derp.Dial(ctx, addr, p.self, p.auth(), p.onRecv, p.logger)
+		c, via, err := p.dialLink(ctx, addr)
 		p.mu.Lock()
 		delete(p.dialing, addr)
 		switch {
 		case err != nil:
 			p.mu.Unlock()
 			if p.logger != nil {
-				p.logger.Warn("mesh: relay link dial failed", "relay", addr, "err", err)
+				p.logger.Warn("mesh: relay link dial failed", "relay", addr, "tls", via.Trust, "err", err)
 			}
 			return
 		case p.closed || p.clients[addr] != nil:
 			p.mu.Unlock() // shut down, or another dial won the race
 			_ = c.Close()
 			return
+		case !via.Equal(p.transports[addr]):
+			// The map changed how this relay is reached while the dial was in
+			// flight: this link is already the wrong kind. Drop it and dial again.
+			p.mu.Unlock()
+			_ = c.Close()
+			p.dial(addr)
+			return
 		}
 		p.clients[addr] = c
+		p.via[addr] = via
 		p.mu.Unlock()
 		p.whenAdmitted(addr, c)
 	}()

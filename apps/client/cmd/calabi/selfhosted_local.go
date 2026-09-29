@@ -1,6 +1,7 @@
 package main
 
-// The local daemon connected to a self-hosted server: its mesh as something the
+// The local daemon connected to a self-hosted server:
+// its mesh as something the
 // console can start, stop and reconfigure, and the console's /v1/selfhosted and
 // mesh-settings endpoints. Joining is signing in; the mesh is a switch on top.
 

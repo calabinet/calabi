@@ -29,6 +29,8 @@ type MeshRelay struct {
 	StunPort int `json:"stun_port,omitempty"`
 	// false parks the relay: the row stays, the region leaves the map
 	Enabled bool `json:"enabled,omitempty"`
+	// the relay's own heartbeat says it speaks TLS on derp_port with a certificate the platform CA verifies; devices then reach it over TLS only. Rewritten by every heartbeat, so a node that stops saying it goes back to plaintext
+	TLS bool `json:"tls,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt    time.Time `json:"created_at,omitempty"`
 	selectValues sql.SelectValues
@@ -39,7 +41,7 @@ func (*MeshRelay) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case meshrelay.FieldEnabled:
+		case meshrelay.FieldEnabled, meshrelay.FieldTLS:
 			values[i] = new(sql.NullBool)
 		case meshrelay.FieldID, meshrelay.FieldMeshnetID, meshrelay.FieldDerpPort, meshrelay.FieldStunPort:
 			values[i] = new(sql.NullInt64)
@@ -104,6 +106,12 @@ func (mr *MeshRelay) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				mr.Enabled = value.Bool
 			}
+		case meshrelay.FieldTLS:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field tls", values[i])
+			} else if value.Valid {
+				mr.TLS = value.Bool
+			}
 		case meshrelay.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -163,6 +171,9 @@ func (mr *MeshRelay) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("enabled=")
 	builder.WriteString(fmt.Sprintf("%v", mr.Enabled))
+	builder.WriteString(", ")
+	builder.WriteString("tls=")
+	builder.WriteString(fmt.Sprintf("%v", mr.TLS))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(mr.CreatedAt.Format(time.ANSIC))

@@ -5,8 +5,7 @@
 //   <UpdateTag/>   the 320px overview card: a signal, no controls.
 //   <UpdatePanel/> Settings: the status, the buttons, and the policy.
 //
-// Three different facts, deliberately rendered as three different things
-// (docs/runbook/client-update-policy.md §6):
+// Three different facts, deliberately rendered as three different things:
 //   available  — there is something newer
 //   can_apply  — this machine could install it       → `reason` when false
 //   hold       — it could, but the policy says not yet → `hold` when set
@@ -91,7 +90,7 @@ function holdKey(hold?: string): string | null {
       return "update.holdWindow";
     case "busy":
       return "update.holdBusy";
-    // The publisher's staged rollout (U5b): the machine is ready, the release
+    // The publisher's staged rollout: the machine is ready, the release
     // has not reached it yet.
     case "rollout":
       return "update.holdRollout";

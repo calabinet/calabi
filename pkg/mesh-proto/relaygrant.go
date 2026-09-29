@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Relay grants (R0′). A grant is the coordinator's signed statement that one
+// Relay grants. A grant is the coordinator's signed statement that one
 // node may use relays: "I authorize node K of meshnet M, scope S, until T".
 // The coordinator hands it to the node in its netmap; the node presents it when
 // it connects to a relay; the relay verifies it with the coordinator's PUBLIC
@@ -24,7 +24,7 @@ import (
 // a proof of possession of the node's private key, bound to a relay-chosen
 // nonce (derpauth.go). The grant answers "who authorized this, until when, for
 // which relays"; the proof answers "are you actually that node". Both are
-// required —
+// required.
 //
 // Wire format (fixed 120 bytes), signed bytes first:
 //
@@ -105,9 +105,10 @@ type RelayGrant struct {
 	// the key the connection claims; without that check a grant issued for one
 	// node would authorize a connection claiming to be another.
 	Node NodeKey
-	// Meshnet is the org the node belongs to. Relays don't act on it (they have
-	// no concept of an org); it is here so a relay's logs can be correlated with
-	// the control plane during an incident.
+	// Meshnet is the org the node belongs to. A relay acts on it in two places:
+	// it refuses to forward between two meshnets (pkg/relay crossesMeshnets), and
+	// a relay that one organization runs for itself admits only that
+	// organization's grants (pkg/relay AuthConfig.Meshnet).
 	Meshnet int64
 	Scope   RelayScope
 	Expiry  time.Time

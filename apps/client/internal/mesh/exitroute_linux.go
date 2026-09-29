@@ -14,8 +14,8 @@ import (
 // all of IPv4, so removing them cleanly restores the original default route.
 var splitDefault = []string{"0.0.0.0/1", "128.0.0.0/1"}
 
-// enableExitRoutes turns this node into a full-tunnel client of an exit node
-// (MESH.7b). It first pins the control-plane endpoints (coord + relay) to the
+// enableExitRoutes turns this node into a full-tunnel client of an exit node.
+// It first pins the control-plane endpoints (coord + relay) to the
 // physical link — captured from the CURRENT route table before we hijack the
 // default — so WireGuard's own transport keeps escaping; then it routes
 // 0.0.0.0/1 + 128.0.0.0/1 at the tun so every other destination flows to the
@@ -23,8 +23,8 @@ var splitDefault = []string{"0.0.0.0/1", "128.0.0.0/1"}
 // last, so the box is never briefly unroutable). Needs CAP_NET_ADMIN.
 //
 // The luid arg is Windows-only (see exitroute_windows.go); ignored on Linux.
-// lanKeep are the private/local ranges to hold on the physical link (MESH.7b
-// "allow LAN access") so full-tunnelling never cuts off the local network.
+// lanKeep are the private/local ranges to hold on the physical link ("allow LAN access")
+// so full-tunnelling never cuts off the local network.
 func enableExitRoutes(_ uint64, ifname string, bypass []netip.Addr, lanKeep []netip.Prefix) (func(), error) {
 	var pinned []netip.Addr
 	var carved []netip.Prefix

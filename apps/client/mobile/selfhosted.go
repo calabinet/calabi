@@ -22,7 +22,8 @@ import (
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
-// A phone joined to a self-hosted coordinator instead of calabi.net. There is no account and no
+// A phone joined to a self-hosted coordinator instead of calabi.net.
+// There is no account and no
 // control plane: the phone knows the coordinator's address, how to trust it,
 // and — only until the coordinator has agreed to take it back by proof of its
 // node key — the auth key it joined with.

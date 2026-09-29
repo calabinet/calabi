@@ -3,10 +3,10 @@
 // contract) — never pkg/api — so it links cleanly into the self-hosted client
 // (enforced by scripts/export-public.sh).
 //
-// MESH.2 scope in this slice: the control-plane plumbing — the netmap model
+// The first slice was the control-plane plumbing — the netmap model
 // (this file) and the coordinator client (coord.go). The DERP relay client and
 // the WireGuard tun datapath (which need a real tun device / privileges, not
-// exercisable in CI) land behind the Datapath seam in follow-up slices.
+// exercisable in CI) came behind the Datapath seam after it.
 package mesh
 
 import (
@@ -58,7 +58,7 @@ type NetMap struct {
 	Self  Peer
 	Peers []Peer
 	DERP  DERPMap
-	// Filter is what THIS node enforces on inbound traffic (MESH.5b), meaningful
+	// Filter is what THIS node enforces on inbound traffic, meaningful
 	// only when FilterEnabled — see below.
 	Filter []FilterRule
 	// FilterEnabled says the coordinator compiled Filter authoritatively. When
@@ -95,12 +95,12 @@ type NetMap struct {
 	RelayBandwidthBurstKbps uint32
 
 	// RelayGrant is the coordinator's signed authorization for this node to use
-	// relays (R0'). Opaque: the node hands the bytes to a relay, which verifies
+	// relays. Opaque: the node hands the bytes to a relay, which verifies
 	// them offline against the coordinator's public key. Empty from a coordinator
 	// that doesn't issue grants — relays must then not require them.
 	RelayGrant []byte
 	// SelfServices is the coordinator's registry of the services registered on
-	// THIS node, used only for the self-check (F3b). It exists because the
+	// THIS node, used only for the self-check. It exists because the
 	// registry is not only what this node declared: a manager can enter a
 	// service in the console, and nothing else pushes that back down, so
 	// without it such a service could never be observed at all.
@@ -112,7 +112,7 @@ type NetMap struct {
 }
 
 // FilterRule allows traffic from any of SrcCIDRs to any of DstPorts on THIS
-// node (MESH.5b). The coordinator compiles the meshnet's ACL into these per
+// node. The coordinator compiles the meshnet's ACL into these per
 // node; the node enforces them on inbound traffic — the receiver's own copy of
 // the rules is the one a compromised sender cannot argue with.
 type FilterRule struct {
@@ -174,6 +174,36 @@ type DERPNode struct {
 	HostName string
 	DERPPort int
 	STUNPort int
+	// TLS is how to reach DERPPort; the zero value is the plaintext protocol.
+	TLS RelayTLS
+}
+
+// RelayTLS is what the relay map says about reaching a relay over TLS
+// (meshpb.DERPNodeTLS): the trust to check its certificate with —
+// meshproto.RelayTrustPlatform, RelayTrustSystem or RelayTrustPin — and, for a
+// pin, the fingerprints. The zero value is plaintext. A relay marked TLS is
+// dialed over TLS only, and left alone when its trust cannot be applied here
+// (relayTLSConfig): falling back to plaintext would hand whoever blocks the TLS
+// a downgrade.
+type RelayTLS struct {
+	Trust string
+	Pins  []string
+}
+
+// Enabled reports whether the relay is to be reached over TLS.
+func (t RelayTLS) Enabled() bool { return t.Trust != "" }
+
+// Equal compares two descriptions, pins in order.
+func (t RelayTLS) Equal(o RelayTLS) bool {
+	if t.Trust != o.Trust || len(t.Pins) != len(o.Pins) {
+		return false
+	}
+	for i := range t.Pins {
+		if t.Pins[i] != o.Pins[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // FromNetMap converts the wire NetMap into the client model. It fails only if
@@ -254,7 +284,7 @@ func peerFromProto(pp *meshpb.Peer) (Peer, error) {
 		})
 	}
 
-	// disco_key is optional (empty until MESH.4).
+	// disco_key is optional: a node from before hole punching has none.
 	if dk := pp.GetDiscoKey(); dk != "" {
 		if k, err := meshproto.ParseDiscoKey(dk); err == nil {
 			p.DiscoKey = k
@@ -292,11 +322,20 @@ func derpFromProto(pb *meshpb.DERPMap) DERPMap {
 	for _, r := range pb.GetRegions() {
 		reg := DERPRegion{Code: r.GetCode()}
 		for _, n := range r.GetNodes() {
-			reg.Nodes = append(reg.Nodes, DERPNode{
+			dn := DERPNode{
 				HostName: n.GetHostName(),
 				DERPPort: int(n.GetDerpPort()),
 				STUNPort: int(n.GetStunPort()),
-			})
+			}
+			if t := n.GetTls(); t != nil {
+				// An entry that says TLS with no trust named is still TLS: it
+				// must not read as plaintext. relayTLSConfig refuses it.
+				dn.TLS = RelayTLS{Trust: t.GetTrust(), Pins: append([]string(nil), t.GetPins()...)}
+				if dn.TLS.Trust == "" {
+					dn.TLS.Trust = relayTrustUnnamed
+				}
+			}
+			reg.Nodes = append(reg.Nodes, dn)
 		}
 		out.Regions = append(out.Regions, reg)
 	}

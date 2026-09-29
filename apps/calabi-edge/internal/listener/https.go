@@ -51,7 +51,7 @@ type HTTPSOptions struct {
 	// router miss. nil resolver = mesh disabled.
 	MeshResolver OwnerResolver
 	SelfEdgeID   int64
-	// GlobalLimiter is the process-wide backpressure (Phase B). nil =
+	// GlobalLimiter is the process-wide backpressure. nil =
 	// unlimited. Checked at accept before the TLS handshake completes work.
 	GlobalLimiter *ratelimit.GlobalLimiter
 }
@@ -110,7 +110,7 @@ func (h *HTTPS) Run(ctx context.Context) error {
 			h.logger.Warn("accept", "err", err)
 			continue
 		}
-		// Phase B global backpressure: shed before the TLS handshake +
+		// global backpressure: shed before the TLS handshake +
 		// goroutine cost.
 		rel, shed := globalAdmit(h.opts.GlobalLimiter)
 		if shed != "" {
@@ -194,7 +194,7 @@ func (h *HTTPS) handle(visitor net.Conn) {
 		}
 	}
 
-	// Anti-abuse gates (Phase A). HTTPS is TLS-terminated HTTP, so it
+	// Anti-abuse gates. HTTPS is TLS-terminated HTTP, so it
 	// shares the HTTP new-connection rate bucket; concurrent cap is shared
 	// across all listener types for the org.
 	if err := sess.AllowHTTPConn(); err != nil {

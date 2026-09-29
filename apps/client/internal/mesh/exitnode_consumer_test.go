@@ -17,7 +17,7 @@ import (
 // Choosing an exit device must put its default route into WireGuard, following
 // the path a real netmap takes: coordinator stream -> BuildWGConfig -> route
 // policy -> datapath. The datapath tests hand SetConfig a WGConfig they built
-// themselves, so none of them went through BuildWGConfig — where the MESH-1
+// themselves, so none of them went through BuildWGConfig — where the
 // guard dropped 0.0.0.0/0 for overlapping the node pool. From 2026-09-10 every
 // exit device looked selected on every client and forwarded nothing. Found on a
 // real phone: routes and "exit node engaged" in place, zero bytes to the exit.
@@ -33,7 +33,7 @@ func TestChosenExitDeviceGetsTheDefaultRouteInWireGuard(t *testing.T) {
 				{NodeId: 2, NodeKey: keyB64(2), Name: "office-exit", OverlayAddr: "100.64.0.2",
 					AllowedIps: []string{"100.64.0.2/32", "0.0.0.0/0", "::/0"}},
 				// Still refused: a prefix that overlaps the node pool without being
-				// the default route is the MESH-1 shape.
+				// the default route is the shape the security audit found.
 				{NodeId: 3, NodeKey: keyB64(3), Name: "mallory", OverlayAddr: "100.64.0.3",
 					AllowedIps: []string{"100.64.0.3/32", "100.64.0.0/10"}},
 			},

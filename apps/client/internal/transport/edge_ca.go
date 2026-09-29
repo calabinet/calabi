@@ -21,7 +21,7 @@ var embeddedEdgeCA []byte
 
 // EdgeRootCAs returns the trust pool for verifying any server certificate the
 // platform edge CA signed: the edge :7443 control listener AND — since the mesh
-// coordinator grew native TLS (R0′) — coord's public gRPC. It reads the embedded
+// coordinator grew native TLS — coord's public gRPC. It reads the embedded
 // root plus the optional CALABI_EDGE_CA_FILE override, so the mesh datapath can
 // dial coord with the exact trust root the edge control transport already uses;
 // coord presents an edge-CA-signed server cert (calabi-coord CALABI_COORD_TLS_*), and

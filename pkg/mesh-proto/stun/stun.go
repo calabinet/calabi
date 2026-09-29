@@ -1,5 +1,5 @@
 // Package stun is a minimal RFC 5389 STUN codec — just enough for
-// reflexive-address discovery during mesh hole punching (MESH.4): a binding
+// reflexive-address discovery during mesh hole punching: a binding
 // request, and the XOR-MAPPED-ADDRESS carried in the success response. It is NOT
 // a general STUN implementation (no MESSAGE-INTEGRITY, FINGERPRINT, retransmit
 // policy, or the deprecated MAPPED-ADDRESS). Shared by the client (asks a relay

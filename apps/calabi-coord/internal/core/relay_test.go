@@ -28,7 +28,7 @@ func mustRegister(t *testing.T, c *Coordinator, ctx context.Context, meshnet Mes
 	return r
 }
 
-// UpsertRelay is idempotent by label (edge/derp merge-B): same data →
+// UpsertRelay is idempotent by label (edge/derp merge): same data →
 // changed=false (no netmap churn on a heartbeat); changed host → update in place;
 // new label → create. This is what lets a merged node self-register every 30s.
 func TestUpsertRelay_Idempotent(t *testing.T) {
@@ -59,6 +59,57 @@ func TestUpsertRelay_Idempotent(t *testing.T) {
 	}
 	if list, _ := c.RelaysFor(ctx, 1); len(list) != 2 {
 		t.Fatalf("after new label: %d relays, want 2", len(list))
+	}
+}
+
+// A node registering its own relay reports the port its STUN responder listens
+// on, and 0 when the responder is off. That 0 must reach the map as "no STUN
+// port": devices measure a region over its STUN port to choose a home, and one
+// that nothing answers only costs each of them a probe. It used to be replaced
+// by the console's default, 3478, like a registration that left the port out.
+func TestUpsertRelayWithSTUNOffIsListedWithoutAPort(t *testing.T) {
+	c, ctx := relayCoord(t)
+	listed := func() int {
+		t.Helper()
+		m, err := c.DERP.DERPMap(ctx, 1)
+		if err != nil {
+			t.Fatalf("derp map: %v", err)
+		}
+		for _, r := range m.Regions {
+			if r.Code == "self-hk" && len(r.Nodes) == 1 {
+				return r.Nodes[0].STUNPort
+			}
+		}
+		t.Fatalf("self-hk not in the map: %+v", m.Regions)
+		return 0
+	}
+	upsert := func(stun int) bool {
+		t.Helper()
+		r, changed, err := c.UpsertRelay(ctx, 1, Relay{Label: "hk", HostName: "h1.example", DERPPort: 3340, STUNPort: stun})
+		if err != nil {
+			t.Fatalf("upsert stun=%d: %v", stun, err)
+		}
+		if r.STUNPort != stun {
+			t.Fatalf("stored stun port = %d, want the %d the relay reported", r.STUNPort, stun)
+		}
+		return changed
+	}
+
+	upsert(0) // a relay whose responder was never on
+	if got := listed(); got != 0 {
+		t.Fatalf("listed with STUN port %d, want none", got)
+	}
+	if !upsert(3478) || listed() != 3478 {
+		t.Fatalf("responder turned on: map says %d", listed())
+	}
+	if !upsert(0) {
+		t.Fatal("turning the responder off moved nothing, so no device would be told")
+	}
+	if got := listed(); got != 0 {
+		t.Fatalf("listed with STUN port %d after the responder went off, want none", got)
+	}
+	if upsert(0) {
+		t.Fatal("a steady heartbeat with the responder off churned the map")
 	}
 }
 

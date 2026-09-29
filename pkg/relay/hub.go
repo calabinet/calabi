@@ -2,7 +2,8 @@
 // relays already-encrypted mesh packets between connected nodes. It NEVER sees
 // plaintext — a SendPacket's payload is WireGuard-encrypted by the sending node,
 // so the hub can route by public key but cannot read traffic. This is the
-// property that lets the relay be OSS and untrusted. Depends only on pkg/mesh-proto (the public frame contract) + stdlib.
+// property that lets the relay be OSS and untrusted.
+// Depends only on pkg/mesh-proto (the public frame contract) + stdlib.
 package relay
 
 import (
@@ -18,7 +19,7 @@ import (
 type Hub struct {
 	mu      sync.RWMutex
 	clients map[meshproto.NodeKey]*client
-	// usage accumulates relayed bytes per node key (F2, usage.go). Guarded by mu
+	// usage accumulates relayed bytes per node key (usage.go). Guarded by mu
 	// for map access only; the counters themselves are atomic and the forwarding
 	// path reaches them through the client, never through this map.
 	usage  map[meshproto.NodeKey]*usageCounter
@@ -35,6 +36,11 @@ type Hub struct {
 type client struct {
 	key  meshproto.NodeKey
 	conn net.Conn
+	// binding names the certificate this relay presented in the link's TLS
+	// handshake, or is nil for a plaintext link. It decides which proof the
+	// link must answer with (auth.go): bound on TLS, legacy on plaintext, and
+	// never the other way round.
+	binding *meshproto.DERPBinding
 	// wmu serializes every write to conn: the control frames written inline below
 	// and the data frames written by the queue's own goroutine. Without it the two
 	// can interleave mid-frame and desynchronise the stream permanently.
@@ -44,7 +50,7 @@ type client struct {
 	// whoever sent them — see sendq.go.
 	sendq  *sendQueue
 	closed chan struct{} // closed when Serve returns; stops the writer
-	auth   authState     // R0': the challenge/grant state of this link (auth.go)
+	auth   authState     // the challenge/grant state of this link (auth.go)
 	usage  *usageCounter
 	// limiter is this link's rate decision, resolved from its meshnet when the
 	// grant lands and re-resolved on re-auth. Atomic: the forwarding path reads
@@ -53,8 +59,8 @@ type client struct {
 }
 
 // NewHub returns an empty hub. A zero AuthConfig means connections are accepted
-// on the node key they claim, with no proof — the pre-R0' behaviour, which is
-// still what a relay runs during a staged rollout.
+// on the node key they claim, with no proof — how relays behaved before relay
+// authentication, which is still what a relay runs during a staged rollout.
 func NewHub(logger *slog.Logger, auth AuthConfig) *Hub {
 	return &Hub{clients: make(map[meshproto.NodeKey]*client), logger: logger, auth: auth}
 }
@@ -103,9 +109,27 @@ func (h *Hub) lookup(key meshproto.NodeKey) *client {
 	return h.clients[key]
 }
 
-// Serve handles one client connection: the mandatory ClientInfo frame, then a
-// forward loop until the peer disconnects. It always closes conn on return.
-func (h *Hub) Serve(conn net.Conn) {
+// Serve handles one client connection on the PLAINTEXT protocol: the mandatory
+// ClientInfo frame, then a forward loop until the peer disconnects. It always
+// closes conn on return.
+//
+// A plaintext link answers a challenge with the legacy proof, which names no
+// relay (auth.go). It stays for nodes and relays that predate TLS on the relay
+// port; a relay that refuses plaintext simply stops calling this.
+func (h *Hub) Serve(conn net.Conn) { h.serve(conn, nil) }
+
+// ServeBound handles one client connection that reached this relay over TLS.
+// The caller terminated the TLS and passes what this package needs from it:
+// binding, the certificate the relay presented in THAT handshake
+// (meshproto.DERPBindingOf). This package never touches TLS itself, which is
+// what keeps TLS-terminating code out of its import graph (deps_test.go).
+//
+// A link served this way accepts only proofs bound to that certificate, so a
+// relay the node is also connected to cannot use the node's answers here.
+// Everything else is Serve.
+func (h *Hub) ServeBound(conn net.Conn, binding meshproto.DERPBinding) { h.serve(conn, &binding) }
+
+func (h *Hub) serve(conn net.Conn, binding *meshproto.DERPBinding) {
 	defer conn.Close()
 
 	typ, payload, err := meshproto.ReadDERPFrame(conn)
@@ -118,7 +142,7 @@ func (h *Hub) Serve(conn net.Conn) {
 	}
 	var key meshproto.NodeKey
 	copy(key[:], payload)
-	c := &client{key: key, conn: conn, sendq: newSendQueue(), closed: make(chan struct{})}
+	c := &client{key: key, conn: conn, binding: binding, sendq: newSendQueue(), closed: make(chan struct{})}
 	defer close(c.closed)
 
 	// Authenticate BEFORE registering. ClientInfo is only a claim, and add()
@@ -127,7 +151,7 @@ func (h *Hub) Serve(conn net.Conn) {
 	// the length of the handshake. See auth.go.
 	if h.auth.Require {
 		if err := h.authenticate(c); err != nil {
-			h.logger.Warn("derp: rejecting unauthenticated connection", "key", key, "err", err)
+			h.logger.Warn("derp: rejecting unauthenticated connection", "key", key, "tls", binding != nil, "err", err)
 			return
 		}
 	}
@@ -142,7 +166,7 @@ func (h *Hub) Serve(conn net.Conn) {
 	// The writer starts only after add(), so c.usage is set: the queue credits
 	// usage itself, on the frames it actually manages to write.
 	go c.sendq.run(conn, &c.wmu, c.usage, c.closed)
-	h.logger.Info("derp client connected", "key", key)
+	h.logger.Info("derp client connected", "key", key, "tls", binding != nil)
 	defer func() {
 		if n := c.sendq.Dropped(); n > 0 {
 			h.logger.Info("derp client disconnected", "key", key, "dropped_as_stale", n)
@@ -189,7 +213,7 @@ func (h *Hub) Serve(conn net.Conn) {
 
 // forward relays ciphertext from src to dst as a RecvPacket. Best-effort: if dst
 // isn't connected the packet is dropped (the sender upgrades to a direct path or
-// retries — MESH.4). The hub treats ciphertext as opaque.
+// retries). The hub treats ciphertext as opaque.
 //
 // This NEVER blocks. It hands the frame to the destination's own writer and
 // returns, so the caller — the source link's read goroutine — keeps reading no
@@ -230,7 +254,7 @@ func (h *Hub) forward(src *client, dst meshproto.NodeKey, ciphertext []byte) {
 // between them - and WireGuard on the far side drops it anyway. But by then the
 // relay has delivered it, and relay usage is billed as the RECEIVER egress: a
 // node of org A could run up the bill of org B with junk addressed to a B node
-// key (security audit 1-D). Refusing it here costs two atomic loads a packet.
+// key. Refusing it here costs two atomic loads a packet.
 //
 // Only enforceable with authentication on, where each link proved the meshnet
 // its grant names. A relay running without it knows no meshnets (both 0) and

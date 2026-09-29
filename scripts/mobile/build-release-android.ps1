@@ -3,7 +3,7 @@
   Builds the release APK, checks it, and stages it as dist\release\calabi-android.apk.
 
 .DESCRIPTION
-  docs/runbook/release-mac-and-android.md. In order:
+  In order:
 
     1. the Go core for both ABIs (build-core-android.ps1) with the production edge CA
     2. gradle assembleRelease, signed with the release keystore
@@ -16,7 +16,7 @@
 
   A build without -EdgeCa is refused: build-core-android.ps1 alone only warns and
   embeds the DEV CA, and an installer carrying a DEV core looks exactly like a
-  good one (docs/runbook/release-pitfalls-and-verification.md 1).
+  good one.
 
   The keystore passwords are read from CALABI_ANDROID_KEYSTORE_PASSWORD (and
   CALABI_ANDROID_KEY_PASSWORD when the key has its own), or prompted for. They
@@ -53,7 +53,8 @@ if (-not $EdgeCa) { throw "-EdgeCa is required: a release APK without the produc
 $EdgeCa = (Resolve-Path (FromRepo $EdgeCa)).Path
 $Tree = if ($Tree) { (Resolve-Path (FromRepo $Tree)).Path } else { $repo }
 $Keystore = FromRepo $Keystore
-if (-not (Test-Path $Keystore)) { throw "release keystore not found: $Keystore (docs/runbook/release-mac-and-android.md A1)" }
+# The release keystore is kept out of the tree.
+if (-not (Test-Path $Keystore)) { throw "release keystore not found: $Keystore" }
 $OutDir = FromRepo $OutDir
 # From this repository, not the tree: the public export has no VERSION file.
 $version = (Get-Content (Join-Path $repo "VERSION") -Raw).Trim()

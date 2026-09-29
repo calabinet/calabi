@@ -55,7 +55,7 @@ func MintLocalToken() (string, error) {
 		return "", err
 	}
 	// Same reasoning as creds.Save: on Windows the mode is ignored, and this
-	// file is the :7400 console's write credential (audit finding ACL-1).
+	// file is the :7400 console's write credential.
 	defer func() { _ = secureServiceDir(filepath.Dir(p)) }()
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		return "", fmt.Errorf("mkdir local-token: %w", err)

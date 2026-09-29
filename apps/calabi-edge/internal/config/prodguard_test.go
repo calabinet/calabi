@@ -6,7 +6,7 @@ import (
 )
 
 // prodCfg is a healthy PLATFORM edge: the control plane reached through
-// bff-edge (the only way since F3 step 2b) and a platform relay that verifies
+// bff-edge (the only way) and a platform relay that verifies
 // grants — i.e. deploy/compose/edge/edge.yaml.
 func prodCfg() Config {
 	return Config{

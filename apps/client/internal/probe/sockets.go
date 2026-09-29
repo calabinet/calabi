@@ -13,11 +13,12 @@ package probe
 // guessed.
 //
 // This stays on :7400 and NEVER rides to the coordinator. That is the whole
-// distinction of the console UX plan draws: enumerating listeners and then
-// REPORTING them to the control plane would hand it a per-machine attack-surface
-// map, which is vetoed; enumerating them for the person sitting at this machine,
-// where the data never leaves the host, is exactly the alternative keeps.
-// What crosses the wire is still only what the operator DECLARES.
+// distinction the design draws: enumerating listeners
+// and then REPORTING them to the control plane would hand it a per-machine
+// attack-surface map, which is vetoed; enumerating them for the person sitting
+// at this machine, where the data never leaves the host, is exactly the
+// alternative it keeps. What crosses the wire is still only what the operator
+// DECLARES.
 //
 // Enumeration is best-effort. When the platform has no table we can read (or the
 // read fails), listenerSockets returns errEnumUnsupported and Scan falls back to

@@ -373,7 +373,14 @@ type RelayEndpoint struct {
 	// Relay data port mesh nodes dial. 0 = this node serves no relay.
 	DerpPort int32 `protobuf:"varint,3,opt,name=derp_port,json=derpPort,proto3" json:"derp_port,omitempty"`
 	// STUN responder port, used for reflexive-address discovery. 0 = none.
-	StunPort      int32 `protobuf:"varint,4,opt,name=stun_port,json=stunPort,proto3" json:"stun_port,omitempty"`
+	StunPort int32 `protobuf:"varint,4,opt,name=stun_port,json=stunPort,proto3" json:"stun_port,omitempty"`
+	// The relay speaks TLS on derp_port with a certificate nodes can check the
+	// way they check the platform's edges: the CA compiled into the client, and
+	// host. The coordinator then tells nodes to reach it over TLS only. Set it
+	// only for a relay known to serve such a certificate — a node never falls
+	// back to plaintext on one marked TLS. False keeps the plaintext protocol,
+	// which every relay speaks.
+	Tls           bool `protobuf:"varint,5,opt,name=tls,proto3" json:"tls,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -434,6 +441,13 @@ func (x *RelayEndpoint) GetStunPort() int32 {
 		return x.StunPort
 	}
 	return 0
+}
+
+func (x *RelayEndpoint) GetTls() bool {
+	if x != nil {
+		return x.Tls
+	}
+	return false
 }
 
 // CheckEnrollmentRequest names an enrollment: the org and who enrolled.
@@ -1002,12 +1016,13 @@ const file_hookspb_hooks_proto_rawDesc = "" +
 	"\x06region\x18\x01 \x01(\tR\x06region\x12+\n" +
 	"\x11freshness_seconds\x18\x02 \x01(\x05R\x10freshnessSeconds\"R\n" +
 	"\x1aListRelayEndpointsResponse\x124\n" +
-	"\x05items\x18\x01 \x03(\v2\x1e.calabi.v1.hooks.RelayEndpointR\x05items\"u\n" +
+	"\x05items\x18\x01 \x03(\v2\x1e.calabi.v1.hooks.RelayEndpointR\x05items\"\x87\x01\n" +
 	"\rRelayEndpoint\x12\x16\n" +
 	"\x06region\x18\x01 \x01(\tR\x06region\x12\x12\n" +
 	"\x04host\x18\x02 \x01(\tR\x04host\x12\x1b\n" +
 	"\tderp_port\x18\x03 \x01(\x05R\bderpPort\x12\x1b\n" +
-	"\tstun_port\x18\x04 \x01(\x05R\bstunPort\"f\n" +
+	"\tstun_port\x18\x04 \x01(\x05R\bstunPort\x12\x10\n" +
+	"\x03tls\x18\x05 \x01(\bR\x03tls\"f\n" +
 	"\x16CheckEnrollmentRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\x03R\x05orgId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x1c\n" +

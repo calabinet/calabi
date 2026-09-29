@@ -60,14 +60,16 @@ type Delta struct {
 // reflect the change in its local router (e.g. UnregisterByProxyID on
 // delete). Failures are logged by configclient; the stream isn't broken.
 //
-// OnRemoteDelta is called for routes belonging to other edges; just notes them. wires cross-edge proxying.
+// OnRemoteDelta is called for routes belonging to other edges;
+// just notes them. wires cross-edge proxying.
 type Applier interface {
 	OnLocalDelta(Delta)
 	OnRemoteDelta(Delta)
 	OnSnapshot(routes []Route)
 }
 
-// RPC is the narrow subset of pb.ConfigClient the edge uses. bffedgeclient.ConfigAdapter (which wraps bff_edge.BFFEdgeClient.
+// RPC is the narrow subset of pb.ConfigClient the edge uses.
+// bffedgeclient.ConfigAdapter (which wraps bff_edge.BFFEdgeClient.
 // SubscribeConfig) satisfies the same shape, so the edge can pick
 // either upstream at boot.
 type RPC interface {
@@ -99,7 +101,7 @@ type Options struct {
 	Applier Applier
 }
 
-// The direct-dial constructor was removed in F3 step 2b: every edge now
+// The direct-dial constructor was removed: every edge now
 // reaches the control plane through bff-edge, so this package is only ever
 // handed a ready client.
 // StartWithClient is Start's sibling for bff-edge mode: the caller

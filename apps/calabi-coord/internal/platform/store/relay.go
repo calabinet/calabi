@@ -8,7 +8,7 @@ import (
 	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent/meshrelay"
 )
 
-// Self-hosted relay registry (R2). Every query here is scoped to one meshnet —
+// Self-hosted relay registry. Every query here is scoped to one meshnet —
 // an org's relay must appear only in that org's map, and the store is the last
 // place that can be true.
 
@@ -21,6 +21,7 @@ func toRelay(row *ent.MeshRelay) core.Relay {
 		DERPPort:  row.DerpPort,
 		STUNPort:  row.StunPort,
 		Enabled:   row.Enabled,
+		TLS:       row.TLS,
 		CreatedAt: row.CreatedAt,
 	}
 }
@@ -52,6 +53,7 @@ func (s *Store) CreateRelay(ctx context.Context, r core.Relay) (*core.Relay, err
 		SetDerpPort(r.DERPPort).
 		SetStunPort(r.STUNPort).
 		SetEnabled(r.Enabled).
+		SetTLS(r.TLS).
 		Save(ctx)
 	if err != nil {
 		if ent.IsConstraintError(err) {
@@ -72,6 +74,7 @@ func (s *Store) UpdateRelay(ctx context.Context, r core.Relay) error {
 		SetDerpPort(r.DERPPort).
 		SetStunPort(r.STUNPort).
 		SetEnabled(r.Enabled).
+		SetTLS(r.TLS).
 		Save(ctx)
 	if ent.IsNotFound(err) {
 		return core.ErrRelayNotFound

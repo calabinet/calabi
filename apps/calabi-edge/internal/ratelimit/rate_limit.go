@@ -1,6 +1,6 @@
 // RateLimiter caps a per-org event rate expressed in events-per-MINUTE.
 //
-// It is the anti-abuse "new-connection rate" gate (Phase A, 2026-06-11):
+// It is the anti-abuse "new-connection rate" gate (2026-06-11):
 // the edge installs two instances per process — one for new HTTP(S)
 // connections, one for new TCP/TLS(+SNI/UDP-flow) connections — and feeds
 // each org's cap from quota-svc at handshake. Visitor-facing listeners

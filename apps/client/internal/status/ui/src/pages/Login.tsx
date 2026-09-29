@@ -1,4 +1,4 @@
-// Login.tsx — in-window login form. M7.1 replaces the "open a terminal
+// Login.tsx — in-window login form. It replaces the "open a terminal
 // and run calabi login" instruction with a proper email/password +
 // optional TOTP form.
 //
@@ -121,7 +121,7 @@ export default function Login() {
   });
 
   // The secondary way in: this computer on the user's own server instead of
-  // calabi.net (docs/runbook/self-hosted-sign-in-plan.md §6.2). Shown only when
+  // calabi.net. Shown only when
   // the daemon can switch — a daemon from before answers 404.
   const { data: selfHosted } = useQuery<SelfHostedStatus>({
     queryKey: ["selfhosted"],

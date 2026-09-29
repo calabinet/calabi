@@ -1,4 +1,4 @@
-// Package selfupdate is the daemon-side half of F4 (silent updates) —
+// Package selfupdate is the daemon-side half of silent updates.
 //
 // The privileged system service (root LaunchDaemon / LocalSystem) is the one
 // component always running AND already elevated, so it owns the update loop:
@@ -36,7 +36,7 @@ import (
 // attacker-controllable under this package's own threat model ("an attacker who
 // can spoof the manifest host"), and the download runs as root/LocalSystem —
 // so an unbounded stream is a disk-fill, and VerifySignature reads the whole
-// file into memory afterwards (audit finding UPD-1). Real installers are tens
+// file into memory afterwards. Real installers are tens
 // of MB; this leaves a wide margin.
 const maxInstallerBytes = 512 << 20 // 512 MiB
 
@@ -80,7 +80,7 @@ type Manifest struct {
 	// remotely-exploitable fix wait until 3am would be using it for something it
 	// was not for. It does NOT override ModeNotify — someone who said "never
 	// without me" gets a louder notice, not a surprise restart; the floor that
-	// overrides even that is min_supported (U3).
+	// overrides even that is min_supported.
 	//
 	// Like Rollback, it is safe precisely because it lives INSIDE the signed
 	// manifest: it can bypass the user's setting, so it must not be possible to
@@ -98,7 +98,7 @@ type Manifest struct {
 	// Signed like the rest of the manifest — it can override the user's setting,
 	// so it must not be possible to add or strip without the key.
 	MinSupported string `json:"min_supported,omitempty"`
-	// Rollout staggers this release across machines over time (U5b). Absent =
+	// Rollout staggers this release across machines over time. Absent =
 	// every machine at once. Signed like the rest: see Rollout.
 	Rollout *Rollout `json:"rollout,omitempty"`
 }

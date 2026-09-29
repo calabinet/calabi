@@ -1,6 +1,6 @@
 // messages.proto — the self-contained message set of the bff-edge contract.
 //
-// WHY THIS FILE EXISTS (docs/runbook/full-oss-plan.md F3)
+// WHY THIS FILE EXISTS
 //
 // bff_edge.proto used to declare its RPCs directly over
 // calabi.v1.control_plane.* messages. That made the "narrow edge-facing
@@ -69,8 +69,9 @@ message CertMeta {
   google.protobuf.Timestamp not_before = 8;
   google.protobuf.Timestamp not_after  = 9;
 
-  // Source: "uploaded" for static M3; "acme-letsencrypt" / "acme-aliyun"
-  // etc. in M4. Free-form to absorb new CAs without a proto v2.
+  // Source: "uploaded" for a cert the user uploaded; "acme-letsencrypt" /
+  // "acme-aliyun" etc. for one issued over ACME. Free-form to absorb new
+  // CAs without a proto v2.
   string source = 10;
 
   // When the renewal cron will pick this cert up (not_after minus its
@@ -117,7 +118,7 @@ message ClaimTunnelRequest {
   int32  remote_port     = 5;
   int64  org_id          = 6;
   int64  client_id       = 7;
-  // M12 — the calling edge's local base_domain (e.g. "edge1.calabi.net").
+  // the calling edge's local base_domain (e.g. "edge1.calabi.net").
   // Same semantics as CreateTunnelRequest.base_domain — used for the
   // zone-edge consistency check in per-edge wildcard DNS deploys. Required
   // when domain falls under any managed base; empty means "edge didn't
@@ -126,7 +127,7 @@ message ClaimTunnelRequest {
   string base_domain     = 8;
   // BYOI: authenticated org of the calling edge (bff-edge-stamped, >0 only
   // for BYOI edges). tunnel-svc rejects a claim targeting a platform-managed
-  // domain — BYOI is custom-domain-only. See byoi-plan.md BYOI.5.
+  // domain — BYOI is custom-domain-only.
   int64  caller_org_id   = 9;
 }
 
@@ -149,14 +150,14 @@ message CreateTunnelRequest {
   string domain       = 7;
   int32  remote_port  = 8;
   string config_json  = 9;
-  // M11.20.6 — set ONLY by edge-internal callers (tunnelstore.Client.
+  // set ONLY by edge-internal callers (tunnelstore.Client.
   // Persist) so the row goes in with a real edge ownership stamp and
   // the (edge_node_id, remote_port) unique check fires on insert. The
   // user-facing bff-console REST handler does NOT forward this field —
   // user rows continue to start at edge_node_id=0 and get their ownership
   // assigned by the edge via ClaimTunnel. See server.CreateTunnel notes.
   int64  edge_node_id = 10;
-  // M12 — the calling edge's local base_domain (e.g. "edge1.calabi.net").
+  // the calling edge's local base_domain (e.g. "edge1.calabi.net").
   // Set by edge-internal callers ONLY. tunnel-svc uses it for the
   // zone-edge consistency check in the per-edge wildcard DNS deployment
   // mode: if `domain` falls under any managed base (TUNNEL_SVC_BASE_-
@@ -176,12 +177,11 @@ message CreateTunnelRequest {
   // BYOI: authenticated org of the calling edge (bff-edge-stamped, >0 only
   // for single-tenant BYOI edges). tunnel-svc rejects when set and the
   // tunnel targets a platform-managed domain — BYOI is custom-domain-only.
-  // See docs/runbook/byoi-plan.md BYOI.5.
   int64  caller_org_id = 13;
   // creator_user_id — set by the user-facing bff-console path from the caller
   // principal's user id, so the row is attributed to its creator for org RBAC
   // visibility. Edge-internal callers leave it 0 (their rows are claimed, not
-  // user-created). See docs/runbook/org-resource-visibility-rbac.md.
+  // user-created).
   int64  creator_user_id = 14;
   // client_proposed_security_json — the security block the END USER typed on
   // the command line (`calabi http 8080 --ip-allow 203.0.113.0/24`), relayed
@@ -212,7 +212,7 @@ message DeleteTunnelRequest  {
   int64 id = 1;
   // BYOI: the authenticated org of the calling edge (stamped by bff-edge
   // from its mTLS cert). >0 ⇒ tunnel-svc enforces target.org == caller_org_id;
-  // 0 = trusted in-cluster caller (no cross-org gate). See byoi-plan.md.
+  // 0 = trusted in-cluster caller (no cross-org gate).
   int64 caller_org_id = 2;
 }
 
@@ -270,7 +270,7 @@ message EdgeNode {
   // region).
   int32  active_clients          = 6;
   google.protobuf.Timestamp last_seen_at = 7;
-  // M15: VPC-internal "host:port" a SAME-REGION peer edge dials to
+  // VPC-internal "host:port" a SAME-REGION peer edge dials to
   // forward a visitor connection for a tunnel this edge owns (edge mesh
   // HA). NOT public — never exposed via bff-console /v1/edges; only the
   // in-cluster / bff-edge ListEdges path carries it. Empty = this edge
@@ -451,7 +451,7 @@ message ListCertsResponse {
 }
 
 // [mirrored from proto/calabi/v1/control_plane/tunnel.proto]
-// M11.20.5 — edge boot port-pool seed.
+// edge boot port-pool seed.
 message ListEdgeClaimedPortsRequest {
   int64 edge_node_id = 1;
 }
@@ -569,7 +569,7 @@ message RegisterEdgeNodeRequest {
   string region         = 3;
   string public_addr    = 4;
   int32  active_clients = 5;
-  // M15: VPC-internal host:port for same-region peer forwarding (edge
+  // VPC-internal host:port for same-region peer forwarding (edge
   // mesh HA). Empty = no peer forwarding.
   string internal_addr  = 6;
   // Pool bucket for plan-tier routing ("shared" | "dedicated"); self-
@@ -589,6 +589,12 @@ message RegisterEdgeNodeRequest {
   // edge sets it, bff-edge forwards the whole request to identity-svc unchanged,
   // and the consoles read it back from the edge directory. Empty = legacy edge.
   string version         = 11;
+  // The relay (relay_derp_port) speaks TLS with a certificate that verifies
+  // against the platform CA for host(public_addr), checked by the node at every
+  // heartbeat; the coordinator then marks it TLS in the DERP map. Same field
+  // number as control_plane.RegisterEdgeNodeRequest.relay_tls. False from a
+  // node older than relay TLS: its devices keep the plaintext protocol.
+  bool   relay_tls       = 12;
 }
 
 // [mirrored from proto/calabi/v1/control_plane/identity.proto]
@@ -600,9 +606,9 @@ message ReportClientPresenceRequest {
   // tunnel-svc can later route push events back through the right edge.
   int64  edge_node_id    = 1;
   string edge_node_label = 2;
-  // Legacy field. M3 edges send a flat id list; M6+ edges fill `clients`
-  // instead so the server can stamp org_id. When `clients` is non-empty
-  // this is ignored.
+  // Legacy field. Older edges send a flat id list; newer ones fill
+  // `clients` instead so the server can stamp org_id. When `clients` is
+  // non-empty this is ignored.
   repeated int64 client_ids = 3;
   // Preferred shape from 2026-05-28: one entry per active client with
   // its (client_id, org_id) pair.
@@ -668,7 +674,7 @@ message ResolveRequest {
   int32  remote_port   = 3;
   // BYOI: authenticated org of the calling edge (bff-edge-stamped). >0 ⇒
   // tunnel-svc returns found=false for a tunnel whose org differs, so a
-  // single-tenant edge can't resolve another org's domains. See byoi-plan.md.
+  // single-tenant edge can't resolve another org's domains.
   int64  caller_org_id = 4;
 }
 
@@ -686,7 +692,7 @@ message ResourceMeta {
   int64                     id          = 1;
   google.protobuf.Timestamp created_at  = 2;
   google.protobuf.Timestamp updated_at  = 3;
-  // Soft-delete: null means "alive". M2 sprint 1 does not enforce.
+  // Soft-delete: null means "alive".
   google.protobuf.Timestamp deleted_at  = 4;
 }
 
@@ -695,8 +701,8 @@ message Snapshot {
   // A monotonic SHA computed by config-svc; the edge persists this
   // alongside the snapshot for fast resync on reconnect.
   string sha          = 1;
-  // Compact JSON-encoded list of tunnels, tokens, and route entries.
-  // Sprint 2 may swap to typed nested messages if cardinality bites.
+  // Compact JSON-encoded list of tunnels, tokens, and route entries. A later
+  // version may swap to typed nested messages if cardinality bites.
   bytes  body_json   = 2;
 }
 
@@ -714,17 +720,17 @@ message Tunnel {
   string status        = 10;    // enabled/disabled/error
   int64  edge_node_id  = 11;
   // Free-form per-protocol config (basic-auth, IP allowlist, ...).
-  // JSON-encoded for now; sprint 2+ may move to typed oneof.
+  // JSON-encoded for now; a later version may move to typed oneof.
   string config_json   = 12;
   // legacy_route_key is kept as a worked example of the field-evolution
-  // pattern documented in docs/protocol-spec.md §11.4 (S7-2). It carries
+  // pattern.
+  // It carries
   // no live data: new servers always emit "" and ignore incoming values;
   // existing v1.0 clients that still set it continue to round-trip
   // without errors. Removal target: v2 (proto package calabi.v2).
-  // See apps/tunnel-svc/internal/server/legacy_field_example.go.
   string legacy_route_key = 13 [deprecated = true];
 
-  // ---- Client presence enrichment (Phase A) ----
+  // ---- Client presence enrichment ----
   //
   // Populated by tunnel-svc.ListTunnels via a BatchGetClientStatus
   // round-trip to identity-svc. Best-effort: when identity-svc isn't
@@ -736,8 +742,8 @@ message Tunnel {
   bool                       client_online       = 14;
   google.protobuf.Timestamp  client_last_seen_at = 15;
   // client_edge_node_id is the edge the OWNING client's daemon is
-  // currently connected to (from identity-svc presence). Under M12
-  // per-edge wildcard DNS this matters: if it differs from
+  // currently connected to (from identity-svc presence). Under per-edge
+  // wildcard DNS this matters: if it differs from
   // edge_node_id (the edge that owns the tunnel's domain), the
   // tunnel's public URL is unreachable because daemon's session
   // lives on the wrong edge — readers should render "mismatch"
@@ -751,7 +757,7 @@ message Tunnel {
   // through mismatch on every poll.
   int64                      client_edge_node_id = 16;
 
-  // ---- M18 delete/disable surfacing (admin) ----
+  // ---- delete/disable surfacing (admin) ----
   // disabled_by_admin: an admin (not the user) disabled this tunnel; the
   // user cannot re-enable it and the edge refuses to serve it.
   bool   disabled_by_admin = 17;
@@ -782,8 +788,7 @@ message Tunnel {
   // creator_user_id — the user who created this tunnel (org RBAC). Drives
   // member visibility: a non-management member (developer/viewer) only sees
   // rows where creator_user_id == themselves; owner/admin/auditor see all.
-  // 0 = legacy/unattributed (pre-RBAC rows until backfilled). See
-  // docs/runbook/org-resource-visibility-rbac.md.
+  // 0 = legacy/unattributed (pre-RBAC rows until backfilled).
   int64 creator_user_id = 20;
 
   // ---- Upstream (local_addr) health, reported by the owning daemon ----
@@ -803,7 +808,7 @@ message ValidateTokenRequest {
   // BYOI: authenticated org of the calling edge (bff-edge-stamped, >0 only
   // for single-tenant BYOI edges). When set, identity-svc returns
   // valid=false unless the token's org matches — a BYOI edge may only
-  // authenticate its own org's clients. See byoi-plan.md BYOI.4b.
+  // authenticate its own org's clients.
   int64  caller_org_id = 2;
 }
 

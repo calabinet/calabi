@@ -238,7 +238,7 @@ func TestGrantChecks(t *testing.T) {
 	}
 }
 
-// With auth off a relay behaves exactly as it did before R0': no challenge is
+// With auth off a relay behaves exactly as it did before: no challenge is
 // sent and a plain ClientInfo registers. This is what every relay runs until the
 // fleet has upgraded, so it is not a legacy path — it is the rollout.
 func TestAuthDisabledSendsNoChallenge(t *testing.T) {

@@ -29,7 +29,7 @@ type Agent struct {
 	mu     sync.Mutex
 	snap   Snapshot
 	policy Policy
-	// org is the org's requirement (U5c), nil when none applies. The agent acts
+	// org is the org's requirement, nil when none applies. The agent acts
 	// on policy.Tighten(org); policy itself stays the machine's own choice.
 	org    *OrgPolicy
 	busyOp bool
@@ -75,7 +75,7 @@ type Snapshot struct {
 	// zero value went out on the wire as "0001-01-01T00:00:00Z", the console read
 	// that as a real date, and the panel offered "等你决定。· 最迟 1/1/1".
 	HoldUntil *time.Time `json:"hold_until,omitempty"`
-	// OrgPolicy is the org's requirement when one applies (U5c). Policy above
+	// OrgPolicy is the org's requirement when one applies. Policy above
 	// stays the machine's own setting; the console shows what the org locks.
 	OrgPolicy *OrgPolicy `json:"org_policy,omitempty"`
 	// Timezone is the abbreviation for the MACHINE's local zone (e.g. CST, CEST).

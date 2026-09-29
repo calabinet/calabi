@@ -8,9 +8,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
-// Self-hosted relays (R2) — an org registering a calabi-derp it runs itself.
+// Self-hosted relays — an org registering a calabi-derp it runs itself.
 //
 // Three constraints shape everything here, and none is negotiable:
 //
@@ -40,11 +42,16 @@ const SelfHostedRegionPrefix = "self-"
 // netmaps.
 const maxRelaysPerMeshnet = 16
 
-// defaultRelaySTUNPort is what a registration without one gets. A region with no
+// defaultRelaySTUNPort is what a relay registered by hand (RegisterRelay, the
+// console) gets when the registration leaves the STUN port out. A region with no
 // STUN endpoint cannot be latency-measured, and a region that cannot be measured
 // is never chosen as anyone's home — i.e. a relay registered without it would
 // quietly do nothing. Defaulting beats rejecting: 3478 is what the relay listens
 // on unless the operator changed it.
+//
+// A relay registering ITSELF (UpsertRelay) gets no default. It reports the port
+// its own responder listens on, so its 0 says the responder is off, and listing
+// 3478 for it would send every device to measure a port nothing answers on.
 const defaultRelaySTUNPort = 3478
 
 // Relay is one calabi-derp an org runs itself.
@@ -61,7 +68,13 @@ type Relay struct {
 	STUNPort int    `json:"stun_port"`
 	// Enabled false keeps the row but drops the region from the map, so an
 	// operator can park a relay for maintenance without losing its registration.
-	Enabled   bool      `json:"enabled"`
+	Enabled bool `json:"enabled"`
+	// TLS is what the relay's own heartbeat last said (UpsertRelay): it speaks
+	// TLS on DERPPort with a certificate the platform CA verifies for HostName.
+	// Only a node's heartbeat sets it — never a console registration, which
+	// cannot know — and every heartbeat rewrites it, so a node that stops
+	// saying it goes back to plaintext. See CompositeDERP.OwnRelaysPlatformCA.
+	TLS       bool      `json:"tls"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -189,9 +202,10 @@ func (c *Coordinator) UpsertRelay(ctx context.Context, t MeshnetID, in Relay) (*
 	}
 	label := NormalizeNodeName(in.Label)
 	host := strings.TrimSpace(in.HostName)
-	if in.STUNPort == 0 {
-		in.STUNPort = defaultRelaySTUNPort
-	}
+	// No STUN default here, unlike RegisterRelay: 0 is the node saying its
+	// responder is off (defaultRelaySTUNPort), and the region is listed with no
+	// STUN port. No edge sent 0 before it could mean that — their configs read
+	// 0 as 3478 — so for them nothing changes.
 	if err := ValidateRelay(label, host, in.DERPPort, in.STUNPort); err != nil {
 		return nil, false, err
 	}
@@ -232,17 +246,20 @@ func (c *Coordinator) UpsertRelay(ctx context.Context, t MeshnetID, in Relay) (*
 		// Same label = same relay (the label IS the region code). Nothing moved →
 		// changed=false so a 30s heartbeat doesn't churn every node's netmap
 		// (unless we just retired a stale sibling — then the map did change).
-		if r.HostName == host && r.DERPPort == in.DERPPort && r.STUNPort == in.STUNPort && r.Enabled {
+		// TLS is part of "moved": a relay starting (or stopping) to speak TLS
+		// changes how every device reaches it, and they must hear it now, not
+		// at the next periodic resend.
+		if r.HostName == host && r.DERPPort == in.DERPPort && r.STUNPort == in.STUNPort && r.Enabled && r.TLS == in.TLS {
 			out := r
 			return &out, retired, nil
 		}
-		r.HostName, r.DERPPort, r.STUNPort, r.Enabled = host, in.DERPPort, in.STUNPort, true
+		r.HostName, r.DERPPort, r.STUNPort, r.Enabled, r.TLS = host, in.DERPPort, in.STUNPort, true, in.TLS
 		if err := c.Relays.UpdateRelay(ctx, r); err != nil {
 			return nil, false, fmt.Errorf("core: update relay: %w", err)
 		}
 		if c.Logger != nil {
 			c.Logger.Info("self-hosted relay re-registered", "meshnet", t, "relay_id", r.ID,
-				"region", r.RegionCode(), "host", host)
+				"region", r.RegionCode(), "host", host, "tls", r.TLS)
 		}
 		out := r
 		return &out, true, nil
@@ -261,7 +278,7 @@ func (c *Coordinator) UpsertRelay(ctx context.Context, t MeshnetID, in Relay) (*
 	}
 	out, err := c.Relays.CreateRelay(ctx, Relay{
 		Meshnet: t, Label: label, HostName: host,
-		DERPPort: in.DERPPort, STUNPort: in.STUNPort, Enabled: true,
+		DERPPort: in.DERPPort, STUNPort: in.STUNPort, Enabled: true, TLS: in.TLS,
 	})
 	if err != nil {
 		return nil, false, fmt.Errorf("core: create relay: %w", err)
@@ -347,6 +364,13 @@ type CompositeDERP struct {
 	// Relays supplies each org's own. Nil = platform only, i.e. exactly the
 	// behaviour of StaticDERP.
 	Relays RelayStore
+	// OwnRelaysPlatformCA puts an org's relay whose heartbeat says it speaks TLS
+	// (Relay.TLS) in the map as TLS, checked against the platform CA — the CA
+	// that issued its certificate. Set on calabi.net, where that is what the
+	// heartbeat vouches for. A self-hosted coordinator leaves it off: its devices
+	// never trust that CA (meshproto.RelayTrustPlatform), so the entry would only
+	// strand them.
+	OwnRelaysPlatformCA bool
 }
 
 // DERPMap implements DERPMapSource.
@@ -379,10 +403,11 @@ func (c CompositeDERP) DERPMap(ctx context.Context, t MeshnetID) (DERPMap, error
 			// org is also using.
 			continue
 		}
-		out.Regions = append(out.Regions, DERPRegion{
-			Code:  code,
-			Nodes: []DERPNode{{HostName: r.HostName, DERPPort: r.DERPPort, STUNPort: r.STUNPort}},
-		})
+		node := DERPNode{HostName: r.HostName, DERPPort: r.DERPPort, STUNPort: r.STUNPort}
+		if r.TLS && c.OwnRelaysPlatformCA {
+			node.TLS = DERPTLS{Trust: meshproto.RelayTrustPlatform}
+		}
+		out.Regions = append(out.Regions, DERPRegion{Code: code, Nodes: []DERPNode{node}})
 	}
 	return out, nil
 }
@@ -427,7 +452,7 @@ func (s *MemRelayStore) UpdateRelay(_ context.Context, in Relay) error {
 	if !ok {
 		return ErrRelayNotFound
 	}
-	cur.HostName, cur.DERPPort, cur.STUNPort, cur.Enabled = in.HostName, in.DERPPort, in.STUNPort, in.Enabled
+	cur.HostName, cur.DERPPort, cur.STUNPort, cur.Enabled, cur.TLS = in.HostName, in.DERPPort, in.STUNPort, in.Enabled, in.TLS
 	s.m[in.ID] = cur
 	return nil
 }

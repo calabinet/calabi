@@ -68,7 +68,7 @@ const pendingTTL = 10 * time.Second
 // packets, short enough to forget a peer's stale per-session NAT port.
 const learnedTTL = 30 * time.Second
 
-// discoProber drives DISCO path discovery (MESH.4 B3): it pings each peer's
+// discoProber drives DISCO path discovery: it pings each peer's
 // candidate endpoints and records which answer, exposing the best validated
 // direct path per peer via bestPath. The bind consumes that (as a pathFinder) to
 // decide, per packet, whether a peer's WireGuard traffic goes direct or via the

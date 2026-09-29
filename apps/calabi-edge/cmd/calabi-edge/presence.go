@@ -17,10 +17,10 @@ import (
 // 15s pairs with the 35s default freshness window in
 // identity-svc.GetClientStatuses (≈2× heartbeat + slack).
 //
-// History: hard-coded 10s and that turned out to dominate PG QPS at
-// 10k clients. X1 batched the upserts (one tx per tick) and X2
-// (this change) made the cadence operator-tunable so prod can run at
-// 15-20s without code changes.
+// History: the cadence was hard-coded to 10s, and that turned out to
+// dominate PG QPS at 10k clients. The upserts were then batched into one tx
+// per tick, and this change made the cadence operator-tunable so
+// prod can run at 15-20s without code changes.
 const defaultPresenceInterval = 15 * time.Second
 
 // runPresenceReporter walks the live session set every `interval`

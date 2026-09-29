@@ -1,6 +1,7 @@
 package adminhttp
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -9,7 +10,7 @@ import (
 	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 )
 
-// Self-hosted relay registry (R2) — the admin surface behind bff-console.
+// Self-hosted relay registry — the admin surface behind bff-console.
 //
 // The meshnet is ALWAYS the one in the path, which the gateway sets from the
 // caller's authenticated org and never from a request body. An org's relay
@@ -29,14 +30,19 @@ type relayView struct {
 	DERPPort    int    `json:"derp_port"`
 	STUNPort    int    `json:"stun_port"`
 	Enabled     bool   `json:"enabled"`
+	TLS         bool   `json:"tls"`
 	NodesHomed  int    `json:"nodes_homed"`
 	CreatedAtMS int64  `json:"created_at_ms"`
+	// GrantPubKey (base64 Ed25519) is set only in the answer to a relay's own
+	// registration (upsertRelay): the key the relay checks its devices' grants
+	// against. Empty when this coordinator signs no grants.
+	GrantPubKey string `json:"grant_pubkey,omitempty"`
 }
 
 func toRelayView(r core.Relay, homed int) relayView {
 	return relayView{
 		ID: r.ID, Label: r.Label, RegionCode: r.RegionCode(), HostName: r.HostName,
-		DERPPort: r.DERPPort, STUNPort: r.STUNPort, Enabled: r.Enabled,
+		DERPPort: r.DERPPort, STUNPort: r.STUNPort, Enabled: r.Enabled, TLS: r.TLS,
 		NodesHomed: homed, CreatedAtMS: r.CreatedAt.UnixMilli(),
 	}
 }
@@ -84,6 +90,9 @@ type registerRelayRequest struct {
 	HostName string `json:"host_name"`
 	DERPPort int    `json:"derp_port"`
 	STUNPort int    `json:"stun_port"`
+	// TLS is read by upsertRelay only — the relay's own heartbeat, relayed by
+	// bff-edge. A console registration cannot know it and never sets it.
+	TLS bool `json:"tls"`
 }
 
 func (h *handler) registerRelay(w http.ResponseWriter, r *http.Request) {
@@ -120,7 +129,7 @@ func (h *handler) registerRelay(w http.ResponseWriter, r *http.Request) {
 // upsertRelay is the idempotent registration a merged edge/relay node calls on
 // every heartbeat (via bff-edge). Re-registering the same label rewrites the
 // mutable fields instead of 409-ing, and only bumps the netmap when the map
-// actually moved (edge/derp merge-B).
+// actually moved (edge/derp merge).
 func (h *handler) upsertRelay(w http.ResponseWriter, r *http.Request) {
 	meshnet, ok := meshnetFromPath(w, r)
 	if !ok {
@@ -133,7 +142,7 @@ func (h *handler) upsertRelay(w http.ResponseWriter, r *http.Request) {
 	}
 	rl, changed, err := h.coord.UpsertRelay(r.Context(), meshnet, core.Relay{
 		Label: body.Label, HostName: body.HostName,
-		DERPPort: body.DERPPort, STUNPort: body.STUNPort,
+		DERPPort: body.DERPPort, STUNPort: body.STUNPort, TLS: body.TLS,
 	})
 	switch {
 	case errors.Is(err, core.ErrInvalidRelay), errors.Is(err, core.ErrTooManyRelays):
@@ -148,7 +157,13 @@ func (h *handler) upsertRelay(w http.ResponseWriter, r *http.Request) {
 	if changed {
 		h.notif.Bump(meshnet)
 	}
-	writeJSON(w, http.StatusOK, toRelayView(*rl, 0))
+	out := toRelayView(*rl, 0)
+	// The relay registering itself is the one that has to check its devices'
+	// grants, and this answer is how it learns which key signed them.
+	if pub := h.coord.RelayGrantPublicKey(); pub != nil {
+		out.GrantPubKey = base64.StdEncoding.EncodeToString(pub)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (h *handler) setRelayEnabled(enabled bool) http.HandlerFunc {

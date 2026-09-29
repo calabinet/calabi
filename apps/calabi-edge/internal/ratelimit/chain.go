@@ -17,9 +17,10 @@
 // SCOPE, stated plainly: the org tier is per EDGE PROCESS. An org whose
 // tunnels land on three edges can run three times its org allowance. That is
 // the same limitation the per-org connection caps have carried since
-// 2026-06-11 and is a deliberate, documented trade-off, not an oversight.
-// Closing it needs the minute-scale feedback loop sketched in
-// bandwidth-model.md not a bigger lock.
+// 2026-06-11 and is a deliberate, documented trade-off,
+// not an oversight.
+// Closing it needs a minute-scale feedback loop,
+// not a bigger lock.
 package ratelimit
 
 import (

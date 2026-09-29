@@ -466,7 +466,7 @@ func receiveOne(t *testing.T, b *meshBind) *meshEndpoint {
 // The whole direct data path over loopback sockets: node A probes B with DISCO,
 // the prober validates the path, A's bind sends a WireGuard packet over it, and
 // B's socket demultiplexes it into B's bind attributed to A. This is everything
-// B3-3 adds except the tun device itself.
+// the direct path adds except the tun device itself.
 func TestDirectTransportRoundTrip(t *testing.T) {
 	aDisco, _ := GenerateDiscoKey()
 	bDisco, _ := GenerateDiscoKey()

@@ -7,8 +7,8 @@
 // been the last thing keeping the edge tied to a closed package after the
 // control-plane contract was already cut.
 //
-// The edge does not dial NATS any more either. Since F3 step 2b every edge
-// reaches the control plane through bff-edge, and its bus is the bff-edge-backed
+// The edge does not dial NATS any more either. Every edge reaches the control
+// plane through bff-edge, and its bus is the bff-edge-backed
 // implementation in internal/platform/bffedgeclient — Subscribe becomes a
 // SubscribeXxx stream, Publish becomes a ReportUsage call. So this package
 // declares what the edge USES and nothing implements it here.

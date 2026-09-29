@@ -13,7 +13,7 @@ import (
 
 // addSubnetRoutes routes each advertised CIDR (a subnet-router peer's
 // allowed-ip outside the overlay range) at the tun, so overlay-external
-// destinations flow into WireGuard (MESH.7). Idempotent ("exists" ignored).
+// destinations flow into WireGuard. Idempotent ("exists" ignored).
 func addSubnetRoutes(_ uint64, ifname string, routes []netip.Prefix) error {
 	for _, r := range routes {
 		out, err := runIP("route", "add", r.String(), "dev", ifname)

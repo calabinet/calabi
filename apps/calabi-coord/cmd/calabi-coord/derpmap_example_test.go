@@ -2,9 +2,9 @@ package main
 
 import "testing"
 
-// The shipped example map must actually parse: an operator copies it to start a
-// relay fleet, and a CALABI_COORD_DERP_MAP_FILE that fails to load is a hard
-// startup error.
+// The shipped example map must actually parse: an operator copies
+// it to start a relay fleet, and a CALABI_COORD_DERP_MAP_FILE that fails to
+// load is a hard startup error.
 //
 // It lives in this module (apps/calabi-coord/examples/) rather than under
 // deploy/compose/, so it travels with the coordinator into the public tree — a

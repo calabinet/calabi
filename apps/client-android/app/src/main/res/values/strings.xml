@@ -232,7 +232,7 @@
     <string name="region_ca_toronto">Toronto</string>
     <string name="region_sa_saopaulo">São Paulo</string>
     <string name="region_af_johannesburg">Johannesburg</string>
-    <!-- A self-hosted server (docs/runbook/self-hosted-sign-in-plan.md S3). -->
+    <!-- A self-hosted server. -->
     <string name="login_self_hosted">Connect to a self-hosted server</string>
     <string name="sh_title">Self-hosted server</string>
     <string name="sh_subtitle">Join the mesh of a server you or your team run, with the invite its administrator made.</string>

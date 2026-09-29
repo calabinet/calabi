@@ -1,7 +1,7 @@
 // ConnLimiter caps the number of *concurrent* visitor connections per
 // org — the anti-abuse "how many open at once" ceiling.
 //
-// Wired in Phase A (2026-06-11): main installs one process-global
+// Wired (2026-06-11): main installs one process-global
 // instance; calabi-edge sets each org's cap from quota-svc's `max_conns`
 // at handshake (SetCap), and every visitor-facing listener Acquire()s
 // before opening the upstream stream + releases on close. Current plan
@@ -15,14 +15,14 @@
 // would force every accept() to pay one event into a bucket that's
 // already tracking byte-level fairness.
 //
-// Multi-replica safety (D7): each calabi-edge holds an independent
+// Multi-replica safety: each calabi-edge holds an independent
 // counter for the same org. A 4-replica deployment with Free user
 // (cap=50) effectively grants 4×50 = 200 concurrent connections —
 // acceptable because edges are heavily affinity-
 // routed by the GSLB, and
-// because Pro users are the ones who care about exact caps. may
-// add a redis-backed cluster-wide counter if the over-grant becomes
-// a real concern.
+// because Pro users are the ones who care about exact caps. A later
+// version may add a redis-backed cluster-wide counter if the
+// over-grant becomes a real concern.
 package ratelimit
 
 import (

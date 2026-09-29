@@ -7,7 +7,7 @@ package statusapi
 // from the control plane (see cmd/calabi/daemon_mesh_platform.go) and reports the
 // resulting node state here, so the SAME embedded SPA (internal/status/ui) renders
 // the mesh on both daemon kinds. Management (disable a node, ACL) stays in the web
-// console (MESH.8b/8e); this surface is read-only status plus a local pause.
+// console; this surface is read-only status plus a local pause.
 
 import (
 	"context"
@@ -33,7 +33,7 @@ type MeshStatusSource interface {
 	MeshStatus() MeshStatus
 	// MeshDown pauses local mesh participation (leaves the meshnet, stops
 	// re-enrolling). Reversible via MeshUp. Idempotent. The org-wide kill switch
-	// is the web console's node-disable (MESH.8b).
+	// is the web console's node-disable.
 	MeshDown() error
 	// MeshUp resumes local mesh participation after a MeshDown: it clears the
 	// pause and re-enrolls immediately (no wait for the next poll). Idempotent.
@@ -117,7 +117,7 @@ type MeshServiceDecl struct {
 	// but it is not this machine's to edit or remove — the console owns it, and
 	// persisting it here would create a second row claiming the same name.
 	FromConsole bool `json:"from_console,omitempty"`
-	// The machine's own last self-check (F3b). Checked=false means it could not
+	// The machine's own last self-check. Checked=false means it could not
 	// test — a udp service, or no observation yet — which is NOT a failure, and
 	// the UI must not render it as one.
 	//

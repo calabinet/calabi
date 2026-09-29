@@ -73,13 +73,9 @@ func TestRelayOnlyRefusesTunnelListeners(t *testing.T) {
 		body  string
 	}{
 		{"control", "control_port", "control:\n  addr: \":7443\"\n"},
-		// The control listener's server certificate. A mesh relay terminates no
-		// TLS at all — runRelay takes only the mesh block and pkg/relay names no
-		// TLS type — so a mesh-only config that points at a cert describes a
-		// node that does not exist. These two were missing from the guard until
-		// 2026-09-23, so a relay-only file could carry them and be believed.
-		{"control cert", "control_cert_pem", "control:\n  cert_pem: /etc/calabi/edge-control.crt\n"},
-		{"control key", "control_key_pem", "control:\n  key_pem: /etc/calabi/edge-control.key\n"},
+		// Not control_cert_pem / control_key_pem: that certificate is the
+		// node's, and a relay-only node presents it on its relay port to the
+		// devices that open TLS (TestRelayOnlyMayNameItsCertificate).
 		{"http", "http_port", "http:\n  addr: \":80\"\n"},
 		{"https", "https_port", "https:\n  addr: \":443\"\n"},
 		{"sni", "sni_port", "sni:\n  addr: \":8443\"\n"},
@@ -100,6 +96,22 @@ func TestRelayOnlyRefusesTunnelListeners(t *testing.T) {
 				t.Errorf("error should name the offending field %q, got: %v", c.field, err)
 			}
 		})
+	}
+}
+
+// TestRelayOnlyMayNameItsCertificate: the node's certificate is not a tunnel
+// setting any more. A relay-only node presents it on its relay port to devices
+// that open TLS (cmd/calabi-edge/relaytls.go) — a relay with a certificate from
+// a public CA needs somewhere to name it, and this is where every other node
+// names its own. It used to be refused here as "a mesh relay terminates no TLS".
+func TestRelayOnlyMayNameItsCertificate(t *testing.T) {
+	cfg, err := writeCfg(t, "node_label: relay-1\nrole: mesh\n"+
+		"tunnel:\n  control_cert_pem: /etc/calabi/relay.crt\n  control_key_pem: /etc/calabi/relay.key\n")
+	if err != nil {
+		t.Fatalf("a relay-only node naming its certificate was refused: %v", err)
+	}
+	if cfg.Tunnel.ControlCertPEM != "/etc/calabi/relay.crt" || cfg.Tunnel.ControlKeyPEM != "/etc/calabi/relay.key" {
+		t.Fatalf("certificate = (%q, %q), want the one the file names", cfg.Tunnel.ControlCertPEM, cfg.Tunnel.ControlKeyPEM)
 	}
 }
 

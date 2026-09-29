@@ -48,8 +48,8 @@ service Coordinator {
   rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
 
   // ReportTunnels uploads the reverse tunnels this node's daemon serves, for a
-  // self-hosted coordinator's apps (docs/runbook/self-hosted-sign-in-plan.md
-  // §五): the whole current list, which replaces the one reported before, and
+  // self-hosted coordinator's apps:
+  // the whole current list, which replaces the one reported before, and
   // the bytes each tunnel carried since the node's last accepted report.
   // Information only — a tunnel grants nothing in the mesh, so nothing here
   // needs approving. PermissionDenied on a coordinator whose credentials come
@@ -74,7 +74,7 @@ service Coordinator {
   rpc OpenViewSession(OpenViewSessionRequest) returns (OpenViewSessionResponse);
 
   // GetEdgeAccess is what a node needs to serve tunnels through this server's
-  // edge (docs/runbook/self-hosted-server-plan.md §3.1): where the edge is, how
+  // edge: where the edge is, how
   // to trust its certificate, and a grant the edge accepts — the same signed,
   // short-lived statement relays accept, since one calabi-edge is both. Takes a
   // live session's token or a view token, so a device whose mesh is switched off
@@ -90,7 +90,7 @@ service Coordinator {
   // ReportEndpoints uploads the node's freshly discovered candidate endpoints
   // (local interfaces + STUN-reflexive) and, once measured, the relay region it
   // is closest to. The coordinator relays both to peers via their NetMap so hole
-  // punching can begin and relayed traffic takes the nearest hop (MESH.4).
+  // punching can begin and relayed traffic takes the nearest hop.
   rpc ReportEndpoints(ReportEndpointsRequest) returns (ReportEndpointsResponse);
 
   // UpdateNodeDeclarations changes what an ALREADY-ENROLLED node declares about
@@ -127,7 +127,8 @@ service Coordinator {
   // Observation, deliberately, not configuration: nothing here grants anything,
   // so a node lying costs it a wrong badge on its own row. The coordinator keeps
   // only the CURRENT value and does not persist it — a history of which port
-  // answered when is exactly the kind of record §八 says not to accumulate.
+  // answered when is exactly the kind of record the design says not to
+  // accumulate.
   rpc ReportServiceHealth(ReportServiceHealthRequest) returns (ReportServiceHealthResponse);
 
   // ReportConnections uploads WHO this node exchanged traffic with in a window:
@@ -136,9 +137,9 @@ service Coordinator {
   // half (who changed a rule, who approved a device) already lives in
   // audit-svc's hash chain.
   //
-  // This REVISES the "current value, never a time series" rule in
-  // docs/runbook/mesh-console-ux-plan.md §八-3, and the revision is deliberately
-  // narrow. What that rule was protecting is spelled out there: a sequence of a
+  // This REVISES the "current value, never a time series" rule,
+  // and the revision is deliberately
+  // narrow. What that rule was protecting: a sequence of a
   // laptop's ENDPOINT ADDRESSES is a location trail, because a public IP reverse
   // -resolves to a place and an ISP. So endpoints are still current-value only,
   // and this message carries none — no endpoint, no public IP, no port. A peer
@@ -159,7 +160,7 @@ message RegisterNodeRequest {
   // Base64 (WireGuard-style) public keys. Private keys never leave the node.
   string node_key = 1;
   string disco_key = 2;
-  // Human label used for MagicDNS (MESH.6): <name>.<meshnet>.mesh.calabi.net
+  // Human label used for MagicDNS: <name>.<meshnet>.mesh.calabi.net
   string name = 3;
   // Opaque auth-key/token proving the node may join a meshnet (verified by
   // identity-svc on the platform build; a static file on the self-hosted coord).
@@ -169,7 +170,7 @@ message RegisterNodeRequest {
   repeated string capabilities = 6;
   // Subnet routes this node advertises (CIDRs it can forward to, e.g.
   // "192.168.1.0/24"). The coordinator, once it approves them, adds them to this
-  // node's allowed_ips in peers' netmaps so they route the CIDR here (MESH.7).
+  // node's allowed_ips in peers' netmaps so they route the CIDR here.
   repeated string advertised_routes = 7;
   // device_fingerprint is the daemon's per-install id (the same one it registers
   // with on the Publish side). A CLAIM, like name: it exists only so the console
@@ -277,7 +278,7 @@ message GetRegisterChallengeRequest {
   // Re-registration by proof alone (capability node_reauth): no auth_key, and
   // instead the node this device already is. The challenge is issued only when
   // both name an existing, enabled, not signed-out node, and it is bound to that
-  // node. See docs/runbook/self-hosted-sign-in-plan.md §四.
+  // node.
   int64 node_id = 2;
   string node_key = 3;
 }
@@ -573,7 +574,7 @@ message NetMap {
   Peer self = 1;
   repeated Peer peers = 2;
   DERPMap derp_map = 3;
-  // Packet filter this node ENFORCES on inbound traffic (MESH.5b). The
+  // Packet filter this node ENFORCES on inbound traffic. The
   // coordinator compiles it from the meshnet's ACL for this node specifically:
   // "these sources may reach these ports OF MINE". Enforcement is on the
   // RECEIVING side on purpose — a sender that lies (or is compromised) still
@@ -595,7 +596,7 @@ message NetMap {
   // one of those, and either choice is an outage for the other case.
   bool filter_enabled = 5;
   // relay_grant is the coordinator's signed authorization for THIS node to use
-  // relays (R0'). Opaque here on purpose: the node forwards the bytes verbatim
+  // relays. Opaque here on purpose: the node forwards the bytes verbatim
   // to a relay, which verifies them with the coordinator's public key held as
   // static config — so a relay decides who may connect WITHOUT ever talking to
   // the control plane. Format and rules in ../relaygrant.go.
@@ -605,16 +606,16 @@ message NetMap {
   // require them), and it is also how an org over its traffic quota is cut off
   // from the platform's relays — note the coordinator downgrades the grant's
   // SCOPE rather than withholding it, so the org keeps the relays it runs
-  // itself. See docs/runbook/facility-and-service-model.md §3.5.
+  // itself.
   //
   // Grants expire, so the coordinator re-sends the netmap well before they do;
   // a relay may also re-challenge a live link at any time.
   bytes relay_grant = 6;
   // self_services is the coordinator's registry of the services registered on
-  // THIS node, sent so the node can self-check them (F3b).
+  // THIS node, sent so the node can self-check them.
   //
   // Needed because the registry is not only what the node declared. A manager
-  // can enter a service in the console (F4a), and nothing else ever pushes that
+  // can enter a service in the console, and nothing else ever pushes that
   // back down — so without this field a console-authored service could never
   // show a reachability result at all. That is exactly the kind most likely to
   // be pointed at the wrong address, since nobody was standing at the machine
@@ -669,10 +670,9 @@ message NetMap {
   // 0 / absent = no self-limit, which is what an older coordinator sends and
   // what a self-hosted one sends. Direct (hole-punched) traffic is NEVER
   // charged against it: it costs the platform nothing.
-  // See docs/runbook/mesh-relay-rate-limit-plan.md.
   uint32 relay_bandwidth_kbps = 12;
   uint32 relay_bandwidth_burst_kbps = 13;
-  // MagicDNS records land here in MESH.6.
+  // MagicDNS records land here.
 }
 
 // SubnetAlias is one real subnet and the unique prefix standing in for it.
@@ -680,7 +680,7 @@ message NetMap {
 // Same size, always: the host bits are positional, so alias .222 IS real .222.
 // That is what lets the router rewrite with one stateless rule rather than a
 // lookup table, and what lets a person who knows the NAS is .222 find it without
-// consulting anything. See docs/runbook/mesh-subnet-alias-nat-plan.md.
+// consulting anything.
 message SubnetAlias {
   string alias = 1;
   string real = 2;
@@ -713,7 +713,7 @@ message Peer {
   // Region code of the peer's DERP home relay.
   string derp_home = 7;
   // MagicDNS label — the node's name, resolved to its overlay IP by the
-  // client-side resolver (MESH.6).
+  // client-side resolver.
   string name = 8;
   // Services this peer offers, so a client can say what a machine is FOR rather
   // than only what it is called. Only CONFIRMED ones travel: the coordinator
@@ -755,13 +755,34 @@ message DERPNode {
   string host_name = 1;
   int32 derp_port = 2;
   int32 stun_port = 3;
+  // How a node reaches this relay's derp_port. Unset: the plaintext protocol,
+  // which every relay speaks. Set: TLS, checked as it says, and never plaintext
+  // — a node whose check fails does not fall back, and one that cannot make the
+  // check (a trust it does not know) leaves the relay alone. A relay that speaks
+  // TLS answers the plaintext protocol on the same port until it is told to
+  // refuse it, so an older node that ignores this field keeps working.
+  DERPNodeTLS tls = 4;
+}
+
+// DERPNodeTLS is how a node checks a relay's certificate — the way it already
+// checks an edge.
+message DERPNodeTLS {
+  // "platform": the edge CA compiled into the client, and host_name. Only a
+  // calabi.net coordinator says it, and a node signed in to a self-hosted one
+  // never accepts it.
+  // "system":   the device's own roots, and host_name.
+  // "pin":      the certificate's fingerprint (meshproto.CertPin) is one of pins.
+  string trust = 1;
+  // For trust "pin". More than one lets a relay roll to a new key without
+  // cutting its devices off.
+  repeated string pins = 2;
 }
 
 message ReportEndpointsRequest {
   int64 node_id = 1;
   repeated string endpoints = 2; // host:port candidates
-  // Region code of the relay the node measured as its LOWEST-latency home
-  // (MESH.4 B2b). The node picks it by probing each region's STUN endpoint from
+  // Region code of the relay the node measured as its LOWEST-latency home.
+  // The node picks it by probing each region's STUN endpoint from
   // the DERP map; the coordinator accepts it only if the region exists in the
   // map it published, and distributes it to peers as this node's derp_home so
   // they relay via the closest hop. Empty = no change (keep the current home).

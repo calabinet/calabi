@@ -11,7 +11,7 @@ import (
 )
 
 // ACLStore holds one ACL document per meshnet — the SaaS per-org policy the
-// console editor reads and writes (MESH.8e-2). meshnet == org, so this is the
+// console editor reads and writes. meshnet == org, so this is the
 // org's access-control document. The platform build backs it with a DB table
 // (mesh_acls, calabi-coord-owned); the self-hosted build leaves it nil (its single
 // ACL comes from a file — see cmd/calabi-coord/policy.go). A meshnet with no
@@ -108,7 +108,7 @@ func (s *MemACLStore) SetACL(_ context.Context, t MeshnetID, p ACLPolicy) error 
 
 // ACLFilter is a PolicyStore that enforces each meshnet's OWN stored ACL doc,
 // falling back to Fallback (allow-all, or the global file policy) when a
-// meshnet has no doc. This is the platform's per-org netmap filter (MESH.8e-2).
+// meshnet has no doc. This is the platform's per-org netmap filter.
 //
 // Read-error posture: if the store read fails, ACLFilter degrades to the
 // Fallback default rather than erroring the netmap pull — consistent with the
@@ -146,7 +146,7 @@ const (
 )
 
 // ValidateACLPolicy structurally validates an ACL document before it is stored
-// (MESH.8e-2 write path). It rejects the shapes MemPolicy would silently ignore
+// (write path). It rejects the shapes MemPolicy would silently ignore
 // so an admin gets a clear error instead of a policy that quietly does nothing:
 //
 //   - only action "accept" is supported (there is no deny; absence = denial)

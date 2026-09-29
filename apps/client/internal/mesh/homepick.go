@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Home-relay selection (MESH.4 B2b). Until now a node's DERP home was stamped by
+// Home-relay selection. Until now a node's DERP home was stamped by
 // the coordinator — one deployment-wide default region for everybody, which is
 // only right for a single-relay deployment. With a relay fleet the node itself is
 // the only party that can tell which relay is closest to it, so it measures:

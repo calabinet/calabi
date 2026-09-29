@@ -15,7 +15,8 @@ import (
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
-// The edge a self-hosted coordinator's devices serve tunnels through, from the environment:
+// The edge a self-hosted coordinator's devices serve tunnels through,
+// from the environment:
 //
 //	CALABI_COORD_EDGE_ADDR        host:port of the edge's control listener, as devices reach it
 //	CALABI_COORD_EDGE_PIN         the fingerprint of the edge's certificate, sha256:… (optional)
@@ -116,6 +117,18 @@ func edgeDirectoryFromEnv(logger *slog.Logger) (*edgeDirectory, error) {
 
 // learns reports whether the fingerprint is found by connecting to the edge.
 func (d *edgeDirectory) learns() bool { return !d.system && !d.given }
+
+// givenPin is the fingerprint the environment gave, "" when it gave none. The
+// relay on the edge's machine presents the same certificate and is pinned to
+// the same fingerprint (relaytls.go).
+func (d *edgeDirectory) givenPin() string {
+	if d == nil || !d.given {
+		return ""
+	}
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.pin
+}
 
 // Edges is core.EdgeDirectory. Until the fingerprint is known there is nothing
 // to say: an edge without a pin would be checked against the system's roots,

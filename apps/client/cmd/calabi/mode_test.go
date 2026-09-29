@@ -8,7 +8,7 @@ import (
 )
 
 // TestDefaultClientMode pins the single binary's default mode. There is no
-// longer a build to vary it by (full-oss-plan F1): the binary can reach the
+// longer a build to vary it by: the binary can reach the
 // managed control plane, so "platform" is what a fresh install gets, and a
 // self-hoster opts out with `calabi mode standalone`.
 func TestDefaultClientMode(t *testing.T) {

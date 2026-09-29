@@ -129,7 +129,7 @@ export default function Layout() {
   // (writable console) from a read-only key (read-only chip).
   const { agentMode, canManage, container } = useServiceMode();
 
-  // M11.7 multi-Org: list the user's memberships so the topbar can
+  // multi-Org: list the user's memberships so the topbar can
   // expose a switcher. Cached for the lifetime of the SPA — orgs
   // rarely change within a session; switchOrg invalidates this on
   // success via window.location.reload().
@@ -229,7 +229,7 @@ export default function Layout() {
         ),
         onClick: () => {
           if (o.id === activeOrgID || switchOrgMu.isPending) return;
-          // M11.8: explicit confirm step. The daemon's data plane
+          // explicit confirm step. The daemon's data plane
           // is one-session-at-a-time — switching Org rebinds the
           // edge connection to the new Org and the previous Org's
           // tunnels lose their auto-claim (show as 离线 until you
@@ -923,7 +923,7 @@ export default function Layout() {
             {/* 顶栏只放数据面相关:组织 / 在线状态 / 出口 / 地域。套餐名 + 账号 +
                 语言切换都收进左侧菜单栏底部的账号菜单(「用户名 · 套餐」+ 语言 +
                 退出),「本机客户端」标题已删(冗余)。 */}
-            {/* M11.7 multi-Org switcher — only render when the user
+            {/* multi-Org switcher — only render when the user
                 actually has more than one Org. Single-Org accounts get
                 no extra chrome to wade through. */}
             {orgs.length > 1 && activeOrg && !agentMode && (

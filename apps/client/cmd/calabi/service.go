@@ -696,7 +696,7 @@ func serviceConfig(installArgs []string, extraEnv map[string]string) *service.Co
 	// buildService(nil,nil)) resolves the same name and the control dispatcher
 	// matches. EnvVars only takes effect at Install; harmless for other callers.
 	env["CALABI_SERVICE_NAME"] = name
-	// Option A (privileged system service): `--system` installs a machine-wide
+	// The privileged system service: `--system` installs a machine-wide
 	// service (root LaunchDaemon / LocalSystem / systemd system unit) instead of a
 	// per-user agent. Bake a marker so the boot path (applySystemServiceDataDir,
 	// via the shared maybeRunUnderServiceManager chokepoint — reached on every
@@ -866,7 +866,7 @@ func exeDir() string {
 
 // applySystemServiceDataDir points the data dir at the machine-wide SystemDataDir
 // when the CALABI_SYSTEM_SERVICE marker is set — i.e. this process is a --system
-// service (Option A). It's called from the shared boot chokepoint so it applies
+// service. It's called from the shared boot chokepoint so it applies
 // on launchd / systemd (which start the daemon directly and never reach the
 // Windows-only serviceProgram path) as well as Windows. No-op otherwise.
 func applySystemServiceDataDir() {

@@ -40,7 +40,7 @@ func TestBuildWGConfig(t *testing.T) {
 		t.Fatalf("endpoint should be zero in DERP-only mode, got %s", p.Endpoint)
 	}
 
-	// Once an endpoint is known (MESH.4), it becomes the direct-path hint.
+	// Once an endpoint is known, it becomes the direct-path hint.
 	nm.Peers[0].Endpoints = []netip.AddrPort{netip.MustParseAddrPort("203.0.113.5:41641")}
 	if got := BuildWGConfig(nm).Peers[0].Endpoint.String(); got != "203.0.113.5:41641" {
 		t.Fatalf("endpoint = %s, want 203.0.113.5:41641", got)

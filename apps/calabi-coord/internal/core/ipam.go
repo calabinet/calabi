@@ -39,7 +39,7 @@ var ErrPoolExhausted = errors.New("core: overlay address pool exhausted")
 
 // MemIPAM is a simple sequential allocator over overlayNodePool, held in memory.
 // v0 hands out globally-unique addresses (not yet partitioned per meshnet); the
-// platform build (MESH.8) will persist allocations and may segment per meshnet.
+// platform build will persist allocations and may segment per meshnet.
 //
 // Bounded to the node half of the overlay rather than the whole /10: see the
 // pool comment above. Every address ever handed out lives in 100.64.0.0/11
@@ -73,7 +73,7 @@ func (p *MemIPAM) Allocate(_ context.Context, _ MeshnetID) (netip.Addr, error) {
 }
 
 // Warm advances the allocator past the highest address already in use, so a
-// coordinator that reloaded its nodes from a persistent store (MESH.8c) never
+// coordinator that reloaded its nodes from a persistent store never
 // hands a NEW node an address a persisted node already holds. Existing nodes
 // keep their stored overlay via idempotent re-enrollment (FindByKey), so only
 // fresh allocations need protecting. Gaps below the max aren't reclaimed — the

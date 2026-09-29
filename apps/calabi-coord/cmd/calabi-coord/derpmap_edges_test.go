@@ -11,6 +11,7 @@ import (
 
 	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 	pb "github.com/calabinet/calabi/pkg/hooks-proto/hookspb"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 func quietLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
@@ -104,5 +105,42 @@ func TestRefreshChangeDetectionAndErrorKeepsPrevious(t *testing.T) {
 	}
 	if len(p.Current().Regions) != 2 {
 		t.Fatalf("recovered map should have 2 regions, got %+v", p.Current())
+	}
+}
+
+// A platform relay whose heartbeat says it speaks TLS is a TLS entry, checked
+// against the platform CA; one that does not say it stays plaintext. A relay
+// starting (or stopping) to say it is a change to the map: every node is told
+// at once, not at the next periodic resend, because a node never switches
+// transport on its own.
+func TestPlatformRelayTLSReachesTheMapAndCountsAsAChange(t *testing.T) {
+	ctx := context.Background()
+	lister := &fakeEdgeLister{resp: &pb.ListRelayEndpointsResponse{Items: []*pb.RelayEndpoint{
+		{Region: "lax", Host: "edge-lax.calabi.net:7443", DerpPort: 3340},
+		{Region: "sgp", Host: "edge-sgp.calabi.net:7443", DerpPort: 3340, Tls: true},
+	}}}
+	p := newPlatformDERPFromEdges(lister, core.DERPMap{}, quietLogger())
+	if !p.refresh(ctx) {
+		t.Fatal("first refresh should report a change")
+	}
+	trustOf := func(code string) string {
+		for _, r := range p.Current().Regions {
+			if r.Code == code {
+				return r.Nodes[0].TLS.Trust
+			}
+		}
+		t.Fatalf("region %s missing", code)
+		return ""
+	}
+	if trustOf("sgp") != meshproto.RelayTrustPlatform || trustOf("lax") != "" {
+		t.Fatalf("trust: lax=%q sgp=%q, want plaintext and platform", trustOf("lax"), trustOf("sgp"))
+	}
+
+	lister.resp.Items[0].Tls = true
+	if !p.refresh(ctx) {
+		t.Fatal("a relay that starts speaking TLS did not count as a change")
+	}
+	if trustOf("lax") != meshproto.RelayTrustPlatform {
+		t.Fatal("the change was reported but not applied")
 	}
 }

@@ -54,7 +54,7 @@ func TestTrustsClientPolicy(t *testing.T) {
 //
 // This used to be written in terms of clearing identity.addr / tunnel.addr /
 // quota.addr, which config.Default() injected. Those settings are gone — the
-// edge has reached the control plane only through bff-edge since F3 — so
+// edge has reached the control plane only through bff-edge — so
 // "is a control plane wired" is now multi_region's question alone.
 func TestNormalizeForMode(t *testing.T) {
 	t.Run("standalone fork keeps standalone and forces grants", func(t *testing.T) {
@@ -96,6 +96,36 @@ func TestNormalizeForMode(t *testing.T) {
 		}
 		if out.TrustsClientPolicy(false) {
 			t.Fatal("BYOI must never trust client policy")
+		}
+	})
+
+	// A BYOI node's own relay serves its organization's devices only, the way a
+	// standalone node's serves its coordinator's: grants are forced on, whatever
+	// the file said. Only that case — a platform relay keeps its setting, and a
+	// relay with no control plane is either standalone (above) or a dev relay.
+	t.Run("BYOI node's own relay forces grants", func(t *testing.T) {
+		for _, tc := range []struct {
+			name    string
+			role    string
+			kind    string
+			bffEdge bool
+			want    bool
+		}{
+			{"mesh, kind unset", "mesh", "", true, true},
+			{"both, kind self", "both", "self", true, true},
+			{"platform relay behind bff-edge", "both", "platform", true, false},
+			{"tunnel-only BYOI node", "tunnel", "", true, false},
+			{"relay with no control plane", "mesh", "", false, false},
+		} {
+			in := Config{Role: tc.role}
+			in.Mesh.Kind = tc.kind
+			if tc.bffEdge {
+				in.MultiRegion.Mode = "bff-edge"
+			}
+			out, _ := in.NormalizeForMode()
+			if out.Mesh.RequireAuth != tc.want {
+				t.Errorf("%s: require_auth = %v, want %v", tc.name, out.Mesh.RequireAuth, tc.want)
+			}
 		}
 	})
 

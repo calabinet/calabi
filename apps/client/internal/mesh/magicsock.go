@@ -16,7 +16,7 @@ import (
 )
 
 // magicSock is the node's direct-path UDP socket plus its DISCO identity — the
-// heart of hole punching (MESH.4). ONE dual-stack ephemeral port carries all
+// heart of hole punching. ONE dual-stack ephemeral port carries all
 // three protocols, which is what makes a punched path usable: the NAT binding a
 // STUN/DISCO probe opens is the same binding WireGuard data then flows through.
 // The read loop demultiplexes them — STUN responses to the reflexive probe,
@@ -258,7 +258,7 @@ func (m *magicSock) deliverSTUN(pkt []byte) {
 
 // Reflexive asks a relay's STUN endpoint for the public address it sees this
 // socket at — the node's NAT-mapped endpoint, which peers use to reach it across
-// NATs (MESH.4). It retransmits until stunProbeTimeout (UDP loses packets) and
+// NATs. It retransmits until stunProbeTimeout (UDP loses packets) and
 // returns the reflexive address or an error. The result shares the socket's port,
 // so the advertised endpoint is exactly where our DISCO/WG handler listens.
 func (m *magicSock) Reflexive(ctx context.Context, stunServer netip.AddrPort) (netip.AddrPort, error) {

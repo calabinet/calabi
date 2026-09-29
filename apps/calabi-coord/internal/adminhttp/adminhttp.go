@@ -1,4 +1,4 @@
-// Package adminhttp is the coordinator's node-admin surface (MESH.8b): list a
+// Package adminhttp is the coordinator's node-admin surface: list a
 // meshnet's nodes and flip a node's disabled kill switch. It speaks ONLY core
 // types, so every coordinator mounts it — a self-hosted one gets the same ops
 // surface the platform uses.
@@ -56,16 +56,16 @@ func New(coord *core.Coordinator, notif Notifier, logger *slog.Logger) http.Hand
 	mux.HandleFunc("POST /admin/meshnets/{id}/nodes/{nodeID}/tags", h.setTags)
 	mux.HandleFunc("POST /admin/nodes/{id}/disable", h.setDisabled(true))
 	mux.HandleFunc("POST /admin/nodes/{id}/enable", h.setDisabled(false))
-	// Per-org ACL editor (MESH.8e-2). Every wired coordinator has a writable ACL
+	// Per-org ACL editor. Every wired coordinator has a writable ACL
 	// store, self-hosted included; a saved doc overrides CALABI_COORD_POLICY_FILE
 	// for that meshnet. NotImplemented only when Coordinator.ACL is nil.
 	mux.HandleFunc("GET /admin/meshnets/{id}/acl", h.getACL)
 	mux.HandleFunc("PUT /admin/meshnets/{id}/acl", h.putACL)
-	// Pre-save impact + "why can/can't A reach B" (MESH.8e-3).
-	// Declared services (MESH.8e-4): what each node OFFERS, registered by a human.
+	// Pre-save impact + "why can/can't A reach B".
+	// Declared services: what each node OFFERS, registered by a human.
 	mux.HandleFunc("POST /admin/meshnets/{id}/services/{svcID}/approve", h.setServiceApproved(true))
 	mux.HandleFunc("POST /admin/meshnets/{id}/services/{svcID}/unapprove", h.setServiceApproved(false))
-	// Console-authored services (F4a): an admin entering one IS the
+	// Console-authored services: an admin entering one IS the
 	// authorization, so it is created confirmed and a device can never modify or
 	// shadow it. Delete only applies to console rows — see core.DeleteConsoleService.
 	mux.HandleFunc("POST /admin/meshnets/{id}/services", h.createService)
@@ -73,13 +73,13 @@ func New(coord *core.Coordinator, notif Notifier, logger *slog.Logger) http.Hand
 	mux.HandleFunc("GET /admin/meshnets/{id}/acl/revisions", h.listACLRevisions)
 	mux.HandleFunc("POST /admin/meshnets/{id}/acl/preview", h.previewACL)
 	mux.HandleFunc("POST /admin/meshnets/{id}/acl/check", h.checkAccess)
-	// Self-hosted relays (R2): the org registers a calabi-derp it runs itself.
+	// Self-hosted relays: the org registers a calabi-derp it runs itself.
 	// The meshnet in the path is the tenant boundary — the gateway sets it from
 	// the caller's org, never from a body.
 	mux.HandleFunc("GET /admin/meshnets/{id}/relays", h.listRelays)
 	mux.HandleFunc("POST /admin/meshnets/{id}/relays", h.registerRelay)
 	// PUT is the idempotent upsert a merged edge/relay node self-registers with
-	// (edge/derp merge-B). POST stays strict (409 on duplicate) for the console.
+	// (edge/derp merge). POST stays strict (409 on duplicate) for the console.
 	mux.HandleFunc("PUT /admin/meshnets/{id}/relays", h.upsertRelay)
 	mux.HandleFunc("POST /admin/meshnets/{id}/relays/{relayID}/enable", h.setRelayEnabled(true))
 	mux.HandleFunc("POST /admin/meshnets/{id}/relays/{relayID}/disable", h.setRelayEnabled(false))
@@ -111,7 +111,7 @@ type serviceView struct {
 	// an app bound to loopback answers the first and not the second.
 	Target string `json:"target"`
 	Note   string `json:"note"`
-	// What the NODE ITSELF last observed (F3b). health_checked=false means
+	// What the NODE ITSELF last observed. health_checked=false means
 	// nothing has been reported — NOT that the service is broken. The pair
 	// target_ok=true, mesh_ok=false is the loopback-only case: the app answers
 	// where the machine dials it, but not on the address peers use.
@@ -248,7 +248,7 @@ func (h *handler) listNodes(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// seatUsage reports a meshnet's mesh-node seat accounting (MESH.8d): seats used
+// seatUsage reports a meshnet's mesh-node seat accounting: seats used
 // (active nodes), disabled (parked, not consuming a seat), total, and the plan's
 // seat allowance — the source the account/billing view reflects.
 func (h *handler) seatUsage(w http.ResponseWriter, r *http.Request) {

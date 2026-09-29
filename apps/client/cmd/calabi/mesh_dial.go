@@ -33,7 +33,8 @@ type coordTrustSpec struct {
 	Platform bool
 }
 
-// coordTrust decides how to check the coordinator's certificate. authKey is the credential the
+// coordTrust decides how to check the coordinator's certificate.
+// authKey is the credential the
 // node will enroll with.
 //
 // Stated explicitly (trust: / --trust), it is taken as stated; pins or a CA file

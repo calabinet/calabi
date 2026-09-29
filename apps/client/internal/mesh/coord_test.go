@@ -184,7 +184,7 @@ func TestCoordReportEndpoints(t *testing.T) {
 	if f.reportedEps[0][0] != "192.168.1.10:41641" || f.reportedEps[0][1] != "[2001:db8::1]:41641" {
 		t.Fatalf("endpoints round-tripped wrong: %v", f.reportedEps[0])
 	}
-	// The measured home region rides the same report (MESH.4 B2b).
+	// The measured home region rides the same report.
 	if len(f.reportedHome) != 1 || f.reportedHome[0] != "sgp" {
 		t.Fatalf("home_region round-tripped as %v, want [sgp]", f.reportedHome)
 	}

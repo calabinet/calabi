@@ -101,7 +101,8 @@ type Options struct {
 // Safe for concurrent reads (GetCertificate); writes happen only on the
 // polling goroutine or NATS handler goroutine; the writeMu serialises
 // the two so they don't trample each other's pool snapshots.
-// RPC is the narrow subset of pb.CertClient edge uses. bff_edge.BFFEdgeClient satisfies it directly — names + signatures match.
+// RPC is the narrow subset of pb.CertClient edge uses. bff_edge.BFFEdgeClient
+// satisfies it directly — names + signatures match.
 type RPC interface {
 	GetCert(ctx context.Context, in *pb.GetCertRequest, opts ...grpc.CallOption) (*pb.GetCertResponse, error)
 	ListCerts(ctx context.Context, in *pb.ListCertsRequest, opts ...grpc.CallOption) (*pb.ListCertsResponse, error)
@@ -139,7 +140,7 @@ type certPool struct {
 	fingerprints map[string]bool
 }
 
-// The direct-dial constructor was removed in F3 step 2b: every edge now
+// The direct-dial constructor was removed: every edge now
 // reaches the control plane through bff-edge, so this package is only ever
 // handed a ready client.
 // logInitialFetchErr logs a failed initial cert fetch at the right level. A

@@ -95,7 +95,7 @@ func (a *Authenticator) Resolve(ctx context.Context, authKey string) (core.Ident
 		return core.Identity{}, core.ErrAuthDenied
 	}
 	// Platform node tags (tag:server etc.) are assigned in the console and land
-	// with the DB-backed node store in MESH.8; a tk_ key carries none today.
+	// with the DB-backed node store; a tk_ key carries none today.
 	// Attribution: an api-key carries "actor:<id>" (the person who minted it);
 	// a login token is the person itself. Mirrors how tunnels attribute an agent
 	// device to a real account rather than to the key.
@@ -103,7 +103,7 @@ func (a *Authenticator) Resolve(ctx context.Context, authKey string) (core.Ident
 	if owner == 0 {
 		owner = resp.GetUserId()
 	}
-	// Scope gate (audit finding MESH-3). Joining a mesh is a WRITE: the node
+	// Scope gate. Joining a mesh is a WRITE: the node
 	// gets an address, the full netmap (every device's name, overlay, public
 	// endpoints, subnet routes) and, under a permissive policy, reach to every
 	// peer. Before this, coord looked only at which org a credential named, so a
@@ -116,7 +116,7 @@ func (a *Authenticator) Resolve(ctx context.Context, authKey string) (core.Ident
 	// machine credentials, and logging a daemon in interactively still works.
 	//
 	// The write-capable test mirrors bff-console's writeCapableScope, the rule
-	// that decides who may MINT such a key (audit 1-B): one place decides what
+	// that decides who may MINT such a key: one place decides what
 	// "write credential" means.
 	if resp.GetUserId() == 0 && !hasWriteScope(resp.GetRoles()) {
 		a.logger.Warn("mesh enrollment denied: api key carries no write scope",

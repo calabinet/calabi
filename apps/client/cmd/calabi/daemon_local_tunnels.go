@@ -10,7 +10,8 @@ import (
 )
 
 // tunnelStates is what the local daemon tells a self-hosted coordinator about
-// the tunnels it serves: every configured tunnel, with the address its edge assigned and its live
+// the tunnels it serves:
+// every configured tunnel, with the address its edge assigned and its live
 // counters. A tunnel with no live registration is reported offline.
 func (sv *localSupervisor) tunnelStates(state *status.State) []mesh.TunnelState {
 	sv.mu.Lock()

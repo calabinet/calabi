@@ -250,7 +250,7 @@ type NewProxyRequest struct {
 	// ClaimTunnelID, when non-zero, asks the edge to update the existing
 	// tunnel-svc row with this id (writing edge_node_id / domain / remote_port
 	// onto it) instead of inserting a fresh row. Used by the daemon-mode
-	// auto-claim path (Phase D): the console pre-created a tunnel with
+	// auto-claim path: the console pre-created a tunnel with
 	// edge_node_id=0; the client receives it via CONFIG_PUSH.UpsertProxies
 	// and "claims" it without duplicating the row.
 	//
@@ -341,7 +341,7 @@ type Pong struct {
 // ---- 0x40 CONFIG_PUSH --------------------------------------------------
 
 // UpsertProxy describes one server-side tunnel that the client should
-// register locally on receipt (Phase C). Mirrors the bits the existing
+// register locally on receipt. Mirrors the bits the existing
 // NEW_PROXY flow uses, plus a server-assigned proxy_id so the client
 // can skip the round-trip and just install the entry.
 type UpsertProxy struct {
@@ -355,9 +355,9 @@ type UpsertProxy struct {
 }
 
 // ConfigPush is the runtime-config delta the edge pushes down to a
-// connected client. only supported the `close_proxy_ids`
-// branch; Phase C added `upsert_proxies` so the console can create a
-// tunnel for a connected client and have it install locally without
+// connected client. At first only the `close_proxy_ids`
+// branch existed; `upsert_proxies` came later so the console can
+// create a tunnel for a connected client and have it install locally without
 // the user re-running calabi http.
 //
 // Backward compat: a client that doesn't know about upsert_proxies

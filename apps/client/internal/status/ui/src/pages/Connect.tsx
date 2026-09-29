@@ -1,11 +1,11 @@
 // Connect.tsx — join this computer to a self-hosted server instead of
-// calabi.net (docs/runbook/self-hosted-sign-in-plan.md §6.2), from the sign-in
+// calabi.net, from the sign-in
 // page's secondary entry, or from a self-hosted console to change servers.
 //
 // One thing to give: an invite link from `calabi-coord invite`, or the
 // coordinator's address and a key. Joining the coordinator is the sign-in — it
-// then names the edge for tunnels and signs this computer's way in
-// (docs/runbook/self-hosted-server-plan.md). The daemon joins before saving
+// then names the edge for tunnels and signs this computer's way in.
+// The daemon joins before saving
 // anything; a certificate this computer does not already trust comes back with
 // its fingerprint for a person to compare with what the server prints. Then the
 // daemon starts again as the local one on the same address, and the page

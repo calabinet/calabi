@@ -63,7 +63,7 @@ type SNIOptions struct {
 	// router miss. nil resolver = mesh disabled.
 	MeshResolver OwnerResolver
 	SelfEdgeID   int64
-	// GlobalLimiter is the process-wide backpressure (Phase B). nil =
+	// GlobalLimiter is the process-wide backpressure. nil =
 	// unlimited. Checked at accept before the ClientHello peek + route.
 	GlobalLimiter *ratelimit.GlobalLimiter
 }
@@ -116,7 +116,7 @@ func (s *SNI) Run(ctx context.Context) error {
 			s.logger.Warn("accept", "err", err)
 			continue
 		}
-		// Phase B global backpressure: shed before the peek + route work.
+		// global backpressure: shed before the peek + route work.
 		rel, shed := globalAdmit(s.opts.GlobalLimiter)
 		if shed != "" {
 			s.observeRequest(shed)
@@ -180,7 +180,7 @@ func (s *SNI) handle(visitor net.Conn) {
 		}
 	}
 
-	// Anti-abuse gates (Phase A). SNI is TLS passthrough (raw TCP/TLS),
+	// Anti-abuse gates. SNI is TLS passthrough (raw TCP/TLS),
 	// so it shares the TCP new-connection rate bucket. No plaintext
 	// channel to the visitor here — over-limit connections are closed
 	// silently (the deferred visitor.Close handles it on return).
@@ -285,8 +285,8 @@ func (s *SNI) observeBytes(direction string, n int64) {
 // SNI extraction without going through a real handshake (which would
 // consume bytes and require terminating the TLS, breaking passthrough).
 //
-// References: RFC 5246 (Handshake / ClientHello),
-// RFC 6066 (server_name extension).
+// References: RFC 5246 §7.4.1.2 (Handshake / ClientHello),
+// RFC 6066 §3 (server_name extension).
 func peekSNI(br *bufio.Reader) ([]byte, string, error) {
 	// Step 1: the TLS record header is 5 bytes:
 	//   ContentType(1) | ProtocolVersion(2) | Length(2)

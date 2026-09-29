@@ -220,3 +220,50 @@ func TestParseMode(t *testing.T) {
 		}
 	}
 }
+
+// withChain is cert presenting extra certificates after its leaf — whatever a
+// server decides to send; nothing makes them related to the leaf.
+func withChain(cert tls.Certificate, extra ...*x509.Certificate) tls.Certificate {
+	for _, c := range extra {
+		cert.Certificate = append(cert.Certificate, c.Raw)
+	}
+	return cert
+}
+
+// The impostor in the path: its own leaf, whose key it holds and so can finish
+// the handshake with, followed by the real server's certificate, which is
+// public. A pin matched anywhere in the list let it through.
+func TestPinRefusesAnImpostorThatAppendsThePinnedCertificate(t *testing.T) {
+	real := newCA(t, "self").issue(t)
+	impostor := newCA(t, "impostor").issue(t)
+
+	addr := serve(t, withChain(impostor, real.Leaf))
+	err := handshake(t, Config{Mode: Pin, Pins: []string{meshproto.CertPin(real.Leaf)}}, addr)
+	var mismatch *PinMismatchError
+	if !errors.As(err, &mismatch) {
+		t.Fatalf("err = %v, want a PinMismatchError: the impostor's own leaf carries no pin", err)
+	}
+	if mismatch.Presented[0] != meshproto.CertPin(impostor.Leaf) {
+		t.Fatalf("Presented = %v, want the impostor's leaf first", mismatch.Presented)
+	}
+}
+
+// Same trick one level up: a pinned CA appended behind a leaf it never signed.
+func TestPinRefusesAPinnedCAThatDidNotSignTheLeaf(t *testing.T) {
+	ca := newCA(t, "pinned-ca")
+	impostor := newCA(t, "impostor").issue(t)
+
+	addr := serve(t, withChain(impostor, ca.cert))
+	if err := handshake(t, Config{Mode: Pin, Pins: []string{meshproto.CertPin(ca.cert)}}, addr); err == nil {
+		t.Fatal("a pinned CA appended behind a leaf it did not sign was accepted")
+	}
+}
+
+// What a pin on a CA is for, still working: a leaf that CA really signed.
+func TestPinAcceptsALeafSignedByThePinnedCA(t *testing.T) {
+	ca := newCA(t, "pinned-ca")
+	addr := serve(t, withChain(ca.issue(t), ca.cert))
+	if err := handshake(t, Config{Mode: Pin, Pins: []string{meshproto.CertPin(ca.cert)}}, addr); err != nil {
+		t.Fatalf("a leaf signed by the pinned CA was refused: %v", err)
+	}
+}

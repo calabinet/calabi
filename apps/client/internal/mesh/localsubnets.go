@@ -9,7 +9,7 @@ import (
 
 // privateV4Blocks are the IPv4 ranges an exit-node client keeps on the physical
 // link instead of sending through the exit peer, so local-network access
-// survives full-tunnelling (the consumer side of MESH.7b "allow LAN access").
+// survives full-tunnelling (the consumer side of "allow LAN access").
 // They cover RFC1918 private space; together with each interface's own, more
 // specific, directly-connected on-link route (which wins by longest prefix on
 // its own) this keeps every private destination — directly attached OR one
@@ -38,7 +38,7 @@ var privateV4Blocks = []netip.Prefix{
 // Used to decide which mesh-advertised subnets overlap a local network: on a
 // collision the local network wins (the advertised subnet is NOT routed into the
 // mesh), because the destination IP is ambiguous and hijacking the machine's own
-// LAN is the worse failure. See selectSubnetRoutes (MESH.7).
+// LAN is the worse failure. See selectSubnetRoutes.
 func localDirectSubnets(excludeIfname string) ([]netip.Prefix, error) {
 	ifaces, err := hostnet.Interfaces()
 	if err != nil {

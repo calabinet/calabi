@@ -119,7 +119,7 @@ func (s *Store) onCleanup(m *eventbus.Msg) {
 // ok=false on miss/expiry/host mismatch. This is the closure the HTTP
 // listener calls for /.well-known/acme-challenge/<token>.
 //
-// The host check matters (audit finding CERT-1): this table is filled
+// The host check matters: this table is filled
 // from a bus subject every platform edge subscribes to, so without it
 // ANY live token is answered under ANY Host. Combined with an issuance
 // path that did not check domain ownership, that let one org obtain a

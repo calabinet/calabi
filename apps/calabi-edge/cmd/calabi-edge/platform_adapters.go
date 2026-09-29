@@ -82,7 +82,7 @@ const portInUseReason = "port_in_use:"
 func (a *tunnelPersisterAdapter) OnProxyOpened(sess *session.Session, p *session.Proxy) (int64, error) {
 	orgID, wsID := tunnelstore.ParseTenant(sess.TenantID, sess.WorkspaceID)
 
-	// Phase D: NEW_PROXY carried claim_tunnel_id ⇒ the client is claiming
+	// NEW_PROXY carried claim_tunnel_id ⇒ the client is claiming
 	// a console-pre-created row, not creating a fresh one. Try Claim first;
 	// if it fails for a reason that's safe to retry as a fresh insert
 	// (most commonly: the pending row got deleted between push and claim),
@@ -286,7 +286,7 @@ func (a *tunnelPersisterAdapter) OnProxyOpened(sess *session.Session, p *session
 // from tunnel-svc's response — never from the daemon — so a tampered client
 // can't strip its own restrictions. Best-effort + fail-open: a malformed blob
 // logs and leaves Policy nil (allow all) so a config glitch never blackholes a
-// tunnel. See apps/calabi-edge/internal/policy +
+// tunnel. See apps/calabi-edge/internal/policy.
 //
 // Platform-only: a standalone edge applies client-supplied policy directly in
 // session/controlloop.go, not via this server-authoritative path.
@@ -386,7 +386,7 @@ func (a *tunnelPersisterAdapter) OnProxyClosed(sess *session.Session, p *session
 //   - any kind + remote edge: log only; will route visitor traffic to
 //     the right edge instead of returning 404
 //
-// Phase C additions:
+// Added with console-created tunnels:
 //   - upsert (any edge) + Route.ClientID matches a live session on this
 //     edge: forward the upsert to the client over CONFIG_PUSH so the
 //     client's UI / future daemon can react. Routes with edge_node_id=0
@@ -515,7 +515,7 @@ func (a *routeApplier) OnRemoteDelta(d configclient.Delta) {
 	a.logger.Debug("remote delta noted",
 		"kind", d.Kind, "edge", d.Route.EdgeNodeID,
 		"tunnel_id", d.Route.ID, "domain", d.Route.Domain)
-	// Phase C: even a "remote" route may belong to a client currently
+	// even a "remote" route may belong to a client currently
 	// connected to THIS edge (unassigned edge_node_id=0 routes land here).
 	a.forwardToClient(d)
 }
@@ -598,7 +598,8 @@ func runDenySweeper(ctx context.Context, logger *slog.Logger, mgr *session.Manag
 }
 
 // usageReportInterval reads CALABI_USAGE_REPORT_INTERVAL_MS to override
-// the usage reporter cadence. Unset / 0 / invalid keeps the
+// the usage reporter cadence.
+// Unset / 0 / invalid keeps the
 // usage.DefaultReportInterval (60s). The metering bucket is still
 // per-minute, so 60s is the finest useful setting; 300s ≈ ÷5 cost.
 func usageReportInterval(logger *slog.Logger) time.Duration {

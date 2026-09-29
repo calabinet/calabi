@@ -136,7 +136,7 @@ type BFFEdgeClient interface {
 	// ListCerts — same authz model.
 	ListCerts(ctx context.Context, in *ListCertsRequest, opts ...grpc.CallOption) (*ListCertsResponse, error)
 	// RenewEdgeCert rotates the edge's OWN short-lived mTLS client cert before
-	// it expires (F1, byoi-seat-and-cert-lifecycle). Unlike GetCert, bff-edge
+	// it expires. Unlike GetCert, bff-edge
 	// GATES this per org: org + edge_node_id come from the authenticated mTLS
 	// cert (never the body), and a fresh bundle is issued only while the org
 	// still has BYOI entitlement (effective edge cap > 0 and org active). A
@@ -189,7 +189,7 @@ type BFFEdgeClient interface {
 	// describe visitors to that org's own services.
 	ReportAccess(ctx context.Context, in *ReportAccessRequest, opts ...grpc.CallOption) (*ReportAccessResponse, error)
 	// RegisterRelay lets a merged edge/relay node self-register its relay endpoint
-	// into the org's DERP map (edge/derp merge-B), mirroring how the edge
+	// into the org's DERP map (edge/derp merge), mirroring how the edge
 	// self-registers via RegisterEdgeNode. bff-edge derives the org from the mTLS
 	// cert and idempotently upserts into coord (the node re-registers on a
 	// heartbeat). The relay is self-hosted, so it lands under a "self-<label>"
@@ -597,7 +597,7 @@ type BFFEdgeServer interface {
 	// ListCerts — same authz model.
 	ListCerts(context.Context, *ListCertsRequest) (*ListCertsResponse, error)
 	// RenewEdgeCert rotates the edge's OWN short-lived mTLS client cert before
-	// it expires (F1, byoi-seat-and-cert-lifecycle). Unlike GetCert, bff-edge
+	// it expires. Unlike GetCert, bff-edge
 	// GATES this per org: org + edge_node_id come from the authenticated mTLS
 	// cert (never the body), and a fresh bundle is issued only while the org
 	// still has BYOI entitlement (effective edge cap > 0 and org active). A
@@ -650,7 +650,7 @@ type BFFEdgeServer interface {
 	// describe visitors to that org's own services.
 	ReportAccess(context.Context, *ReportAccessRequest) (*ReportAccessResponse, error)
 	// RegisterRelay lets a merged edge/relay node self-register its relay endpoint
-	// into the org's DERP map (edge/derp merge-B), mirroring how the edge
+	// into the org's DERP map (edge/derp merge), mirroring how the edge
 	// self-registers via RegisterEdgeNode. bff-edge derives the org from the mTLS
 	// cert and idempotently upserts into coord (the node re-registers on a
 	// heartbeat). The relay is self-hosted, so it lands under a "self-<label>"

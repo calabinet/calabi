@@ -132,6 +132,20 @@ func (mru *MeshRelayUpdate) SetNillableEnabled(b *bool) *MeshRelayUpdate {
 	return mru
 }
 
+// SetTLS sets the "tls" field.
+func (mru *MeshRelayUpdate) SetTLS(b bool) *MeshRelayUpdate {
+	mru.mutation.SetTLS(b)
+	return mru
+}
+
+// SetNillableTLS sets the "tls" field if the given value is not nil.
+func (mru *MeshRelayUpdate) SetNillableTLS(b *bool) *MeshRelayUpdate {
+	if b != nil {
+		mru.SetTLS(*b)
+	}
+	return mru
+}
+
 // Mutation returns the MeshRelayMutation object of the builder.
 func (mru *MeshRelayUpdate) Mutation() *MeshRelayMutation {
 	return mru.mutation
@@ -199,6 +213,9 @@ func (mru *MeshRelayUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := mru.mutation.Enabled(); ok {
 		_spec.SetField(meshrelay.FieldEnabled, field.TypeBool, value)
+	}
+	if value, ok := mru.mutation.TLS(); ok {
+		_spec.SetField(meshrelay.FieldTLS, field.TypeBool, value)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, mru.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -325,6 +342,20 @@ func (mruo *MeshRelayUpdateOne) SetNillableEnabled(b *bool) *MeshRelayUpdateOne 
 	return mruo
 }
 
+// SetTLS sets the "tls" field.
+func (mruo *MeshRelayUpdateOne) SetTLS(b bool) *MeshRelayUpdateOne {
+	mruo.mutation.SetTLS(b)
+	return mruo
+}
+
+// SetNillableTLS sets the "tls" field if the given value is not nil.
+func (mruo *MeshRelayUpdateOne) SetNillableTLS(b *bool) *MeshRelayUpdateOne {
+	if b != nil {
+		mruo.SetTLS(*b)
+	}
+	return mruo
+}
+
 // Mutation returns the MeshRelayMutation object of the builder.
 func (mruo *MeshRelayUpdateOne) Mutation() *MeshRelayMutation {
 	return mruo.mutation
@@ -422,6 +453,9 @@ func (mruo *MeshRelayUpdateOne) sqlSave(ctx context.Context) (_node *MeshRelay, 
 	}
 	if value, ok := mruo.mutation.Enabled(); ok {
 		_spec.SetField(meshrelay.FieldEnabled, field.TypeBool, value)
+	}
+	if value, ok := mruo.mutation.TLS(); ok {
+		_spec.SetField(meshrelay.FieldTLS, field.TypeBool, value)
 	}
 	_node = &MeshRelay{config: mruo.config}
 	_spec.Assign = _node.assignValues

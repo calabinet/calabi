@@ -13,7 +13,8 @@ import (
 var ErrRegister = errors.New("mesh: register")
 
 // ReauthState remembers, across sessions, which node this device already is and
-// whether its coordinator lets it come back by proof of its node key alone. A Controller is
+// whether its coordinator lets it come back by proof of its node key alone.
+// A Controller is
 // built per session; this outlives them, so the second session onward does not
 // need the auth key at all.
 //

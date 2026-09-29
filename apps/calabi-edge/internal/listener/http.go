@@ -34,14 +34,15 @@ type HTTPOptions struct {
 	Addr     string
 	Router   *router.Router
 	Observer HTTPObserver // may be nil
-	// MeshResolver, when non-nil, enables intra-region peer forwarding: on a router miss the listener asks whether a same-region peer
+	// MeshResolver, when non-nil, enables intra-region peer forwarding:
+	// on a router miss the listener asks whether a same-region peer
 	// owns the host and, if so, relays the visitor connection there instead
 	// of returning 502. nil = mesh disabled (behaviour).
 	MeshResolver OwnerResolver
 	// SelfEdgeID is this edge's numeric id, stamped into the forward frame
 	// as OriginEdge (logging / anti-loop breadcrumb).
 	SelfEdgeID int64
-	// GlobalLimiter is the process-wide backpressure (Phase B). nil =
+	// GlobalLimiter is the process-wide backpressure. nil =
 	// unlimited (admits everything). Checked at accept before sniff/route.
 	GlobalLimiter *ratelimit.GlobalLimiter
 	// ACMEChallengeResolver, when non-nil, answers ACME http-01 validation
@@ -51,7 +52,7 @@ type HTTPOptions struct {
 	// such a path falls through to normal host routing. Checked BEFORE host
 	// routing and BEFORE any auth / rate-limit gate — the probe is anonymous.
 	// The host is passed so the resolver can refuse a token probed under a
-	// domain it was not issued for (audit finding CERT-1).
+	// domain it was not issued for.
 	ACMEChallengeResolver func(token, host string) (keyAuth string, ok bool)
 }
 
@@ -104,7 +105,7 @@ func (h *HTTP) Run(ctx context.Context) error {
 			h.logger.Warn("accept", "err", err)
 			continue
 		}
-		// Phase B global backpressure: shed before spending a goroutine.
+		// global backpressure: shed before spending a goroutine.
 		rel, shed := globalAdmit(h.opts.GlobalLimiter)
 		if shed != "" {
 			h.observeRequest(shed)
@@ -214,7 +215,7 @@ func (h *HTTP) handle(visitor net.Conn) {
 		}
 	}
 
-	// Anti-abuse gates (Phase A): new-connection rate first (cheap, sheds
+	// Anti-abuse gates: new-connection rate first (cheap, sheds
 	// floods before allocating), then the concurrent-connection cap.
 	// Unguarded sessions (dev / no quota-svc) pass straight through.
 	if err := sess.AllowHTTPConn(); err != nil {

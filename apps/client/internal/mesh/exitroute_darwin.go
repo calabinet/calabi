@@ -10,7 +10,7 @@ import (
 )
 
 // enableExitRoutes makes this node a full-tunnel client of an exit node on macOS
-// (the consumer side of MESH.7b). It mirrors the Linux path with the BSD `route`
+// (the consumer side). It mirrors the Linux path with the BSD `route`
 // tool, the same wg-quick approach: pin coord + relay to the physical link FIRST
 // (via the gateway `route -n get` reports for them now, before we hijack the
 // default), then route 0.0.0.0/1 + 128.0.0.0/1 at the utun. Longest-prefix match
@@ -19,7 +19,7 @@ import (
 // it added (tun /1s first, so the box is never briefly unroutable). Needs root.
 //
 // The luid arg is Windows-only; ignored here. lanKeep are the private/local
-// ranges to hold on the physical link (MESH.7b "allow LAN access") so
+// ranges to hold on the physical link ("allow LAN access") so
 // full-tunnelling never cuts off the local network.
 func enableExitRoutes(_ uint64, ifname string, bypass []netip.Addr, lanKeep []netip.Prefix) (func(), error) {
 	var pinned []netip.Addr

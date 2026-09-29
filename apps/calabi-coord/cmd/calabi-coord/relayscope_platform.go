@@ -14,7 +14,7 @@ import (
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
-// Enforcing the traffic cap on mesh relays (F2).
+// Enforcing the traffic cap on mesh relays.
 //
 // An org over its monthly cap keeps its OWN relays and loses the platform's:
 // the coordinator issues its nodes a grant scoped to self-hosted relays, which
@@ -29,7 +29,7 @@ import (
 //
 // Poll only. This used to ALSO subscribe to calabi.usage.deny/allow on the
 // cluster's NATS to invalidate the view the instant metering changed its mind;
-// F4 dropped that subscription, because it was the second of coord's two
+// the subscription was dropped because it was the second of coord's two
 // pkg/eventbus uses and the coordinator cannot be published while it links the
 // control plane's bus.
 //

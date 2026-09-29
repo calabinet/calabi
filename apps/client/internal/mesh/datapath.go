@@ -6,7 +6,7 @@ import "log/slog"
 // implementation (wireguard-go + a tun device) is a real-machine slice: it needs
 // a tun device and elevated privileges (wintun.dll on Windows), so it can't run
 // in CI. Until then LoggingDatapath is the safe default / dry run, and tests use
-// a recording fake. (MESH.2).
+// a recording fake.
 type Datapath interface {
 	// SetConfig applies the desired WG peer set. Called on every netmap update
 	// with the FULL config; implementations diff against current state and are

@@ -10,12 +10,31 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
-## Unreleased
+## 2.1.0 — 2026-09-29
 
-Changes since 2.0.0, going into the next release.
+**Devices reach relays over TLS.** There is nothing to configure, and nothing
+stops working while you upgrade: a relay switches to TLS only once the
+coordinator, the relay's edge and the device all run 2.1.0, and until then it
+works in plaintext as before. Update the coordinator first, then your edges,
+then devices, and leave the new `mesh.require_tls` off until every device has
+been updated.
 
 ### Mesh
 
+- **Changed** — **Devices reach relays over TLS.** A relay speaks TLS and the
+  older plaintext protocol on the same port (3340). A device whose relay map
+  marks a relay as TLS uses TLS only, and checks its certificate the way it
+  checks that node's edge: your coordinator's fingerprint for it, or public
+  roots with `CALABI_COORD_EDGE_TRUST=system`. A relay presents its node's own
+  certificate (`tunnel.control_cert_pem`, or the self-signed one in
+  `state.dir`), so there is nothing new to set up; a `role: mesh` node may now
+  name one with `tunnel.control_cert_pem` too. Your coordinator reads each
+  relay's certificate on 3340 once a minute, as it does the edge's, and marks a
+  relay as TLS only after completing a TLS handshake with it. A device that
+  fails the check does not fall back to plaintext. The new setting
+  `mesh.require_tls` (`CALABI_EDGE_RELAY_REQUIRE_TLS`, off by default) refuses
+  plaintext. Clients older than 2.1.0 speak only plaintext, so leave it off
+  until every client is updated.
 - **Fixed** — **A subnet router started with `calabi mesh up` published its
   subnets under their real addresses.** Since 1.8.0 a subnet router asks for a
   stand-in prefix on every route it publishes, but the foreground command still
@@ -28,6 +47,73 @@ Changes since 2.0.0, going into the next release.
   services, were not affected. `--alias-routes` is still accepted, so existing
   scripts keep running, and is now actually ignored: a value it cannot parse no
   longer stops the command.
+- **Fixed** — **`stun_port: 0` did not turn a relay's STUN responder off**, and
+  neither did `CALABI_EDGE_RELAY_STUN_PORT=0`. The settings table says 0 turns
+  it off, but the edge read 0 as "use the default" and kept answering STUN on
+  3478. Now 0 turns the responder off, and leaving the setting out still means
+  3478. So if one of your relays says `stun_port: 0`, its STUN stops when you
+  upgrade that edge: devices can no longer measure the relay, and do not pick
+  it over one they can. To keep STUN, delete the line. A coordinator of your
+  own lists a relay's STUN port from its own settings, so for a relay with STUN
+  off leave `CALABI_COORD_DERP_STUN_PORT` (or `stun_port` in the map file)
+  unset too.
+
+### Your server
+
+- **Fixed** — **A pinned fingerprint could be matched by any certificate the
+  server sent**, not only its own: a server in the path could present its own
+  certificate followed by the real one. The client now accepts a pin on the
+  server's certificate, or on a CA that certificate verifiably chains to. This
+  is the check behind `CALABI_EDGE_PIN`, the fingerprint in an invite link, and
+  now a relay's certificate. Update devices to get it.
+- **Fixed** — **An edge whose listener or background task stopped on its own
+  exited quietly**, with status 0 and no log line, so it looked like a clean
+  stop. It now logs `task exited before shutdown` with the task's name and exits
+  with status 1, so the log says why and a restart policy that acts only on
+  failure restarts it. Stopping the edge with a signal still exits 0.
+
+### Updates
+
+- **Fixed** — **`calabi update` on a device signed in to your own server said
+  it was a dev build, or that updates were disabled.** Neither was true, and no
+  setting turns updates on there: a device connected to a self-hosted server
+  does not update itself, so your deployment never contacts
+  download.calabi.net. It now says that, and that whoever runs the server
+  distributes the client — the coordinator, the edges and the devices run the
+  same version.
+
+### On calabi.net
+
+- **Changed** — **Relays on calabi.net are reached over TLS**, including the
+  one a self-hosted node runs. Devices check them against the calabi.net CA and
+  their host name. A self-hosted node checks the certificate it serves on 3340
+  the same way and reports the result, and only a relay that passes is marked
+  as TLS. A node whose certificate was issued without its public address keeps
+  plaintext until the certificate is re-issued; the node's log and its details
+  in the console say so.
+- **Changed** — **A self-hosted node's relay admits only your organization's
+  devices.** Each device proves a grant signed by calabi.net, as it already
+  does on Calabi's relays; a device of another organization, or one presenting
+  no grant, is turned away. The node learns the key from calabi.net when it
+  registers its relay, so `coord_pubkey` and `require_auth` need not be set,
+  and `require_auth: false` no longer turns it off on a node connected to
+  calabi.net. Until calabi.net first answers, a relay with no key kept in
+  `state.dir` does not listen. Devices need no update: every client with the
+  mesh already answers the relay's check.
+- **Fixed** — **A node's own relay with STUN off would have been listed with
+  STUN port 3478.** calabi.net filled in 3478 for a relay that registered itself
+  with none, so its devices would have measured a port nothing answers on. It
+  is now listed without a STUN port. Until the `stun_port: 0` fix above, no
+  relay could get into that state.
+- **Fixed** — **A self-hosted node that could not register with calabi.net
+  said so only in debug logs**, so a relay that never showed up in your mesh
+  looked healthy. The first failure is now a warning that says what it breaks,
+  a reminder follows every 10 minutes while it lasts, and the recovery is
+  logged.
+- **Fixed** — **The console's setup for a self-hosted node wrote the config
+  layout from before 2.0.0**, and left `state.dir` out of a relay-only node's
+  config. It now writes the current layout, and every node gets a `state.dir`,
+  where a relay keeps calabi.net's key and its certificate across restarts.
 
 ## 2.0.0 — 2026-09-23
 

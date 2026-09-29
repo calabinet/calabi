@@ -4,7 +4,7 @@ version: v2
 # directory). Separate from the root proto/ module, which generates into
 # pkg/api: that whole MODULE is excluded from the public export, so a contract
 # generated there can never ship. Same shape as pkg/mesh-proto and
-# pkg/edge-proto. See docs/runbook/full-oss-plan.md F4.
+# pkg/edge-proto.
 modules:
   - path: .
 lint:

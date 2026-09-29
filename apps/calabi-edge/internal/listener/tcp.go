@@ -62,7 +62,7 @@ func acceptTCP(logger *slog.Logger, ln net.Listener, sess *session.Session, prox
 			time.Sleep(50 * time.Millisecond)
 			continue
 		}
-		// Phase B global backpressure: shed before spending a goroutine.
+		// global backpressure: shed before spending a goroutine.
 		rel, shed := globalAdmit(glob)
 		if shed != "" {
 			if obs != nil {
@@ -102,7 +102,7 @@ func handleTCPConn(logger *slog.Logger, visitor net.Conn, sess *session.Session,
 		}
 	}
 
-	// Anti-abuse gates (Phase A): raw TCP shares the TCP/TLS new-connection
+	// Anti-abuse gates: raw TCP shares the TCP/TLS new-connection
 	// rate bucket + the org-wide concurrent cap. Over-limit connections are
 	// closed (no protocol to send a message on raw TCP). Unguarded sessions
 	// pass through.

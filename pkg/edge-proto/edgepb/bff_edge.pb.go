@@ -86,8 +86,10 @@ func (*RenewEdgeCertRequest) Descriptor() ([]byte, []int) {
 
 type SubscribeCertEventsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 0 = subscribe to all orgs.
-	// Future: per-org scoping when edge knows which orgs it serves.
+	// Not read; the edge sends 0. The org filter is implicit (taken from the
+	// mTLS cert): a BYOI edge, whose cert names its org, receives cert events
+	// for that org only, a platform edge for every org. ACME challenge events
+	// go to every edge either way.
 	OrgId         int64 `protobuf:"varint,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1023,10 +1025,18 @@ type RegisterRelayRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// org_id is NOT carried — bff-edge derives the org from the mTLS cert, so a
 	// node can only register a relay for its own org.
-	Label         string `protobuf:"bytes,1,opt,name=label,proto3" json:"label,omitempty"` // region code = "self-"+label
-	Host          string `protobuf:"bytes,2,opt,name=host,proto3" json:"host,omitempty"`   // public host:… mesh nodes dial the relay at
-	DerpPort      int32  `protobuf:"varint,3,opt,name=derp_port,json=derpPort,proto3" json:"derp_port,omitempty"`
-	StunPort      int32  `protobuf:"varint,4,opt,name=stun_port,json=stunPort,proto3" json:"stun_port,omitempty"`
+	Label    string `protobuf:"bytes,1,opt,name=label,proto3" json:"label,omitempty"` // region code = "self-"+label
+	Host     string `protobuf:"bytes,2,opt,name=host,proto3" json:"host,omitempty"`   // public host:… mesh nodes dial the relay at
+	DerpPort int32  `protobuf:"varint,3,opt,name=derp_port,json=derpPort,proto3" json:"derp_port,omitempty"`
+	StunPort int32  `protobuf:"varint,4,opt,name=stun_port,json=stunPort,proto3" json:"stun_port,omitempty"`
+	// The relay speaks TLS on derp_port with a certificate that verifies against
+	// the platform CA for host — the node's own certificate, checked by the node
+	// at every heartbeat. The coordinator then tells devices to reach it over
+	// TLS only, checked as they check the platform's edges. False from a node
+	// older than relay TLS, or whose certificate would not pass that check (one
+	// issued without the public address): its devices keep the plaintext
+	// protocol, which the relay also speaks.
+	Tls           bool `protobuf:"varint,5,opt,name=tls,proto3" json:"tls,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1089,12 +1099,28 @@ func (x *RegisterRelayRequest) GetStunPort() int32 {
 	return 0
 }
 
+func (x *RegisterRelayRequest) GetTls() bool {
+	if x != nil {
+		return x.Tls
+	}
+	return false
+}
+
 type RegisterRelayResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Region the relay landed under, e.g. "self-hk-1". Diagnostic.
-	Region        string `protobuf:"bytes,1,opt,name=region,proto3" json:"region,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Region string `protobuf:"bytes,1,opt,name=region,proto3" json:"region,omitempty"`
+	// The Ed25519 public key (32 bytes) the platform coordinator signs relay
+	// grants with. The relay admits a device only if it proves a grant that
+	// verifies under this key and names the relay's own organization.
+	//
+	// Empty when the control plane signs no grants: devices then hold none, and a
+	// relay that demanded one would turn every device away. A gateway that
+	// predates this field sends it empty too, which is why empty can never be
+	// read as "admit nobody".
+	CoordGrantPubkey []byte `protobuf:"bytes,2,opt,name=coord_grant_pubkey,json=coordGrantPubkey,proto3" json:"coord_grant_pubkey,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *RegisterRelayResponse) Reset() {
@@ -1132,6 +1158,13 @@ func (x *RegisterRelayResponse) GetRegion() string {
 		return x.Region
 	}
 	return ""
+}
+
+func (x *RegisterRelayResponse) GetCoordGrantPubkey() []byte {
+	if x != nil {
+		return x.CoordGrantPubkey
+	}
+	return nil
 }
 
 var File_edgepb_bff_edge_proto protoreflect.FileDescriptor
@@ -1196,14 +1229,16 @@ const file_edgepb_bff_edge_proto_rawDesc = "" +
 	"\x17ReportRelayUsageRequest\x12>\n" +
 	"\areports\x18\x01 \x03(\v2$.calabi.v1.bff_edge.RelayUsageReportR\areports\"8\n" +
 	"\x18ReportRelayUsageResponse\x12\x1c\n" +
-	"\tpublished\x18\x01 \x01(\x05R\tpublished\"z\n" +
+	"\tpublished\x18\x01 \x01(\x05R\tpublished\"\x8c\x01\n" +
 	"\x14RegisterRelayRequest\x12\x14\n" +
 	"\x05label\x18\x01 \x01(\tR\x05label\x12\x12\n" +
 	"\x04host\x18\x02 \x01(\tR\x04host\x12\x1b\n" +
 	"\tderp_port\x18\x03 \x01(\x05R\bderpPort\x12\x1b\n" +
-	"\tstun_port\x18\x04 \x01(\x05R\bstunPort\"/\n" +
+	"\tstun_port\x18\x04 \x01(\x05R\bstunPort\x12\x10\n" +
+	"\x03tls\x18\x05 \x01(\bR\x03tls\"]\n" +
 	"\x15RegisterRelayResponse\x12\x16\n" +
-	"\x06region\x18\x01 \x01(\tR\x06region2\x8d\x17\n" +
+	"\x06region\x18\x01 \x01(\tR\x06region\x12,\n" +
+	"\x12coord_grant_pubkey\x18\x02 \x01(\fR\x10coordGrantPubkey2\x8d\x17\n" +
 	"\aBFFEdge\x12d\n" +
 	"\rValidateToken\x12(.calabi.v1.bff_edge.ValidateTokenRequest\x1a).calabi.v1.bff_edge.ValidateTokenResponse\x12m\n" +
 	"\x10RegisterEdgeNode\x12+.calabi.v1.bff_edge.RegisterEdgeNodeRequest\x1a,.calabi.v1.bff_edge.RegisterEdgeNodeResponse\x12y\n" +

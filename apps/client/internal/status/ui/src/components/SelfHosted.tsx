@@ -1,6 +1,6 @@
 // SelfHosted.tsx — this console connected to a self-hosted server instead of
-// calabi.net (docs/runbook/self-hosted-sign-in-plan.md §6.2,
-// self-hosted-server-plan.md): the coordinator it joined, a coordinator
+// calabi.net:
+// the coordinator it joined, a coordinator
 // certificate that changed and waits for a person, the edge the coordinator
 // names for its tunnels, the mesh switch, the network's tunnels and traffic as
 // the coordinator keeps them, and leaving.

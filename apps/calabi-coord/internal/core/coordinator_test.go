@@ -31,7 +31,7 @@ func TestRegisterCarriesAdvertisedRoutes(t *testing.T) {
 }
 
 // Register stamps the deployment's default DERP home on a new node and surfaces
-// it to peers via the netmap (MESH.4 — the console/admin "relay home" column).
+// it to peers via the netmap (the console/admin "relay home" column).
 func TestRegisterAssignsDefaultDERPHome(t *testing.T) {
 	c := newTestCoord()
 	c.DefaultDERPHome = "lax"
@@ -299,7 +299,7 @@ func TestNetMapFullMeshMinusSelfAndTenantIsolation(t *testing.T) {
 	}
 }
 
-// SetDERPHome accepts the region a node measured as closest (MESH.4 B2b) and
+// SetDERPHome accepts the region a node measured as closest and
 // distributes it to peers via the netmap, replacing the deployment default.
 func TestSetDERPHomeAcceptsMeasuredRegion(t *testing.T) {
 	c := newTestCoord()

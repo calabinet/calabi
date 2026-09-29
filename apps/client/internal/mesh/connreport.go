@@ -19,7 +19,7 @@ import (
 // What is deliberately NOT sent: the endpoint, the public IP, the port. Only the
 // peer, the window, the byte counts and direct-vs-relay. That line is the whole
 // of why this is allowed to exist as history at all — see the note on
-// ReportConnections in coord.proto and mesh-console-ux-plan
+// ReportConnections in coord.proto.
 
 // connReportInterval is how often a node reports. Short enough that a crash
 // costs minutes rather than an hour of trail; the coordinator folds these into

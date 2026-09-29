@@ -46,7 +46,7 @@ func TestApplyEnvRelayOnlyNodeNeedsNoFile(t *testing.T) {
 	if !cfg.Mesh.RequireAuth || cfg.Mesh.CoordPubKey == "" {
 		t.Error("grant verification not applied from env")
 	}
-	// Two edge-image containers share a host in the self-hosted stack, so the
+	// Two edge-image containers can share a host under host networking, so the
 	// relay must be able to move off the default admin port :9101.
 	if cfg.Admin.Addr != ":9200" {
 		t.Errorf("admin addr = %q, want :9200 (port collision with the edge container)", cfg.Admin.Addr)
@@ -56,7 +56,7 @@ func TestApplyEnvRelayOnlyNodeNeedsNoFile(t *testing.T) {
 	//
 	// This used to assert that NormalizeForMode blanked identity.addr. That
 	// field is gone — the edge has reached the control plane only through
-	// bff-edge since F3 — so the reachable-control-plane question is now
+	// bff-edge — so the reachable-control-plane question is now
 	// entirely multi_region's, and that is what gets asserted.
 	normalized, _ := cfg.NormalizeForMode()
 	if normalized.MultiRegion.IsBFFEdge() {
@@ -119,13 +119,21 @@ func TestApplyEnvRejectsMalformed(t *testing.T) {
 
 // TestApplyEnvStunPortZeroDisables: 0 is a legal value (it turns the STUN
 // responder off), so it must not be treated as "unset" or as an error.
+//
+// It used to check only that the field read 0 afterwards, which it did while
+// RelaySTUNPort still turned that 0 into 3478 and the responder kept running.
+// What counts is the value the relay acts on.
 func TestApplyEnvStunPortZeroDisables(t *testing.T) {
 	t.Setenv("CALABI_EDGE_RELAY_STUN_PORT", "0")
-	cfg, err := ApplyEnv(Default())
+	before := Default()
+	if before.Mesh.RelaySTUNPort() == 0 {
+		t.Fatal("Default() has STUN off already, so this test would prove nothing")
+	}
+	cfg, err := ApplyEnv(before)
 	if err != nil {
 		t.Fatalf("ApplyEnv: %v", err)
 	}
-	if cfg.Mesh.STUNPort != 0 {
-		t.Errorf("STUNPort = %d, want 0 (disabled)", cfg.Mesh.STUNPort)
+	if got := cfg.Mesh.RelaySTUNPort(); got != 0 {
+		t.Errorf("RelaySTUNPort = %d, want 0 (disabled)", got)
 	}
 }

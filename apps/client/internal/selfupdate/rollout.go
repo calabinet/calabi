@@ -12,7 +12,8 @@ import (
 	"time"
 )
 
-// Rollout staggers one release across machines over time: starting at Start, the share of
+// Rollout staggers one release across machines over time:
+// starting at Start, the share of
 // machines allowed to install grows linearly to CapPercent over Hours.
 //
 // It lives INSIDE the signed manifest like every other field that changes what

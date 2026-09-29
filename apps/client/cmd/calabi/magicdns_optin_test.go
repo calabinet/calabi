@@ -18,7 +18,7 @@ import (
 //
 // A feature nobody is promised must not keep a failure mode that costs the whole
 // machine. Turning the default around is the fix; the implementation stays for
-// when split-horizon DNS (A1) revives it.
+// when split-horizon DNS revives it.
 func TestMagicDNSIsOffUnlessAskedFor(t *testing.T) {
 	var cfg localConfig
 	if err := yaml.Unmarshal([]byte("mesh:\n  enabled: true\n  coord: coord.example:7014\n"), &cfg); err != nil {

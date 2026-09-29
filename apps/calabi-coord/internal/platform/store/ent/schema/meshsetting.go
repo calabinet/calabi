@@ -7,7 +7,7 @@ import (
 	"entgo.io/ent/schema/field"
 )
 
-// MeshSetting holds one meshnet's org-level switches (MESH.8e-5). One row per
+// MeshSetting holds one meshnet's org-level switches. One row per
 // meshnet, created on first write — an absent row means "all defaults", which is
 // what every meshnet runs on until an admin changes something.
 type MeshSetting struct{ ent.Schema }

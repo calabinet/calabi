@@ -11,7 +11,7 @@ import (
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
-// Relay-side authentication (R0′).
+// Relay-side authentication.
 //
 // What it fixes: without it a connection's identity is whatever node key it
 // typed into ClientInfo, and a reconnect with the same key evicts the older
@@ -27,11 +27,18 @@ import (
 //
 // Rollout is gated by Require, deliberately, because turning verification on
 // disconnects every node that hasn't upgraded yet. Ship with it off, upgrade the
-// fleet, then turn it on. (Same lesson as MESH.5b's filter_enabled: an explicit
+// fleet, then turn it on. (Same lesson as the filter_enabled: an explicit
 // flag, never an implicit "empty means...".)
+//
+// Which proof a link must answer with depends on how it arrived (openProof): a
+// TLS link (ServeBound) takes only a proof bound to the certificate this relay
+// presented on it; a plaintext link (Serve) takes only the legacy proof. The
+// binding is what keeps a relay the node also talks to from using the node's
+// answers here — see meshproto's derpauth.go.
 
 // AuthConfig is a relay's authentication posture. The zero value is "no
-// authentication", which is exactly how relays behaved before R0′.
+// authentication", which is exactly how relays behaved before relay
+// authentication.
 type AuthConfig struct {
 	// Require turns verification on. Off: no challenge is ever sent and proofs
 	// are ignored, so nodes old and new connect as before.
@@ -43,6 +50,16 @@ type AuthConfig struct {
 	// how an org over its traffic quota keeps its own relays and loses the
 	// platform's.
 	Kind meshproto.RelayKind
+	// Meshnet, when non-zero, is the one meshnet (organization) this relay
+	// admits: a grant naming any other is refused, however valid its signature.
+	//
+	// A relay an organization runs for itself needs this. The coordinator it
+	// trusts signs grants for EVERY organization on the platform, so signature,
+	// node and scope checks alone would admit any of them — to relay their own
+	// traffic through somebody else's machine. Zero, for a relay that serves
+	// every meshnet its coordinator signs for (the platform's own, or the relay of
+	// a self-hosted coordinator).
+	Meshnet int64
 	// Now is a clock seam for tests; nil means time.Now.
 	Now func() time.Time
 }
@@ -128,7 +145,7 @@ func (h *Hub) acceptProof(c *client, payload []byte) (ok bool, err error) {
 	if p == nil {
 		return false, nil
 	}
-	grant, err := meshproto.OpenDERPAuthProof(p.ch, p.ephPriv, c.key, payload)
+	grant, err := openProof(c, p, payload)
 	if err != nil {
 		return false, fmt.Errorf("%w: %v", ErrAuthRequired, err)
 	}
@@ -153,12 +170,26 @@ func (h *Hub) acceptProof(c *client, payload []byte) (ok bool, err error) {
 	return true, nil
 }
 
-// checkGrant validates a grant blob for the node that presented it. All three
-// checks are mandatory and each blocks a different bypass:
+// openProof opens an answer the way the link it arrived on requires: bound to
+// the certificate this relay presented, on a TLS link; the legacy format, on a
+// plaintext one. Nothing else is tried. A relay that fell back to the legacy
+// opener on a TLS link would take a proof harvested on some plaintext link, and
+// the binding would stop nothing (meshproto's derpauth.go).
+func openProof(c *client, p *pendingChallenge, payload []byte) ([]byte, error) {
+	if c.binding != nil {
+		return meshproto.OpenBoundDERPAuthProof(p.ch, p.ephPriv, c.key, payload, *c.binding)
+	}
+	return meshproto.OpenDERPAuthProof(p.ch, p.ephPriv, c.key, payload)
+}
+
+// checkGrant validates a grant blob for the node that presented it. Every check
+// is mandatory and each blocks a different bypass:
 //
 //   - signature: only the coordinator may authorize a node;
 //   - node key: a grant issued to one node must not admit another (otherwise a
 //     grant scraped off the wire would be a universal pass);
+//   - meshnet, on a relay that serves one: the coordinator's signature covers
+//     every organization, so without it any of them could use the relay;
 //   - scope vs this relay's kind: this is what makes quota enforcement bite on
 //     platform relays without touching the org's own.
 func (h *Hub) checkGrant(claimed meshproto.NodeKey, grant []byte) (meshproto.RelayGrant, error) {
@@ -171,6 +202,10 @@ func (h *Hub) checkGrant(claimed meshproto.NodeKey, grant []byte) (meshproto.Rel
 	}
 	if !g.Node.Equal(claimed) {
 		return meshproto.RelayGrant{}, fmt.Errorf("%w: grant was issued to a different node", ErrAuthRequired)
+	}
+	if h.auth.Meshnet != 0 && g.Meshnet != h.auth.Meshnet {
+		return meshproto.RelayGrant{}, fmt.Errorf("%w: grant is for meshnet %d, and this relay serves meshnet %d only",
+			ErrAuthRequired, g.Meshnet, h.auth.Meshnet)
 	}
 	if !g.Scope.Permits(h.auth.Kind) {
 		return meshproto.RelayGrant{}, fmt.Errorf("%w: grant scope %s does not permit a %s relay", ErrAuthRequired, g.Scope, h.auth.Kind)

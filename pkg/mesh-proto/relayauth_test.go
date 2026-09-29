@@ -1,9 +1,13 @@
 package meshproto
 
 import (
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
+	"encoding/hex"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -246,5 +250,131 @@ func TestDERPAuthProofRejectsMalformedPayloads(t *testing.T) {
 		if _, err := OpenDERPAuthProof(ch, ephPriv, nk, bad); err == nil {
 			t.Fatalf("%s payload accepted", name)
 		}
+	}
+}
+
+// relayCertBinding is the binding a relay presenting a fresh certificate would
+// hand out: what DERPBindingOf computes on both ends of a TLS link.
+func relayCertBinding(t *testing.T) DERPBinding {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return DERPBindingOf(selfSigned(t, key, 1))
+}
+
+func TestBoundDERPAuthProofRoundTrip(t *testing.T) {
+	nk, priv := node(t)
+	relayA := relayCertBinding(t)
+	ch, ephPriv, err := NewDERPAuthChallenge()
+	if err != nil {
+		t.Fatalf("challenge: %v", err)
+	}
+	for _, grant := range [][]byte{nil, []byte("a-grant-blob")} {
+		proof, err := SealBoundDERPAuthProof(ch, nk, priv, grant, relayA)
+		if err != nil {
+			t.Fatalf("seal: %v", err)
+		}
+		got, err := OpenBoundDERPAuthProof(ch, ephPriv, nk, proof, relayA)
+		if err != nil {
+			t.Fatalf("open: %v", err)
+		}
+		if string(got) != string(grant) {
+			t.Fatalf("grant round trip: got %q want %q", got, grant)
+		}
+	}
+}
+
+// at the format level: relay B passes its challenge down a node's link
+// to relay A, and the node answers it — bound to A's certificate, because A is
+// the relay it verified on that link. B cannot use the answer: it opens only
+// against A's binding.
+func TestBoundDERPAuthProofOpensOnlyAtTheRelayItWasMadeFor(t *testing.T) {
+	nk, priv := node(t)
+	relayA, relayB := relayCertBinding(t), relayCertBinding(t)
+	chFromB, ephPrivB, err := NewDERPAuthChallenge()
+	if err != nil {
+		t.Fatalf("challenge: %v", err)
+	}
+	answer, err := SealBoundDERPAuthProof(chFromB, nk, priv, []byte("live-grant"), relayA)
+	if err != nil {
+		t.Fatalf("seal: %v", err)
+	}
+	_, err = OpenBoundDERPAuthProof(chFromB, ephPrivB, nk, answer, relayB)
+	if !errors.Is(err, ErrAuthProof) {
+		t.Fatalf("a proof bound to relay A opened at relay B (err=%v)", err)
+	}
+	if !strings.Contains(err.Error(), "another relay") {
+		t.Fatalf("err = %v, want it to say the proof was made for another relay", err)
+	}
+}
+
+// The legacy and the bound format must never stand in for each other. A relay
+// that accepted a legacy proof on a TLS link would let a proof harvested on a
+// plaintext link log in over TLS; one that accepted a bound proof as a legacy
+// one would open the formats up to confusion the magic exists to rule out.
+func TestDERPProofFormatsNeverStandInForEachOther(t *testing.T) {
+	nk, priv := node(t)
+	binding := relayCertBinding(t)
+	ch, ephPriv, err := NewDERPAuthChallenge()
+	if err != nil {
+		t.Fatalf("challenge: %v", err)
+	}
+	legacy, err := SealDERPAuthProof(ch, nk, priv, []byte("grant"))
+	if err != nil {
+		t.Fatalf("seal legacy: %v", err)
+	}
+	bound, err := SealBoundDERPAuthProof(ch, nk, priv, []byte("grant"), binding)
+	if err != nil {
+		t.Fatalf("seal bound: %v", err)
+	}
+	if _, err := OpenBoundDERPAuthProof(ch, ephPriv, nk, legacy, binding); err == nil {
+		t.Fatal("a legacy proof opened as a bound one")
+	}
+	if _, err := OpenDERPAuthProof(ch, ephPriv, nk, bound); err == nil {
+		t.Fatal("a bound proof opened as a legacy one")
+	}
+	// Same lengths, different magic: a box whose plaintext is a legacy proof
+	// padded out to the bound length must still be refused. Built by hand, since
+	// no honest sealer produces it.
+	forged := derpProofPlaintext(nk, ch.EphPub)
+	forged = append(forged, binding[:]...)
+	sealed := box.Seal(nil, forged, (*[DERPAuthNonceLen]byte)(&ch.Nonce), (*[KeyLen]byte)(&ch.EphPub), (*[KeyLen]byte)(&priv))
+	payload := append([]byte{0, 0}, sealed...)
+	if _, err := OpenBoundDERPAuthProof(ch, ephPriv, nk, payload, binding); !errors.Is(err, ErrAuthProof) {
+		t.Fatalf("a legacy-magic plaintext opened as a bound proof (err=%v)", err)
+	}
+}
+
+// The binding is the pin's number: both ends compute it from the certificate,
+// and the value in a log line can be compared with `calabi-edge -fingerprint`.
+func TestDERPBindingIsThePinsNumber(t *testing.T) {
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	cert := selfSigned(t, key, 7)
+	b := DERPBindingOf(cert)
+	if got, want := "sha256:"+hex.EncodeToString(b[:]), CertPin(cert); got != want {
+		t.Fatalf("binding %s, pin %s", got, want)
+	}
+}
+
+// A bound relay proof is no more usable as an edge or registration proof than
+// a legacy one: its own magic, and a length neither of the others accepts.
+func TestBoundDERPAuthProofDoesNotCrossProtocols(t *testing.T) {
+	pub, priv := node(t)
+	dch, ephPriv, err := NewDERPAuthChallenge()
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof, err := SealBoundDERPAuthProof(dch, pub, priv, nil, relayCertBinding(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sealed := proof[2:] // no grant: strip the length prefix
+	if err := OpenEdgeProof(EdgeChallenge{EphPub: dch.EphPub, Nonce: dch.Nonce}, ephPriv, pub, sealed); err == nil {
+		t.Fatal("a bound relay proof passed as an edge proof")
+	}
+	if err := OpenRegisterProof(RegisterChallenge{EphPub: dch.EphPub, Nonce: dch.Nonce}, ephPriv, pub, sealed); err == nil {
+		t.Fatal("a bound relay proof passed as a registration proof")
 	}
 }

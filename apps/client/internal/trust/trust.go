@@ -32,9 +32,10 @@ const (
 	// System: the operating system's roots and the host name — a server with a
 	// certificate from a public CA such as Let's Encrypt.
 	System Mode = "system"
-	// Pin: some certificate in the server's chain has a public key whose hash is
-	// one of Pins (meshproto.CertPin). The host name is not checked: the pin IS
-	// the server's identity, the way an SSH host key is.
+	// Pin: the server's certificate has a public key whose hash is one of Pins
+	// (meshproto.CertPin), or chains up to one that does (a pinned CA). The host
+	// name is not checked: the pin IS the server's identity, the way an SSH host
+	// key is.
 	Pin Mode = "pin"
 	// CA: only the CA in CAPEM, plus the host name.
 	CA Mode = "ca"
@@ -105,15 +106,7 @@ func (c Config) TLS(addr string) (*tls.Config, error) {
 			// and refuses one that matches no pin.
 			InsecureSkipVerify: true,
 			VerifyConnection: func(cs tls.ConnectionState) error {
-				presented := make([]string, 0, len(cs.PeerCertificates))
-				for _, cert := range cs.PeerCertificates {
-					pin := meshproto.CertPin(cert)
-					if want[pin] {
-						return nil
-					}
-					presented = append(presented, pin)
-				}
-				return &PinMismatchError{Presented: presented}
+				return verifyPinned(cs.PeerCertificates, want)
 			},
 			MinVersion: tls.VersionTLS12,
 		}, nil
@@ -123,6 +116,52 @@ func (c Config) TLS(addr string) (*tls.Config, error) {
 		return nil, errors.New("trust: no mode set")
 	}
 	return nil, fmt.Errorf("trust: unknown mode %q (want system, pin, ca, plaintext or platform)", c.Mode)
+}
+
+// verifyPinned is the Pin check. The server's own certificate — the leaf, whose
+// key the handshake has just proved it holds — may carry the pin, or a
+// certificate further up the chain may, but then only if the leaf really chains
+// up to it.
+//
+// That second half is the point. A server sends whatever certificates it likes
+// after its leaf, and with the ordinary chain check switched off nothing else
+// looks at them. Matching a pin anywhere in the list therefore let anyone in the
+// path pass: present its own leaf, append the real server's certificate — it is
+// public — and the pin matched the appendage while the connection went to the
+// impostor. So a match above the leaf counts only when the leaf verifies with
+// the pinned certificate as its root and the ones between as intermediates. The
+// host name is still not checked: the pin is the identity, as Pin says.
+func verifyPinned(chain []*x509.Certificate, want map[string]bool) error {
+	presented := make([]string, 0, len(chain))
+	for i, cert := range chain {
+		pin := meshproto.CertPin(cert)
+		presented = append(presented, pin)
+		if !want[pin] {
+			continue
+		}
+		if i == 0 || signsDownTo(chain, i) {
+			return nil
+		}
+	}
+	return &PinMismatchError{Presented: presented}
+}
+
+// signsDownTo reports whether chain[0] verifies with chain[i] as the only root
+// and chain[1:i] as intermediates.
+func signsDownTo(chain []*x509.Certificate, i int) bool {
+	roots := x509.NewCertPool()
+	roots.AddCert(chain[i])
+	inter := x509.NewCertPool()
+	for _, c := range chain[1:i] {
+		inter.AddCert(c)
+	}
+	_, err := chain[0].Verify(x509.VerifyOptions{
+		Roots: roots, Intermediates: inter,
+		// What the leaf may be used for was never part of a pin; only who
+		// signed it is being asked here.
+		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+	})
+	return err == nil
 }
 
 // ParseMode reads a mode as a person writes it in a config file or a flag.

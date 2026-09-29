@@ -26,7 +26,9 @@ func connectClient(t *testing.T, h *Hub, k meshproto.NodeKey) net.Conn {
 	if err := meshproto.WriteDERPFrame(mine, meshproto.DERPFrameClientInfo, k[:]); err != nil {
 		t.Fatalf("send ClientInfo: %v", err)
 	}
-	// Wait for the hub to register (Serve reads ClientInfo then adds).
+	// Wait for the hub to register (Serve reads ClientInfo then adds). Only
+	// that: the link's rate limiter is resolved after add(), so a test that
+	// depends on it waits for it separately (waitLimiter).
 	deadline := time.Now().Add(2 * time.Second)
 	for !h.Connected(k) {
 		if time.Now().After(deadline) {

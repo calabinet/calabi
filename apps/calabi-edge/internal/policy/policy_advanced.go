@@ -5,7 +5,7 @@ package policy
 // authentication.
 //
 // These used to be platform-only, stubbed out to "off"/passthrough by a
-// self-hosted-build twin. Since F3 there is no such split: one edge binary
+// self-hosted-build twin. There is no such split any more: one edge binary
 // ships and a self-hosted edge enforces the same policy set as a managed one.
 // On the hosted product these are gated by PLAN, and that gate lives in the
 // control plane (tunnel-svc), not here.

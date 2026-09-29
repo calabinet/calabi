@@ -13,8 +13,8 @@ import (
 // ACLPolicy is a meshnet's access-control document — a small Tailscale-style
 // model: named groups + accept rules over src/dst selectors. It compiles (via
 // MemPolicy) into the first isolation layer: which peers appear in each node's
-// netmap. Node-side packet filtering (defense in depth, with ports) lands in a
-// follow-up (MESH.5b).
+// netmap. Node-side packet filtering (defense in depth, with ports) is the
+// second layer (packetfilter.go).
 //
 // Selectors (in src/dst and group members) name MACHINES, never ports:
 //   - "*"            any node in the meshnet
@@ -99,7 +99,7 @@ func LoadACLPolicy(path string) (*ACLPolicy, error) {
 
 // MemPolicy is a PolicyStore backed by a single in-memory ACLPolicy — the
 // self-hosted coordinator's policy source (loaded from a file; the platform build
-// swaps a per-org DB-backed policy in MESH.8). It is deployment-agnostic and lives
+// swaps a per-org DB-backed policy). It is deployment-agnostic and lives
 // in core so the self-hosted coordinator ships the real engine.
 type MemPolicy struct{ Policy ACLPolicy }
 
@@ -198,7 +198,7 @@ func sameOwner(src, dst *Node) bool {
 
 // matchSelector matches one selector against a node. A dst selector may carry a
 // ":port" suffix, which the netmap layer ignores (ports are enforced by the
-// node-side filter in MESH.5b) — the host part is what is matched here.
+// node-side filter) — the host part is what is matched here.
 //
 // autogroup:self is absent on purpose: it is a property of a (src, dst) pair,
 // not of a node, so only matchDst can answer it. Falling through to the default

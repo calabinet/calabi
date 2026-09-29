@@ -30,7 +30,8 @@ import "google/protobuf/timestamp.proto";
 // The edge-facing message set, mirrored from control_plane with identical field
 // numbers (see messages.proto). Importing the control_plane protos here would
 // drag their single generated Go package -- all 11 services, every Admin* RPC --
-// into anything that links this contract, which is exactly what F3 removes.
+// into anything that links this contract — the very link this module exists to
+// cut.
 import "edgepb/messages.proto";
 
 // BFFEdge is the gateway service. RPC names mirror the underlying
@@ -58,7 +59,7 @@ service BFFEdge {
   rpc GetOrgOnlineCount(GetOrgOnlineCountRequest)
     returns (GetOrgOnlineCountResponse);
 
-  // ListEdges (M15 mesh) — the edge's mesh resolver polls this to build
+  // ListEdges — the edge's mesh resolver polls this to build
   // its same-region peer address book. bff-edge FORCES the region filter
   // from the mTLS cert so an edge can only ever enumerate its own region.
   rpc ListEdges(ListEdgesRequest)
@@ -106,7 +107,7 @@ service BFFEdge {
   rpc Resolve(ResolveRequest)
     returns (ResolveResponse);
 
-  // ResolveOwners (M15 mesh) — the region's {domain → owner edge} map
+  // ResolveOwners — the region's {domain → owner edge} map
   // the mesh resolver polls to forward a visitor connection to the peer
   // that owns a subdomain this edge doesn't hold. Read-only, scoped by
   // base_domain (itself region-specific); no edge_node_id field.
@@ -114,11 +115,11 @@ service BFFEdge {
   rpc ResolveOwners(ResolveOwnersRequest)
     returns (ResolveOwnersResponse);
 
-  // ReclaimTunnel (M4.3) — overwrite edge_node_id.
+  // ReclaimTunnel — overwrite edge_node_id.
   rpc ReclaimTunnel(ReclaimTunnelRequest)
     returns (ReclaimTunnelResponse);
 
-  // DrainEdge (M4.3) — overwrite edge_node_id with caller id.
+  // DrainEdge — overwrite edge_node_id with caller id.
   rpc DrainEdge(DrainEdgeRequest)
     returns (DrainEdgeResponse);
 
@@ -134,7 +135,7 @@ service BFFEdge {
     returns (ListCertsResponse);
 
   // RenewEdgeCert rotates the edge's OWN short-lived mTLS client cert before
-  // it expires (F1, byoi-seat-and-cert-lifecycle). Unlike GetCert, bff-edge
+  // it expires. Unlike GetCert, bff-edge
   // GATES this per org: org + edge_node_id come from the authenticated mTLS
   // cert (never the body), and a fresh bundle is issued only while the org
   // still has BYOI entitlement (effective edge cap > 0 and org active). A
@@ -199,7 +200,7 @@ service BFFEdge {
   // mesh-relay traffic (edge/derp merge). bff-edge re-publishes each report on
   // the cluster NATS as calabi.usage.relay → metering-svc's relay_usage_raws.
   // The region carries a "self-<label>" code, which metering keeps OUT of the
-  // plan cap: a customer's own relay is display-only (edge-relay-merge-plan §八).
+  // plan cap: a customer's own relay is display-only.
   rpc ReportRelayUsage(ReportRelayUsageRequest) returns (ReportRelayUsageResponse);
 
   // ReportAccess mirrors ReportUsage for the tunnel access log (who reached
@@ -218,7 +219,7 @@ service BFFEdge {
   rpc ReportAccess(ReportAccessRequest) returns (ReportAccessResponse);
 
   // RegisterRelay lets a merged edge/relay node self-register its relay endpoint
-  // into the org's DERP map (edge/derp merge P3-B), mirroring how the edge
+  // into the org's DERP map (edge/derp merge), mirroring how the edge
   // self-registers via RegisterEdgeNode. bff-edge derives the org from the mTLS
   // cert and idempotently upserts into coord (the node re-registers on a
   // heartbeat). The relay is self-hosted, so it lands under a "self-<label>"
@@ -238,8 +239,10 @@ message RenewEdgeCertRequest {}
 // blit Body through to the existing handlers.
 
 message SubscribeCertEventsRequest {
-  // 0 = subscribe to all orgs (M3 dogfood default; current edge behavior).
-  // Future: per-org scoping when edge knows which orgs it serves.
+  // Not read; the edge sends 0. The org filter is implicit (taken from the
+  // mTLS cert): a BYOI edge, whose cert names its org, receives cert events
+  // for that org only, a platform edge for every org. ACME challenge events
+  // go to every edge either way.
   int64 org_id = 1;
 }
 
@@ -301,7 +304,7 @@ message UsageReport {
   int64 bytes_out = 3;
   // Edge-local timestamp when this 1-minute bucket closed.
   google.protobuf.Timestamp window_close_at = 4;
-  // tunnel_id the bytes are attributed to (M16). 0 = unattributed
+  // tunnel_id the bytes are attributed to. 0 = unattributed
   // (standalone proxy / session-level fallback). bff-edge passes this
   // through verbatim onto the NATS report; metering-svc keys on it.
   int64 tunnel_id = 5;
@@ -374,7 +377,7 @@ message ReportRelayUsageResponse {
   int32 published = 1;
 }
 
-// ===== Reverse: relay endpoint self-registration (edge/derp merge P3-B) =====
+// ===== Reverse: relay endpoint self-registration (edge/derp merge) =====
 
 message RegisterRelayRequest {
   // org_id is NOT carried — bff-edge derives the org from the mTLS cert, so a
@@ -383,9 +386,26 @@ message RegisterRelayRequest {
   string host = 2;     // public host:… mesh nodes dial the relay at
   int32 derp_port = 3;
   int32 stun_port = 4;
+  // The relay speaks TLS on derp_port with a certificate that verifies against
+  // the platform CA for host — the node's own certificate, checked by the node
+  // at every heartbeat. The coordinator then tells devices to reach it over
+  // TLS only, checked as they check the platform's edges. False from a node
+  // older than relay TLS, or whose certificate would not pass that check (one
+  // issued without the public address): its devices keep the plaintext
+  // protocol, which the relay also speaks.
+  bool tls = 5;
 }
 
 message RegisterRelayResponse {
   // Region the relay landed under, e.g. "self-hk-1". Diagnostic.
   string region = 1;
+  // The Ed25519 public key (32 bytes) the platform coordinator signs relay
+  // grants with. The relay admits a device only if it proves a grant that
+  // verifies under this key and names the relay's own organization.
+  //
+  // Empty when the control plane signs no grants: devices then hold none, and a
+  // relay that demanded one would turn every device away. A gateway that
+  // predates this field sends it empty too, which is why empty can never be
+  // read as "admit nobody".
+  bytes coord_grant_pubkey = 2;
 }

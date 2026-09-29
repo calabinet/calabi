@@ -27,7 +27,7 @@ type MeshNode struct {
 	HostName string `json:"host_name,omitempty"`
 	// name was set by an admin: re-registration stops following the hostname
 	NamePinned bool `json:"name_pinned,omitempty"`
-	// hole-punch disco key, base64 text; empty until MESH.4
+	// hole-punch disco key, base64 text; empty
 	DiscoKey string `json:"disco_key,omitempty"`
 	// allocated 100.64.x.x /32, text
 	Overlay string `json:"overlay,omitempty"`
@@ -35,7 +35,7 @@ type MeshNode struct {
 	DerpHome string `json:"derp_home,omitempty"`
 	// JSON array of discovered ip:port endpoints
 	EndpointsJSON string `json:"endpoints_json,omitempty"`
-	// JSON array of subnet-router / exit CIDRs the node CLAIMS (MESH.7)
+	// JSON array of subnet-router / exit CIDRs the node CLAIMS
 	AdvertisedRoutesJSON string `json:"advertised_routes_json,omitempty"`
 	// the subset an admin approved; only these are routed to the node
 	ApprovedRoutesJSON string `json:"approved_routes_json,omitempty"`
@@ -57,9 +57,9 @@ type MeshNode struct {
 	TagsPinned bool `json:"tags_pinned,omitempty"`
 	// JSON array of ACL tags resolved from the auth key
 	TagsJSON string `json:"tags_json,omitempty"`
-	// device approval (MESH.8e-5): false = enrolled but not yet allowed to reach anything. Defaults TRUE so enabling approval never retroactively parks existing nodes
+	// device approval: false = enrolled but not yet allowed to reach anything. Defaults TRUE so enabling approval never retroactively parks existing nodes
 	Approved bool `json:"approved,omitempty"`
-	// admin kill switch (MESH.8b): dropped from netmaps + refused on re-register
+	// admin kill switch: dropped from netmaps + refused on re-register
 	Disabled bool `json:"disabled,omitempty"`
 	// principal of the auth key the node last enrolled with (user:<id> / apikey:<id>; empty for a self-hosted key); rechecked on re-registration by proof alone
 	EnrolledBy string `json:"enrolled_by,omitempty"`

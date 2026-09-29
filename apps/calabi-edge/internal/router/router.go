@@ -1,8 +1,8 @@
 // Package router maps externally visible identifiers (HTTP Host, TCP port)
 // to the session + proxy that should receive the visitor connection.
 //
-// implementation: pure in-memory sync.Map. adds L2 ristretto cache +
-// L3 Redis lookup per technical-design
+// The implementation is a pure in-memory sync.Map; the design adds an L2
+// ristretto cache and an L3 Redis lookup later.
 package router
 
 import (

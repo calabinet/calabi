@@ -15,15 +15,15 @@ const meshKeepalive = 25 * time.Second
 // WGPeer is the desired WireGuard configuration for one peer.
 type WGPeer struct {
 	PublicKey meshproto.NodeKey
-	// DiscoKey is the peer's hole-punching identity (MESH.4). The datapath needs
+	// DiscoKey is the peer's hole-punching identity. The datapath needs
 	// it to map WireGuard's node key onto the disco key the DISCO prober files
 	// validated direct paths under. Zero for a peer that advertises none — such a
 	// peer stays relay-only.
 	DiscoKey   meshproto.DiscoKey
 	AllowedIPs []netip.Prefix
 	// Endpoint is the direct UDP address to reach the peer. ZERO in DERP-only
-	// mode (MESH.2): traffic goes via the relay keyed by PublicKey until hole
-	// punching (MESH.4) discovers a direct path and fills this in.
+	// mode: traffic goes via the relay keyed by PublicKey until hole
+	// punching discovers a direct path and fills this in.
 	Endpoint            netip.AddrPort
 	DERPHome            string
 	PersistentKeepalive time.Duration
@@ -36,12 +36,12 @@ type WGConfig struct {
 	OverlayAddr netip.Addr
 	Peers       []WGPeer
 	// ExitNode, when non-zero, is the peer this node routes its DEFAULT traffic
-	// through (full-tunnel, MESH.7b). It's a LOCAL choice (never from the
+	// through (full-tunnel). It's a LOCAL choice (never from the
 	// coordinator): the consumer opts in to one advertised exit node. Zero = no
 	// exit node — advertised 0.0.0.0/0 routes are then ignored, never auto-used.
 	ExitNode meshproto.NodeKey
-	// RelayByRegion resolves a DERP region code to the relay address serving it
-	// (MESH.4 B2b). The datapath needs it twice: to reach a peer via THAT peer's
+	// RelayByRegion resolves a DERP region code to the relay address serving it.
+	// The datapath needs it twice: to reach a peer via THAT peer's
 	// home relay, and to keep its own home link on the relay its own region
 	// resolves to. Empty for a deployment whose map carries no usable relay.
 	RelayByRegion map[string]string
@@ -57,7 +57,7 @@ type WGConfig struct {
 	UnaliasedRoutes  []SubnetAlias
 	AliasBudgetAddrs int
 	AliasUsedAddrs   int
-	// Filter / FilterEnabled are the node's INBOUND packet filter (MESH.5b),
+	// Filter / FilterEnabled are the node's INBOUND packet filter,
 	// straight from the netmap. FilterEnabled false = the coordinator doesn't
 	// compile filters, so nothing is filtered.
 	Filter        []FilterRule
@@ -73,10 +73,18 @@ type WGConfig struct {
 	// this node listens on. Empty leaves the bootstrap relay in place.
 	SelfRelay string
 	// RelayGrant is the coordinator's relay authorization, straight from the
-	// netmap (R0'). It rides on the config for the same reason the filter does:
+	// netmap. It rides on the config for the same reason the filter does:
 	// SetConfig receives the FULL desired state on every netmap update, which is
 	// exactly the cadence a grant needs to be refreshed at.
 	RelayGrant []byte
+	// RelayTLS lists, by address, the relays the map marks TLS and how to check
+	// each one's certificate (relaytls.go). Every other relay is plaintext.
+	RelayTLS map[string]RelayTLS
+	// RelayPlatformTrust says this node's coordinator is calabi.net, the only one
+	// whose "platform" relay trust it accepts. Not from the netmap — the netmap
+	// is what it constrains — but from how the controller checked the
+	// coordinator (Controller.PlatformRelays).
+	RelayPlatformTrust bool
 	// RelayBandwidthKbps / RelayBandwidthBurstKbps is the self-limit for traffic
 	// this node sends over a PLATFORM relay. 0 = none. Rides on the config for
 	// the same reason the grant does: it is desired state, refreshed whole on
@@ -87,7 +95,7 @@ type WGConfig struct {
 
 // BuildWGConfig maps a NetMap onto the desired WG state. Pure + deterministic so
 // the datapath can diff-and-apply. In DERP-only mode peer Endpoints stay zero;
-// once endpoints are present (MESH.4) the first is taken as the direct-path hint.
+// once endpoints are present the first is taken as the direct-path hint.
 func BuildWGConfig(nm NetMap) WGConfig {
 	cfg := WGConfig{NodeKey: nm.Self.NodeKey, OverlayAddr: nm.Self.Overlay}
 	cfg.Filter, cfg.FilterEnabled = nm.Filter, nm.FilterEnabled
@@ -100,6 +108,7 @@ func BuildWGConfig(nm NetMap) WGConfig {
 	}
 	cfg.AliasBudgetAddrs, cfg.AliasUsedAddrs = nm.AliasBudgetAddrs, nm.AliasUsedAddrs
 	cfg.RelayByRegion = relayAddrsByRegion(nm.DERP)
+	cfg.RelayTLS = relayTLSByAddr(nm.DERP)
 	cfg.SelfRelay = cfg.RelayByRegion[nm.Self.DERPHome]
 	for _, p := range nm.Peers {
 		wp := WGPeer{
@@ -127,7 +136,7 @@ const meshNodePoolCIDR = "100.64.0.0/11"
 // ownOverlayOnly strips any allowed-ip inside the node pool that is not this
 // peer's OWN address.
 //
-// Defence in depth for audit finding MESH-1. The coordinator now refuses to
+// Defence in depth. The coordinator now refuses to
 // publish a route inside its own address space, but the consequence of getting
 // it wrong lands here and is severe: WireGuard allowed-ips are exclusive, so a
 // peer that carries another node's overlay /32 takes over that address on this
@@ -281,7 +290,7 @@ func applyRoutePolicy(cfg WGConfig, rp RoutePolicy) (WGConfig, []RefusedRoute) {
 }
 
 // selectSubnetRoutes decides which of the peers' advertised allowed-ips get an OS
-// route at the tun (MESH.7a). It drops three kinds: overlay /32s (already covered
+// route at the tun. It drops three kinds: overlay /32s (already covered
 // by the meshOverlayCIDR route), default routes (0.0.0.0/0 — handled by the exit
 // step, never a plain tun route), and — the local-wins rule — any advertisement
 // naming address space this machine is already directly attached to, whether that

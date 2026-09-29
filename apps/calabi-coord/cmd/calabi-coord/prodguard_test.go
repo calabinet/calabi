@@ -163,7 +163,7 @@ func TestNoAuthSourceAtAllIsRefused(t *testing.T) {
 }
 
 // TestLegacyEnvNamesStillConfigureProduction is the compatibility contract for
-// the CALABI_COORD_* rename (full-oss-plan 12.5).
+// the CALABI_COORD_* rename.
 //
 // A deployment that predates the rename sets only COORD_SVC_* (and the platform
 // name QUOTA_SVC_ADDR). If those stopped counting, this guard would refuse to

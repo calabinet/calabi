@@ -113,7 +113,7 @@ func TestStoreRoundTrip(t *testing.T) {
 		t.Fatalf("AllOverlays = %v, %v; want 2", ov, err)
 	}
 
-	// SetDisabled persists the kill switch (MESH.8b) and survives a re-read.
+	// SetDisabled persists the kill switch and survives a re-read.
 	if err := s.SetDisabled(ctx, saved.ID, true); err != nil {
 		t.Fatalf("set disabled: %v", err)
 	}
@@ -126,8 +126,8 @@ func TestStoreRoundTrip(t *testing.T) {
 	}
 }
 
-// TestACLStoreRoundTrip exercises the per-meshnet ACL doc persistence
-// (MESH.8e-2): absent → (zero,false); Set → Get returns it; overwrite replaces;
+// TestACLStoreRoundTrip exercises the per-meshnet ACL doc persistence:
+// absent → (zero,false); Set → Get returns it; overwrite replaces;
 // meshnets are isolated.
 func TestACLStoreRoundTrip(t *testing.T) {
 	s := newTestStore(t)

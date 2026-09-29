@@ -1,7 +1,7 @@
-// update_report.go — delivers self-update results (U5a) to bff-console over the
+// update_report.go — delivers self-update results to bff-console over the
 // daemon's own authenticated channel, the same credential and base URL the
 // upstream-health reporter uses. Platform daemon only: the standalone daemon
-// never builds an update agent, so nothing here can run there. (U5a) for what is reported and why.
+// never builds an update agent, so nothing here can run there.
 
 package main
 
@@ -32,7 +32,7 @@ func newUpdateReporter(bffConsoleURL string) func(context.Context, []selfupdate.
 	}
 }
 
-// newOrgPolicyFetcher returns the agent's OrgPolicy source (U5c), or nil when
+// newOrgPolicyFetcher returns the agent's OrgPolicy source, or nil when
 // there is no control plane to ask.
 func newOrgPolicyFetcher(bffConsoleURL string) func(context.Context) (*selfupdate.OrgPolicy, error) {
 	base := strings.TrimRight(strings.TrimSpace(bffConsoleURL), "/")

@@ -104,7 +104,7 @@ func (m *Manager) All(f func(*Session) bool) {
 // FindByDeviceID returns the first session matching deviceID, or nil.
 // Used by the online-cap evict consumer to map a NATS payload's
 // client_id back onto a live session so we can close it. We expect at
-// most one session per device on a given edge — Phase A presence
+// most one session per device on a given edge — presence
 // model assumes a fresh AUTH overwrites any prior live session — but
 // iterating all is cheap (Count() is typically <100 per edge) and
 // keeps us correct if the assumption ever drifts.

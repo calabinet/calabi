@@ -1,13 +1,13 @@
 // calabi-coord is the mesh coordinator — the control plane for Calabi's Connect
 // (WireGuard mesh) data plane: node registry, IPAM (100.64.0.0/10),
-// ACL-filtered netmap, MagicDNS, and the DERP relay map. It is the "brain"
-// described in
+// ACL-filtered netmap, MagicDNS, and the DERP relay map. It is the mesh's
+// "brain".
 //
-// MESH.1 (this slice) closes the minimal loop: the Coordinator gRPC service
-// (RegisterNode / PullNetMap stream / ReportEndpoints) is served over the
+// The first slice closed the minimal loop: the Coordinator gRPC service
+// (RegisterNode / PullNetMap stream / ReportEndpoints) served over the
 // standard svcboot server, backed by the core through the wire.go seam.
-// Netmaps are full-mesh (AllowAllPolicy); ACLs, hole punching, and MagicDNS
-// land in later slices.
+// Netmaps started out full-mesh (AllowAllPolicy); ACLs, hole punching and
+// MagicDNS came in later slices.
 package main
 
 import (
@@ -141,7 +141,7 @@ func main() {
 			meshpb.RegisterCoordinatorServer(s, srv)
 			return nil
 		},
-		// Node-admin HTTP surface (MESH.8b): list / disable / enable nodes. Served
+		// Node-admin HTTP surface: list / disable / enable nodes. Served
 		// only when CALABI_COORD_MESH_ADMIN_ADDR is set, on a PRIVATE address (the
 		// bff-admin gateway is its authenticated front door).
 		Extra: withConnRecordPurge(coord, logger, withEdgeDirectory(edgeDirectoryOf(coord), withEdgeDERPWatcher(notif, meshAdminServer(meshAdmin, coord, notif, logger)))),

@@ -36,10 +36,10 @@ func ApplyEnv(cfg Config) (Config, error) {
 	if v := envStr("CALABI_EDGE_ROLE"); v != "" {
 		cfg.Role = v
 	}
-	// A second edge-image container on the SAME host (the self-hosted stack runs
-	// the edge and the relay side by side under host networking) would otherwise
-	// fight the first one for the default admin port :9101. The retired derp-node
-	// avoided this by using :9200; this is how a relay-only node does it now.
+	// A second edge-image container on the SAME host under host networking — a
+	// relay-only node next to an edge, say — would otherwise fight the first one
+	// for the default admin port :9101. The retired derp-node avoided this by
+	// using :9200; this is how a relay-only node does it now.
 	if v := envStr("CALABI_EDGE_ADMIN_ADDR"); v != "" {
 		cfg.Admin.Addr = v
 	}
@@ -86,13 +86,21 @@ func ApplyEnv(cfg Config) (Config, error) {
 		}
 		cfg.Mesh.RequireAuth = b
 	}
+	if v := envStr("CALABI_EDGE_RELAY_REQUIRE_TLS"); v != "" {
+		b, err := parseBool("CALABI_EDGE_RELAY_REQUIRE_TLS", v)
+		if err != nil {
+			return cfg, err
+		}
+		cfg.Mesh.RequireTLS = b
+	}
 	return cfg, nil
 }
 
 func envStr(key string) string { return strings.TrimSpace(os.Getenv(key)) }
 
-// parsePort accepts a bare port number. 0 is legal — it disables the STUN
-// responder — so only negative and non-numeric values are rejected.
+// parsePort accepts a bare port number from 0 to 65535. 0 is legal: as the STUN
+// port it turns the responder off (MeshService.STUNPort), as the DERP port it
+// means the default, since a relay always has a data port.
 func parsePort(key, raw string) (int, error) {
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < 0 || n > 65535 {

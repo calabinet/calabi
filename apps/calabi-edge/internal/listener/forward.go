@@ -172,7 +172,7 @@ func (f *Forward) handle(peer net.Conn) {
 	// Enforced with the ORIGINAL visitor IP the relay carries (hdr.VisitorIP),
 	// never the peer edge's address.
 	//
-	// Only the IP rule used to run here (audit finding EDGE-1): Basic-Auth, the
+	// Only the IP rule used to run here: Basic-Auth, the
 	// per-tunnel rate cap and OAuth 登录认证 were all skipped on the relay path,
 	// so the headline login gate protecting a customer's private backend was
 	// bypassable by retrying until the DNS/LB routed you to a non-owner edge.

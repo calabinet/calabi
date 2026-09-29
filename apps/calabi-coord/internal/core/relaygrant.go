@@ -9,7 +9,7 @@ import (
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
-// Relay grants (R0′) — the coordinator's half.
+// Relay grants — the coordinator's half.
 //
 // A relay cannot ask the control plane anything: calabi-derp forwards opaque
 // ciphertext and has zero control-plane dependencies, which is exactly why it
@@ -55,7 +55,7 @@ type SigningRelayGrantIssuer struct {
 	Key ed25519.PrivateKey
 	// Scope decides what a node's grant permits. Nil means RelayScopeAll.
 	//
-	// This is the seam quota enforcement plugs into (F2): an org over its monthly
+	// This is the seam quota enforcement plugs into: an org over its monthly
 	// traffic cap gets RelayScopeSelfHosted, which platform relays refuse and the
 	// org's own relays still accept. Downgrading the scope rather than withholding
 	// the grant is deliberate — it is what keeps the org's own bandwidth its own
@@ -96,6 +96,21 @@ func (s *SigningRelayGrantIssuer) IssueRelayGrant(ctx context.Context, node *Nod
 		Scope:   scope,
 		Expiry:  s.now().Add(s.ttl()),
 	})
+}
+
+// RelayGrantPublicKey is the key this coordinator's grants verify under, or nil
+// when it signs none.
+//
+// A relay an organization runs on a node connected to the platform learns it
+// from here, in the answer to its own registration (adminhttp upsertRelay, via
+// bff-edge), rather than from a key pasted into its config: it is then the key
+// that actually signed the grants its devices hold, and it follows a rotation.
+func (c *Coordinator) RelayGrantPublicKey() ed25519.PublicKey {
+	k, ok := c.RelayGrants.(interface{ PublicKey() ed25519.PublicKey })
+	if !ok {
+		return nil
+	}
+	return k.PublicKey()
 }
 
 // relayGrantFor issues a node's grant, or returns nil when this coordinator

@@ -47,9 +47,9 @@ const DAEMON_SIG: &str = env!("CALABI_DAEMON_SIG");
 const PORT_START: u16 = 7400;
 const PORT_SCAN: u16 = 20;
 
-// Release shells are attach-only (Option A): the daemon is delivered by the
+// Release shells are attach-only: the daemon is delivered by the
 // installer and we attach to the machine-wide system service. Only DEBUG dev
-// builds spawn their own daemon. See docs/runbook/privileged-service-and-updates-plan.md.
+// builds spawn their own daemon.
 const ALLOW_DEV_SPAWN: bool = cfg!(debug_assertions);
 
 #[derive(Clone, Debug, Serialize)]
@@ -60,7 +60,7 @@ pub struct DaemonStatus {
     pub version: String,
     pub server_addr: String,
     /// /healthz service_mode: "system" for the machine-wide system service we
-    /// attach to (Option A), "user" for a dev/foreground daemon, "" if unknown.
+    /// attach to, "user" for a dev/foreground daemon, "" if unknown.
     pub service_mode: String,
     /// True when the shell attached to an existing system service rather than
     /// spawning its own daemon (so the tray "stop/restart" don't touch it).
@@ -85,7 +85,7 @@ impl Default for DaemonStatus {
 
 pub struct Supervisor {
     // The local calabi daemon binary for the DEBUG dev-spawn fallback, or None
-    // when there isn't one. A release shell is attach-only (Option A: the service
+    // when there isn't one. A release shell is attach-only (the service
     // comes from the installer), so this is never spawned there.
     bin: Option<PathBuf>,
     child: Mutex<Option<Child>>,
@@ -96,8 +96,8 @@ pub struct Supervisor {
     // successful probe and cached so the 5s tray loop hits one port, not a scan.
     bound_port: Mutex<Option<u16>>,
     // Some(port) when we ATTACHED to an existing machine-wide system service
-    // (Option A) instead of spawning our own: stop() must then NOT kill it and
-    // start() must NOT spawn. See docs/runbook/privileged-service-and-updates-plan.md.
+    // instead of spawning our own: stop() must then NOT kill it and
+    // start() must NOT spawn.
     attached: Mutex<Option<u16>>,
     // Where we record the spawned daemon's PID, so a NEXT launch can reap a
     // daemon orphaned by a crash / force-kill (its single-instance lock would
@@ -141,7 +141,7 @@ impl Supervisor {
     }
 
     /// True when the shell attached to an existing machine-wide system service
-    /// (Option A) rather than spawning its own daemon. The tray uses this to
+    /// rather than spawning its own daemon. The tray uses this to
     /// avoid offering "stop/restart" on a root service it can't control.
     pub fn is_attached(&self) -> bool {
         self.attached.lock().unwrap().is_some()
@@ -161,12 +161,11 @@ impl Supervisor {
         if self.attached.lock().unwrap().is_some() {
             return Ok(());
         }
-        // F2 (Option A): PREFER attaching to the machine-wide system service over
+        // PREFER attaching to the machine-wide system service over
         // spawning our own. It reliably owns :7400 (starts at boot); we verify via
         // /healthz service_mode=="system", so a foreign or dev/user daemon on :7400
-        // is NOT trusted — we fall through and spawn our own (dev + pre-F3
-        // installer behaviour, unchanged). See
-        // docs/runbook/privileged-service-and-updates-plan.md.
+        // is NOT trusted — we fall through and spawn our own (what dev builds and
+        // older installers do, unchanged).
         if let Some(port) = discover_system_service().await {
             info!("attaching to system service on 127.0.0.1:{port} (not spawning our own)");
             *self.attached.lock().unwrap() = Some(port);
@@ -177,8 +176,7 @@ impl Supervisor {
         // No system service found. A release shell is ATTACH-ONLY — the installer
         // is the sole daemon delivery (spawn + embedded removed), so there's
         // nothing for us to start if the service isn't running. DEBUG builds still
-        // spawn a dev daemon for ergonomics. See
-        // docs/runbook/privileged-service-and-updates-plan.md.
+        // spawn a dev daemon for ergonomics.
         // Release is attach-only; only DEBUG builds spawn a dev daemon. The const
         // (vs a #[cfg]) keeps the spawn code compiled — no dead-code churn — but
         // off at runtime in release.
@@ -484,11 +482,10 @@ fn extract_embedded_daemon(dir: &Path) -> Option<PathBuf> {
 }
 
 /// Probe the standard console port for an already-running machine-wide system
-/// service (Option A). Returns its port iff /healthz identifies it as
+/// service. Returns its port iff /healthz identifies it as
 /// service_mode "system" — the one daemon the shell attaches to. A dev/user
 /// daemon or a foreign process on :7400 is deliberately NOT matched, so the shell
-/// spawns its own instead (dev + pre-F3-installer behaviour). See
-/// docs/runbook/privileged-service-and-updates-plan.md.
+/// spawns its own instead, as dev builds and older installers do.
 async fn discover_system_service() -> Option<u16> {
     let st = probe_healthz(PORT_START).await;
     if st.running && st.service_mode == "system" {

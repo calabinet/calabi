@@ -16,7 +16,7 @@ import (
 )
 
 // directTransport is implemented by datapaths that can carry WireGuard over the
-// node's direct-path UDP socket (hole punching, MESH.4) as well as the relay.
+// node's direct-path UDP socket (hole punching) as well as the relay.
 // Optional: the Controller offers the transport to a datapath that accepts it and
 // otherwise changes nothing.
 type directTransport interface {
@@ -60,7 +60,7 @@ type Controller struct {
 	// outlives the Controller, like Reauth. nil = report none.
 	Tunnels *TunnelMeter
 	// ExitNode, if set, is the local exit-node selection (peer name or overlay
-	// IP) whose default route this node adopts (MESH.7b). Resolved against each
+	// IP) whose default route this node adopts. Resolved against each
 	// netmap; the datapath installs the full-tunnel routes only for that peer.
 	ExitNode string
 	// BlockIncoming refuses every inbound CONNECTION to this machine, whatever
@@ -82,6 +82,13 @@ type Controller struct {
 	// the relay along with the edge instead of leaving it at whichever facility
 	// measured fastest. Empty = pure latency within the preferred class.
 	PinnedHomeRegion string
+	// PlatformRelays says the coordinator is calabi.net — it was checked against
+	// the CA compiled into this client (trust.Platform). Only then does a relay
+	// the map asks to be checked the same way ("platform" trust) get dialed;
+	// against any other coordinator such a relay is left alone, because a
+	// self-hosted mesh must never trust that CA. Relays marked "system" or "pin"
+	// are checked that way whatever this says.
+	PlatformRelays bool
 	// Routes is this node's stance on the subnet routes peers advertise. The zero
 	// value refuses them all — callers resolve the user's setting and pass it in
 	// explicitly, so "nobody wired it up" fails closed rather than quietly
@@ -94,17 +101,17 @@ type Controller struct {
 
 	// disco is the per-session DISCO private key generated in Run; its public half
 	// rides registration (Params.DiscoKey) and the direct-path socket carries it
-	// for the hole-punching exchange (MESH.4). Zero if generation failed.
+	// for the hole-punching exchange. Zero if generation failed.
 	disco DiscoPrivateKey
 
 	// netmapSelf holds what each netmap says about THIS node: its overlay
 	// address, so the service self-check can dial the address peers use, and the
 	// coordinator's registry of its services, which is the only way it learns
-	// about ones a manager entered in the console (F3b/F4a).
+	// about ones a manager entered in the console.
 	netmapSelf
 
 	// healthGuard holds the last service self-check, so the machine's own :7400
-	// console can show it without going through the control plane (F3b).
+	// console can show it without going through the control plane.
 	healthGuard
 
 	// paramsMu guards the MUTABLE half of Params — Services and
@@ -125,7 +132,7 @@ type Controller struct {
 	peersMu  sync.Mutex
 	curPeers []Peer
 
-	// homeMu guards the home-relay selection (MESH.4 B2b): the DERP map from the
+	// homeMu guards the home-relay selection: the DERP map from the
 	// latest netmap, and the region this node measured as its closest relay. The
 	// home is reported with every endpoint report; the coordinator distributes it
 	// to peers as this node's derp_home.
@@ -228,7 +235,7 @@ func (c *Controller) Run(ctx context.Context) error {
 	c.Logger.Info("mesh node registered", "node_id", reg.NodeID, "overlay", reg.Overlay, "by_proof_alone", reg.Reauth)
 
 	// Open the direct-path UDP socket and advertise our candidate endpoints so
-	// peers can (from the probe slice on) reach us directly (MESH.4 B1/B2).
+	// peers can (from the probe slice on) reach us directly.
 	// Best-effort: if the socket can't open, we log and keep working over the relay
 	// — the existing relay datapath is untouched by this.
 	var ms *magicSock
@@ -244,11 +251,11 @@ func (c *Controller) Run(ctx context.Context) error {
 			// this one only moves it earlier in the LIFO order.
 			defer func() { stopSession(); ms.Close() }()
 			// DISCO prober: ping peers' candidate endpoints and record which reach
-			// them (MESH.4 B3).
+			// them.
 			prober = newDiscoProber(ms, c.Logger)
 			go prober.run(ctx, c.timing().DiscoProbe, c.peers)
 			// Hand the socket + prober to the datapath, so WireGuard traffic can
-			// take a validated direct path instead of the relay (MESH.4 B3-3). A
+			// take a validated direct path instead of the relay. A
 			// datapath that doesn't support it (the dry-run logger, test fakes) just
 			// isn't offered the transport and stays relay-only — as does this whole
 			// session if the socket above failed to open.
@@ -268,7 +275,7 @@ func (c *Controller) Run(ctx context.Context) error {
 	}
 
 	// Self-check the declared services and report what this machine actually
-	// observes (F3b). No-op when nothing is declared.
+	// observes. No-op when nothing is declared.
 	go c.serviceHealthLoop(ctx, reg.NodeID)
 	// The tunnels this daemon serves, for a self-hosted coordinator's phones.
 	// Relay-only sessions too: it needs the coordinator, not a direct path.
@@ -311,6 +318,7 @@ func (c *Controller) Run(ctx context.Context) error {
 			}
 		}
 		cfg.BlockIncoming = c.BlockIncoming
+		cfg.RelayPlatformTrust = c.PlatformRelays
 		if c.ExitNode != "" {
 			if cfg.ExitNode = ResolveExitNode(nm, c.ExitNode); cfg.ExitNode.IsZero() {
 				c.Logger.Warn("mesh: exit node not found in netmap; routing directly until it appears", "exit_node", c.ExitNode)
@@ -352,8 +360,8 @@ func (c *Controller) Run(ctx context.Context) error {
 		if c.DNS != nil {
 			c.DNS.SetRecords(dnsRecords(nm))
 		}
-		// Relay selection (MESH.4 B2). The DERP map lists the fleet; the node's own
-		// measurement decides which region is its home (B2b), and that region's STUN
+		// Relay selection. The DERP map lists the fleet; the node's own
+		// measurement decides which region is its home, and that region's STUN
 		// endpoint is where it asks for its reflexive address. Until the first
 		// measurement lands, fall back to the home the coordinator stamped, so a
 		// single-relay deployment behaves exactly as before.
@@ -572,8 +580,8 @@ func (c *Controller) getStunServer() netip.AddrPort {
 }
 
 // reportEndpoints uploads the node's current candidate endpoints: its local
-// interface addresses (B1) plus, when a STUN server is known, its reflexive
-// (NAT-mapped) address (B2). Best-effort and quiet on a cancelled context.
+// interface addresses plus, when a STUN server is known, its reflexive
+// (NAT-mapped) address. Best-effort and quiet on a cancelled context.
 func (c *Controller) reportEndpoints(ctx context.Context, nodeID int64, ms *magicSock) {
 	if ctx.Err() != nil {
 		return
@@ -672,7 +680,8 @@ func (c *Controller) wakeLoop(ctx context.Context, nodeID int64, ms *magicSock, 
 //
 // A desktop has no one to call this and relies on the timers; a phone's platform
 // calls it from its network callback (NWPathMonitor, ConnectivityManager), since
-// on a phone this is the common case, not the exception. Safe from any goroutine; never
+// on a phone this is the common case, not the exception.
+// Safe from any goroutine; never
 // blocks; changes that arrive before the session handles the first coalesce.
 func (c *Controller) NetworkChanged() {
 	select {

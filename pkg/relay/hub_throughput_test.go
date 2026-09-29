@@ -27,6 +27,26 @@ import (
 // deliberately LOW floor: loopback should manage hundreds of Mbit/s, so a floor
 // of 50 catches "something here is structurally slow" without turning into a
 // flaky benchmark on a loaded CI box.
+//
+// The sender PACES ITSELF against what the receiver has read, never more than
+// maxInFlight frames ahead. It used to write all 20,000 as fast as the socket
+// would take them and allow up to 2% to be shed, on the theory that more would
+// mean the writer could not keep up with the reader. What that measured was the
+// scheduler. Both sides of the destination's queue run at nearly the same rate
+// — the hub reading the sender, the writer feeding the receiver — so its depth
+// wanders; 512 slots are a few milliseconds at loopback speed, and whether it
+// overflowed was decided by whether the OS kept the writing side off a CPU for
+// longer than that. Unchanged code shed anywhere from 0 to 1,170 frames and
+// failed up to half its runs on a loaded 12-core box, at the same rate before
+// the rate limiter went into forward() as after; on two cores with -race, the
+// shape of a small CI runner, it shed a quarter of the stream or more, every
+// time (2026-09-28). A check that is red that often on correct code says
+// nothing when it goes red.
+//
+// Paced, the queue can never fill, so what is left to assert depends on the
+// code alone: every frame arrives, and at loopback speed. Shedding under
+// overload is pinned where it is deterministic, by a peer that never reads
+// (headofline_test.go).
 func TestRelayForwardingThroughput(t *testing.T) {
 	if testing.Short() {
 		t.Skip("throughput test")
@@ -35,6 +55,9 @@ func TestRelayForwardingThroughput(t *testing.T) {
 		packets = 20000
 		payload = 1280 // a WireGuard transport packet at the mesh's 1280 MTU
 		floor   = 50.0 // Mbit/s
+		// A quarter of the queue, so the frames sent and not yet read can never
+		// outnumber its slots, however the goroutines are scheduled.
+		maxInFlight = sendQueueDepth / 4
 	)
 
 	h := NewHub(slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError})), AuthConfig{})
@@ -58,58 +81,72 @@ func TestRelayForwardingThroughput(t *testing.T) {
 	receiver := dialFramed(t, ln.Addr().String(), keyB)
 	waitConnected(t, h, keyA)
 	waitConnected(t, h, keyB)
+	q := h.lookup(keyB).sendq
 
 	// Drain the receiver in its own goroutine: a receiver that stops reading is
-	// measuring its own back-pressure, not the hub.
-	var got atomic.Int64
+	// measuring its own back-pressure, not the hub. Each frame it reads wakes the
+	// sender, and it notes when the last one landed.
+	var frames, got, lastArrival atomic.Int64
+	progress := make(chan struct{}, 1)
 	done := make(chan struct{})
-	var once sync.Once
+	start := time.Now()
 	go func() {
-		defer once.Do(func() { close(done) })
-		for {
+		defer close(done)
+		for frames.Load() < packets {
 			_, p, err := meshproto.ReadDERPFrame(receiver)
 			if err != nil {
 				return
 			}
-			if got.Add(int64(len(p)-meshproto.KeyLen)) >= int64(packets)*payload {
-				return
+			got.Add(int64(len(p) - meshproto.KeyLen))
+			lastArrival.Store(int64(time.Since(start)))
+			frames.Add(1)
+			select {
+			case progress <- struct{}{}:
+			default: // the sender is already awake
 			}
 		}
 	}()
 
+	deadline := time.After(60 * time.Second)
 	body := make([]byte, payload)
-	start := time.Now()
 	for i := 0; i < packets; i++ {
+		for int64(i)-frames.Load() >= maxInFlight {
+			select {
+			case <-progress:
+			case <-deadline:
+				t.Fatalf("stalled: sent %d, received %d, shed %d", i, frames.Load(), q.Dropped())
+			}
+		}
 		if err := meshproto.WriteDERPFrame(sender, meshproto.DERPFrameSendPacket,
 			meshproto.EncodePacket(keyB, body)); err != nil {
 			t.Fatalf("send %d: %v", i, err)
 		}
 	}
-	// Stop when everything has arrived OR when arrivals stop. Waiting for the full
-	// byte count was wrong: this hub sheds on purpose (sendq.go), and a 20,000-frame
-	// blast at line rate can overrun a 512-slot queue during one scheduler hiccup —
-	// 35 frames of 20,000 in the run that caught this. The test passed for a while
-	// because that had not happened yet, which is the least useful kind of green.
-	deadline := time.After(60 * time.Second)
-	last, quiet := got.Load(), 0
+	// Everything should arrive. If some of it never will, stop once arrivals do,
+	// so the check below says how much was lost instead of the deadline saying
+	// only that something was.
+	last, quiet := frames.Load(), 0
 	for quiet < 4 {
 		select {
 		case <-done:
 			quiet = 4
 		case <-deadline:
-			t.Fatalf("stalled: relayed %d of %d bytes", got.Load(), int64(packets)*payload)
+			t.Fatalf("stalled: received %d of %d frames, shed %d", frames.Load(), packets, q.Dropped())
 		case <-time.After(100 * time.Millisecond):
-			if n := got.Load(); n == last {
+			if n := frames.Load(); n == last {
 				quiet++
 			} else {
 				last, quiet = n, 0
 			}
 		}
 	}
-	elapsed := time.Since(start)
+	// Timed to the last arrival, not to the end of the wait above. Dividing by a
+	// window that included the wait for silence is how runs that moved at ~750
+	// Mbit/s came to be reported as ~250.
+	elapsed := time.Duration(lastArrival.Load())
 
 	delivered := got.Load()
-	shed := h.lookup(keyB).sendq.Dropped()
+	shed := q.Dropped()
 	mbps := float64(delivered) * 8 / elapsed.Seconds() / 1e6
 	t.Logf("relayed %d of %d packets (%d B each) in %v — %.1f Mbit/s, %.0f pkt/s, %d shed",
 		delivered/payload, packets, payload, elapsed.Round(time.Millisecond), mbps,
@@ -118,12 +155,13 @@ func TestRelayForwardingThroughput(t *testing.T) {
 		t.Errorf("forwarding throughput %.1f Mbit/s is below the %.0f Mbit/s floor — on LOOPBACK, "+
 			"which means the cost is in this code, not the network", mbps, floor)
 	}
-	// Shedding a little under a full-rate blast is the depth backstop doing its
-	// job; shedding a lot would mean the writer cannot keep up with the reader on
-	// loopback, which would be a defect in the forwarding path itself.
-	if shed > uint64(packets)/50 {
-		t.Errorf("shed %d of %d frames on loopback (>2%%) — the writer is not keeping up with the reader",
-			shed, packets)
+	// The queue had room for this whole stream, so no frame of it was the
+	// backstop's to shed. Counted by what ARRIVED rather than by Dropped(): a
+	// frame the forwarding path loses without counting it is lost all the same.
+	if n := frames.Load(); n != packets {
+		t.Errorf("delivered %d of %d frames (%d counted as shed) with never more than %d in flight — "+
+			"the %d-slot queue had room for every one, so the forwarding path lost them",
+			n, packets, shed, maxInFlight, sendQueueDepth)
 	}
 }
 
@@ -184,6 +222,11 @@ func TestRelayForwardingThroughputWithLatency(t *testing.T) {
 // this test failed when the queue landed. What is worth measuring here is what
 // gets THROUGH, so the run ends when the stream goes quiet after the sender has
 // finished.
+//
+// And it is timed to the last frame that arrived, not to when the quiet was
+// noticed. With the wait for silence in the denominator, every run that shed a
+// frame reported about 30 Mbit/s — at 20 ms one-way, the very collapse this
+// test is here to rule out — while runs that shed nothing showed 450 to 630.
 func relayThroughput(t *testing.T, packets, payload int, oneWay time.Duration) (float64, uint64) {
 	t.Helper()
 	h := NewHub(slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError})), AuthConfig{})
@@ -208,9 +251,10 @@ func relayThroughput(t *testing.T, packets, payload int, oneWay time.Duration) (
 	waitConnected(t, h, keyA)
 	waitConnected(t, h, keyB)
 
-	var got atomic.Int64
+	var got, lastArrival atomic.Int64
 	done := make(chan struct{})
 	var once sync.Once
+	start := time.Now()
 	go func() {
 		defer once.Do(func() { close(done) })
 		for {
@@ -218,6 +262,7 @@ func relayThroughput(t *testing.T, packets, payload int, oneWay time.Duration) (
 			if err != nil {
 				return
 			}
+			lastArrival.Store(int64(time.Since(start)))
 			if got.Add(int64(len(p)-meshproto.KeyLen)) >= int64(packets)*int64(payload) {
 				return
 			}
@@ -225,7 +270,6 @@ func relayThroughput(t *testing.T, packets, payload int, oneWay time.Duration) (
 	}()
 
 	body := make([]byte, payload)
-	start := time.Now()
 	sent := make(chan struct{})
 	go func() {
 		defer close(sent)
@@ -262,7 +306,7 @@ func relayThroughput(t *testing.T, packets, payload int, oneWay time.Duration) (
 			}
 		}
 	}
-	elapsed := time.Since(start)
+	elapsed := time.Duration(lastArrival.Load())
 	var dropped uint64
 	if c := h.lookup(keyB); c != nil {
 		dropped = c.sendq.Dropped()

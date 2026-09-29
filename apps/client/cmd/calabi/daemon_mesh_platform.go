@@ -11,7 +11,7 @@
 // identity-svc to the owning org, which IS the meshnet (one org = one meshnet).
 // So no separate key is minted — the same credential that authenticates the edge
 // session and the /v1/mesh/enrollment fetch also enrolls the node. coord enforces
-// the per-plan node cap at registration; the web console (MESH.8b/8e) is where a
+// the per-plan node cap at registration; the web console is where a
 // manager disables a node or edits ACLs. This file is the daemon's side: fetch +
 // reconcile + surface status on :7400. Platform deployments only.
 package main
@@ -66,8 +66,8 @@ type meshLeaseStarter func(ctx context.Context, cfg meshConfig, authKey func() s
 // meshAdvertise is the node's optional subnet-router / exit-node role, set from
 // the daemon's flags/env (see runDaemon). Zero value = a plain member node.
 type meshAdvertise struct {
-	Routes   []string // subnet-router CIDRs this node advertises (MESH.7a)
-	ExitNode bool     // advertise this node AS an exit node (MESH.7b)
+	Routes   []string // subnet-router CIDRs this node advertises
+	ExitNode bool     // advertise this node AS an exit node
 	ExitPeer string   // route THIS node's default traffic through this exit peer
 	// AliasRoutes is IGNORED, as is the meshConfig.AliasRoutes it is copied into:
 	// every advertised subnet is published under a stand-in prefix wherever the

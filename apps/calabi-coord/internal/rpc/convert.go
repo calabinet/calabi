@@ -29,7 +29,7 @@ func toProtoNetMap(nm *core.NetMap) *meshpb.NetMap {
 		}
 		out.PacketFilter = append(out.PacketFilter, fr)
 	}
-	// The node's own registered services, so it can self-check them (F3b). Self
+	// The node's own registered services, so it can self-check them. Self
 	// already carries them — NetMapFor swaps in the enriched copy so an "svc:"
 	// rule about self matches like it does for peers — they simply never rode
 	// the wire before, which left every console-authored service permanently
@@ -69,12 +69,12 @@ func toProtoPeer(n *core.Node) *meshpb.Peer {
 		Os:          n.OS,
 	}
 	// A peer's traffic is routed to it by its overlay /32 plus any approved subnet
-	// routes it advertises (MESH.7) — the mesh routes those CIDRs to this node.
+	// routes it advertises — the mesh routes those CIDRs to this node.
 	if n.Overlay.IsValid() {
 		p.AllowedIps = append(p.AllowedIps, n.Overlay.String()+"/32")
 	}
 	// Only APPROVED routes are routed to this node: an unapproved claim must not
-	// pull anyone's traffic here (MESH.7 + admin approval).
+	// pull anyone's traffic here (admin approval).
 	//
 	// PublishedRoutes, not ApprovedRoutes: a route with a subnet alias rides under
 	// the ALIAS and never its real CIDR. Peers must not learn the real one — it is
@@ -109,11 +109,15 @@ func toProtoDERPMap(m core.DERPMap) *meshpb.DERPMap {
 	for _, r := range m.Regions {
 		pr := &meshpb.DERPRegion{Code: r.Code}
 		for _, node := range r.Nodes {
-			pr.Nodes = append(pr.Nodes, &meshpb.DERPNode{
+			pn := &meshpb.DERPNode{
 				HostName: node.HostName,
 				DerpPort: int32(node.DERPPort),
 				StunPort: int32(node.STUNPort),
-			})
+			}
+			if node.TLS.Enabled() {
+				pn.Tls = &meshpb.DERPNodeTLS{Trust: node.TLS.Trust, Pins: append([]string(nil), node.TLS.Pins...)}
+			}
+			pr.Nodes = append(pr.Nodes, pn)
 		}
 		out.Regions = append(out.Regions, pr)
 	}

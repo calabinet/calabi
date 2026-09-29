@@ -22,6 +22,7 @@ import (
 
 	"github.com/calabinet/calabi/apps/client/internal/creds"
 	"github.com/calabinet/calabi/apps/client/internal/mesh"
+	"github.com/calabinet/calabi/apps/client/internal/trust"
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
@@ -29,7 +30,7 @@ import (
 // subsystem. Available in BOTH deployments (mesh is the open data plane).
 //
 // ⚠ `mesh up` needs a tun device + privileges (wintun.dll on Windows) and has
-// NOT been validated end to end — MESH.2.
+// NOT been validated end to end.
 // It's wired for the two-machine ping-over-DERP acceptance, run on real hosts.
 func runMesh(args []string) int {
 	if len(args) == 0 {
@@ -189,8 +190,9 @@ func runMeshUp(args []string) int {
 			AliasRoutes:       aliased,
 			DeviceFingerprint: resolveFingerprint(logger),
 		},
-		ExitNode: *exitNode,
-		Logger:   logger,
+		ExitNode:       *exitNode,
+		PlatformRelays: coordT.Mode == trust.Platform,
+		Logger:         logger,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -215,7 +217,7 @@ func defaultNodeName() string {
 // deserves. Both mesh entry points — foreground `mesh up` and the daemon
 // runner — go through here so the two can't drift apart.
 //
-// Off Linux the OS integration simply isn't wired (MESH.6).
+// Off Linux the OS integration simply isn't wired.
 // That is the EXPECTED state on Windows and macOS, so warning about it on
 // every single start reads as a fault and keeps advertising a feature we no
 // longer offer. A failure on a platform that does support it is a different

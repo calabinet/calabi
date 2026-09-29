@@ -95,8 +95,8 @@ type WGDatapath struct {
 	// it, the tun reader waits on it, SetConfig re-rates it from each netmap.
 	// Held here because all three need the same one (relayrate.go).
 	relayMeter *relayMeter
-	// filter drops inbound packets the meshnet's access rules don't allow
-	// (MESH.5b). Installed on the tun; updated from every netmap.
+	// filter drops inbound packets the meshnet's access rules don't allow.
+	// Installed on the tun; updated from every netmap.
 	filter *PacketFilter
 	uapi   net.Listener // WireGuard UAPI socket (for `wg show`); nil off Linux
 	// routing points the host's addresses and routes at the tun: this process's
@@ -139,7 +139,7 @@ type WGDatapath struct {
 	// SetConfig goroutine only.
 	curDroppedFP string
 
-	// Exit-node (MESH.7b) state, all touched only on SetConfig's goroutine.
+	// Exit-node state, all touched only on SetConfig's goroutine.
 	// bypassHosts are the control-plane endpoints (coord + relay, host:port) that
 	// MUST keep flowing over the physical link when a full-tunnel exit node is
 	// selected — otherwise WireGuard's own transport to the relay would loop back
@@ -292,7 +292,7 @@ var _ directTransport = (*WGDatapath)(nil)
 // socket + the prober that validates paths over it) into the running datapath.
 // The control-plane loop owns both — they exist only once a session is up — so
 // this is a seam, not a constructor argument: a datapath with nothing attached is
-// exactly the relay-only datapath that shipped in MESH.2.
+// exactly the relay-only datapath that shipped.
 func (d *WGDatapath) attachDirect(ms *magicSock, paths pathFinder) {
 	d.bind.attachDirect(ms, paths)
 	d.logger.Info("mesh direct transport attached (hole punching active)", "port", ms.LocalPort())
@@ -326,7 +326,8 @@ func NewWGDatapath(priv PrivateKey, relayAddr string, mtu int, logger *slog.Logg
 
 // NewWGDatapathOnTUN brings the datapath up on a tun device the platform already
 // opened, with the platform also owning the routes: a phone app may neither
-// create a tun nor touch the routing table, and gets both from its VPN API. The datapath takes ownership
+// create a tun nor touch the routing table, and gets both from its VPN API.
+// The datapath takes ownership
 // of tunDev: it is closed if bring-up fails, and by Close.
 func NewWGDatapathOnTUN(tunDev tun.Device, routing Routing, priv PrivateKey, relayAddr string, logger *slog.Logger) (*WGDatapath, error) {
 	if routing == nil {
@@ -357,7 +358,7 @@ func newWGDatapath(tunDev tun.Device, routing Routing, priv PrivateKey, relayAdd
 	bind := newMeshBind(self, meter, logger)
 	// The relay pool starts as the single bootstrap link this node was configured
 	// with; once the netmap arrives it also links to the relays its peers are homed
-	// at (MESH.4 B2b). Every link feeds the same inbound queue.
+	// at. Every link feeds the same inbound queue.
 	relays := newRelayPool(self, [meshproto.KeyLen]byte(priv), func(src meshproto.NodeKey, ct []byte) {
 		bind.deliver(src, ct)
 	}, logger)
@@ -369,8 +370,8 @@ func newWGDatapath(tunDev tun.Device, routing Routing, priv PrivateKey, relayAdd
 		// paths can carry traffic, and before the netmap there are no peers.
 		logger.Info("mesh: no relay configured; the home relay will come from the coordinator's relay map")
 	} else if err := relays.DialHome(context.Background(), relayAddr); err != nil {
-		// Not fatal any more. Hole punching (MESH.4) means a node without a relay
-		// link is degraded, not unreachable; and under R0' a relay that requires
+		// Not fatal any more. Hole punching means a node without a relay
+		// link is degraded, not unreachable; and a relay that requires
 		// authorization will refuse this very first dial, because the grant only
 		// arrives with the netmap moments later. The send path re-dials the home
 		// address on its own, by which point SetConfig has supplied the grant.
@@ -512,7 +513,11 @@ func (d *WGDatapath) SetConfig(cfg WGConfig) error {
 			"blocked", cfg.BlockIncoming)
 	}
 	// Keep the relay links aligned with the map: our own home relay (where peers
-	// reach us) plus a warm link to every relay a peer is homed at (MESH.4 B2b).
+	// reach us) plus a warm link to every relay a peer is homed at.
+	// First of all, how each relay is reached: the grant below may re-dial the
+	// home relay at once, and that dial must already go the way this map says —
+	// over TLS for a relay it marks TLS (relaytls.go).
+	d.relays.SetTransports(cfg.RelayTLS, cfg.RelayPlatformTrust)
 	// Before Reconcile: the dials it starts must already carry the current
 	// authorization, or a relay that requires one would reject them.
 	d.relays.SetGrant(cfg.RelayGrant)
@@ -587,7 +592,7 @@ func (d *WGDatapath) SetConfig(cfg WGConfig) error {
 		}
 	}
 
-	// MESH.7a: a subnet-router peer's advertised CIDRs arrive as allowed-ips
+	// a subnet-router peer's advertised CIDRs arrive as allowed-ips
 	// outside the overlay range; add an OS route for each at the tun so
 	// overlay-external destinations flow into WireGuard. Default routes are
 	// handled separately (exit node, below) — never as a plain tun route. An
@@ -793,7 +798,7 @@ func (d *WGDatapath) applyExitNode(cfg WGConfig) {
 		d.curExit = meshproto.NodeKey{} // force a retry on the next netmap
 		return
 	}
-	// privateV4Blocks stay on the physical link (MESH.7b "allow LAN access") so
+	// privateV4Blocks stay on the physical link ("allow LAN access") so
 	// full-tunnelling never cuts off the local network — directly-connected AND
 	// one-hop-via-gateway private destinations. More-specific subnet-router routes
 	// still win over these /8–/16 carves, so mesh-reachable remote subnets keep

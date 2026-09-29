@@ -15,8 +15,8 @@ import (
 //
 // An org credential names a meshnet, not a device, so it cannot be what says "I
 // am node 42": with only that, any member could present their own key with a
-// colleague's node key and be treated as that device (security audit 1-C,
-// same-org residual). Identity now comes from the node private key, proven ONCE
+// colleague's node key and be treated as that device (same-org residual).
+// Identity now comes from the node private key, proven ONCE
 // per session at registration against a one-time challenge. The coordinator then
 // hands back a session token, and that token - not an org key - is what the
 // node-scoped calls are authorized by.
@@ -36,8 +36,8 @@ const (
 	maxPendingChallenges = 4096
 	// maxPendingPerMeshnet caps how much of that table ONE org may hold.
 	//
-	// Without it the global cap was a cross-tenant weapon (audit finding
-	// MESH-2): any account could ask for 4096 challenges, never answer them, and
+	// Without it the global cap was a cross-tenant weapon:
+	// any account could ask for 4096 challenges, never answer them, and
 	// every other org's registration failed until they expired — refilled every
 	// 30 seconds for as long as the attacker cared to. Since v2 made
 	// registration the only way to get a session, and nodes re-register whenever

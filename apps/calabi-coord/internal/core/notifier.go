@@ -10,8 +10,8 @@ import "sync"
 // Deployment-agnostic: the same mechanism serves the SaaS and the self-hosted
 // coordinator. (A multi-instance SaaS deployment will later back Bump with a
 // NATS fan-out so a change on one coord instance reaches streams pinned to
-// another; MESH.8. Single-instance — including every self-hosted coordinator —
-// needs only this in-process notifier.)
+// another. Single-instance — including every self-hosted
+// coordinator — needs only this in-process notifier.)
 type Notifier struct {
 	mu sync.Mutex
 	// nextSub hands each subscription its own key. Keying by NODE id instead
@@ -19,8 +19,8 @@ type Notifier struct {
 	// for a moment: the reconnect that Presence is explicitly built to tolerate
 	// opens the new stream before the old one's teardown runs. The old stream's
 	// unsubscribe then deleted the map entry the NEW stream had just installed,
-	// leaving a live stream that Bump could no longer reach (audit finding
-	// MESH-11). It kept serving the node its stale netmap — including an ACL an
+	// leaving a live stream that Bump could no longer reach.
+	// It kept serving the node its stale netmap — including an ACL an
 	// admin had just tightened — until the 15-minute grant refresh happened to
 	// re-push, and a node could provoke that state deliberately.
 	nextSub int64

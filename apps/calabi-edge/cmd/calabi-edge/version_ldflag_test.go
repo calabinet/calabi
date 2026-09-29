@@ -22,7 +22,7 @@ import (
 // VAR (a const is compiled in, not linked), and the name did not match the flag
 // anyway. `go build -X main.version=...` names a symbol that does not exist, and
 // the linker accepts that SILENTLY. Every release therefore shipped an edge with
-// no version in it at all, while reporting an-sprint-5 label to the control
+// no version in it at all, while reporting that hard-coded label to the control
 // plane (wire_platform.go) and into its own metrics (observability.New).
 //
 // It survived a year of releases because nothing checked that the flag LANDED —

@@ -105,7 +105,7 @@ func TestStateReconcileToTunnelIDs(t *testing.T) {
 	// active rows the daemon auto-claimed (have tunnel_id)
 	s.AddActiveTunnel("px-keep", 10, "keep", "http", "127.0.0.1:9000", "http://k.localtest.me")
 	s.AddActiveTunnel("px-stale", 20, "stale", "http", "127.0.0.1:9001", "http://s.localtest.me")
-	// pending row (Phase C console-pushed but not yet claimed)
+	// pending row (console-pushed but not yet claimed)
 	s.UpsertPending(30, "pending-keep", "http", "127.0.0.1:9002", "p.localtest.me", 0)
 	s.UpsertPending(40, "pending-stale", "http", "127.0.0.1:9003", "ps.localtest.me", 0)
 	// CLI-launched row with tunnel_id=0 — must survive a reconcile pass

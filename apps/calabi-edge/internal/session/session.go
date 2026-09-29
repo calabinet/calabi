@@ -54,7 +54,7 @@ type Proxy struct {
 
 	// ClaimTunnelID, when non-zero, signals that this NEW_PROXY is the
 	// client's claim on an already-existing tunnel-svc row (created by
-	// the console with edge_node_id=0 — see Phase D). The persister uses
+	// the console with edge_node_id=0). The persister uses
 	// this to update the existing row in place instead of inserting a
 	// duplicate. After OnProxyOpened succeeds, TunnelID is set to the
 	// same value (claimed rows are addressable by the same id afterwards).
@@ -137,7 +137,7 @@ type Session struct {
 	ClientID    string
 	// DeviceID is the identity-svc clients.id the client announced in
 	// its AUTH frame. 0 = unknown. Used
-	// for live-presence reporting to identity-svc (Phase A); not a
+	// for live-presence reporting to identity-svc; not a
 	// security boundary — the bearer token in AUTH is authoritative.
 	DeviceID int64
 
@@ -195,7 +195,7 @@ type Session struct {
 	tunnelPeak      atomic.Int64
 	orgLimiter      atomic.Pointer[ratelimit.Limiter]
 
-	// connGuard holds the per-org connection limiters (Phase A anti-abuse,
+	// connGuard holds the per-org connection limiters (anti-abuse,
 	// 2026-06-11): concurrent-connection cap + new-connection rate gates.
 	// nil (the zero value) = no connection limiting for this session
 	// (dev / standalone / static-token tenants). Installed at handshake

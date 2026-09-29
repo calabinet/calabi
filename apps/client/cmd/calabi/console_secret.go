@@ -61,7 +61,7 @@ func resolveConsoleSecret() (secret, source, path string, err error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", "", "", err
 	}
-	// Best-effort, like every other write into this directory (audit ACL-1).
+	// Best-effort, like every other write into this directory.
 	defer func() { _ = creds.SecureDataDir() }()
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, []byte(secret+"\n"), 0o600); err != nil {

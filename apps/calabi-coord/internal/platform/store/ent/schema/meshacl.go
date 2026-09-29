@@ -10,7 +10,7 @@ import (
 )
 
 // MeshACL is one meshnet's access-control document — the persistent backing for
-// the console ACL editor (MESH.8e-2). calabi-coord owns this table (same call as
+// the console ACL editor. calabi-coord owns this table (same call as
 // mesh_nodes in 8c: the mesh data plane stays self-contained). One row per
 // meshnet; the document is stored as JSON text so it is portable across sqlite
 // (dev/test) and postgres (prod) and forward-compatible if the ACL model grows.

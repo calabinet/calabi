@@ -46,9 +46,9 @@ type RegisterParams struct {
 	// coordinator knows the caller is this device and not merely a member of its
 	// org who read NodeKey out of a netmap.
 	NodePrivate PrivateKey
-	DiscoKey    meshproto.DiscoKey // optional until MESH.4
+	DiscoKey    meshproto.DiscoKey // optional
 	Name        string
-	// AdvertiseRoutes are subnet-router CIDRs this node offers to forward (MESH.7).
+	// AdvertiseRoutes are subnet-router CIDRs this node offers to forward.
 	AdvertiseRoutes []netip.Prefix
 	// AliasRoutes are the AdvertiseRoutes this node asks to be published under a
 	// unique stand-in prefix: all of its subnets, unless this host cannot install
@@ -247,7 +247,7 @@ func (c *CoordClient) attachProof(ctx context.Context, req *meshpb.RegisterNodeR
 }
 
 // ReportEndpoints uploads the node's freshly discovered candidate endpoints so
-// peers can attempt direct paths to it (MESH.4), together with the relay region
+// peers can attempt direct paths to it, together with the relay region
 // it measured as closest (homeRegion; "" = not measured yet, keep the current
 // home). Endpoints are host:port; the coordinator stores both and re-pushes
 // affected netmaps.

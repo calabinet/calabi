@@ -7,7 +7,8 @@
 // — as a boot-start service. Same binary, one daemon, both data planes.
 //
 // Compiled into both deployments (mesh is the open data plane). Needs a tun device
-// + privileges, like `calabi mesh up`; the datapath's runtime is verified in
+// + privileges, like `calabi mesh up`; the datapath's runtime is verified by a
+// two-machine acceptance run.
 package main
 
 import (
@@ -36,7 +37,8 @@ type meshConfig struct {
 	Coord   string `yaml:"coord,omitempty"`    // coordinator host:port (prod: your bff-console entrypoint)
 	Relay   string `yaml:"relay,omitempty"`    // relay host:port to start on; optional — else the coordinator's relay map decides
 	AuthKey string `yaml:"auth_key,omitempty"` // tk_ key (platform) or pre-shared key (self-hosted)
-	// Trust, Pins and CAFile say how the coordinator's certificate is checked: trust is "system", "pin"
+	// Trust, Pins and CAFile say how the coordinator's certificate is checked:
+	// trust is "system", "pin"
 	// (with pins), "ca" (with ca_file), "plaintext" or "platform". Unset, the
 	// daemon decides; see coordTrust.
 	Trust  string   `yaml:"trust,omitempty"`
@@ -47,7 +49,7 @@ type meshConfig struct {
 	PlatformCoord bool   `yaml:"-"`
 	Name          string `yaml:"name,omitempty"`     // node name for MagicDNS; defaults to hostname
 	KeyFile       string `yaml:"key_file,omitempty"` // WireGuard private key path; default per-OS config dir
-	// AdvertiseRoutes are subnet-router CIDRs this node offers to forward (MESH.7),
+	// AdvertiseRoutes are subnet-router CIDRs this node offers to forward,
 	// e.g. ["192.168.1.0/24"]. Enables local forwarding + NAT on Linux.
 	AdvertiseRoutes []string `yaml:"advertise_routes,omitempty"`
 	// AliasRoutes is IGNORED. Every advertised route is now published under a
@@ -62,7 +64,7 @@ type meshConfig struct {
 	// that gets confirmed.
 	MTU int `yaml:"mtu,omitempty"`
 	// AdvertiseExitNode offers this node as an exit node (forward peers' default
-	// route to the internet) — sugar for advertising 0.0.0.0/0 (MESH.7b).
+	// route to the internet) — sugar for advertising 0.0.0.0/0.
 	AdvertiseExitNode bool `yaml:"advertise_exit_node,omitempty"`
 	// ExitNode routes THIS node's default traffic through the named exit-node peer
 	// (name or overlay IP). Opt-in: an advertised exit node is never used unless set.
@@ -78,7 +80,7 @@ type meshConfig struct {
 	// benefit we had stopped promising. Field report 2026-09-09.
 	//
 	// Left as a switch rather than deleted: the implementation is fine, the
-	// product decision is what changed, and A1 (split-horizon DNS) will want it.
+	// product decision is what changed, and split-horizon DNS will want it.
 	MagicDNS bool `yaml:"magic_dns,omitempty"`
 	// HomePreference biases mesh relay-home selection to match the edge affinity,
 	// so "use my node" moves BOTH the edge egress and the relay home ("own" =
@@ -87,7 +89,7 @@ type meshConfig struct {
 	// (no platform-vs-own distinction), hence yaml:"-" — it's never a file knob.
 	HomePreference string `yaml:"-"`
 	// AcceptRoutes decides whether this node installs the subnet routes its PEERS
-	// advertise (the consumer side of MESH.7). nil = not configured, which the
+	// advertise (the consumer side). nil = not configured, which the
 	// daemon resolves once at startup and remembers; see resolveAcceptRoutes.
 	// Advertising is the publisher's call and approval the admin's — this is the
 	// receiving machine's, because the route lands in ITS kernel routing table.
@@ -114,7 +116,7 @@ type meshConfig struct {
 	// A DECLARATION, not an authorization: the coordinator records each entry as
 	// pending and an admin confirms it in the console before any ACL "svc:" rule
 	// matches. Written by a person (or by IaC), never discovered by scanning the
-	// machine —
+	// machine.
 	Services []meshServiceDecl `yaml:"services,omitempty"`
 }
 
@@ -175,7 +177,8 @@ type meshRunner struct {
 	reauth *mesh.ReauthState
 
 	// tunnels, when set, are the tunnels this daemon serves, reported to a
-	// self-hosted coordinator for the meshnet's phones. Only the local daemon sets
+	// self-hosted coordinator for the meshnet's phones.
+	// Only the local daemon sets
 	// it; it outlives each session like reauth. A platform coordinator refuses
 	// the report and the session stops sending it.
 	tunnels *mesh.TunnelMeter
@@ -482,7 +485,10 @@ func (r *meshRunner) runControlPlane(ctx context.Context, data *meshDataPlane) e
 		PinnedHomeRegion: r.cfg.PinnedHomeRegion,
 		Routes:           r.routePolicy(),
 		BlockIncoming:    r.cfg.BlockIncoming,
-		Logger:           r.logger,
+		// Relays are checked the way this coordinator was: calabi.net's CA for
+		// calabi.net only (mesh.Controller.PlatformRelays).
+		PlatformRelays: t.Mode == trust.Platform,
+		Logger:         r.logger,
 	}
 	// Retained so the status endpoint can read the service self-check. Cleared
 	// on the way out: a stale controller would keep serving the observations of
@@ -724,7 +730,7 @@ func (r *meshRunner) MeshDown() error {
 	return nil
 }
 
-// --- consumer-side route policy (MESH.7 receiving end) ---------------------
+// --- consumer-side route policy (receiving end) ---------------------
 
 // routePolicy resolves this node's stance on peers' advertised subnet routes.
 // Excludes that don't parse are dropped with a warning rather than failing the

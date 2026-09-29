@@ -30,14 +30,14 @@ fn main() {
 /// each distinct daemon build to its own filename (a new desktop release ships a
 /// new daemon → new sig → fresh extract, never a stale cached copy).
 fn embed_daemon() {
-    // The daemon is NO LONGER baked into the desktop exe (Option A / F3 "spawn +
-    // embedded removal"): the installer delivers it — a .pkg on macOS, and the
-    // NSIS installer ships calabi.exe on Windows — and the app ATTACHES to the
-    // machine-wide system service. We still write an EMPTY OUT_DIR payload (+ sig)
-    // so the include_bytes! in daemon.rs compiles; empty ⇒ extract_embedded_daemon
-    // returns None ⇒ resolve_binary falls back to a sibling/PATH calabi, used only
-    // by DEBUG dev builds. This drops ~20MB of duplicated daemon from the exe.
-    // See docs/runbook/privileged-service-and-updates-plan.md.
+    // The daemon is NO LONGER baked into the desktop exe (the "spawn + embedded
+    // removal" step): the installer delivers it — a .pkg on macOS,
+    // and the NSIS installer ships calabi.exe on Windows — and the app ATTACHES to
+    // the machine-wide system service. We still write an EMPTY OUT_DIR payload
+    // (+ sig) so the include_bytes! in daemon.rs compiles; empty ⇒
+    // extract_embedded_daemon returns None ⇒ resolve_binary falls back to a
+    // sibling/PATH calabi, used only by DEBUG dev builds. This drops ~20MB of
+    // duplicated daemon from the exe.
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("embedded-daemon");
     std::fs::write(&out, b"").expect("write OUT_DIR/embedded-daemon");
     println!("cargo:rustc-env=CALABI_DAEMON_SIG=none");

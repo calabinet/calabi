@@ -52,7 +52,7 @@ func LoadEffective(path string) (cfg Config, notes Notes, err error) {
 	// Standalone normalization: a self-hosted (mode=standalone) edge has no
 	// control plane, so its control-plane addresses are cleared; a BYOI edge
 	// (bff-edge cert) is refused standalone and kept on platform semantics.
-	// See NormalizeForMode +
+	// See NormalizeForMode.
 	cfg, notes.BYOIRefused = cfg.NormalizeForMode()
 	// Who this node is, from its own mTLS certificate — the same certificate
 	// bff-edge authenticates it by, so the two cannot disagree. Runs here, in
@@ -92,7 +92,7 @@ func LoadEffective(path string) (cfg Config, notes Notes, err error) {
 	// CALABI_ENV=production: none of the dev fallbacks (no control plane where
 	// one was meant, an ungranted platform relay) may be active. Checked AFTER NormalizeForMode so "no control plane" reads as the
 	// stated standalone intent rather than a missing dependency. See
-	// prodguard.go + F0.2.
+	// prodguard.go.
 	if err := cfg.ValidateProductionPosture(); err != nil {
 		return Config{}, notes, err
 	}

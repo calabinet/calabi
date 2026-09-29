@@ -331,7 +331,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/inspect/captures", s.handleInspectCaptures)
 	mux.HandleFunc("POST /v1/inspect/replay", s.requireLocalToken(s.handleInspectReplay))
 
-	//sticky: dismiss the edge-switch banner. The current edge_switch
+	// sticky: dismiss the edge-switch banner. The current edge_switch
 	// payload sits in status.State; the SPA shows a yellow Alert when
 	// snapshot.edge_switch is non-null. Clicking close calls this
 	// endpoint, daemon clears the payload, the next snapshot poll has
@@ -366,7 +366,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	// page. Read open (loopback bind). `down` is a guarded LOCAL pause (until
 	// daemon restart); it is NOT agent-blocked because mesh participation is
 	// data-plane, not identity — same posture as edge-region/affinity. The
-	// org-wide kill switch is the web console's node-disable (MESH.8b).
+	// org-wide kill switch is the web console's node-disable.
 	mux.HandleFunc("GET /v1/mesh", s.handleMesh)
 	mux.HandleFunc("POST /v1/mesh/down", s.requireLocalToken(s.handleMeshDown))
 	mux.HandleFunc("POST /v1/mesh/up", s.requireLocalToken(s.handleMeshUp))
@@ -768,7 +768,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 // the user clicked "退出登录", which is the opposite of the user's
 // intent. OnLogout tears down the in-flight edge session so tunnels
 // and presence go offline server-side immediately (same root cause
-// as's Org-switch fix — the control loop blocks on a raw TCP
+// as the Org-switch fix — the control loop blocks on a raw TCP
 // read that doesn't honour ctx; only closing the mux unblocks it).
 func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	// Fire-and-forget upstream — if the call fails (offline, identity-
@@ -1525,7 +1525,8 @@ func resolveBearer(agentMode bool) string {
 // machine that cannot reach calabi.net — someone who only ever connects to
 // their own server, or a network that blocks it — got "can't reach the Calabi
 // server" instead of the sign-in page, and with it no way to the
-// "connect to a self-hosted server" entry that lives there. A stored refresh token
+// "connect to a self-hosted server" entry that lives there.
+// A stored refresh token
 // counts as a credential: the proxy can turn it into an access token.
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	if resolveBearer(s.cfg.AgentMode) == "" {

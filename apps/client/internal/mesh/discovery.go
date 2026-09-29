@@ -7,7 +7,7 @@ import (
 )
 
 // filterCandidateIPs reduces a host's raw interface addresses to the ones worth
-// advertising as direct endpoints (MESH.4): it drops loopback, link-local,
+// advertising as direct endpoints: it drops loopback, link-local,
 // multicast, and unspecified addresses, plus anything inside the mesh overlay
 // range (100.64.0.0/10) — the tun's own address is reached THROUGH the mesh, not
 // a direct path to it — and de-dupes. Private/LAN addresses (RFC1918, ULA) are

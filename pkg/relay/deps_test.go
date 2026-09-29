@@ -39,7 +39,7 @@ func TestRelayDepsStayMinimal(t *testing.T) {
 		}
 		mod := fields[0]
 		if strings.HasPrefix(mod, "github.com/calabinet/calabi/") && !allowed[mod] {
-			t.Errorf("pkg/relay must not depend on %q — the relay forwards ciphertext and must not link edge / control-plane code (see edge-relay-merge-plan.md §二). If this is truly intended, update the allow-list AND reconsider the merge isolation invariant.", mod)
+			t.Errorf("pkg/relay must not depend on %q — the relay forwards ciphertext and must not link edge / control-plane code. If this is truly intended, update the allow-list AND reconsider the merge isolation invariant.", mod)
 		}
 	}
 }

@@ -7,9 +7,9 @@ import (
 )
 
 // perOrgDERP serves a different directory to each meshnet — what the real source
-// does once orgs can register relays of their own (R2). Until then StaticDERP
-// ignores the meshnet and every org sees the same map, which is why the existing
-// test suite is unchanged by R1.
+// does once orgs register relays of their own. StaticDERP ignores the
+// meshnet and every org sees the same map, which is why adding the meshnet
+// parameter left the rest of the tests unchanged.
 type perOrgDERP map[MeshnetID]DERPMap
 
 func (p perOrgDERP) DERPMap(_ context.Context, t MeshnetID) (DERPMap, error) {

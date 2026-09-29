@@ -31,7 +31,7 @@ type Identity struct {
 // Authenticator resolves a node's auth key to its Identity, and says later
 // whether an enrolled node may still come back without it.
 //
-// Platform build (MESH.1+): calls identity-svc to verify a tk_ auth key and
+// Platform build: calls identity-svc to verify a tk_ auth key and
 // map it to the acting org. Self-hosted build: a StaticAuth backed by the
 // coordinator's config file. The interface keeps the RPC layer deployment-agnostic.
 type Authenticator interface {

@@ -134,7 +134,8 @@ type Config struct {
 	Tunnel TunnelService `yaml:"tunnel"`
 	Mesh   MeshService   `yaml:"mesh"`
 
-	// CoordPubKey / CoordPubKeyFile name the coordinator this edge belongs to: the base64 Ed25519 key
+	// CoordPubKey / CoordPubKeyFile name the coordinator this edge belongs to:
+	// the base64 Ed25519 key
 	// its grants are signed with, inline or in a file the coordinator writes
 	// (CALABI_COORD_GRANT_PUBKEY_FILE, on a volume the two share). A
 	// standalone edge accepts devices by those grants and nothing else, for
@@ -230,14 +231,35 @@ func (c Config) AdvertisedAddr() string {
 // are relay mechanics, and calling them mesh ports would describe nothing.
 type MeshService struct {
 	DERPPort int `yaml:"derp_port"` // TCP relay port mesh nodes dial; default 3340
-	STUNPort int `yaml:"stun_port"` // UDP STUN responder port; default 3478 (0 disables)
+	// STUNPort is the UDP port of the STUN responder devices measure this relay
+	// by, and 0 turns the responder off. Its default, 3478, comes from Default()
+	// and not from RelaySTUNPort, the way the tunnel listeners' ports do: a file
+	// that leaves the key out keeps 3478, one that says 0 overwrites it. Until
+	// the default moved there, 0 read as "the default" and the responder kept
+	// answering on 3478, though this comment and the docs both said 0 turned it
+	// off. Read it through RelaySTUNPort.
+	STUNPort int `yaml:"stun_port"`
 	// Label names the DERP region this node advertises: region code = "self-"+Label.
 	Label string `yaml:"label"`
 	// Kind is "self" (default — a BYOI node's relay is the org's self-hosted relay)
-	// or "platform". Drives R0' grant-scope acceptance.
+	// or "platform". Drives grant-scope acceptance.
 	Kind string `yaml:"kind"`
-	// RequireAuth enforces R0' grants (reject connections without a valid one).
+	// RequireAuth enforces grants (reject connections without a valid one).
+	//
+	// Forced on, whatever the file says, in the two places a relay serves one
+	// party's devices only (NormalizeForMode): a standalone node's relay (its
+	// coordinator's devices) and a node's own relay on calabi.net (multi_region
+	// bff-edge, kind self: its organization's devices). The second needs no
+	// coord_pubkey either — the answer to the relay's registration carries the
+	// key (cmd/calabi-edge/relayadmission.go).
 	RequireAuth bool `yaml:"require_auth"`
+	// RequireTLS refuses the plaintext protocol on the relay port. The port
+	// speaks TLS and plaintext side by side (cmd/calabi-edge/relaytls.go):
+	// devices whose relay map marks this relay as TLS dial TLS, older ones keep
+	// speaking plaintext. Off by default, because turning it on disconnects
+	// every device that has not upgraded; it is the last step of the rollout,
+	// taken once they are gone (platform relays first).
+	RequireTLS bool `yaml:"require_tls"`
 	// CoordPubKey is the older spelling of the top-level coord_pubkey, kept
 	// equal to it (resolveCoordPubKey).
 	CoordPubKey string `yaml:"coord_pubkey"`
@@ -429,6 +451,15 @@ func resolveCoordPubKey(c *Config) error {
 	return nil
 }
 
+// BYOIRelay reports whether this node runs its organization's own relay on
+// calabi.net: connected through bff-edge (a control-plane certificate), serving
+// the mesh, and not a platform relay. Such a relay registers itself into its
+// organization's map (bff-edge RegisterRelay) and admits that organization's
+// devices only, by grants checked against the key the registration returns.
+func (c Config) BYOIRelay() bool {
+	return c.MultiRegion.IsBFFEdge() && c.ServesMesh() && !c.Mesh.IsPlatformKind()
+}
+
 // IsPlatformKind reports whether this relay is a platform (multi-tenant) relay
 // rather than a self-hosted one. Mirrors relayAuthConfig's parsing exactly:
 // empty / "self" / "self-hosted" is self-hosted, only "platform" is platform.
@@ -438,7 +469,8 @@ func (r MeshService) IsPlatformKind() bool {
 	return strings.EqualFold(strings.TrimSpace(r.Kind), "platform")
 }
 
-// RelayDERPPort / RelaySTUNPort apply calabi-derp's defaults when unset.
+// RelayDERPPort is the relay's data port, calabi-derp's 3340 when unset. A relay
+// always has one, so 0 can only mean unset.
 func (r MeshService) RelayDERPPort() int {
 	if r.DERPPort == 0 {
 		return 3340
@@ -446,9 +478,22 @@ func (r MeshService) RelayDERPPort() int {
 	return r.DERPPort
 }
 
+// defaultSTUNPort is stun_port when the file does not name it (Default).
+const defaultSTUNPort = 3478
+
+// RelaySTUNPort is the port the STUN responder listens on, or 0 when it is off.
+// runRelay starts the responder from it, and both registrations report it — the
+// edge directory for a platform relay, RegisterRelay for a node's own — so a
+// relay whose responder is off is listed without a STUN port, and no device is
+// sent to measure a port nothing answers on.
+//
+// A negative stun_port was never documented, but it did keep the responder off
+// (runRelay starts it on a port above 0 only), so it still does rather than
+// stopping a config that has run that way. It is reported as 0, not as itself:
+// the coordinator refuses a negative port, and the registration would fail.
 func (r MeshService) RelaySTUNPort() int {
-	if r.STUNPort == 0 {
-		return 3478
+	if r.STUNPort < 0 {
+		return 0
 	}
 	return r.STUNPort
 }
@@ -504,7 +549,9 @@ func (c Config) TrustsClientPolicy(controlPlaneWired bool) bool {
 // NormalizeForMode reconciles control-plane wiring with the selected mode and
 // returns the effective config plus byoiRefused.
 //
-//   - platform (or non-standalone): returned unchanged.
+//   - platform (or non-standalone): returned unchanged, except that a BYOI
+//     node's own relay (bff-edge, kind self) requires grants — see
+//     BYOIRelay.
 //   - standalone + bff-edge configured: this is a BYOI edge holding a
 //     control-plane-issued cert → REFUSED standalone, downgraded to platform
 //     (byoiRefused=true). The enforced "BYOI = platform semantics" rule.
@@ -514,6 +561,15 @@ func (c Config) TrustsClientPolicy(controlPlaneWired bool) bool {
 //     mis-trips the trust guard into thinking a control plane is wired.
 //     (Default() no longer seeds any of them — see its comment.)
 func (c Config) NormalizeForMode() (cfg Config, byoiRefused bool) {
+	if c.BYOIRelay() {
+		// This relay is its organization's own and is listed in that
+		// organization's mesh only: grants are required, whatever the file says,
+		// and it admits that organization's alone. Without them it relays for
+		// whoever reaches it — and a device of the organization, whose key every
+		// member can read in the netmap, can be pushed off it by anyone claiming
+		// that key.
+		c.Mesh.RequireAuth = true
+	}
 	if !c.IsStandaloneMode() {
 		return c, false
 	}
@@ -537,10 +593,10 @@ type LogConfig struct {
 //
 // It sets NO inter-service address. It used to seed the dev cluster's localhost
 // identity/tunnel ports so a bare `calabi-edge` would report presence and persist
-// tunnels; a6d97bcf (F3: the edge reaches the control plane only through
-// bff-edge) removed them. So a config-less edge dials nothing, which is also
-// what makes the self-hosting docs' "it never phones home" true of the default
-// build and not just of a hand-written config.
+// tunnels. They went once the edge reached the control plane only through
+// bff-edge. So a config-less edge dials nothing, which is
+// also what makes the self-hosting docs' "it never phones home" true of the
+// default build and not just of a hand-written config.
 //
 // Note what this does NOT set: Mode, or any way to accept a client. A
 // config-less edge is therefore refused at start (ValidateClientAuth) unless the
@@ -565,7 +621,11 @@ func Default() Config {
 		Admin: AdminListener{
 			Addr: ":9101",
 		},
-		Log: LogConfig{Level: "info", Format: "text"},
+		// Here and not in RelaySTUNPort, so that `stun_port: 0` can turn the
+		// responder off: the decode overwrites this only when the file names
+		// the key, the same way `https_port: 0` turns HTTPS off.
+		Mesh: MeshService{STUNPort: defaultSTUNPort},
+		Log:  LogConfig{Level: "info", Format: "text"},
 	}
 }
 

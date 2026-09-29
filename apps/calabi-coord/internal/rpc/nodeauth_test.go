@@ -55,7 +55,7 @@ func TestPendingChallengesAreCapped(t *testing.T) {
 	if _, _, err := s.issueChallenge(1); !errors.Is(err, errTooManyChallenges) {
 		t.Fatalf("err = %v, want errTooManyChallenges once the meshnet's share is full", err)
 	}
-	// …and that must not touch anyone else's (audit finding MESH-2).
+	// …and that must not touch anyone else's.
 	if _, _, err := s.issueChallenge(2); err != nil {
 		t.Fatalf("a second meshnet was starved by the first: %v", err)
 	}

@@ -13,7 +13,7 @@ import (
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
-// grantRelay authenticates links the way a real relay does (R0′): it challenges
+// grantRelay authenticates links the way a real relay does: it challenges
 // each one, opens the proof, and lets the link in only if it carries the grant
 // the relay currently accepts. Anything else it turns away by hanging up — which
 // is what pkg/relay's hub does with an expired grant, and all a device ever gets

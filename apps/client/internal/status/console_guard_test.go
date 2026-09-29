@@ -89,7 +89,7 @@ func unlock(h http.Handler, peer, host, secret string) *httptest.ResponseRecorde
 // A request that did not come from this machine must not be treated as local
 // just because it SAYS it is addressed to localhost.
 //
-// consoleGuard (MESH-9) decided "local" from the Host header alone. That stops a
+// consoleGuard decided "local" from the Host header alone. That stops a
 // browser — a page cannot forge Host — but the header is the client's to write,
 // so on a console bound beyond loopback (the documented Docker set-up) anyone on
 // the network got the whole /v1 surface, write token included, by sending

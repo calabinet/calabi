@@ -1,5 +1,6 @@
 // Package selfhosted is what the phone and the desktop share about joining a
-// server someone runs themselves instead of calabi.net: reading an invite link, looking at
+// server someone runs themselves instead of calabi.net:
+// reading an invite link, looking at
 // the certificate a server presents before anything is sent to it, and telling
 // "the server is down" from "the server's certificate is not the one we trust".
 package selfhosted

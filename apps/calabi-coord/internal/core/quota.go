@@ -12,8 +12,8 @@ import (
 var ErrNodeQuotaExceeded = errors.New("core: mesh node quota exceeded")
 
 // NodeQuota decides whether a meshnet may enroll one more node. It is the
-// deployment-agnostic seam for MESH.8 billing/quota: the self-hosted build wires a
-// static (or unlimited) cap; the platform build wraps quota-svc (kind
+// deployment-agnostic seam for billing/quota: the self-hosted build
+// wires a static (or unlimited) cap; the platform build wraps quota-svc (kind
 // "mesh_node") behind this same interface, so core never imports pkg/api.
 //
 // current is the meshnet's existing node count (the resource owner supplies it,

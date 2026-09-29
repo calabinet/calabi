@@ -108,8 +108,8 @@ func (u *Updater) check(ctx context.Context) (Status, PlatformArtifact, error) {
 	if err != nil {
 		return st, PlatformArtifact{}, err
 	}
-	// NOTHING from the manifest is trusted before its own signature checks out
-	// (audit finding UPD-1). Fail closed: a service that cannot establish where
+	// NOTHING from the manifest is trusted before its own signature checks out.
+	// Fail closed: a service that cannot establish where
 	// an instruction came from must not follow it.
 	sig, err := FetchManifestSignature(ctx, u.ManifestURL)
 	if err != nil {

@@ -40,7 +40,7 @@ import (
 //   - Neither set: a self-signed certificate, generated once and kept in
 //     CALABI_COORD_TLS_DIR (default ./coord-tls) so its fingerprint survives a
 //     restart. Devices pin that fingerprint (`calabi-coord fingerprint` prints
-//     it; invite links carry it) —
+//     it; invite links carry it).
 //     Until 2026-09 this case served PLAINTEXT, and the auth key crossed the
 //     network in the clear unless the operator had arranged a certificate.
 //   - CALABI_COORD_TLS=off: plaintext, for a dev stack or a deployment that

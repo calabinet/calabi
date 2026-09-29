@@ -28,7 +28,7 @@ func configureLink(_ uint64, ifname string, overlay netip.Addr) error {
 	return addDarwinRoute(meshOverlayCIDR, ifname)
 }
 
-// addSubnetRoutes routes each advertised CIDR at the utun (MESH.7). Idempotent —
+// addSubnetRoutes routes each advertised CIDR at the utun. Idempotent —
 // route's "File exists" is ignored.
 func addSubnetRoutes(_ uint64, ifname string, routes []netip.Prefix) error {
 	for _, r := range routes {

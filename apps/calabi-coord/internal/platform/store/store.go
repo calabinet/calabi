@@ -1,9 +1,9 @@
 // Package store is the PLATFORM (SaaS) NodeStore: an ent/DB-backed
-// implementation of core.NodeStore over a calabi-coord-owned mesh_nodes table
-// (MESH.8c). It lives under internal/platform so the deployment-agnostic core and
+// implementation of core.NodeStore over a calabi-coord-owned mesh_nodes table.
+// It lives under internal/platform so the deployment-agnostic core and
 // the self-hosted coordinator never link ent — a self-hosted coordinator keeps the in-memory
 // NodeStore. The DB is the durable registry behind admin visibility, seat
-// billing, and console (MESH.8b/8d/8e).
+// billing, and console.
 package store
 
 import (
@@ -204,7 +204,7 @@ func (s *Store) SetSignedOut(ctx context.Context, id int64, signedOut bool) erro
 	return err
 }
 
-// SetDisabled flips a node's admin kill switch (MESH.8b).
+// SetDisabled flips a node's admin kill switch.
 func (s *Store) SetDisabled(ctx context.Context, id int64, disabled bool) error {
 	err := s.client.MeshNode.UpdateOneID(int(id)).SetDisabled(disabled).Exec(ctx)
 	if ent.IsNotFound(err) {
@@ -215,7 +215,7 @@ func (s *Store) SetDisabled(ctx context.Context, id int64, disabled bool) error 
 
 // AllOverlays returns every allocated overlay address across all meshnets, so
 // startup can warm the in-memory IPAM past them and avoid re-handing a live
-// address to a fresh node (MESH.8c). Invalid/empty overlays are skipped.
+// address to a fresh node. Invalid/empty overlays are skipped.
 func (s *Store) AllOverlays(ctx context.Context) ([]netip.Addr, error) {
 	rows, err := s.client.MeshNode.Query().Select(meshnode.FieldOverlay).All(ctx)
 	if err != nil {
@@ -256,7 +256,7 @@ func (s *Store) AllRouteAliases(ctx context.Context) ([]netip.Prefix, error) {
 }
 
 // GetACL returns the meshnet's stored ACL doc, or (zero,false,nil) if none is
-// stored (MESH.8e-2). A malformed stored blob is an error (it should never
+// stored. A malformed stored blob is an error (it should never
 // happen — SetACL only ever writes marshalled docs).
 func (s *Store) GetACL(ctx context.Context, t core.MeshnetID) (core.ACLPolicy, bool, error) {
 	row, err := s.client.MeshACL.Query().Where(meshacl.MeshnetID(int64(t))).Only(ctx)
@@ -295,7 +295,7 @@ func (s *Store) SetACL(ctx context.Context, t core.MeshnetID, p core.ACLPolicy) 
 	return s.client.MeshACL.UpdateOneID(existing.ID).SetPolicyJSON(string(blob)).Exec(ctx)
 }
 
-// UpdateEndpoints replaces a node's discovered endpoints (MESH.4).
+// UpdateEndpoints replaces a node's discovered endpoints.
 func (s *Store) UpdateEndpoints(ctx context.Context, id int64, eps []netip.AddrPort) error {
 	blob, err := marshalStrings(addrPortsToStrings(eps))
 	if err != nil {
@@ -308,7 +308,7 @@ func (s *Store) UpdateEndpoints(ctx context.Context, id int64, eps []netip.AddrP
 	return err
 }
 
-// ---- declared services (MESH.8e-4) ----
+// ---- declared services ----
 
 // ListServices returns every service declared in the meshnet, oldest first.
 func (s *Store) ListServices(ctx context.Context, t core.MeshnetID) ([]core.Service, error) {
@@ -448,7 +448,7 @@ func (s *Store) ListRevisions(ctx context.Context, t core.MeshnetID, limit int) 
 	return out, nil
 }
 
-// Delete removes a node row permanently (MESH.8e-8).
+// Delete removes a node row permanently.
 func (s *Store) Delete(ctx context.Context, id int64) error {
 	err := s.client.MeshNode.DeleteOneID(int(id)).Exec(ctx)
 	if ent.IsNotFound(err) {
@@ -473,7 +473,7 @@ func (s *Store) SetTags(ctx context.Context, id int64, tags []string) error {
 	return err
 }
 
-// SetApproved flips device approval (MESH.8e-5).
+// SetApproved flips device approval.
 func (s *Store) SetApproved(ctx context.Context, id int64, approved bool) error {
 	err := s.client.MeshNode.UpdateOneID(int(id)).SetApproved(approved).Exec(ctx)
 	if ent.IsNotFound(err) {
@@ -563,7 +563,7 @@ func (s *Store) UpdateName(ctx context.Context, id int64, name string) error {
 	return err
 }
 
-// UpdateDERPHome records the node's measured home relay region (MESH.4 B2b).
+// UpdateDERPHome records the node's measured home relay region.
 func (s *Store) UpdateDERPHome(ctx context.Context, id int64, region string) error {
 	err := s.client.MeshNode.UpdateOneID(int(id)).SetDerpHome(region).Exec(ctx)
 	if ent.IsNotFound(err) {

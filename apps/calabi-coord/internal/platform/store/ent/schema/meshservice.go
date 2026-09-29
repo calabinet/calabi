@@ -9,8 +9,8 @@ import (
 )
 
 // MeshService is one service offered on a node: "this machine serves postgres on
-// 5432". Never DISCOVERED by scanning the node —
-// rule it distilled: declaration over discovery.
+// 5432". Never DISCOVERED by scanning the node: declaration over discovery, the
+// rule distilled from a rejected proposal to do exactly that.
 //
 // It arrives one of two ways, which is what `source` records:
 //
@@ -22,9 +22,9 @@ import (
 //     over the fact.
 //
 // The older comment on this type said the console was the only author. That was
-// true when a service name decided WHICH MACHINES a rule covered; demoted
-// "svc:" to naming ports on the declaring device only, which is what made a
-// node's own declaration safe to accept.
+// true when a service name decided WHICH MACHINES a rule covered. The rule
+// model has since demoted "svc:" to naming ports on the declaring
+// device only, which is what made a node's own declaration safe to accept.
 type MeshService struct{ ent.Schema }
 
 func (MeshService) Fields() []ent.Field {

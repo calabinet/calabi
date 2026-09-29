@@ -45,7 +45,7 @@ func (c *Coordinator) EdgeAccess(ctx context.Context, node *Node) ([]Edge, []byt
 // PublicKey is the half of the signing key edges and relays are configured
 // with.
 func (s *SigningRelayGrantIssuer) PublicKey() ed25519.PublicKey {
-	if len(s.Key) != ed25519.PrivateKeySize {
+	if s == nil || len(s.Key) != ed25519.PrivateKeySize {
 		return nil
 	}
 	return s.Key.Public().(ed25519.PublicKey)

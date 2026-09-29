@@ -47,7 +47,7 @@ func Wrap(logger *slog.Logger, client RPC) *Client {
 	}
 }
 
-// The direct-dial constructor was removed in F3 step 2b: every edge now
+// The direct-dial constructor was removed: every edge now
 // reaches the control plane through bff-edge, so this package is only ever
 // handed a ready client.
 // Close releases the underlying conn.
@@ -153,7 +153,6 @@ type Bandwidth struct {
 	// one on purpose — the two are metered separately and enforced in different
 	// processes, so one shared number could not be honoured across them. The
 	// PER-DEVICE relay rate reuses Sustained / Peak.
-	//
 	OrgRelaySustained int64
 	OrgRelayPeak      int64
 }
@@ -195,7 +194,7 @@ func (c *Client) OrgBandwidthLimitsBytesPerSec(ctx context.Context, orgID int64)
 }
 
 // ConnLimits returns the org's anti-abuse connection caps from quota
-// (Phase A, 2026-06-11):
+// (2026-06-11):
 //   - maxConns:       concurrent visitor-connection cap (max_conns)
 //   - tcpRatePerMin:  new TCP/TLS(+SNI/UDP-flow) connection rate, events/min
 //   - httpRatePerMin: new HTTP(S) connection rate, events/min

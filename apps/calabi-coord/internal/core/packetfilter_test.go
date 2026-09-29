@@ -100,7 +100,7 @@ func TestCompileLiteralAndBarePorts(t *testing.T) {
 
 // Sources include a subnet router's advertised CIDRs: traffic it forwards
 // arrives with a LAN source address, so a filter that only listed overlay /32s
-// would silently break MESH.7 routing.
+// would silently break routing.
 func TestCompileIncludesSubnetRoutes(t *testing.T) {
 	router := &Node{ID: 1, Name: "router", Overlay: mustAddr("100.64.0.1"),
 		AdvertisedRoutes: []netipPrefix{mustPrefix("192.168.1.0/24")}}

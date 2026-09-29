@@ -34,11 +34,11 @@ type Coordinator struct {
 	// exactly as before the feature existed.
 	AliasIPAM AliasIPAM
 	DERP      DERPMapSource
-	// Quota caps how many nodes a meshnet may enroll (MESH.8). Nil = unlimited
+	// Quota caps how many nodes a meshnet may enroll. Nil = unlimited
 	// (dev/tests). Checked only when admitting a genuinely NEW node.
 	Quota NodeQuota
-	// ACL is the writable per-meshnet ACL store the console editor reads/writes
-	// (MESH.8e-2). wire() always sets it — the DB store with a DSN, the
+	// ACL is the writable per-meshnet ACL store the console editor reads/writes.
+	// wire() always sets it — the DB store with a DSN, the
 	// in-memory one without — so a self-hosted coordinator accepts ACL edits
 	// too, and a meshnet's saved doc then takes precedence over
 	// CALABI_COORD_POLICY_FILE (see ACLFilter). Nil (tests only) makes the admin
@@ -63,7 +63,7 @@ type Coordinator struct {
 	// ConnRecordRetentionDefaultDays is the retention used until an operator sets
 	// one in the console. 0 = the built-in default (see DefaultConnRecordRetentionDays).
 	ConnRecordRetentionDefaultDays int
-	// Relays is the registry of relays each ORG runs itself (R2, relay.go). Nil =
+	// Relays is the registry of relays each ORG runs itself (relay.go). Nil =
 	// no self-hosted relays; every meshnet then sees exactly the platform map.
 	Relays RelayStore
 	// AuthKeys is where a self-hosted coordinator keeps the auth keys it mints
@@ -87,7 +87,7 @@ type Coordinator struct {
 	// the console, never discovered from the node). Nil = no registry.
 	Services ServiceStore
 	// ACLRevisions keeps the history of saved ACL documents so the console can
-	// restore a previous one (MESH.8e-3). Nil = no history (ACL editing still
+	// restore a previous one. Nil = no history (ACL editing still
 	// works); the self-hosted build can wire the in-memory store.
 	ACLRevisions ACLRevisionStore
 	// Presence tracks which nodes hold a live control stream (are online now),
@@ -95,12 +95,12 @@ type Coordinator struct {
 	// marks/clears it around each PullNetMap stream; the admin surface reads it so
 	// the console can show online/offline. Nil is safe (everything reads offline).
 	Presence *Presence
-	// ServiceHealth is what each node OBSERVES about its own services (F3b).
+	// ServiceHealth is what each node OBSERVES about its own services.
 	// In-memory and current-value-only, like Presence. Nil is safe: the console
 	// then shows nothing observed, which is honest rather than wrong.
 	ServiceHealth *ServiceHealthTracker
 	// DefaultDERPHome is the relay region code stamped on a node that has no home
-	// of its own yet (MESH.4): the deployment's home region, from the DERP map
+	// of its own yet: the deployment's home region, from the DERP map
 	// config (CALABI_COORD_DERP_HOME_REGION / first region). It makes a node's
 	// "relay home" concrete — surfaced in the console/admin node list and used to
 	// reach the node via relay. Empty = leave the node's home blank (don't invent
@@ -111,9 +111,10 @@ type Coordinator struct {
 	// from platform config, and every meshnet's map contains the platform regions.
 	// A new node hasn't measured anything yet, so defaulting it to the org's own
 	// VPS would bet its first connectivity on a machine nobody has checked.
-	// R2 must therefore keep including the platform regions in every org's map.
+	// Self-hosted relays must therefore keep the platform regions in every
+	// org's map.
 	DefaultDERPHome string
-	// RelayGrants signs the relay authorization carried in each netmap (R0').
+	// RelayGrants signs the relay authorization carried in each netmap.
 	// Nil = this coordinator issues none, which is correct while its relays still
 	// run with relay.require_auth off. See relaygrant.go.
 	RelayGrants RelayGrantIssuer
@@ -132,7 +133,7 @@ type Coordinator struct {
 	// active nodes, asks the quota backend whether one more fits, allocates an
 	// address and inserts. Run concurrently, every caller read the same count and
 	// every caller passed, so one burst bought far more seats than the plan
-	// allows (audit finding MESH-12) — quota-svc cannot catch it either, because
+	// allows — quota-svc cannot catch it either, because
 	// the count it judges is the one the caller supplied.
 	//
 	// The same snapshot feeds the name-uniqueness and route-overlap rules, so
@@ -175,7 +176,7 @@ type RegisterInput struct {
 	// claim: they land pending and an admin confirms them before any ACL
 	// "svc:" rule matches. Only Name/Proto/Port/Note are read.
 	DeclaredServices []Service
-	// AdvertisedRoutes are subnet-router CIDRs the node offers to forward (MESH.7).
+	// AdvertisedRoutes are subnet-router CIDRs the node offers to forward.
 	// A claim; approval is the admin's (see Node.ApprovedRoutes).
 	AdvertisedRoutes []netip.Prefix
 	// AliasedRoutes are the advertised CIDRs the node asks to publish under a
@@ -219,15 +220,15 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 			"max_prefix_bits", advertiseMinBitsV4, "reserved", carrierGradeNAT)
 	}
 	// Everything from here to the insert is decide-then-write on a snapshot, so
-	// it runs one-at-a-time per meshnet (MESH-12). Held across the store calls
+	// it runs one-at-a-time per meshnet. Held across the store calls
 	// deliberately: the seat count, the name check and the route-overlap check
 	// all read the same snapshot, and a lock that ended before the write would
 	// leave every one of them racy.
 	defer c.lockMeshnet(in.Meshnet)()
 
 	// The meshnet's nodes, fetched once. Three rules below read them: a name may
-	// not collide with a peer's (MESH-5), a CIDR a peer already publishes is not
-	// auto-approved (MESH-1), and the seat gate counts them.
+	// not collide with a peer's, a CIDR a peer already publishes is not
+	// auto-approved, and the seat gate counts them.
 	peers, err := c.Nodes.ListMeshnet(ctx, in.Meshnet)
 	if err != nil {
 		return nil, fmt.Errorf("core: list meshnet: %w", err)
@@ -237,7 +238,7 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 	// Re-enrollment: reuse the existing node (same id + overlay), just refresh the
 	// mutable fields. No new IPAM allocation.
 	if existing, err := c.Nodes.FindByKey(ctx, in.Meshnet, in.NodeKey); err == nil && existing != nil {
-		// An admin-disabled node may not rejoin (MESH.8b) — refuse before touching
+		// An admin-disabled node may not rejoin — refuse before touching
 		// any state, so its reconnect loop can't quietly re-enroll.
 		if existing.Disabled {
 			if c.Logger != nil {
@@ -260,7 +261,7 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 			// next daemon restart (which re-registers) would silently undo it.
 			// Deduped for the same reason a fresh node's name is: re-registering
 			// under a colleague's name would inherit whatever an ACL granted that
-			// name (MESH-5).
+			// name.
 			existing.Name = dedupeNodeName(in.Name, namesInMeshnet(peers, existing.ID))
 		}
 		existing.DiscoKey = in.DiscoKey
@@ -309,7 +310,7 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 		} else {
 			// Never reviewed, in a meshnet that auto-approves: behave as before
 			// approval existed — except for a CIDR a peer already publishes, which
-			// waits for an admin (MESH-1).
+			// waits for an admin.
 			existing.ApprovedRoutes = autoApprovable(in.AdvertisedRoutes, peers, existing.ID, routeMode == routesAutoAll, c.Logger, in.Meshnet)
 		}
 		// A daemon restart with an edited config is how an alias request changes,
@@ -317,7 +318,8 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 		// lines above, because an alias needs both halves.
 		existing.AliasedRoutes = in.AliasedRoutes
 		c.applyAliases(ctx, existing)
-		if existing.DERPHome == "" { // backfill a home for nodes enrolled before MESH.4
+		if existing.DERPHome == "" {
+			// enrolled before nodes had homes: backfill one
 			existing.DERPHome = c.DefaultDERPHome
 		}
 		stored, err := c.Nodes.Upsert(ctx, existing) // ID != 0 → update in place
@@ -379,7 +381,7 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 		}
 	}
 
-	// Device approval (MESH.8e-5) applies to genuinely NEW devices only: an
+	// Device approval applies to genuinely NEW devices only: an
 	// existing node keeps what it had, so turning the switch on never parks a
 	// fleet that already works.
 	approved := true
@@ -402,7 +404,7 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 	}
 	n := &Node{
 		Meshnet:          in.Meshnet,
-		Name:             dedupeNodeName(in.Name, namesInMeshnet(peers, 0)), // MESH-5
+		Name:             dedupeNodeName(in.Name, namesInMeshnet(peers, 0)),
 		HostName:         in.Name,
 		NodeKey:          in.NodeKey,
 		DiscoKey:         in.DiscoKey,
@@ -411,7 +413,7 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 		EnrolledBy:       in.EnrolledBy,
 		AdvertisedRoutes: in.AdvertisedRoutes,
 		// Nothing approved unless the meshnet auto-approves, and even then not
-		// what a peer already publishes — that waits for an admin (MESH-1).
+		// what a peer already publishes — that waits for an admin.
 		ApprovedRoutes:    newNodeApprovals(routeMode, in.AdvertisedRoutes, peers, c.Logger, in.Meshnet),
 		AliasedRoutes:     in.AliasedRoutes,
 		Overlay:           addr,
@@ -441,14 +443,14 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 // NetMapFor computes the ACL-filtered network map for one node: every OTHER node
 // in its meshnet that the policy allows it to reach, plus the DERP map.
 //
-// v0: PolicyStore is allow-all, so this is a full mesh minus self. MESH.5 makes
-// the Filter call actually cut the set.
+// With no ACL configured the PolicyStore is allow-all and this is a full mesh
+// minus self; an ACL makes the Filter call cut the set.
 func (c *Coordinator) NetMapFor(ctx context.Context, nodeID int64) (*NetMap, error) {
 	self, err := c.Nodes.Get(ctx, nodeID)
 	if err != nil {
 		return nil, err
 	}
-	// A disabled node gets no map (MESH.8b) — the RPC layer terminates its
+	// A disabled node gets no map — the RPC layer terminates its
 	// stream. Returning the sentinel keeps that decision in one place.
 	if self.Disabled {
 		return nil, ErrNodeDisabled
@@ -692,7 +694,7 @@ func (c *Coordinator) UpdateSettings(ctx context.Context, t MeshnetID, in Meshne
 		return fmt.Errorf("core: read settings: %w", err)
 	}
 	// The alias budget is one org's claim on a pool every org shares, so it gets
-	// a ceiling here as well as an RBAC gate in the BFFs (audit finding MESH-4):
+	// a ceiling here as well as an RBAC gate in the BFFs:
 	// whoever reaches this call, through whichever surface, cannot take the pool.
 	if in.AliasAddrBudget > MaxAliasAddrBudget {
 		if c.Logger != nil {
@@ -887,8 +889,8 @@ func intersectPrefixes(a, b []netip.Prefix) []netip.Prefix {
 	return out
 }
 
-// SetDERPHome records the relay region a node measured as its closest (MESH.4
-// B2b): the node probes every region in the DERP map and reports the fastest,
+// SetDERPHome records the relay region a node measured as its closest:
+// the node probes every region in the DERP map and reports the fastest,
 // replacing the deployment-wide default stamped at registration.
 //
 // The region is VALIDATED against the map this coordinator publishes, for the
@@ -931,7 +933,7 @@ func (c *Coordinator) SetDERPHome(ctx context.Context, nodeID int64, region stri
 	return true, nil
 }
 
-// SeatUsage is a meshnet's mesh-node seat accounting (MESH.8d): how many seats
+// SeatUsage is a meshnet's mesh-node seat accounting: how many seats
 // are occupied (Active, non-disabled nodes), how many nodes are parked
 // (Disabled, not consuming a seat), the total, and the plan's seat allowance
 // (Limit; -1 = unlimited). It's the source the account/billing view reflects.

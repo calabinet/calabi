@@ -164,7 +164,7 @@ CALABI_COORD_DERP_STUN_PORT=3478 \
 | `CALABI_COORD_RELAY_GRANT_KEY_FILE` | the key it signs devices' [grants](#what-is-a-grant) with. Default `./coord-grant.key`, created on first start |
 | `CALABI_COORD_GRANT_PUBKEY_FILE` | a file it writes the public half of that key to at every start, for the edge to read |
 | `CALABI_COORD_DERP_ADDR` | one relay, `host:port` |
-| `CALABI_COORD_DERP_STUN_PORT` | that relay's STUN port. Devices choose their relay by measuring it over STUN, so set it |
+| `CALABI_COORD_DERP_STUN_PORT` | that relay's STUN port, the same as its `mesh.stun_port`. Devices choose their relay by measuring it over STUN, so set it — unless that relay's STUN is off (`stun_port: 0`) |
 | `CALABI_COORD_DERP_HOME_REGION` | the region name of `CALABI_COORD_DERP_ADDR` (default `default`); with a map file that sets no `home_region`, the region new devices start on |
 | `CALABI_COORD_DERP_MAP_FILE` | several relays: a JSON file (see `apps/calabi-coord/examples/derp-map.example.json`) |
 | `CALABI_COORD_AUTHKEYS_FILE` | your own permanent keys, optional. JSON: `{"key": {"meshnet": 1, "tags": ["tag:laptop"]}}` |
@@ -328,7 +328,7 @@ your own.
 |---|---|---|---|
 | `base_domain` | any node | `localtest.me` | The wildcard domain this node serves: tunnels become `<name>.<base_domain>` |
 | `control_port` | any node | `7443` | Where the `calabi` client connects |
-| `control_cert_pem` / `control_key_pem` | any node | — | That listener's certificate. Left out, the edge makes a self-signed one in `state.dir`. Re-read when the files change |
+| `control_cert_pem` / `control_key_pem` | any node | — | The node's certificate: that listener presents it, and so does the relay to devices that reach it over TLS. Left out, the edge makes a self-signed one in `state.dir`. Re-read when the files change. A `role: mesh` node may set it too, for its relay |
 | `http_port` | any node | `8080` | Visitors to HTTP tunnels |
 | `https_port` | any node | `8443` | Visitors to HTTPS tunnels, with TLS terminated here. `0` turns HTTPS off |
 | `https_self_signed` | your server | `false` | Fall back to a self-signed certificate when there is no real one. **Development only** |
@@ -341,10 +341,11 @@ your own.
 | setting | for | default | what it does |
 |---|---|---|---|
 | `derp_port` | any node | `3340` | Where devices reach the relay |
-| `stun_port` | any node | `3478` | The STUN responder devices measure to pick their nearest relay. `0` turns it off |
+| `stun_port` | any node | `3478` | The STUN responder devices measure to pick their nearest relay. `0` turns it off: devices then cannot measure this relay, and do not pick it over one they can. On a server of your own, also leave its STUN port out of the coordinator (`CALABI_COORD_DERP_STUN_PORT`, or `stun_port` in the map file) |
 | `label` | any node | the node's `region` | The region name this relay advertises, as `self-<label>`. Set it only when one region has two relays |
 | `kind` | any node | `self` | `self` for a relay of your own, `platform` for one of ours |
-| `require_auth` | any node | `false` | Refuse devices without a valid grant. Always on for a `standalone` node |
+| `require_auth` | any node | `false` | Refuse devices without a valid grant. Always on for a `standalone` node, and for the relay of a node connected to calabi.net (`multi_region.mode: bff-edge`, `kind: self`): that relay admits its organization's devices only, and learns the key from calabi.net, so it needs no `coord_pubkey` |
+| `require_tls` | any node | `false` | Refuse devices that reach the relay without TLS. Clients older than relay TLS only speak plaintext, so leave it off until they have all been updated |
 
 **Settings that are refused.** The edge stopped reaching the control plane
 directly, so `identity:`, `quota:`, `config_svc:`, `nats:`, `tunnel.addr` and
@@ -366,7 +367,7 @@ reading either as the other would be worse than saying so.
 `CALABI_EDGE_PUBLIC_HOST`, `CALABI_EDGE_COORD_PUBKEY`,
 `CALABI_EDGE_COORD_PUBKEY_FILE`, and
 `CALABI_EDGE_RELAY_` + `KIND`, `LABEL`, `DERP_PORT`, `STUN_PORT`,
-`REQUIRE_AUTH`, `COORD_PUBKEY`.
+`REQUIRE_AUTH`, `REQUIRE_TLS`, `COORD_PUBKEY`.
 
 ### HTTPS
 
@@ -390,6 +391,14 @@ It listens on 3340/tcp and 3478/udp and serves only devices with your
 coordinator's grants. Add it to the coordinator's `CALABI_COORD_DERP_MAP_FILE`,
 or register it through the admin API. Each device measures the relays and uses
 the closest.
+
+Devices reach a relay over TLS on the same port, and check its certificate the
+way they check your edge. The coordinator reads each relay's certificate on
+3340 once a minute and tells devices its fingerprint. With
+`CALABI_COORD_EDGE_TRUST=system`, give the relay a certificate from a public CA
+for its host (`tunnel.control_cert_pem` / `control_key_pem` in a config file).
+Without a config file with `state.dir`, the relay makes a new certificate at
+every start, and devices pick up its new fingerprint within a minute.
 
 ---
 

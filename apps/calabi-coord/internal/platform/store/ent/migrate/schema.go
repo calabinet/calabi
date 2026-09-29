@@ -177,6 +177,7 @@ var (
 		{Name: "derp_port", Type: field.TypeInt, Default: 3340},
 		{Name: "stun_port", Type: field.TypeInt, Default: 3478},
 		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "tls", Type: field.TypeBool, Default: false},
 		{Name: "created_at", Type: field.TypeTime},
 	}
 	// MeshRelaysTable holds the schema information for the "mesh_relays" table.

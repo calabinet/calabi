@@ -12,5 +12,6 @@ package main
 // binary can reach the managed control plane, and that is what someone who
 // just installed it expects. A self-hoster opts out explicitly with
 // `calabi mode standalone` (or CALABI_MODE=standalone), which is also what
-// makes the edge stop trusting client-supplied policy — Read by resolveClientMode in mode.go.
+// makes the edge stop trusting client-supplied policy.
+// Read by resolveClientMode in mode.go.
 const defaultClientMode = clientModePlatform

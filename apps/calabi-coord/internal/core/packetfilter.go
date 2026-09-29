@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Compiling the meshnet's ACL into a per-node PACKET FILTER (MESH.5b) — the step
+// Compiling the meshnet's ACL into a per-node PACKET FILTER — the step
 // that makes "who can reach what" mean ports rather than hosts.
 //
 // Two properties matter more than the code:
@@ -53,7 +53,7 @@ func allPorts() PortRange { return PortRange{First: 0, Last: 65535} }
 // Sources are the OVERLAY addresses of the peers a rule's src selectors match,
 // plus those peers' advertised subnet routes — traffic forwarded by a subnet
 // router arrives with the LAN address as its source, so leaving those out would
-// silently break MESH.7 routing the moment a filter is applied.
+// silently break routing the moment a filter is applied.
 func CompilePacketFilter(self *Node, peers []*Node, p *ACLPolicy) []FilterRule {
 	if self == nil {
 		return nil

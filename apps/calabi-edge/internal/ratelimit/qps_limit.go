@@ -5,7 +5,7 @@
 // future *per-request* HTTP cap — a later phase that parses individual
 // requests off the keepalive byte-splice (the edge currently sees only
 // the first request per connection, so true per-request limiting needs
-// that parser). Phase A's anti-abuse shipped a per-MINUTE *connection*
+// that parser). The anti-abuse work shipped a per-MINUTE *connection*
 // rate gate instead (see rate_limit.go: RateLimiter), which is all the
 // edge can enforce per-request today. Keep this type + its tests; the
 // per-request phase will wire it.

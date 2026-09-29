@@ -1,7 +1,7 @@
 // GlobalLimiter is the process-wide, ORG-AGNOSTIC backpressure for one
-// calabi-edge (Phase B anti-abuse, 2026-06-11).
+// calabi-edge (anti-abuse, 2026-06-11).
 //
-// Phase A's per-org caps (ConnLimiter / RateLimiter) stop a single tenant
+// The per-org caps (ConnLimiter / RateLimiter) stop a single tenant
 // from monopolising an edge — but the SUM of every org's caps can still
 // exceed what one box can physically carry (file descriptors, goroutines,
 // accept CPU). GlobalLimiter is the machine-wide ceiling that no tenant
@@ -13,7 +13,7 @@
 // queueing (the decided policy) — protecting the box instead of letting a
 // backlog grow. App-level shed cannot undo the TCP handshake the kernel
 // already completed; pair it with OS-level defences (listen backlog, SYN
-// cookies, ulimit -n) —
+// cookies, ulimit -n).
 //
 // Both caps default to 0 = unlimited (opt-in via env), so dev / unset
 // edges behave exactly as before. All methods are nil-safe: a nil

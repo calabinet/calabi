@@ -16,7 +16,8 @@ import (
 )
 
 // The tunnels a self-hosted daemon serves, reported to its coordinator so the
-// meshnet's phones can list them and add up their traffic. A platform coordinator
+// meshnet's phones can list them and add up their traffic.
+// A platform coordinator
 // refuses the report — calabi.net keeps tunnels in its own services — and the
 // loop then stops for the session.
 

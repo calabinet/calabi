@@ -1,6 +1,7 @@
 package main
 
-// daemon_local_supervisor.go — the writable half of the local supervisor daemon. localSupervisor owns the mutable tunnel plan, persists console edits
+// daemon_local_supervisor.go — the writable half of the local supervisor daemon.
+// localSupervisor owns the mutable tunnel plan, persists console edits
 // back to the YAML config, and drives a single-goroutine "reconcile" that brings
 // the live edge session in line with the plan (register added / close removed /
 // close+re-register policy-changed tunnels). It implements localweb.Lister +

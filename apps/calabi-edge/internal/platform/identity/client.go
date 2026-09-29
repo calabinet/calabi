@@ -44,7 +44,7 @@ type Verifier struct {
 	timeout time.Duration
 }
 
-// The direct-dial constructor was removed in F3 step 2b: every edge now
+// The direct-dial constructor was removed: every edge now
 // reaches the control plane through bff-edge, so this package is only ever
 // handed a ready client.
 // Wrap constructs a Verifier from a pre-made gRPC client (e.g. a
@@ -136,6 +136,11 @@ type EdgeRegistration struct {
 	// host = host(PublicAddr).
 	RelayDerpPort int32
 	RelayStunPort int32
+	// RelayTLS: that relay speaks TLS with a certificate that verifies against
+	// the platform CA for host(PublicAddr) — checked by the node at every
+	// heartbeat (cmd/calabi-edge/relayverify.go). The coordinator then tells
+	// devices to reach it over TLS only.
+	RelayTLS bool
 	// Version is this calabi-edge's binary version (-ldflags), published so the
 	// consoles can show which build the edge is running.
 	Version string
@@ -160,6 +165,7 @@ func (v *Verifier) RegisterEdgeNode(ctx context.Context, in EdgeRegistration) er
 		ActiveClients: in.ActiveClients,
 		RelayDerpPort: in.RelayDerpPort,
 		RelayStunPort: in.RelayStunPort,
+		RelayTls:      in.RelayTLS,
 		Version:       in.Version,
 	})
 	return err

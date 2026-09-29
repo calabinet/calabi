@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Reply tracking for the inbound packet filter (MESH.5b).
+// Reply tracking for the inbound packet filter.
 //
 // The coordinator compiles a node's filter from the rules that name it as a
 // DESTINATION. That alone is not a working firewall: a machine that only ever

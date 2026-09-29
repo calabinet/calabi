@@ -2,7 +2,7 @@ package status
 
 import "testing"
 
-// F2: /healthz exposes
+// /healthz exposes
 // service_mode so the desktop shell can confirm it's attaching to the machine
 // -wide system service. "system" iff the CALABI_SYSTEM_SERVICE marker is set.
 func TestServiceMode(t *testing.T) {

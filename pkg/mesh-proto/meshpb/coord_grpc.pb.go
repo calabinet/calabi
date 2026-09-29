@@ -80,7 +80,8 @@ type CoordinatorClient interface {
 	// served by the platform's API, which is where who may see what is decided.
 	ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error)
 	// ReportTunnels uploads the reverse tunnels this node's daemon serves, for a
-	// self-hosted coordinator's apps: the whole current list, which replaces the one reported before, and
+	// self-hosted coordinator's apps:
+	// the whole current list, which replaces the one reported before, and
 	// the bytes each tunnel carried since the node's last accepted report.
 	// Information only — a tunnel grants nothing in the mesh, so nothing here
 	// needs approving. PermissionDenied on a coordinator whose credentials come
@@ -115,7 +116,7 @@ type CoordinatorClient interface {
 	// ReportEndpoints uploads the node's freshly discovered candidate endpoints
 	// (local interfaces + STUN-reflexive) and, once measured, the relay region it
 	// is closest to. The coordinator relays both to peers via their NetMap so hole
-	// punching can begin and relayed traffic takes the nearest hop (MESH.4).
+	// punching can begin and relayed traffic takes the nearest hop.
 	ReportEndpoints(ctx context.Context, in *ReportEndpointsRequest, opts ...grpc.CallOption) (*ReportEndpointsResponse, error)
 	// UpdateNodeDeclarations changes what an ALREADY-ENROLLED node declares about
 	// itself, without re-enrolling it.
@@ -150,7 +151,8 @@ type CoordinatorClient interface {
 	// Observation, deliberately, not configuration: nothing here grants anything,
 	// so a node lying costs it a wrong badge on its own row. The coordinator keeps
 	// only the CURRENT value and does not persist it — a history of which port
-	// answered when is exactly the kind of record says not to accumulate.
+	// answered when is exactly the kind of record the design says not to
+	// accumulate.
 	ReportServiceHealth(ctx context.Context, in *ReportServiceHealthRequest, opts ...grpc.CallOption) (*ReportServiceHealthResponse, error)
 	// ReportConnections uploads WHO this node exchanged traffic with in a window:
 	// the peer, when, how many bytes each way, and whether the path was direct or
@@ -158,8 +160,9 @@ type CoordinatorClient interface {
 	// half (who changed a rule, who approved a device) already lives in
 	// audit-svc's hash chain.
 	//
-	// This REVISES the "current value, never a time series" rule in and the revision is deliberately
-	// narrow. What that rule was protecting is spelled out there: a sequence of a
+	// This REVISES the "current value, never a time series" rule,
+	// and the revision is deliberately
+	// narrow. What that rule was protecting: a sequence of a
 	// laptop's ENDPOINT ADDRESSES is a location trail, because a public IP reverse
 	// -resolves to a place and an ISP. So endpoints are still current-value only,
 	// and this message carries none — no endpoint, no public IP, no port. A peer
@@ -364,7 +367,8 @@ type CoordinatorServer interface {
 	// served by the platform's API, which is where who may see what is decided.
 	ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error)
 	// ReportTunnels uploads the reverse tunnels this node's daemon serves, for a
-	// self-hosted coordinator's apps: the whole current list, which replaces the one reported before, and
+	// self-hosted coordinator's apps:
+	// the whole current list, which replaces the one reported before, and
 	// the bytes each tunnel carried since the node's last accepted report.
 	// Information only — a tunnel grants nothing in the mesh, so nothing here
 	// needs approving. PermissionDenied on a coordinator whose credentials come
@@ -399,7 +403,7 @@ type CoordinatorServer interface {
 	// ReportEndpoints uploads the node's freshly discovered candidate endpoints
 	// (local interfaces + STUN-reflexive) and, once measured, the relay region it
 	// is closest to. The coordinator relays both to peers via their NetMap so hole
-	// punching can begin and relayed traffic takes the nearest hop (MESH.4).
+	// punching can begin and relayed traffic takes the nearest hop.
 	ReportEndpoints(context.Context, *ReportEndpointsRequest) (*ReportEndpointsResponse, error)
 	// UpdateNodeDeclarations changes what an ALREADY-ENROLLED node declares about
 	// itself, without re-enrolling it.
@@ -434,7 +438,8 @@ type CoordinatorServer interface {
 	// Observation, deliberately, not configuration: nothing here grants anything,
 	// so a node lying costs it a wrong badge on its own row. The coordinator keeps
 	// only the CURRENT value and does not persist it — a history of which port
-	// answered when is exactly the kind of record says not to accumulate.
+	// answered when is exactly the kind of record the design says not to
+	// accumulate.
 	ReportServiceHealth(context.Context, *ReportServiceHealthRequest) (*ReportServiceHealthResponse, error)
 	// ReportConnections uploads WHO this node exchanged traffic with in a window:
 	// the peer, when, how many bytes each way, and whether the path was direct or
@@ -442,8 +447,9 @@ type CoordinatorServer interface {
 	// half (who changed a rule, who approved a device) already lives in
 	// audit-svc's hash chain.
 	//
-	// This REVISES the "current value, never a time series" rule in and the revision is deliberately
-	// narrow. What that rule was protecting is spelled out there: a sequence of a
+	// This REVISES the "current value, never a time series" rule,
+	// and the revision is deliberately
+	// narrow. What that rule was protecting: a sequence of a
 	// laptop's ENDPOINT ADDRESSES is a location trail, because a public IP reverse
 	// -resolves to a place and an ISP. So endpoints are still current-value only,
 	// and this message carries none — no endpoint, no public IP, no port. A peer

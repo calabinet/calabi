@@ -20,7 +20,8 @@ import (
 // 10k clients × 5% open-SPA rate × these poll cadences the bff was
 // servicing ~575k HTTP req/min worth of essentially-the-same query.
 //
-// This cache is the daemon-side memoizer documented in We picked daemon-side TTL over
+// This cache is the daemon-side memoizer.
+// We picked daemon-side TTL over
 // end-to-end ETag because:
 //
 //   - No bff-console schema change required (ETag would mean teaching

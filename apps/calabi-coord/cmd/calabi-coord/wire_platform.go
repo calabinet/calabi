@@ -24,8 +24,8 @@ import (
 // local run works without the control plane.
 //
 // Stores are still in-memory — the DB-backed NodeStore + node persistence
-// (mesh_nodes table vs Device-table extension, an open design point) land in
-// MESH.8 behind the SAME core interfaces.
+// (mesh_nodes table vs Device-table extension, an open design point) land
+// behind the SAME core interfaces.
 func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 	nodes, acl, aclRevs, services, settings, relays, connRecs, err := platformStores(logger)
 	if err != nil {
@@ -34,7 +34,7 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 	ipam := core.NewMemIPAM()
 	// Persisted nodes reload from the DB, but the in-memory IPAM starts fresh —
 	// warm it past the overlays already in use so a NEW node can't be handed a
-	// live node's address after a restart (MESH.8c).
+	// live node's address after a restart.
 	if ov, ok := nodes.(interface {
 		AllOverlays(context.Context) ([]netip.Addr, error)
 	}); ok {
@@ -82,14 +82,17 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 	// static map file to maintain. loadDERPMap's result is the FALLBACK — used
 	// until edges report a relay, or if identity-svc is unreachable, so the fleet
 	// is never left with an empty map. Purely static when identity is unset (dev).
-	derp := core.CompositeDERP{Platform: derpMap, Relays: relays}
+	// An org's own relay that says it speaks TLS is checked against the platform
+	// CA — on calabi.net only (CompositeDERP.OwnRelaysPlatformCA).
+	platformCA := env("IDENTITY_ADDR") != ""
+	derp := core.CompositeDERP{Platform: derpMap, Relays: relays, OwnRelaysPlatformCA: platformCA}
 	if addr := env("IDENTITY_ADDR"); addr != "" {
 		lister, derr := dialEdgeLister(addr)
 		if derr != nil {
 			logger.Error("coord: cannot dial identity-svc for the edge-derived DERP map; using the static map only", "addr", addr, "err", derr)
 		} else {
 			src := newPlatformDERPFromEdges(lister, derpMap, logger)
-			derp = core.CompositeDERP{PlatformFn: src.Current, Relays: relays}
+			derp = core.CompositeDERP{PlatformFn: src.Current, Relays: relays, OwnRelaysPlatformCA: platformCA}
 			edgeDERPWatcher = src.run // main starts it once the notifier exists
 			// The operator's stated home region appears once its edge reports a
 			// relay, even if the static fallback never named it — trust it.
@@ -102,9 +105,9 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 	coord := &core.Coordinator{
 		AliasIPAM: aliasIPAM,
 		Nodes:     nodes,
-		// Per-org ACL (MESH.8e-2): the meshnet's stored doc governs its netmap;
+		// Per-org ACL: the meshnet's stored doc governs its netmap;
 		// a meshnet with no doc falls back to the global default (allow-all, or
-		// CALABI_COORD_POLICY_FILE if set — preserving the MESH.5 file behavior).
+		// CALABI_COORD_POLICY_FILE if set — preserving the file behavior).
 		Policy:       core.ACLFilter{Store: acl, Fallback: policyStore(logger)},
 		ACL:          acl,
 		ACLRevisions: aclRevs,
@@ -116,7 +119,7 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 		PlatformSettings:               platformSettings(connRecs),
 		ConnRecordRetentionDefaultDays: connRecordRetentionDefault(logger),
 		IPAM:                           ipam,
-		// Platform regions PLUS this org's own relays (R2). Platform entries are
+		// Platform regions PLUS this org's own relays. Platform entries are
 		// never dropped: DefaultDERPHome names one, and a self-hosted region must
 		// never be a new node's default home. Platform regions are edge-derived
 		// (dynamic) or static — see `derp` above.
@@ -136,8 +139,8 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 	}
 
 	// The quota-svc-backed node quota also knows the plan's bandwidth numbers,
-	// which is what a node needs in order to pace ITSELF over a relay
-	//. The static fallback does not implement
+	// which is what a node needs in order to pace ITSELF over a relay.
+	// The static fallback does not implement
 	// it, so a coordinator without quota-svc sends no self-limit — correct:
 	// the relay is still policing, the node just finds out the lossy way.
 	if rr, ok := coord.Quota.(core.RelayRateSource); ok {
@@ -189,6 +192,12 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 	} else {
 		logger.Info("coord: no edge configured (" + envPrefix + "_" + edgeAddrEnv + "); devices can join the mesh but not serve tunnels")
 	}
+	// The relays: the static map, each relay marked TLS once it is found to
+	// speak it on its data port, and trusted the way the edge is (relaytls.go).
+	// Started with the notifier by main, like the platform's edge-derived map.
+	relayTLS := newSelfHostedRelays(derpMap, edges, logger)
+	coord.DERP = core.CompositeDERP{PlatformFn: relayTLS.Current, Relays: relays}
+	edgeDERPWatcher = relayTLS.run
 	coord.Tunnels = core.NewMemTunnelStore()
 	if s, ok := nodes.(interface {
 		core.TunnelStore
@@ -204,8 +213,8 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 // ACL doc, over one connection) when a DSN is configured (CALABI_COORD_DB_DSN or
 // CALABI_DB_DSN), else in-memory stores (dev / local smoke, where state
 // reasonably vanishes on restart). The DB store is what makes admin visibility,
-// seat billing, and the console ACL editor meaningful across restarts
-// (MESH.8c/8e). A configured-but-broken DSN aborts startup rather than silently
+// seat billing, and the console ACL editor meaningful across restarts.
+// A configured-but-broken DSN aborts startup rather than silently
 // losing persistence.
 func platformStores(logger *slog.Logger) (core.NodeStore, core.ACLStore, core.ACLRevisionStore, core.ServiceStore, core.SettingsStore, core.RelayStore, core.ConnRecordStore, error) {
 	dsn := dbDSN()

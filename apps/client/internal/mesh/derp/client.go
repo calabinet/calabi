@@ -4,13 +4,15 @@
 // before Send and decrypts after onRecv), so the relay never sees plaintext.
 // Speaks only pkg/mesh-proto (the public frame contract) + stdlib.
 //
-// This is the "always-reachable" fallback path of MESH.2 (DERP-only, no hole
-// punching yet). MESH.4 adds direct paths and upgrades off the relay.
+// This is the "always-reachable" fallback path: DERP only, which is all the mesh
+// had at first. Hole punching adds direct paths and upgrades
+// off the relay.
 package derp
 
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -28,10 +30,10 @@ import (
 // goroutine. src is the sending node; ciphertext is opaque (WG-encrypted).
 type RecvFunc func(src meshproto.NodeKey, ciphertext []byte)
 
-// Auth is what this node presents when a relay challenges it (R0'). The zero
+// Auth is what this node presents when a relay challenges it. The zero
 // value means "nothing to present", which is correct against a relay that
-// doesn't require authentication — the pre-R0' behaviour, and what every relay
-// runs until the fleet has upgraded.
+// doesn't require authentication — how relays behaved before relay
+// authentication, and what every relay runs until the fleet has upgraded.
 type Auth struct {
 	// Priv is the node's WireGuard private key. Sealing the challenge with it is
 	// what proves this connection really is the node key it claimed; ClientInfo
@@ -46,13 +48,21 @@ type Auth struct {
 
 // Client is one live link to a relay.
 type Client struct {
-	self   meshproto.NodeKey
-	auth   Auth
-	conn   net.Conn
-	onRecv RecvFunc
-	logger *slog.Logger
-	wmu    sync.Mutex // serializes writes that bypass the queue (control frames)
-	closed chan struct{}
+	self meshproto.NodeKey
+	auth Auth
+	// conn carries the frames: the TCP connection itself, or the TLS connection
+	// over it (DialTLS).
+	conn net.Conn
+	// binding is the certificate the relay presented in this link's TLS
+	// handshake, or nil on a plaintext link. Every challenge on a TLS link is
+	// answered with a proof bound to it (meshproto.SealBoundDERPAuthProof), so a
+	// relay passing down another relay's challenge collects nothing it can use
+	// there.
+	binding *meshproto.DERPBinding
+	onRecv  RecvFunc
+	logger  *slog.Logger
+	wmu     sync.Mutex // serializes writes that bypass the queue (control frames)
+	closed  chan struct{}
 	// sendq carries DATA frames to a writer goroutine, dropping what has waited
 	// too long (sendq.go). Control frames — the auth answer, keepalive pings —
 	// still go straight out under wmu: they are rare, they are what keeps the
@@ -139,23 +149,48 @@ var readyPingPayload = []byte("calready")
 // as ready anyway. A var so a test need not wait it out.
 var readyFallback = 2 * time.Second
 
-// Dial connects to the relay at addr (host:port), announces self via ClientInfo,
-// and starts the read loop. onRecv may be nil (drop inbound). The caller owns
-// the returned Client and must Close it.
+// Dial connects to the relay at addr (host:port) over the PLAINTEXT protocol,
+// announces self via ClientInfo, and starts the read loop. onRecv may be nil
+// (drop inbound). The caller owns the returned Client and must Close it.
 //
-// TODO(real-machine slice): wrap the transport in TLS (relay :443) once the
-// relay serves it; the payload is already E2E-encrypted so this is defense in
-// depth for metadata.
+// A relay whose map entry says it speaks TLS is dialed with DialTLS instead,
+// and never with this: a node that cannot make the TLS check does not fall back.
+//
 // Dial does NOT wait for a challenge before returning. A relay that doesn't
 // require authentication never sends one, and blocking on it would stall every
 // dial against the entire un-upgraded fleet. The challenge — whenever it comes,
 // at connect time or hours later — is answered from the read loop.
 func Dial(ctx context.Context, addr string, self meshproto.NodeKey, auth Auth, onRecv RecvFunc, logger *slog.Logger) (*Client, error) {
+	return dial(ctx, addr, nil, self, auth, onRecv, logger)
+}
+
+// DialTLS is Dial over TLS, with the certificate checked as tlsCfg says (see
+// internal/trust for how a relay map's trust becomes one). TLS 1.3 and the
+// relay's protocol name are set here. The link answers every challenge with a
+// proof bound to the certificate this handshake presented — the leaf tlsCfg
+// just verified — which is what makes the answer useless to any other relay.
+func DialTLS(ctx context.Context, addr string, tlsCfg *tls.Config, self meshproto.NodeKey, auth Auth, onRecv RecvFunc, logger *slog.Logger) (*Client, error) {
+	if tlsCfg == nil {
+		return nil, errors.New("derp: DialTLS without a TLS config")
+	}
+	return dial(ctx, addr, tlsCfg, self, auth, onRecv, logger)
+}
+
+func dial(ctx context.Context, addr string, tlsCfg *tls.Config, self meshproto.NodeKey, auth Auth, onRecv RecvFunc, logger *slog.Logger) (*Client, error) {
 	// Through hostnet: the relay link carries the tunnel, so on a phone it must
 	// be kept out of the tunnel it carries.
-	conn, err := hostnet.Dialer().DialContext(ctx, "tcp", addr)
+	raw, err := hostnet.Dialer().DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("derp: dial %s: %w", addr, err)
+	}
+	conn, binding := raw, (*meshproto.DERPBinding)(nil)
+	if tlsCfg != nil {
+		tc, b, err := handshakeTLS(ctx, raw, tlsCfg)
+		if err != nil {
+			_ = raw.Close()
+			return nil, fmt.Errorf("derp: TLS to %s: %w", addr, err)
+		}
+		conn, binding = tc, &b
 	}
 	if err := meshproto.WriteDERPFrame(conn, meshproto.DERPFrameClientInfo, self[:]); err != nil {
 		_ = conn.Close()
@@ -163,13 +198,14 @@ func Dial(ctx context.Context, addr string, self meshproto.NodeKey, auth Auth, o
 	}
 	// Once per relay connection, not per packet: which send-buffer policy is in
 	// force decides whether the queue's deadline can do its job at all, and the
-	// field has already cost us two rounds of guessing at it.
+	// field has already cost us two rounds of guessing at it. The TCP socket's,
+	// under the TLS if there is one.
 	pol := resolveSendBufPolicy(os.Getenv(sendSockBufEnv))
-	ctl := applySendBufPolicy(conn, pol)
+	ctl := applySendBufPolicy(raw, pol)
 	if logger != nil && pol.pinned > 0 {
 		logger.Info("derp: kernel send buffer pinned", "addr", addr, "bytes", pol.pinned, "env", sendSockBufEnv)
 	}
-	c := &Client{self: self, auth: auth, conn: conn, onRecv: onRecv, logger: logger,
+	c := &Client{self: self, auth: auth, conn: conn, binding: binding, onRecv: onRecv, logger: logger,
 		closed: make(chan struct{}), sendq: newSendQueue(), sndbuf: ctl, pinnedBuf: pol.pinned,
 		dialedAt: time.Now()}
 	c.lastRx.Store(time.Now().UnixNano()) // a fresh link counts as just-heard-from
@@ -332,7 +368,7 @@ func (c *Client) Challenged() (answeredWith []byte, challenged bool) {
 }
 
 // answerChallenge proves possession of the node key and presents whatever grant
-// the node holds right now (R0'). A node with no private key configured stays
+// the node holds right now. A node with no private key configured stays
 // silent rather than sending a proof that cannot verify — the relay closes the
 // link either way, and silence leaves a clearer trail.
 func (c *Client) answerChallenge(payload []byte) error {
@@ -347,7 +383,16 @@ func (c *Client) answerChallenge(payload []byte) error {
 	if c.auth.Grant != nil {
 		grant = c.auth.Grant()
 	}
-	proof, err := meshproto.SealDERPAuthProof(ch, c.self, c.auth.Priv, grant)
+	// On a TLS link, only ever the bound proof: this relay's certificate is in
+	// it, so a relay passing down some other relay's challenge gets an answer
+	// that relay refuses. The legacy proof names no relay and stays for
+	// plaintext links, which have nothing to bind to.
+	var proof []byte
+	if c.binding != nil {
+		proof, err = meshproto.SealBoundDERPAuthProof(ch, c.self, c.auth.Priv, grant, *c.binding)
+	} else {
+		proof, err = meshproto.SealDERPAuthProof(ch, c.self, c.auth.Priv, grant)
+	}
 	if err != nil {
 		return err
 	}

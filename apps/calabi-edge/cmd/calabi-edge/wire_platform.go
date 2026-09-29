@@ -2,12 +2,12 @@ package main
 
 // wire_platform.go is the control-plane seam. It ships in every build,
 // including the open-source one — there is no build tag and no stub twin any
-// more (F1 merged them). It dials identity / tunnel / quota / cert / config /
-// usage — directly in cluster mode or through a single bff-edge mTLS gRPC
-// connection in multi-region mode — and returns the platformDeps bundle that
-// run() threads into the data-plane core. What makes an edge self-hosted is
-// that none of those addresses are configured, so this seam wires nothing;
-// it is a runtime condition, not a compile-time one.
+// more (the two builds were merged). It dials identity / tunnel / quota /
+// cert / config / usage — directly in cluster mode or through a single
+// bff-edge mTLS gRPC connection in multi-region mode — and returns the
+// platformDeps bundle that run() threads into the data-plane core. What makes
+// an edge self-hosted is that none of those addresses are configured, so this
+// seam wires nothing; it is a runtime condition, not a compile-time one.
 
 import (
 	"context"
@@ -15,6 +15,8 @@ import (
 	"io"
 	"log/slog"
 	"net"
+
+	"google.golang.org/grpc"
 
 	bffedge "github.com/calabinet/calabi/pkg/edge-proto/edgepb"
 
@@ -68,7 +70,7 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 		logger.Info("bff-edge wired (multi-region mode)", "addr", cfg.MultiRegion.BFFEdgeAddr)
 	}
 
-	// Since F3 step 2b bff-edge is the ONLY way to a control plane, so this is
+	// bff-edge is the ONLY way to a control plane, so this is
 	// simply whether we dialed it. The old expression also counted the
 	// direct-dial addresses, which no longer reach anything.
 	deps.controlPlaneWired = cpBFF != nil
@@ -210,7 +212,7 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 
 	// Event bus: the bff-edge-backed one, which translates Subscribe into
 	// SubscribeXxx streams and Publish into ReportUsage. The direct NATS dial
-	// went with the direct control-plane dials in F3 step 2b — an edge outside
+	// went with the direct control-plane dials — an edge outside
 	// the cluster could never reach the cluster's NATS anyway, and inside it the
 	// gateway is now the single path. nil cpBFF means no control plane at all
 	// (standalone), and nothing on this side subscribes.
@@ -224,7 +226,7 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 	// Relay usage reporter (edge/derp merge + platform per-org). Two shapes,
 	// one for each relay kind — see relayreporter.go:
 	//
-	//   platform (multi-tenant): bills PER org from each node's R0' grant, under
+	//   platform (multi-tenant): bills PER org from each node's grant, under
 	//     the platform region code (counted toward the cap). Attribution needs
 	//     grants, so require_auth MUST be on; otherwise every delta has meshnet 0
 	//     and is dropped. bff-edge (or cluster NATS) accepts the per-org report as
@@ -302,7 +304,7 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 		logger.Info("online-cap admit wired")
 	}
 
-	// Anti-abuse connection limiters (Phase A, 2026-06-11). Process-global,
+	// Anti-abuse connection limiters (2026-06-11). Process-global,
 	// keyed by org_id; per-org caps fed from quota-svc at handshake. Only wired
 	// when quota-svc is available (there's no per-org cap source otherwise).
 	if quotaCached != nil {
@@ -424,7 +426,8 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 	// edge directory, so the coordinator lists it in the platform DERP map (no
 	// static map file). A self-hosted (BYOI) relay leaves these 0 — it registers
 	// per-org via bff-edge (runRelayRegistrar below) instead, and must not appear
-	// as a platform relay. Relay host = host(publicAddr).
+	// as a platform relay. Relay host = host(publicAddr). A STUN port of 0 is a
+	// relay whose responder is off (RelaySTUNPort), and the map lists it so.
 	var platformRelayDerp, platformRelayStun int32
 	if cfg.ServesMesh() && cfg.Mesh.IsPlatformKind() {
 		platformRelayDerp = int32(cfg.Mesh.RelayDERPPort())
@@ -472,6 +475,15 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 				<-ctx.Done()
 				return nil
 			}
+			// Whether devices may reach this platform relay over TLS: its
+			// certificate must verify against the platform CA for the host the
+			// directory lists it at (relayverify.go).
+			var relayTLS func() bool
+			if platformRelayDerp > 0 {
+				check := &relayTLSCheck{cert: in.relayCert, caFile: cfg.MultiRegion.CA,
+					host: hostOfAddr(publicAddr), logger: logger.With("component", "relay-tls")}
+				relayTLS = check.ok
+			}
 			return runEdgeRegistrar(ctx, logger, identityCli, in.mgr, identity.EdgeRegistration{
 				EdgeNodeID: in.edgeID,
 				NodeLabel:  cfg.NodeLabel,
@@ -485,14 +497,14 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 				RelayDerpPort: platformRelayDerp,
 				RelayStunPort: platformRelayStun,
 				Version:       version,
-			})
+			}, relayTLS)
 		}},
 		{"evict-consumer", func(ctx context.Context) error {
 			return runEvictConsumer(ctx, logger, bus, in.mgr, in.edgeID)
 		}},
 	}
 
-	// Edge cert auto-renewer (F1, byoi-seat-and-cert-lifecycle): keep THIS edge's
+	// Edge cert auto-renewer: keep THIS edge's
 	// own short-lived mTLS client cert fresh over the bff-edge conn (hot-swap, no
 	// restart). Only in bff-edge mode (the only mode that presents a client cert);
 	// the runner no-ops for a platform edge (cert carries no org SAN).
@@ -506,7 +518,7 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 		deps.runners = append(deps.runners, namedRunner{"mesh-resolver", meshResolverImpl.Run})
 	}
 
-	// Relay self-registration (edge/derp merge-B): a merged node self-registers
+	// Relay self-registration (edge/derp merge): a merged node self-registers
 	// its relay endpoint into the org DERP map on a heartbeat, exactly like the
 	// edge registrar above. bff-edge mode only — bff-edge derives the org from the
 	// mTLS cert and attributes the relay to it (the node needn't know its own org).
@@ -515,25 +527,44 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 	// process/config-provisioned (coord's map file), not self-registered per org —
 	// and bff-edge's RegisterRelay is BYOI-only, so a platform edge calling it would
 	// just collect a PermissionDenied every heartbeat. Gate it out.
-	if cpBFF != nil && cfg.ServesMesh() && cfg.Mesh.Label != "" && !cfg.Mesh.IsPlatformKind() {
+	//
+	// The answer is also how the relay learns whom to admit: it carries the key
+	// the platform signs its devices' grants with (relayadmission.go). So every
+	// such relay gets an admission, even one that cannot register — it then
+	// says why it is not listening instead of admitting whoever finds it.
+	if cpBFF != nil && cfg.BYOIRelay() {
+		admission := newRelayAdmission(cfg.State.Dir, logger)
+		deps.relayAdmission = admission
 		relayHost, _, splitErr := net.SplitHostPort(publicAddr)
 		if splitErr != nil {
 			relayHost = publicAddr // publicAddr may already be a bare host
 		}
-		if relayHost == "" {
-			logger.Warn("relay self-registration skipped: no public host (set public.host)")
-		} else {
+		switch {
+		case cfg.Mesh.Label == "":
+			admission.cannotRegister("no mesh.label (it names the relay's region, self-<label>)")
+			logger.Error("relay self-registration skipped: no mesh.label")
+		case relayHost == "":
+			admission.cannotRegister("no public.host (the address devices reach the relay at)")
+			logger.Error("relay self-registration skipped: no public host (set public.host)")
+		default:
 			client := cpBFF.Client
 			req := &bffedge.RegisterRelayRequest{
 				Label:    cfg.Mesh.Label,
 				Host:     relayHost,
 				DerpPort: int32(cfg.Mesh.RelayDERPPort()),
+				// 0 when the responder is off. The coordinator then lists the
+				// relay without a STUN port; before it learned to, it put 3478
+				// in its place, and devices probed a port nothing answered on.
 				StunPort: int32(cfg.Mesh.RelaySTUNPort()),
 			}
+			// Whether devices may reach this relay over TLS: its certificate —
+			// the node's own cert-svc leaf, when it can serve inbound — must
+			// verify against the platform CA for relayHost (relayverify.go).
+			check := &relayTLSCheck{cert: in.relayCert, caFile: cfg.MultiRegion.CA,
+				host: relayHost, logger: logger.With("component", "relay-tls")}
 			deps.runners = append(deps.runners, namedRunner{"relay-registrar", func(ctx context.Context) error {
 				return runRelayRegistrar(ctx, logger, func(ctx context.Context) error {
-					_, err := client.RegisterRelay(ctx, req)
-					return err
+					return registerRelayOnce(ctx, client, withRelayTLS(req, check.ok()), admission)
 				})
 			}})
 			logger.Info("relay self-registration wired",
@@ -543,6 +574,33 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 
 	deps.closers = closers
 	return deps, nil
+}
+
+// relayRegisterer is the one bff-edge call a relay's registration makes.
+type relayRegisterer interface {
+	RegisterRelay(ctx context.Context, in *bffedge.RegisterRelayRequest, opts ...grpc.CallOption) (*bffedge.RegisterRelayResponse, error)
+}
+
+// withRelayTLS is req as this heartbeat sends it: the same relay, with this
+// heartbeat's answer to whether devices can verify it over TLS.
+func withRelayTLS(req *bffedge.RegisterRelayRequest, tls bool) *bffedge.RegisterRelayRequest {
+	return &bffedge.RegisterRelayRequest{
+		Label: req.GetLabel(), Host: req.GetHost(),
+		DerpPort: req.GetDerpPort(), StunPort: req.GetStunPort(), Tls: tls,
+	}
+}
+
+// registerRelayOnce is one heartbeat of a node's own relay: register it, and
+// hand the answer's grant key to the relay.
+func registerRelayOnce(ctx context.Context, client relayRegisterer, req *bffedge.RegisterRelayRequest, admission *relayAdmission) error {
+	resp, err := client.RegisterRelay(ctx, req)
+	if err != nil {
+		return err
+	}
+	if err := admission.learn(resp.GetCoordGrantPubkey()); err != nil {
+		return fmt.Errorf("registered, but the answer cannot be used to check devices' grants: %w", err)
+	}
+	return nil
 }
 
 // oauthSecretsOf adapts the tunnel-store client to the fetcher the policy

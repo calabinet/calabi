@@ -1,6 +1,7 @@
 package main
 
-// How a device that joined a self-hosted server reaches its edge: the coordinator says which
+// How a device that joined a self-hosted server reaches its edge:
+// the coordinator says which
 // edge and which certificate, and signs the grant the edge takes as this
 // device's sign-in. Nothing about the edge is configured on the device.
 

@@ -8,9 +8,9 @@ import (
 	"time"
 )
 
-// TestRunCertRenewalPlatformHoldsUntilCtx locks the namedRunner contract that
-// F1 originally broke: RunCertRenewal runs under main's superviseTasks, where
-// ANY task returning — even nil — stops the whole edge. A platform edge (no
+// TestRunCertRenewalPlatformHoldsUntilCtx locks the namedRunner contract the
+// renewer first broke: RunCertRenewal runs under main's superviseTasks,
+// where ANY task returning — even nil — stops the whole edge. A platform edge (no
 // org SAN, nothing to renew) must therefore BLOCK until ctx is cancelled, not
 // return immediately. The original bare `return nil` on the skip path shut
 // every platform edge down ~1s after boot (booted clean, then vanished with no

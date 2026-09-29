@@ -11,7 +11,7 @@ import (
 )
 
 // enableExitRoutes makes this node a full-tunnel client of an exit node on
-// Windows (the consumer side of MESH.7b). It mirrors the Linux path via the IP
+// Windows (the consumer side). It mirrors the Linux path via the IP
 // Helper API (winipcfg), the same mechanism WireGuard's own Windows client uses:
 // pin the control-plane endpoints (coord + relay) to the physical link FIRST —
 // via the gateway the OS uses for them right now, captured before we hijack the
@@ -22,8 +22,8 @@ import (
 // (tun /1s first, so the box is never briefly unroutable). Needs administrator.
 //
 // luid is the wintun adapter LUID (WGDatapath.tunLUID); ifname is error context.
-// lanKeep are the private/local ranges to hold on the physical link (MESH.7b
-// "allow LAN access") so full-tunnelling never cuts off the local network.
+// lanKeep are the private/local ranges to hold on the physical link ("allow LAN access")
+// so full-tunnelling never cuts off the local network.
 func enableExitRoutes(luid uint64, ifname string, bypass []netip.Addr, lanKeep []netip.Prefix) (func(), error) {
 	if luid == 0 {
 		return nil, fmt.Errorf("mesh: tun %q has no wintun LUID; cannot take exit-node default route", ifname)

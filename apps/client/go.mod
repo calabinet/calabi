@@ -32,6 +32,7 @@ require (
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/calabinet/calabi/pkg/mesh-proto v0.0.0
+	github.com/calabinet/calabi/pkg/relay v0.0.0
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/kr/text v0.2.0 // indirect
@@ -49,3 +50,8 @@ require (
 replace github.com/calabinet/calabi/pkg/protocol => ../../pkg/protocol
 
 replace github.com/calabinet/calabi/pkg/mesh-proto => ../../pkg/mesh-proto
+
+// Tests only: the relay link is exercised against the real relay hub over real
+// TLS (internal/mesh/derp/tls_test.go). pkg/relay is public, and the client
+// binary links none of it.
+replace github.com/calabinet/calabi/pkg/relay => ../../pkg/relay

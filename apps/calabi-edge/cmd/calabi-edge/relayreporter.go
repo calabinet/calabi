@@ -88,7 +88,7 @@ func newRelayUsageReporter(bus usagePublisher, orgID int64, region string, logge
 }
 
 // newPlatformRelayUsageReporter builds a PLATFORM reporter: it serves many orgs,
-// so each delta is billed to the meshnet its R0' grant proved, under the platform
+// so each delta is billed to the meshnet its grant proved, under the platform
 // region code. A delta with meshnet 0 (auth off / no grant) is unattributable and
 // dropped — misbilling it to a wrong or zero org is worse than not counting it.
 func newPlatformRelayUsageReporter(bus usagePublisher, region string, logger *slog.Logger) *relayUsageReporter {

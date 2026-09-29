@@ -16,7 +16,8 @@ import (
 // SubdomainAllocator hands out fresh subdomains under a base domain.
 // Format: "u<6 digit seq>.<base>", e.g. "u000123.localtest.me".
 //
-// The base is held in an atomic.Pointer so the fsnotify config reload can swap it without locking. Allocate is called from
+// The base is held in an atomic.Pointer so the fsnotify config reload
+// can swap it without locking. Allocate is called from
 // the session control loop on a hot path, so we want zero contention.
 //
 // Persistence: when UsePersistentSeq(path) has been called the seq value

@@ -53,8 +53,8 @@ func devStaticAuth(durable bool) (core.Authenticator, error) {
 			// Setting AUTHKEYS_FILE states the intent "these keys, and only
 			// these". Falling back to the built-in key on an unreadable or
 			// half-written file answered that with "anyone, into meshnet 1" —
-			// using a key that is printed in the public source (audit finding
-			// MESH-10). prodguard only checks that the variable is SET, so an
+			// using a key that is printed in the public source.
+			// prodguard only checks that the variable is SET, so an
 			// unmounted volume or a typo sailed straight past it.
 			//
 			// Fail hard regardless of environment: a broken key file is never a

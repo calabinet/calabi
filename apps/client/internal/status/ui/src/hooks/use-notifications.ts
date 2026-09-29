@@ -1,5 +1,5 @@
 // use-notifications.ts — minimal browser-notification helper for the
-// daemon UI. M7-S5 task #44.
+// daemon UI.
 //
 // What we notify on (callers fire these):
 //

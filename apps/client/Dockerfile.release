@@ -5,7 +5,7 @@
 # in the binary that was already built, published and checksummed — literally the
 # file behind `calabi-linux-<arch>.tar.gz` on the download page.
 #
-# WHY (docs/runbook/full-oss-plan.md 8.7, the debt recorded at v1.7.0)
+# WHY — the debt recorded at v1.7.0
 #
 # The release archives are built from the PUBLIC tree by release-official.sh, and
 # build-manifest.json says which commit they came from. The image used to be a
@@ -42,7 +42,7 @@ LABEL org.opencontainers.image.title="calabi" \
 # + route 100.64.0.0/10 (mesh/linkconfig_linux.go).
 # wireguard-tools: `wg show <ifname>` reads the mesh device's UAPI socket — the
 # primary handshake/transfer diagnostic.
-# iptables: subnet-router NAT (MESH.7) MASQUERADEs mesh traffic to advertised
+# iptables: subnet-router NAT MASQUERADEs mesh traffic to advertised
 # LAN CIDRs. All unused by the http/tcp tunnel path; kept in the single client
 # image so mesh works + is debuggable out of the box.
 RUN apk add --no-cache ca-certificates tzdata iproute2 wireguard-tools iptables && \

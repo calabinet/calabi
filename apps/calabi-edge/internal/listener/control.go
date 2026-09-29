@@ -61,7 +61,7 @@ type ControlOptions struct {
 
 	// ConnGuardInstaller, when set, runs once per session post-handshake
 	// to install the per-org connection guard (concurrent-connection cap
-	// + new-connection rate gates, Phase A anti-abuse). It resolves the
+	// + new-connection rate gates, anti-abuse). It resolves the
 	// caps from quota-svc and attaches a *session.ConnGuard. nil ⇒ no
 	// connection limiting (dev / standalone). MUST degrade open (leave
 	// the session unguarded on any lookup failure) — abuse protection is
@@ -90,9 +90,9 @@ type ControlOptions struct {
 	Observer ControlObserver
 
 	// PostHandshake runs after AUTH succeeds, in the per-session goroutine,
-	// before the control loop reads its first frame. Phase C uses this
-	// for the reconnect-catch-up push (fetch all tunnels owned by this
-	// client and send them down as CONFIG_PUSH). nil = no hook.
+	// before the control loop reads its first frame. The reconnect catch-up
+	// push uses it: fetch all tunnels owned by this client and send
+	// them down as CONFIG_PUSH. nil = no hook.
 	PostHandshake func(ctx context.Context, sess *session.Session)
 
 	// OnSessionGone fires AFTER the per-session goroutine returns and
@@ -141,7 +141,7 @@ type OrgBandwidthRegistry interface {
 }
 
 // ConnGuardInstaller resolves a session's per-org connection caps from
-// quota-svc and installs a *session.ConnGuard on it (Phase A anti-abuse).
+// quota-svc and installs a *session.ConnGuard on it (anti-abuse).
 // tenantID is the numeric org_id in string form; non-numeric tenants
 // (static-YAML dev) are left unguarded. The implementation lives in
 // calabi-edge's main (it owns the process-global limiters + quota client);
@@ -316,7 +316,7 @@ func (c *Control) handle(ctx context.Context, conn net.Conn) {
 		defer release()
 	}
 
-	// Connection guard (Phase A anti-abuse): install the per-org
+	// Connection guard (anti-abuse): install the per-org
 	// concurrent-connection cap + new-connection rate gates. Degrades open
 	// (installer leaves the session unguarded) on any quota lookup failure.
 	if c.opts.ConnGuardInstaller != nil {

@@ -10,7 +10,7 @@
 // Everything else (ValidateToken, ClaimTunnel, GetCert, …) matches exactly, so
 // the raw BFFEdgeClient satisfies those clients' narrow interfaces directly.
 //
-// Since F3 step 2b these adapters convert NOTHING: the edge's platform clients
+// these adapters convert NOTHING: the edge's platform clients
 // are typed by the edge contract itself (pkg/edge-proto/edgepb), because every
 // edge now reaches the control plane through bff-edge. The re-encoding bridges
 // that briefly lived here — for the window where one binary had to speak both

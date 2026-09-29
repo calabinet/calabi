@@ -80,6 +80,20 @@ func (mrc *MeshRelayCreate) SetNillableEnabled(b *bool) *MeshRelayCreate {
 	return mrc
 }
 
+// SetTLS sets the "tls" field.
+func (mrc *MeshRelayCreate) SetTLS(b bool) *MeshRelayCreate {
+	mrc.mutation.SetTLS(b)
+	return mrc
+}
+
+// SetNillableTLS sets the "tls" field if the given value is not nil.
+func (mrc *MeshRelayCreate) SetNillableTLS(b *bool) *MeshRelayCreate {
+	if b != nil {
+		mrc.SetTLS(*b)
+	}
+	return mrc
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (mrc *MeshRelayCreate) SetCreatedAt(t time.Time) *MeshRelayCreate {
 	mrc.mutation.SetCreatedAt(t)
@@ -141,6 +155,10 @@ func (mrc *MeshRelayCreate) defaults() {
 		v := meshrelay.DefaultEnabled
 		mrc.mutation.SetEnabled(v)
 	}
+	if _, ok := mrc.mutation.TLS(); !ok {
+		v := meshrelay.DefaultTLS
+		mrc.mutation.SetTLS(v)
+	}
 	if _, ok := mrc.mutation.CreatedAt(); !ok {
 		v := meshrelay.DefaultCreatedAt()
 		mrc.mutation.SetCreatedAt(v)
@@ -166,6 +184,9 @@ func (mrc *MeshRelayCreate) check() error {
 	}
 	if _, ok := mrc.mutation.Enabled(); !ok {
 		return &ValidationError{Name: "enabled", err: errors.New(`ent: missing required field "MeshRelay.enabled"`)}
+	}
+	if _, ok := mrc.mutation.TLS(); !ok {
+		return &ValidationError{Name: "tls", err: errors.New(`ent: missing required field "MeshRelay.tls"`)}
 	}
 	if _, ok := mrc.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "MeshRelay.created_at"`)}
@@ -219,6 +240,10 @@ func (mrc *MeshRelayCreate) createSpec() (*MeshRelay, *sqlgraph.CreateSpec) {
 	if value, ok := mrc.mutation.Enabled(); ok {
 		_spec.SetField(meshrelay.FieldEnabled, field.TypeBool, value)
 		_node.Enabled = value
+	}
+	if value, ok := mrc.mutation.TLS(); ok {
+		_spec.SetField(meshrelay.FieldTLS, field.TypeBool, value)
+		_node.TLS = value
 	}
 	if value, ok := mrc.mutation.CreatedAt(); ok {
 		_spec.SetField(meshrelay.FieldCreatedAt, field.TypeTime, value)

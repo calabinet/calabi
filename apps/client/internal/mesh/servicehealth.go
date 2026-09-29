@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Service self-check (F3b).
+// Service self-check.
 //
 // The confusion this exists to end: a rule names a service, an admin confirms
 // it, and it still does not work. The usual cause is an application bound to
@@ -29,9 +29,10 @@ import (
 //	neither ok                 → the app isn't running
 //
 // This is OBSERVATION, not discovery: every address dialed comes from a service
-// the operator declared. rejected scanning a node's listening ports, and
-// this doesn't — it checks the ones already written down, which is the same
-// thing the tunnel upstream prober has always done (internal/probe/health.go).
+// the operator declared. The design rejected scanning a node's listening
+// ports, and this doesn't — it checks the ones already written down,
+// which is the same thing the tunnel upstream prober has always done
+// (internal/probe/health.go).
 //
 // TCP only. A udp "dial" is connectionless and succeeds against a port nothing
 // is listening on, so reporting its result would be worse than reporting
@@ -93,7 +94,7 @@ func (c *Controller) getSelfServices() []DeclaredService {
 // declares, plus what the coordinator says is registered on it.
 //
 // The second half is the whole reason this exists. A manager can enter a service
-// in the console (F4a) and the machine never hears about it any other way — so
+// in the console and the machine never hears about it any other way — so
 // before the netmap carried them, a console-authored service showed "not
 // observed" forever. That is the kind most in need of a check: nobody was
 // standing at the machine when its address was typed in.
@@ -275,8 +276,8 @@ type ServiceObservation struct {
 
 // setObservations records the last check. Current value only, same posture as
 // the coordinator's tracker: a history of which port answered when is the kind
-// of record says not to accumulate, and it is no more welcome on the machine
-// than in the control plane.
+// of record the design says not to accumulate, and it is no more welcome
+// on the machine than in the control plane.
 func (c *Controller) setObservations(services []DeclaredService, fromNetmap []bool, reports []ServiceHealthReport) {
 	byName := make(map[string]ServiceHealthReport, len(reports))
 	for _, r := range reports {

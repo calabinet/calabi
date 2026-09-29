@@ -40,7 +40,7 @@ type RegisterNodeRequest struct {
 	// Base64 (WireGuard-style) public keys. Private keys never leave the node.
 	NodeKey  string `protobuf:"bytes,1,opt,name=node_key,json=nodeKey,proto3" json:"node_key,omitempty"`
 	DiscoKey string `protobuf:"bytes,2,opt,name=disco_key,json=discoKey,proto3" json:"disco_key,omitempty"`
-	// Human label used for MagicDNS (MESH.6): <name>.<meshnet>.mesh.calabi.net
+	// Human label used for MagicDNS: <name>.<meshnet>.mesh.calabi.net
 	Name string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	// Opaque auth-key/token proving the node may join a meshnet (verified by
 	// identity-svc on the platform build; a static file on the self-hosted coord).
@@ -50,7 +50,7 @@ type RegisterNodeRequest struct {
 	Capabilities    []string `protobuf:"bytes,6,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
 	// Subnet routes this node advertises (CIDRs it can forward to, e.g.
 	// "192.168.1.0/24"). The coordinator, once it approves them, adds them to this
-	// node's allowed_ips in peers' netmaps so they route the CIDR here (MESH.7).
+	// node's allowed_ips in peers' netmaps so they route the CIDR here.
 	AdvertisedRoutes []string `protobuf:"bytes,7,rep,name=advertised_routes,json=advertisedRoutes,proto3" json:"advertised_routes,omitempty"`
 	// device_fingerprint is the daemon's per-install id (the same one it registers
 	// with on the Publish side). A CLAIM, like name: it exists only so the console
@@ -2421,7 +2421,7 @@ type NetMap struct {
 	Self    *Peer                  `protobuf:"bytes,1,opt,name=self,proto3" json:"self,omitempty"`
 	Peers   []*Peer                `protobuf:"bytes,2,rep,name=peers,proto3" json:"peers,omitempty"`
 	DerpMap *DERPMap               `protobuf:"bytes,3,opt,name=derp_map,json=derpMap,proto3" json:"derp_map,omitempty"`
-	// Packet filter this node ENFORCES on inbound traffic (MESH.5b). The
+	// Packet filter this node ENFORCES on inbound traffic. The
 	// coordinator compiles it from the meshnet's ACL for this node specifically:
 	// "these sources may reach these ports OF MINE". Enforcement is on the
 	// RECEIVING side on purpose — a sender that lies (or is compromised) still
@@ -2445,7 +2445,7 @@ type NetMap struct {
 	// one of those, and either choice is an outage for the other case.
 	FilterEnabled bool `protobuf:"varint,5,opt,name=filter_enabled,json=filterEnabled,proto3" json:"filter_enabled,omitempty"`
 	// relay_grant is the coordinator's signed authorization for THIS node to use
-	// relays (R0'). Opaque here on purpose: the node forwards the bytes verbatim
+	// relays. Opaque here on purpose: the node forwards the bytes verbatim
 	// to a relay, which verifies them with the coordinator's public key held as
 	// static config — so a relay decides who may connect WITHOUT ever talking to
 	// the control plane. Format and rules in ../relaygrant.go.
@@ -2461,10 +2461,10 @@ type NetMap struct {
 	// a relay may also re-challenge a live link at any time.
 	RelayGrant []byte `protobuf:"bytes,6,opt,name=relay_grant,json=relayGrant,proto3" json:"relay_grant,omitempty"`
 	// self_services is the coordinator's registry of the services registered on
-	// THIS node, sent so the node can self-check them (F3b).
+	// THIS node, sent so the node can self-check them.
 	//
 	// Needed because the registry is not only what the node declared. A manager
-	// can enter a service in the console (F4a), and nothing else ever pushes that
+	// can enter a service in the console, and nothing else ever pushes that
 	// back down — so without this field a console-authored service could never
 	// show a reachability result at all. That is exactly the kind most likely to
 	// be pointed at the wrong address, since nobody was standing at the machine
@@ -2520,7 +2520,7 @@ type NetMap struct {
 	// what a self-hosted one sends. Direct (hole-punched) traffic is NEVER
 	// charged against it: it costs the platform nothing.
 	RelayBandwidthKbps      uint32 `protobuf:"varint,12,opt,name=relay_bandwidth_kbps,json=relayBandwidthKbps,proto3" json:"relay_bandwidth_kbps,omitempty"`
-	RelayBandwidthBurstKbps uint32 `protobuf:"varint,13,opt,name=relay_bandwidth_burst_kbps,json=relayBandwidthBurstKbps,proto3" json:"relay_bandwidth_burst_kbps,omitempty"` // MagicDNS records land here in MESH.6.
+	RelayBandwidthBurstKbps uint32 `protobuf:"varint,13,opt,name=relay_bandwidth_burst_kbps,json=relayBandwidthBurstKbps,proto3" json:"relay_bandwidth_burst_kbps,omitempty"` // MagicDNS records land here.
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -2833,7 +2833,7 @@ type Peer struct {
 	// Region code of the peer's DERP home relay.
 	DerpHome string `protobuf:"bytes,7,opt,name=derp_home,json=derpHome,proto3" json:"derp_home,omitempty"`
 	// MagicDNS label — the node's name, resolved to its overlay IP by the
-	// client-side resolver (MESH.6).
+	// client-side resolver.
 	Name string `protobuf:"bytes,8,opt,name=name,proto3" json:"name,omitempty"`
 	// Services this peer offers, so a client can say what a machine is FOR rather
 	// than only what it is called. Only CONFIRMED ones travel: the coordinator
@@ -3115,10 +3115,17 @@ func (x *DERPRegion) GetNodes() []*DERPNode {
 }
 
 type DERPNode struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	HostName      string                 `protobuf:"bytes,1,opt,name=host_name,json=hostName,proto3" json:"host_name,omitempty"`
-	DerpPort      int32                  `protobuf:"varint,2,opt,name=derp_port,json=derpPort,proto3" json:"derp_port,omitempty"`
-	StunPort      int32                  `protobuf:"varint,3,opt,name=stun_port,json=stunPort,proto3" json:"stun_port,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	HostName string                 `protobuf:"bytes,1,opt,name=host_name,json=hostName,proto3" json:"host_name,omitempty"`
+	DerpPort int32                  `protobuf:"varint,2,opt,name=derp_port,json=derpPort,proto3" json:"derp_port,omitempty"`
+	StunPort int32                  `protobuf:"varint,3,opt,name=stun_port,json=stunPort,proto3" json:"stun_port,omitempty"`
+	// How a node reaches this relay's derp_port. Unset: the plaintext protocol,
+	// which every relay speaks. Set: TLS, checked as it says, and never plaintext
+	// — a node whose check fails does not fall back, and one that cannot make the
+	// check (a trust it does not know) leaves the relay alone. A relay that speaks
+	// TLS answers the plaintext protocol on the same port until it is told to
+	// refuse it, so an older node that ignores this field keeps working.
+	Tls           *DERPNodeTLS `protobuf:"bytes,4,opt,name=tls,proto3" json:"tls,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3174,12 +3181,80 @@ func (x *DERPNode) GetStunPort() int32 {
 	return 0
 }
 
+func (x *DERPNode) GetTls() *DERPNodeTLS {
+	if x != nil {
+		return x.Tls
+	}
+	return nil
+}
+
+// DERPNodeTLS is how a node checks a relay's certificate — the way it already
+// checks an edge.
+type DERPNodeTLS struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// "platform": the edge CA compiled into the client, and host_name. Only a
+	// calabi.net coordinator says it, and a node signed in to a self-hosted one
+	// never accepts it.
+	// "system":   the device's own roots, and host_name.
+	// "pin":      the certificate's fingerprint (meshproto.CertPin) is one of pins.
+	Trust string `protobuf:"bytes,1,opt,name=trust,proto3" json:"trust,omitempty"`
+	// For trust "pin". More than one lets a relay roll to a new key without
+	// cutting its devices off.
+	Pins          []string `protobuf:"bytes,2,rep,name=pins,proto3" json:"pins,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DERPNodeTLS) Reset() {
+	*x = DERPNodeTLS{}
+	mi := &file_meshpb_coord_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DERPNodeTLS) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DERPNodeTLS) ProtoMessage() {}
+
+func (x *DERPNodeTLS) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DERPNodeTLS.ProtoReflect.Descriptor instead.
+func (*DERPNodeTLS) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *DERPNodeTLS) GetTrust() string {
+	if x != nil {
+		return x.Trust
+	}
+	return ""
+}
+
+func (x *DERPNodeTLS) GetPins() []string {
+	if x != nil {
+		return x.Pins
+	}
+	return nil
+}
+
 type ReportEndpointsRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	NodeId    int64                  `protobuf:"varint,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	Endpoints []string               `protobuf:"bytes,2,rep,name=endpoints,proto3" json:"endpoints,omitempty"` // host:port candidates
-	// Region code of the relay the node measured as its LOWEST-latency home
-	// (MESH.4 B2b). The node picks it by probing each region's STUN endpoint from
+	// Region code of the relay the node measured as its LOWEST-latency home.
+	// The node picks it by probing each region's STUN endpoint from
 	// the DERP map; the coordinator accepts it only if the region exists in the
 	// map it published, and distributes it to peers as this node's derp_home so
 	// they relay via the closest hop. Empty = no change (keep the current home).
@@ -3192,7 +3267,7 @@ type ReportEndpointsRequest struct {
 
 func (x *ReportEndpointsRequest) Reset() {
 	*x = ReportEndpointsRequest{}
-	mi := &file_meshpb_coord_proto_msgTypes[43]
+	mi := &file_meshpb_coord_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3204,7 +3279,7 @@ func (x *ReportEndpointsRequest) String() string {
 func (*ReportEndpointsRequest) ProtoMessage() {}
 
 func (x *ReportEndpointsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[43]
+	mi := &file_meshpb_coord_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3217,7 +3292,7 @@ func (x *ReportEndpointsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportEndpointsRequest.ProtoReflect.Descriptor instead.
 func (*ReportEndpointsRequest) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{43}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *ReportEndpointsRequest) GetNodeId() int64 {
@@ -3256,7 +3331,7 @@ type ReportEndpointsResponse struct {
 
 func (x *ReportEndpointsResponse) Reset() {
 	*x = ReportEndpointsResponse{}
-	mi := &file_meshpb_coord_proto_msgTypes[44]
+	mi := &file_meshpb_coord_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3268,7 +3343,7 @@ func (x *ReportEndpointsResponse) String() string {
 func (*ReportEndpointsResponse) ProtoMessage() {}
 
 func (x *ReportEndpointsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[44]
+	mi := &file_meshpb_coord_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3281,7 +3356,7 @@ func (x *ReportEndpointsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportEndpointsResponse.ProtoReflect.Descriptor instead.
 func (*ReportEndpointsResponse) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{44}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{45}
 }
 
 var File_meshpb_coord_proto protoreflect.FileDescriptor
@@ -3511,11 +3586,15 @@ const file_meshpb_coord_proto_rawDesc = "" +
 	"\n" +
 	"DERPRegion\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12.\n" +
-	"\x05nodes\x18\x02 \x03(\v2\x18.calabi.mesh.v1.DERPNodeR\x05nodes\"a\n" +
+	"\x05nodes\x18\x02 \x03(\v2\x18.calabi.mesh.v1.DERPNodeR\x05nodes\"\x90\x01\n" +
 	"\bDERPNode\x12\x1b\n" +
 	"\thost_name\x18\x01 \x01(\tR\bhostName\x12\x1b\n" +
 	"\tderp_port\x18\x02 \x01(\x05R\bderpPort\x12\x1b\n" +
-	"\tstun_port\x18\x03 \x01(\x05R\bstunPort\"\xb5\x01\n" +
+	"\tstun_port\x18\x03 \x01(\x05R\bstunPort\x12-\n" +
+	"\x03tls\x18\x04 \x01(\v2\x1b.calabi.mesh.v1.DERPNodeTLSR\x03tls\"7\n" +
+	"\vDERPNodeTLS\x12\x14\n" +
+	"\x05trust\x18\x01 \x01(\tR\x05trust\x12\x12\n" +
+	"\x04pins\x18\x02 \x03(\tR\x04pins\"\xb5\x01\n" +
 	"\x16ReportEndpointsRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\x03R\x06nodeId\x12\x1c\n" +
 	"\tendpoints\x18\x02 \x03(\tR\tendpoints\x12\x1f\n" +
@@ -3553,7 +3632,7 @@ func file_meshpb_coord_proto_rawDescGZIP() []byte {
 	return file_meshpb_coord_proto_rawDescData
 }
 
-var file_meshpb_coord_proto_msgTypes = make([]protoimpl.MessageInfo, 45)
+var file_meshpb_coord_proto_msgTypes = make([]protoimpl.MessageInfo, 46)
 var file_meshpb_coord_proto_goTypes = []any{
 	(*RegisterNodeRequest)(nil),            // 0: calabi.mesh.v1.RegisterNodeRequest
 	(*DeclaredService)(nil),                // 1: calabi.mesh.v1.DeclaredService
@@ -3598,8 +3677,9 @@ var file_meshpb_coord_proto_goTypes = []any{
 	(*DERPMap)(nil),                        // 40: calabi.mesh.v1.DERPMap
 	(*DERPRegion)(nil),                     // 41: calabi.mesh.v1.DERPRegion
 	(*DERPNode)(nil),                       // 42: calabi.mesh.v1.DERPNode
-	(*ReportEndpointsRequest)(nil),         // 43: calabi.mesh.v1.ReportEndpointsRequest
-	(*ReportEndpointsResponse)(nil),        // 44: calabi.mesh.v1.ReportEndpointsResponse
+	(*DERPNodeTLS)(nil),                    // 43: calabi.mesh.v1.DERPNodeTLS
+	(*ReportEndpointsRequest)(nil),         // 44: calabi.mesh.v1.ReportEndpointsRequest
+	(*ReportEndpointsResponse)(nil),        // 45: calabi.mesh.v1.ReportEndpointsResponse
 }
 var file_meshpb_coord_proto_depIdxs = []int32{
 	1,  // 0: calabi.mesh.v1.RegisterNodeRequest.declared_services:type_name -> calabi.mesh.v1.DeclaredService
@@ -3623,39 +3703,40 @@ var file_meshpb_coord_proto_depIdxs = []int32{
 	39, // 18: calabi.mesh.v1.Peer.services:type_name -> calabi.mesh.v1.PeerService
 	41, // 19: calabi.mesh.v1.DERPMap.regions:type_name -> calabi.mesh.v1.DERPRegion
 	42, // 20: calabi.mesh.v1.DERPRegion.nodes:type_name -> calabi.mesh.v1.DERPNode
-	0,  // 21: calabi.mesh.v1.Coordinator.RegisterNode:input_type -> calabi.mesh.v1.RegisterNodeRequest
-	3,  // 22: calabi.mesh.v1.Coordinator.GetRegisterChallenge:input_type -> calabi.mesh.v1.GetRegisterChallengeRequest
-	4,  // 23: calabi.mesh.v1.Coordinator.SignOut:input_type -> calabi.mesh.v1.SignOutRequest
-	6,  // 24: calabi.mesh.v1.Coordinator.ListNodes:input_type -> calabi.mesh.v1.ListNodesRequest
-	10, // 25: calabi.mesh.v1.Coordinator.ReportTunnels:input_type -> calabi.mesh.v1.ReportTunnelsRequest
-	12, // 26: calabi.mesh.v1.Coordinator.ListTunnels:input_type -> calabi.mesh.v1.ListTunnelsRequest
-	15, // 27: calabi.mesh.v1.Coordinator.GetUsage:input_type -> calabi.mesh.v1.GetUsageRequest
-	19, // 28: calabi.mesh.v1.Coordinator.OpenViewSession:input_type -> calabi.mesh.v1.OpenViewSessionRequest
-	21, // 29: calabi.mesh.v1.Coordinator.GetEdgeAccess:input_type -> calabi.mesh.v1.GetEdgeAccessRequest
-	33, // 30: calabi.mesh.v1.Coordinator.PullNetMap:input_type -> calabi.mesh.v1.PullNetMapRequest
-	43, // 31: calabi.mesh.v1.Coordinator.ReportEndpoints:input_type -> calabi.mesh.v1.ReportEndpointsRequest
-	26, // 32: calabi.mesh.v1.Coordinator.UpdateNodeDeclarations:input_type -> calabi.mesh.v1.UpdateNodeDeclarationsRequest
-	31, // 33: calabi.mesh.v1.Coordinator.ReportServiceHealth:input_type -> calabi.mesh.v1.ReportServiceHealthRequest
-	29, // 34: calabi.mesh.v1.Coordinator.ReportConnections:input_type -> calabi.mesh.v1.ReportConnectionsRequest
-	2,  // 35: calabi.mesh.v1.Coordinator.RegisterNode:output_type -> calabi.mesh.v1.RegisterNodeResponse
-	24, // 36: calabi.mesh.v1.Coordinator.GetRegisterChallenge:output_type -> calabi.mesh.v1.GetRegisterChallengeResponse
-	5,  // 37: calabi.mesh.v1.Coordinator.SignOut:output_type -> calabi.mesh.v1.SignOutResponse
-	7,  // 38: calabi.mesh.v1.Coordinator.ListNodes:output_type -> calabi.mesh.v1.ListNodesResponse
-	11, // 39: calabi.mesh.v1.Coordinator.ReportTunnels:output_type -> calabi.mesh.v1.ReportTunnelsResponse
-	13, // 40: calabi.mesh.v1.Coordinator.ListTunnels:output_type -> calabi.mesh.v1.ListTunnelsResponse
-	16, // 41: calabi.mesh.v1.Coordinator.GetUsage:output_type -> calabi.mesh.v1.GetUsageResponse
-	20, // 42: calabi.mesh.v1.Coordinator.OpenViewSession:output_type -> calabi.mesh.v1.OpenViewSessionResponse
-	22, // 43: calabi.mesh.v1.Coordinator.GetEdgeAccess:output_type -> calabi.mesh.v1.GetEdgeAccessResponse
-	34, // 44: calabi.mesh.v1.Coordinator.PullNetMap:output_type -> calabi.mesh.v1.NetMap
-	44, // 45: calabi.mesh.v1.Coordinator.ReportEndpoints:output_type -> calabi.mesh.v1.ReportEndpointsResponse
-	27, // 46: calabi.mesh.v1.Coordinator.UpdateNodeDeclarations:output_type -> calabi.mesh.v1.UpdateNodeDeclarationsResponse
-	32, // 47: calabi.mesh.v1.Coordinator.ReportServiceHealth:output_type -> calabi.mesh.v1.ReportServiceHealthResponse
-	30, // 48: calabi.mesh.v1.Coordinator.ReportConnections:output_type -> calabi.mesh.v1.ReportConnectionsResponse
-	35, // [35:49] is the sub-list for method output_type
-	21, // [21:35] is the sub-list for method input_type
-	21, // [21:21] is the sub-list for extension type_name
-	21, // [21:21] is the sub-list for extension extendee
-	0,  // [0:21] is the sub-list for field type_name
+	43, // 21: calabi.mesh.v1.DERPNode.tls:type_name -> calabi.mesh.v1.DERPNodeTLS
+	0,  // 22: calabi.mesh.v1.Coordinator.RegisterNode:input_type -> calabi.mesh.v1.RegisterNodeRequest
+	3,  // 23: calabi.mesh.v1.Coordinator.GetRegisterChallenge:input_type -> calabi.mesh.v1.GetRegisterChallengeRequest
+	4,  // 24: calabi.mesh.v1.Coordinator.SignOut:input_type -> calabi.mesh.v1.SignOutRequest
+	6,  // 25: calabi.mesh.v1.Coordinator.ListNodes:input_type -> calabi.mesh.v1.ListNodesRequest
+	10, // 26: calabi.mesh.v1.Coordinator.ReportTunnels:input_type -> calabi.mesh.v1.ReportTunnelsRequest
+	12, // 27: calabi.mesh.v1.Coordinator.ListTunnels:input_type -> calabi.mesh.v1.ListTunnelsRequest
+	15, // 28: calabi.mesh.v1.Coordinator.GetUsage:input_type -> calabi.mesh.v1.GetUsageRequest
+	19, // 29: calabi.mesh.v1.Coordinator.OpenViewSession:input_type -> calabi.mesh.v1.OpenViewSessionRequest
+	21, // 30: calabi.mesh.v1.Coordinator.GetEdgeAccess:input_type -> calabi.mesh.v1.GetEdgeAccessRequest
+	33, // 31: calabi.mesh.v1.Coordinator.PullNetMap:input_type -> calabi.mesh.v1.PullNetMapRequest
+	44, // 32: calabi.mesh.v1.Coordinator.ReportEndpoints:input_type -> calabi.mesh.v1.ReportEndpointsRequest
+	26, // 33: calabi.mesh.v1.Coordinator.UpdateNodeDeclarations:input_type -> calabi.mesh.v1.UpdateNodeDeclarationsRequest
+	31, // 34: calabi.mesh.v1.Coordinator.ReportServiceHealth:input_type -> calabi.mesh.v1.ReportServiceHealthRequest
+	29, // 35: calabi.mesh.v1.Coordinator.ReportConnections:input_type -> calabi.mesh.v1.ReportConnectionsRequest
+	2,  // 36: calabi.mesh.v1.Coordinator.RegisterNode:output_type -> calabi.mesh.v1.RegisterNodeResponse
+	24, // 37: calabi.mesh.v1.Coordinator.GetRegisterChallenge:output_type -> calabi.mesh.v1.GetRegisterChallengeResponse
+	5,  // 38: calabi.mesh.v1.Coordinator.SignOut:output_type -> calabi.mesh.v1.SignOutResponse
+	7,  // 39: calabi.mesh.v1.Coordinator.ListNodes:output_type -> calabi.mesh.v1.ListNodesResponse
+	11, // 40: calabi.mesh.v1.Coordinator.ReportTunnels:output_type -> calabi.mesh.v1.ReportTunnelsResponse
+	13, // 41: calabi.mesh.v1.Coordinator.ListTunnels:output_type -> calabi.mesh.v1.ListTunnelsResponse
+	16, // 42: calabi.mesh.v1.Coordinator.GetUsage:output_type -> calabi.mesh.v1.GetUsageResponse
+	20, // 43: calabi.mesh.v1.Coordinator.OpenViewSession:output_type -> calabi.mesh.v1.OpenViewSessionResponse
+	22, // 44: calabi.mesh.v1.Coordinator.GetEdgeAccess:output_type -> calabi.mesh.v1.GetEdgeAccessResponse
+	34, // 45: calabi.mesh.v1.Coordinator.PullNetMap:output_type -> calabi.mesh.v1.NetMap
+	45, // 46: calabi.mesh.v1.Coordinator.ReportEndpoints:output_type -> calabi.mesh.v1.ReportEndpointsResponse
+	27, // 47: calabi.mesh.v1.Coordinator.UpdateNodeDeclarations:output_type -> calabi.mesh.v1.UpdateNodeDeclarationsResponse
+	32, // 48: calabi.mesh.v1.Coordinator.ReportServiceHealth:output_type -> calabi.mesh.v1.ReportServiceHealthResponse
+	30, // 49: calabi.mesh.v1.Coordinator.ReportConnections:output_type -> calabi.mesh.v1.ReportConnectionsResponse
+	36, // [36:50] is the sub-list for method output_type
+	22, // [22:36] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_meshpb_coord_proto_init() }
@@ -3671,7 +3752,7 @@ func file_meshpb_coord_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meshpb_coord_proto_rawDesc), len(file_meshpb_coord_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   45,
+			NumMessages:   46,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

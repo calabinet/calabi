@@ -10,7 +10,7 @@
   module generated here: it requires apps/client through a replace, plus
   x/mobile, and apps/client's own go.mod is never touched.
 
-  Toolchain (see docs/runbook/mobile-client-plan.md M1):
+  Toolchain:
     - Android SDK + NDK: ANDROID_HOME (default D:\Android\Sdk), newest NDK under it
     - gomobile + gobind: go install golang.org/x/mobile/cmd/gomobile@<version>
 
@@ -84,7 +84,7 @@ if ($EdgeCa) {
 # library's build info, which -trimpath does not touch. Same path, same bytes;
 # another checkout directory, a different libgojni.so (measured 2026-09-17).
 # Relative paths here do not help - gomobile resolves them. A reproducible
-# Android build needs a fixed build path (docs/runbook/release-mac-and-android.md).
+# Android build needs a fixed build path.
 $work = Join-Path $env:TEMP "calabi-mobile-bind"
 if (Test-Path $work) { Remove-Item -Recurse -Force $work }
 New-Item -ItemType Directory -Force $work | Out-Null

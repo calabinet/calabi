@@ -3,7 +3,7 @@ version: v2
 # module (which generates into pkg/api — the control-plane contract that is
 # never open-sourced). Keeping the mesh proto here means the pkg/api generator
 # never touches it; `buf generate` is driven by this module's own buf.gen.yaml
-# with LOCAL plugins (no network, no protoc). See docs/runbook/mesh-plan.md §十一.
+# with LOCAL plugins (no network, no protoc).
 modules:
   - path: .
 lint:

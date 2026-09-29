@@ -1,8 +1,8 @@
 // dial.go — open the long-lived mTLS gRPC connection to bff-edge.
 //
 // One connection. All edge → control-plane traffic flows through it.
-// The edge presents an X.509 client cert signed by cert-svc's edge CA
-//; bff-edge's auth interceptor extracts edge_id + region
+// The edge presents an X.509 client cert signed by cert-svc's edge CA;
+// bff-edge's auth interceptor extracts edge_id + region
 // from the cert's CN and stamps them onto every RPC.
 //
 // We pin TLS 1.3 + ALPN "h2" to match bff-edge's server config and
@@ -48,7 +48,7 @@ type Conn struct {
 	Client pb.BFFEdgeClient
 
 	// holder backs the TLS GetClientCertificate callback so RunCertRenewal can
-	// hot-swap the edge's own mTLS leaf without dropping the connection (F1).
+	// hot-swap the edge's own mTLS leaf without dropping the connection.
 	// cfg keeps the on-disk paths so a renewed cert is persisted for restart.
 	holder *certHolder
 	cfg    Config

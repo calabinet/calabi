@@ -10,7 +10,7 @@ import (
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
-// DISCO is the peer-to-peer NAT-traversal protocol (MESH.4): short ping/pong
+// DISCO is the peer-to-peer NAT-traversal protocol: short ping/pong
 // probes a node sends over its direct-path UDP socket to find out which of a
 // peer's candidate endpoints actually reach it. It is SEPARATE from WireGuard —
 // it authenticates with the node's disco key (not the traffic key), so path

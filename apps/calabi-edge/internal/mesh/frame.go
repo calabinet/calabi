@@ -1,4 +1,5 @@
-// Package mesh defines the edge↔edge intra-region forwarding wire format. When a visitor lands on an edge that does NOT own the requested
+// Package mesh defines the edge↔edge intra-region forwarding wire format.
+// When a visitor lands on an edge that does NOT own the requested
 // tunnel, that edge ("relay") opens a VPC-internal connection to the edge
 // that DOES own it ("owner") and replays the visitor's traffic through it.
 //

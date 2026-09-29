@@ -11,7 +11,8 @@ import (
 //
 // Retiring that binary traded a process boundary for a config flag. The
 // isolation itself is unchanged where it matters — a relay-only node still
-// binds no TLS-terminating listener, and pkg/relay still links no edge code
+// binds no tunnel listener, its relay port terminates only its own TLS toward
+// devices (cmd/calabi-edge/relaytls.go), and pkg/relay still links no edge code
 // (pkg/relay/deps_test.go proves that at the package level) — but "I am only a
 // relay" went from something you could see in the process list to something you
 // have to trust a config field for. These two checks give it back:
@@ -68,13 +69,12 @@ func relayOnlyIsExplicit(cfg Config, raw Config) error {
 		val  string
 	}{
 		{"control_port", portText(raw.Tunnel.ControlPort)},
-		// The control listener's server certificate. A mesh relay terminates no
-		// TLS at all — it forwards ciphertext it cannot read,
-		// runRelay takes only the mesh block, and pkg/relay names no TLS type.
-		// So these belong to the tunnel and nowhere else, and a mesh-only config
-		// that sets them describes a node that does not exist.
-		{"control_cert_pem", raw.Tunnel.ControlCertPEM},
-		{"control_key_pem", raw.Tunnel.ControlKeyPEM},
+		// Not control_cert_pem / control_key_pem, which were refused here until
+		// 2026-09-28 on the ground that a mesh relay terminates no TLS. It does
+		// now: the relay port speaks TLS to devices with the node's certificate,
+		// so the
+		// certificate is the node's, and a relay-only node may name it — a relay
+		// with a public CA's certificate has nowhere else to.
 		{"http_port", portText(raw.Tunnel.HTTPPort)},
 		{"https_port", portText(raw.Tunnel.HTTPSPort)},
 		{"sni_port", portText(raw.Tunnel.SNIPort)},
@@ -88,8 +88,8 @@ func relayOnlyIsExplicit(cfg Config, raw Config) error {
 		return nil
 	}
 	return fmt.Errorf("role: mesh serves NO tunnels, but this config sets tunnel listener(s): %s. "+
-		"A mesh-only node binds only the relay data port and the STUN responder — it never terminates "+
-		"TLS. Remove those settings, or use role: both if this node really should serve tunnels too",
+		"A mesh-only node binds only the relay data port and the STUN responder. Remove those settings, "+
+		"or use role: both if this node really should serve tunnels too",
 		strings.Join(set, ", "))
 }
 

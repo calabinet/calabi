@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Service health (F3b) — what a node OBSERVES about the services it declares.
+// Service health — what a node OBSERVES about the services it declares.
 //
 // The question it answers: an admin writes a rule naming a service, confirms it,
 // and it still does not work. The usual cause is an application bound to
@@ -20,8 +20,8 @@ import (
 //   - Writing it would mean a row update per service per node per minute, to
 //     store something that is meaningless a minute later.
 //   - A persisted series of "which port answered when" is a record of what ran
-//     on someone's machine over time. rule is current value over history,
-//     and this is precisely the sort of thing that rule is about.
+//     on someone's machine over time. The standing rule is current value over
+//     history, and this is precisely the sort of thing that rule is about.
 //
 // A restart therefore forgets everything, and every node refills it within its
 // reporting interval. Until then the console shows nothing for that service,

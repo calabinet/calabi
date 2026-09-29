@@ -100,7 +100,7 @@ LABEL org.opencontainers.image.title="calabi" \
 # wireguard-tools: `wg show <ifname>` reads the mesh device's UAPI socket
 # (/var/run/wireguard/*.sock, exposed by the datapath) — the primary handshake/
 # transfer diagnostic.
-# iptables: subnet-router NAT (MESH.7) MASQUERADEs mesh traffic to advertised
+# iptables: subnet-router NAT MASQUERADEs mesh traffic to advertised
 # LAN CIDRs. All unused by the http/tcp tunnel path; kept in the single client
 # image so mesh works + is debuggable out of the box.
 RUN apk add --no-cache ca-certificates tzdata iproute2 wireguard-tools iptables && \

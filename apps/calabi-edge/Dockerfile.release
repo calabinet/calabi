@@ -29,8 +29,8 @@ LABEL org.opencontainers.image.title="calabi-edge" \
       org.opencontainers.image.source="https://github.com/calabinet/calabi" \
       org.opencontainers.image.vendor="Calabi"
 
-# tzdata is needed because the services pin display timezone to Asia/Shanghai
-# (see commit 00e38f4). ca-certificates is needed for outbound HTTPS.
+# tzdata is needed because the services pin display timezone to Asia/Shanghai.
+# ca-certificates is needed for outbound HTTPS.
 RUN apk add --no-cache ca-certificates tzdata && \
     cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone && \

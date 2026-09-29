@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-// Node-side enforcement of the coordinator's packet filter (MESH.5b). Until this
+// Node-side enforcement of the coordinator's packet filter. Until this
 // existed, an ACL decided which peers a node could SEE; a peer that was visible
 // at all could reach every port on it. This is the second gate: of the traffic
 // that gets through the netmap, only what a rule names may actually arrive.

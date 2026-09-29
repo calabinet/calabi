@@ -321,7 +321,7 @@ export const api = {
       }),
     ),
 
-  // Dismiss the M12 edge-switch banner. Fire-and-forget — the SPA
+  // Dismiss the edge-switch banner. Fire-and-forget — the SPA
   // already invalidates the snapshot query so the next poll will see
   // edge_switch=null and stop rendering the banner.
   dismissEdgeSwitch: async (): Promise<void> => {
@@ -357,7 +357,7 @@ export const api = {
       ),
     ),
 
-  // ---- M7-S5 probe + inspect ----------------------------------------------
+  // ---- probe + inspect ----------------------------------------------
 
   probePorts: async (): Promise<{ items: ProbePort[] }> =>
     jsonOrThrow(await fetch("/v1/probe/ports")),
@@ -387,7 +387,7 @@ export const api = {
       }),
     ),
 
-  // ---- M7.1 in-window auth ------------------------------------------------
+  // ---- in-window auth ------------------------------------------------
 
   // login does NOT require the local-token (chicken-and-egg). We POST
   // directly to /v1/auth/login; the daemon proxies to bff-console and
@@ -414,7 +414,7 @@ export const api = {
   logout: async (): Promise<{ status: string }> =>
     jsonOrThrow(await writeRequest("POST", "/v1/auth/logout", {})),
 
-  // ---- a self-hosted server (docs/runbook/self-hosted-sign-in-plan.md §6.2) ----
+  // ---- a self-hosted server ----
   // Both daemons answer: the calabi.net one says whether it can switch
   // (mode "platform"), the local one what it is connected to. A 404 is a daemon
   // from before this, which cannot switch at all.
@@ -439,7 +439,7 @@ export const api = {
       await fetch("/v1/selfhosted/usage?days=" + days + "&tz=" + encodeURIComponent(viewerTZ())),
     ),
 
-  // ---- M11.7 multi-Org ----------------------------------------------------
+  // ---- multi-Org ----------------------------------------------------
 
   // listOrgs returns every Org the logged-in user belongs to plus the
   // currently-active one. Daemon proxies straight to bff-console

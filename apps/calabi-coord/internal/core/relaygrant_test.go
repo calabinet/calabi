@@ -55,7 +55,7 @@ func TestNetMapCarriesAVerifiableGrant(t *testing.T) {
 	}
 }
 
-// The seam quota enforcement (F2) will plug into: an org over its traffic cap
+// The seam quota enforcement will plug into: an org over its traffic cap
 // gets a scope platform relays refuse while its own relays still accept it.
 func TestScopeHookDowngradesTheGrant(t *testing.T) {
 	c := newTestCoord()

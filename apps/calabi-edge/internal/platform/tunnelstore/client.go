@@ -28,7 +28,7 @@ import (
 // ErrTunnelDisabled signals that tunnel-svc refused a Claim because the row
 // was disabled by an admin (gRPC PermissionDenied). The NEW_PROXY handler
 // MUST hard-fail on this — it must NOT fall back to Persist, or it would
-// resurrect an admin-blocked tunnel under a brand-new id. See.
+// resurrect an admin-blocked tunnel under a brand-new id.
 var ErrTunnelDisabled = errors.New("tunnelstore: tunnel disabled by admin")
 
 // ErrClaimConflict signals that tunnel-svc rejected a Claim as a genuine
@@ -39,7 +39,7 @@ var ErrTunnelDisabled = errors.New("tunnelstore: tunnel disabled by admin")
 // Falling back would mint a brand-new duplicate row AND orphan-delete the
 // conflicting one, which is exactly how the edge produced bursts of
 // identical deleted TCP rows whenever a port tunnel bounced between same-region
-// edges (TCP carries no domain, so's intra-region re-home didn't cover
+// edges (TCP carries no domain, so the intra-region re-home didn't cover
 // it until tunnel-svc learned to match on base_domain). With that fix in place
 // a legitimate same-client same-region re-home now SUCCEEDS at tunnel-svc, so a
 // FailedPrecondition here is a real conflict that should surface, not churn.
@@ -112,7 +112,7 @@ type Client struct {
 	baseDomain string
 }
 
-// The direct-dial constructor was removed in F3 step 2b: every edge now
+// The direct-dial constructor was removed: every edge now
 // reaches the control plane through bff-edge, so this package is only ever
 // handed a ready client.
 // Wrap constructs a Client from a pre-made RPC client. The caller owns
@@ -374,7 +374,7 @@ func (c *Client) ReportStatus(ctx context.Context, tunnelID int64, statusStr, re
 }
 
 // ListByClient returns all live tunnels owned by clientID under orgID.
-// Used by the Phase C catch-up flow: when a client (re)connects, the
+// Used by the catch-up flow: when a client (re)connects, the
 // edge pulls its tunnel set from tunnel-svc and pushes them down via
 // CONFIG_PUSH so console-created entries land on the client immediately.
 //
@@ -400,7 +400,7 @@ func (c *Client) ListByClient(ctx context.Context, orgID, clientID int64) ([]*pb
 		if t.GetClientId() != clientID {
 			continue
 		}
-		//: never re-push a disabled tunnel to the daemon —
+		// never re-push a disabled tunnel to the daemon —
 		// admin-disabled (disabled_by_admin) or user-disabled
 		// (status=disabled). The authoritative gate is ClaimTunnel (which
 		// refuses it), but skipping it here keeps the daemon from attempting

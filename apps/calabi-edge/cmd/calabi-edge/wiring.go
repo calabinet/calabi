@@ -29,6 +29,9 @@ type platformInputs struct {
 	registrar    session.ProxyRegistrar
 	edgeID       int64
 	presenceKick <-chan struct{}
+	// relayCert is what the relay port presents (controlCert.certificate): the
+	// heartbeats say whether devices can verify it (relayverify.go).
+	relayCert func(*tls.ClientHelloInfo) (*tls.Certificate, error)
 }
 
 // namedRunner is one long-lived task of the process: a listener, the relay, the
@@ -77,13 +80,19 @@ type platformDeps struct {
 	// without reporting.
 	relayReporter *relayUsageReporter
 
-	// relayRate resolves each mesh link's rate limiter from its org's quota
-	//. nil = the relay forwards unlimited,
+	// relayRate resolves each mesh link's rate limiter from its org's quota.
+	// nil = the relay forwards unlimited,
 	// which is what a self-hosted relay does and what every platform relay did
 	// before this existed. Only wired for a PLATFORM-kind relay: a self-hosted
 	// one carries its owner's own traffic on their own VPS, and the platform
 	// neither may nor can meter it.
 	relayRate *relayRateResolver
+
+	// relayAdmission is set for a node's own relay on calabi.net
+	// (config.BYOIRelay): the relay registrar feeds it the platform's answer —
+	// the key its devices' grants are checked against — and runRelay admits
+	// devices by it (relayadmission.go). nil for every other relay.
+	relayAdmission *relayAdmission
 
 	runners []namedRunner
 	closers []io.Closer

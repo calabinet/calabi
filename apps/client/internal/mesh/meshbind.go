@@ -17,10 +17,10 @@ import (
 // meshBind is the wireguard-go conn.Bind that carries WireGuard's
 // already-encrypted packets to peers over EITHER of two transports:
 //
-//   - the relay, keyed by peer node key (MESH.2, always available:
+//   - the relay, keyed by peer node key (always available:
 //     both nodes hold an outbound connection to the relay, so it works behind any
 //     NAT); or
-//   - a direct UDP path discovered by DISCO hole punching (MESH.4 B3), when the
+//   - a direct UDP path discovered by DISCO hole punching, when the
 //     prober has validated one for that peer.
 //
 // Send picks per packet: a fresh validated direct path wins, otherwise the relay.
@@ -36,7 +36,7 @@ import (
 // ⚠ COMPILE-VERIFIED + LOOPBACK-TESTED ONLY. The relay path has a real
 // two-machine run behind it; the direct
 // path is exercised over loopback sockets in tests but a real NAT traversal needs
-// two machines on different networks —
+// two machines on different networks.
 type meshBind struct {
 	self   meshproto.NodeKey
 	client relaySender // set via attach() before Open
@@ -71,7 +71,7 @@ type meshBind struct {
 	txDirectErr   atomic.Uint64
 	txRelayErr    atomic.Uint64
 
-	// Direct-path state (MESH.4 B3-3), guarded by dmu. All of it is optional: a
+	// Direct-path state, guarded by dmu. All of it is optional: a
 	// bind with no direct transport attached behaves exactly like the relay-only
 	// bind that came before it.
 	dmu sync.Mutex
@@ -92,8 +92,8 @@ type meshBind struct {
 	// key WireGuard identifies the peer by.
 	discoOf map[meshproto.NodeKey]meshproto.DiscoKey
 	keyOf   map[meshproto.DiscoKey]meshproto.NodeKey
-	// relayOf maps a peer's node key to the relay address it is homed at (MESH.4
-	// B2b), so a relayed packet takes the peer's OWN relay rather than ours — the
+	// relayOf maps a peer's node key to the relay address it is homed at,
+	// so a relayed packet takes the peer's OWN relay rather than ours — the
 	// only relay it is listening on. Empty/absent falls back to our home relay.
 	relayOf map[meshproto.NodeKey]string
 	// srcOf remembers which peer sent DISCO from which source address, so an

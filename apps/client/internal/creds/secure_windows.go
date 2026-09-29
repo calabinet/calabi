@@ -2,7 +2,7 @@
 
 package creds
 
-// Windows ACLs for the SERVICE data directory (audit finding ACL-1).
+// Windows ACLs for the SERVICE data directory.
 //
 // Go's 0o700 / 0o600 mode bits are ignored on Windows, so everything the
 // --system service wrote under %ProgramData%\Calabi inherited that folder's

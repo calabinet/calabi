@@ -5258,6 +5258,7 @@ type MeshRelayMutation struct {
 	stun_port     *int
 	addstun_port  *int
 	enabled       *bool
+	tls           *bool
 	created_at    *time.Time
 	clearedFields map[string]struct{}
 	done          bool
@@ -5639,6 +5640,42 @@ func (m *MeshRelayMutation) ResetEnabled() {
 	m.enabled = nil
 }
 
+// SetTLS sets the "tls" field.
+func (m *MeshRelayMutation) SetTLS(b bool) {
+	m.tls = &b
+}
+
+// TLS returns the value of the "tls" field in the mutation.
+func (m *MeshRelayMutation) TLS() (r bool, exists bool) {
+	v := m.tls
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTLS returns the old "tls" field's value of the MeshRelay entity.
+// If the MeshRelay object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshRelayMutation) OldTLS(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTLS is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTLS requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTLS: %w", err)
+	}
+	return oldValue.TLS, nil
+}
+
+// ResetTLS resets all changes to the "tls" field.
+func (m *MeshRelayMutation) ResetTLS() {
+	m.tls = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *MeshRelayMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -5709,7 +5746,7 @@ func (m *MeshRelayMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *MeshRelayMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.meshnet_id != nil {
 		fields = append(fields, meshrelay.FieldMeshnetID)
 	}
@@ -5727,6 +5764,9 @@ func (m *MeshRelayMutation) Fields() []string {
 	}
 	if m.enabled != nil {
 		fields = append(fields, meshrelay.FieldEnabled)
+	}
+	if m.tls != nil {
+		fields = append(fields, meshrelay.FieldTLS)
 	}
 	if m.created_at != nil {
 		fields = append(fields, meshrelay.FieldCreatedAt)
@@ -5751,6 +5791,8 @@ func (m *MeshRelayMutation) Field(name string) (ent.Value, bool) {
 		return m.StunPort()
 	case meshrelay.FieldEnabled:
 		return m.Enabled()
+	case meshrelay.FieldTLS:
+		return m.TLS()
 	case meshrelay.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -5774,6 +5816,8 @@ func (m *MeshRelayMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldStunPort(ctx)
 	case meshrelay.FieldEnabled:
 		return m.OldEnabled(ctx)
+	case meshrelay.FieldTLS:
+		return m.OldTLS(ctx)
 	case meshrelay.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	}
@@ -5826,6 +5870,13 @@ func (m *MeshRelayMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetEnabled(v)
+		return nil
+	case meshrelay.FieldTLS:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTLS(v)
 		return nil
 	case meshrelay.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -5939,6 +5990,9 @@ func (m *MeshRelayMutation) ResetField(name string) error {
 		return nil
 	case meshrelay.FieldEnabled:
 		m.ResetEnabled()
+		return nil
+	case meshrelay.FieldTLS:
+		m.ResetTLS()
 		return nil
 	case meshrelay.FieldCreatedAt:
 		m.ResetCreatedAt()

@@ -9,7 +9,7 @@ import (
 )
 
 // filteredTUN wraps the real tun device and drops inbound packets the
-// coordinator's filter doesn't allow (MESH.5b).
+// coordinator's filter doesn't allow.
 //
 // The wrap point is deliberate: Write is WireGuard handing a DECRYPTED,
 // AUTHENTICATED packet to the OS, which is the last moment we can refuse it and
@@ -36,9 +36,7 @@ type filteredTUN struct {
 	// It holds up traffic to every peer, not just the relayed ones: there is
 	// one goroutine reading this device for the whole machine
 	// (wireguard-go device/send.go RoutineReadFromTUN), so a wait here is a
-	// wait for the direct paths too. Known and accepted —
-	// has the alternatives and why they
-	// are worse.
+	// wait for the direct paths too. Known and accepted.
 	meter *relayMeter
 	// ctx bounds the wait so a shutting-down datapath is not stuck paying.
 	ctx context.Context

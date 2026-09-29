@@ -5,7 +5,8 @@ import (
 	"testing"
 )
 
-// SystemDataDir feeds a privileged system service's data location. It must be a non-empty
+// SystemDataDir feeds a privileged system service's data location.
+// It must be a non-empty
 // absolute path on every platform so SetDataDir(SystemDataDir()) is well-defined.
 func TestSystemDataDir(t *testing.T) {
 	d := SystemDataDir()

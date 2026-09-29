@@ -13,7 +13,7 @@ import (
 )
 
 // derpMapFile is the on-disk shape of CALABI_COORD_DERP_MAP_FILE — the REAL relay
-// directory an operator supplies (MESH.4). It mirrors core.DERPMap with stable
+// directory an operator supplies. It mirrors core.DERPMap with stable
 // JSON names so the fleet's actual calabi-derp endpoints (host + DERP/STUN ports)
 // are listed from config, no rebuild. home_region names the region a node
 // defaults to until it reports its own; empty falls back to the first region.
@@ -30,8 +30,8 @@ type derpMapFile struct {
 }
 
 // loadDERPMap builds the relay directory coord distributes to nodes, plus the
-// default home region stamped on a node that hasn't reported its own (MESH.4,
-// surfaced as the "relay home" column). Source priority:
+// default home region stamped on a node that hasn't reported its own (surfaced
+// as the "relay home" column). Source priority:
 //  1. CALABI_COORD_DERP_MAP_FILE — the real fleet map (JSON), for a multi-relay
 //     deployment. Set-but-broken is a startup error, never a silent fallback.
 //  2. CALABI_COORD_DERP_ADDR (host:port) — a single-region map for the common

@@ -12,7 +12,7 @@
 //	calabi.cert.delete.<org_id>   — a cert was soft-deleted
 //
 // Edge usually subscribes to "calabi.cert.upsert.>" and
-// "calabi.cert.delete.>" because- it serves all orgs anyway;
+// "calabi.cert.delete.>" because it serves all orgs anyway;
 // org-scoped subscription becomes interesting when we partition
 // edges by tenant.
 //

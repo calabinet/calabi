@@ -12,8 +12,8 @@
 // 2026-08-23 to 09-16, on the idea that a service sits above both mesh access
 // and public tunnels. It does not: it exists only in the mesh, and a tunnel
 // needs no service (`calabi http 8080` never makes one). "发布到公网" below is a
-// shortcut into the tunnel form, not a second switch on the same object —
-// docs/runbook/facility-and-service-model.md §一. The tab still has its own URL,
+// shortcut into the tunnel form, not a second switch on the same object.
+// The tab still has its own URL,
 // which is what the Tools port scanner hands off to.
 import { useEffect, useMemo, useState } from "react";
 import {

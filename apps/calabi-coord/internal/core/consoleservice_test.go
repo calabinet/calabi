@@ -53,7 +53,8 @@ func TestConsoleServiceSurvivesADeviceRestart(t *testing.T) {
 }
 
 // A device declaring the same NAME must not produce a second row. Two entries
-// claiming one name, only one of them carrying the authorization, is the shape called a shadow record — and it is invisible in a list that shows names.
+// claiming one name, only one of them carrying the authorization, is the shape
+// called a shadow record — and it is invisible in a list that shows names.
 func TestDeviceDeclarationDoesNotShadowAConsoleService(t *testing.T) {
 	c, ctx := serviceCoord(t)
 	node, _ := c.Register(ctx, RegisterInput{Meshnet: 1, Name: "db1", NodeKey: key(1)})

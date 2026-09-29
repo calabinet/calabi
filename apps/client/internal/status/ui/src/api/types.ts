@@ -75,7 +75,7 @@ export interface TunnelInfo {
 // picker had to land on a different edge. Tunnels.tsx renders this as
 // a yellow Alert above the table. nil = no switch (typical case).
 //
-// Under M12 per-edge wildcard DNS, tunnels bound to the previous edge
+// With per-edge wildcard DNS, tunnels bound to the previous edge
 // are temporarily unreachable until that edge comes back online — the
 // user has to either wait or delete + recreate the tunnel on the new
 // edge.
@@ -97,13 +97,13 @@ export interface Snapshot {
   // seeing, since it's the reason a mesh device can show no client link.
   fingerprint?: string;
   device_id?: number;
-  // M11.20.3 — edge's HTTPListener.BaseDomain plumbed through AUTH_RESP.
+  // edge's HTTPListener.BaseDomain plumbed through AUTH_RESP.
   // Tunnels.tsx uses it to render TCP/UDP public addrs as
   // `<base_domain>:<remote_port>`. Empty if the edge is too old; the SPA
   // falls back to server_addr's host (which in dev rendered the
   // confusing "localhost:<port>" before this field existed).
   base_domain?: string;
-  // M11.20.6 — the daemon's underlying TCP/TLS conn RemoteAddr resolved
+  // the daemon's underlying TCP/TLS conn RemoteAddr resolved
   // to IP (e.g. "127.0.0.1" in dev, "1.2.3.4" in prod). Tunnels.tsx
   // prefers this for TCP/UDP public addr display — `<server_ip>:<port>`
   // is what the user explicitly asked for (vs domain or "localhost").
@@ -192,14 +192,14 @@ export interface RemoteTunnel {
 
 export interface TunnelList {
   items: RemoteTunnel[];
-  // M11.19.1 — daemon filters items down to this machine's device_id,
+  // daemon filters items down to this machine's device_id,
   // but the Org-wide quota cap is applied against ALL members'
   // tunnels. So we ship two counters from the daemon so the Overview
   // card can render `team_total / plan_max` honestly with a "其中本机
   // N 条" hint, instead of pretending the SPA's filtered count is
   // what the quota is spending.
   //
-  // Both are optional so older daemon builds without M11.19.1 don't
+  // Both are optional so older daemon builds, which lack them, don't
   // break the SPA — Overview falls back to items.length in that case.
   my_total?: number;
   team_total?: number;
@@ -340,7 +340,7 @@ export interface AccountMe {
   };
 }
 
-// M11.7 Org switcher types — mirror bff-console/internal/handlers/orgs.go's
+// Org switcher types — mirror bff-console/internal/handlers/orgs.go's
 // orgListRowJSON.
 export interface OrgListRow {
   id: number;
@@ -448,7 +448,7 @@ export interface ClientDevicesList {
   items: ClientDevice[];
 }
 
-// ---- M7-S5 — probe + inspect ----------------------------------------------
+// ---- probe + inspect ----------------------------------------------
 
 export interface ProbePort {
   port: number;
@@ -716,7 +716,7 @@ export interface MeshAdvertise {
 // `available` and `can_apply` are SEPARATE on purpose. A Linux or agent install
 // can be out of date (available) while having nothing it can install itself
 // (can_apply=false, reason="no-artifact") — that is the "有新版本，请手动更新"
-// state, not an error. See docs/runbook/client-update-policy.md §4.1.
+// state, not an error.
 export interface UpdateInfo {
   current: string;
   latest?: string;
@@ -746,7 +746,7 @@ export interface UpdateInfo {
   // When the max-defer backstop expires for a held version — or, for a
   // "rollout" hold, when this machine's turn is expected.
   hold_until?: string;
-  // The org's requirement (U5c), when one applies. `policy` stays the machine's
+  // The org's requirement, when one applies. `policy` stays the machine's
   // own choice; the daemon acts on the stricter of the two.
   org_policy?: OrgUpdatePolicy;
   // The MACHINE's timezone abbreviation. The window is on this clock, not the
@@ -792,7 +792,7 @@ export interface SelfHostedPart {
 }
 
 // Why this device's tunnels are or are not up. The edge, its certificate and
-// the sign-in all come from the coordinator (docs/runbook/self-hosted-server-plan.md).
+// the sign-in all come from the coordinator.
 export type SelfHostedEdgeState =
   | "connected"
   | "connecting"

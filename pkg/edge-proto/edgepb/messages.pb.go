@@ -138,8 +138,9 @@ type CertMeta struct {
 	Sans        []string               `protobuf:"bytes,7,rep,name=sans,proto3" json:"sans,omitempty"`               // dns names
 	NotBefore   *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=not_before,json=notBefore,proto3" json:"not_before,omitempty"`
 	NotAfter    *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=not_after,json=notAfter,proto3" json:"not_after,omitempty"`
-	// Source: "uploaded" for static; "acme-letsencrypt" / "acme-aliyun"
-	// etc. Free-form to absorb new CAs without a proto v2.
+	// Source: "uploaded" for a cert the user uploaded; "acme-letsencrypt" /
+	// "acme-aliyun" etc. for one issued over ACME. Free-form to absorb new
+	// CAs without a proto v2.
 	Source string `protobuf:"bytes,10,opt,name=source,proto3" json:"source,omitempty"`
 	// When the renewal cron will pick this cert up (not_after minus its
 	// lookahead window). Set ONLY for certs the cron actually renews — the scan
@@ -317,7 +318,7 @@ type ClaimTunnelRequest struct {
 	BaseDomain string `protobuf:"bytes,8,opt,name=base_domain,json=baseDomain,proto3" json:"base_domain,omitempty"`
 	// BYOI: authenticated org of the calling edge (bff-edge-stamped, >0 only
 	// for BYOI edges). tunnel-svc rejects a claim targeting a platform-managed
-	// domain — BYOI is custom-domain-only. BYOI.5.
+	// domain — BYOI is custom-domain-only.
 	CallerOrgId   int64 `protobuf:"varint,9,opt,name=caller_org_id,json=callerOrgId,proto3" json:"caller_org_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -537,7 +538,7 @@ type CreateTunnelRequest struct {
 	Subdomain string `protobuf:"bytes,12,opt,name=subdomain,proto3" json:"subdomain,omitempty"`
 	// BYOI: authenticated org of the calling edge (bff-edge-stamped, >0 only
 	// for single-tenant BYOI edges). tunnel-svc rejects when set and the
-	// tunnel targets a platform-managed domain — BYOI is custom-domain-only. BYOI.5.
+	// tunnel targets a platform-managed domain — BYOI is custom-domain-only.
 	CallerOrgId int64 `protobuf:"varint,13,opt,name=caller_org_id,json=callerOrgId,proto3" json:"caller_org_id,omitempty"`
 	// creator_user_id — set by the user-facing bff-console path from the caller
 	// principal's user id, so the row is attributed to its creator for org RBAC
@@ -2915,7 +2916,13 @@ type RegisterEdgeNodeRequest struct {
 	// control_plane.RegisterEdgeNodeRequest.version (same field number 11): the
 	// edge sets it, bff-edge forwards the whole request to identity-svc unchanged,
 	// and the consoles read it back from the edge directory. Empty = legacy edge.
-	Version       string `protobuf:"bytes,11,opt,name=version,proto3" json:"version,omitempty"`
+	Version string `protobuf:"bytes,11,opt,name=version,proto3" json:"version,omitempty"`
+	// The relay (relay_derp_port) speaks TLS with a certificate that verifies
+	// against the platform CA for host(public_addr), checked by the node at every
+	// heartbeat; the coordinator then marks it TLS in the DERP map. Same field
+	// number as control_plane.RegisterEdgeNodeRequest.relay_tls. False from a
+	// node older than relay TLS: its devices keep the plaintext protocol.
+	RelayTls      bool `protobuf:"varint,12,opt,name=relay_tls,json=relayTls,proto3" json:"relay_tls,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3027,6 +3034,13 @@ func (x *RegisterEdgeNodeRequest) GetVersion() string {
 	return ""
 }
 
+func (x *RegisterEdgeNodeRequest) GetRelayTls() bool {
+	if x != nil {
+		return x.RelayTls
+	}
+	return false
+}
+
 // [mirrored from proto/calabi/v1/control_plane/identity.proto]
 type RegisterEdgeNodeResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -3071,9 +3085,9 @@ type ReportClientPresenceRequest struct {
 	// tunnel-svc can later route push events back through the right edge.
 	EdgeNodeId    int64  `protobuf:"varint,1,opt,name=edge_node_id,json=edgeNodeId,proto3" json:"edge_node_id,omitempty"`
 	EdgeNodeLabel string `protobuf:"bytes,2,opt,name=edge_node_label,json=edgeNodeLabel,proto3" json:"edge_node_label,omitempty"`
-	// Legacy field. edges send a flat id list; edges fill `clients`
-	// instead so the server can stamp org_id. When `clients` is non-empty
-	// this is ignored.
+	// Legacy field. Older edges send a flat id list; newer ones fill
+	// `clients` instead so the server can stamp org_id. When `clients` is
+	// non-empty this is ignored.
 	ClientIds []int64 `protobuf:"varint,3,rep,packed,name=client_ids,json=clientIds,proto3" json:"client_ids,omitempty"`
 	// Preferred shape from 2026-05-28: one entry per active client with
 	// its (client_id, org_id) pair.
@@ -3569,7 +3583,7 @@ type ResourceMeta struct {
 	Id        int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	// Soft-delete: null means "alive". does not enforce.
+	// Soft-delete: null means "alive".
 	DeletedAt     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=deleted_at,json=deletedAt,proto3" json:"deleted_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -3639,8 +3653,8 @@ type Snapshot struct {
 	// A monotonic SHA computed by config-svc; the edge persists this
 	// alongside the snapshot for fast resync on reconnect.
 	Sha string `protobuf:"bytes,1,opt,name=sha,proto3" json:"sha,omitempty"`
-	// Compact JSON-encoded list of tunnels, tokens, and route entries.
-	// may swap to typed nested messages if cardinality bites.
+	// Compact JSON-encoded list of tunnels, tokens, and route entries. A later
+	// version may swap to typed nested messages if cardinality bites.
 	BodyJson      []byte `protobuf:"bytes,2,opt,name=body_json,json=bodyJson,proto3" json:"body_json,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -3705,18 +3719,18 @@ type Tunnel struct {
 	Status      string                 `protobuf:"bytes,10,opt,name=status,proto3" json:"status,omitempty"`                           // enabled/disabled/error
 	EdgeNodeId  int64                  `protobuf:"varint,11,opt,name=edge_node_id,json=edgeNodeId,proto3" json:"edge_node_id,omitempty"`
 	// Free-form per-protocol config (basic-auth, IP allowlist, ...).
-	// JSON-encoded for now;+ may move to typed oneof.
+	// JSON-encoded for now; a later version may move to typed oneof.
 	ConfigJson string `protobuf:"bytes,12,opt,name=config_json,json=configJson,proto3" json:"config_json,omitempty"`
 	// legacy_route_key is kept as a worked example of the field-evolution
-	// pattern documented in docs/protocol-spec.md. It carries
+	// pattern.
+	// It carries
 	// no live data: new servers always emit "" and ignore incoming values;
 	// existing v1.0 clients that still set it continue to round-trip
 	// without errors. Removal target: v2 (proto package calabi.v2).
-	// See apps/tunnel-svc/internal/server/legacy_field_example.go.
 	//
 	// Deprecated: Marked as deprecated in edgepb/messages.proto.
 	LegacyRouteKey string `protobuf:"bytes,13,opt,name=legacy_route_key,json=legacyRouteKey,proto3" json:"legacy_route_key,omitempty"`
-	// ---- Client presence enrichment (Phase A) ----
+	// ---- Client presence enrichment ----
 	//
 	// Populated by tunnel-svc.ListTunnels via a BatchGetClientStatus
 	// round-trip to identity-svc. Best-effort: when identity-svc isn't
@@ -3728,8 +3742,8 @@ type Tunnel struct {
 	ClientOnline     bool                   `protobuf:"varint,14,opt,name=client_online,json=clientOnline,proto3" json:"client_online,omitempty"`
 	ClientLastSeenAt *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=client_last_seen_at,json=clientLastSeenAt,proto3" json:"client_last_seen_at,omitempty"`
 	// client_edge_node_id is the edge the OWNING client's daemon is
-	// currently connected to (from identity-svc presence).
-	// per-edge wildcard DNS this matters: if it differs from
+	// currently connected to (from identity-svc presence). Under per-edge
+	// wildcard DNS this matters: if it differs from
 	// edge_node_id (the edge that owns the tunnel's domain), the
 	// tunnel's public URL is unreachable because daemon's session
 	// lives on the wrong edge — readers should render "mismatch"
@@ -3985,7 +3999,7 @@ type ValidateTokenRequest struct {
 	// BYOI: authenticated org of the calling edge (bff-edge-stamped, >0 only
 	// for single-tenant BYOI edges). When set, identity-svc returns
 	// valid=false unless the token's org matches — a BYOI edge may only
-	// authenticate its own org's clients. BYOI.4b.
+	// authenticate its own org's clients.
 	CallerOrgId   int64 `protobuf:"varint,2,opt,name=caller_org_id,json=callerOrgId,proto3" json:"caller_org_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -4340,7 +4354,7 @@ const file_edgepb_messages_proto_rawDesc = "" +
 	"\rfencing_token\x18\a \x01(\x03R\ffencingToken\"i\n" +
 	"\x15ReclaimTunnelResponse\x122\n" +
 	"\x06tunnel\x18\x01 \x01(\v2\x1a.calabi.v1.bff_edge.TunnelR\x06tunnel\x12\x1c\n" +
-	"\treclaimed\x18\x02 \x01(\bR\treclaimed\"\x89\x03\n" +
+	"\treclaimed\x18\x02 \x01(\bR\treclaimed\"\xa6\x03\n" +
 	"\x17RegisterEdgeNodeRequest\x12 \n" +
 	"\fedge_node_id\x18\x01 \x01(\x03R\n" +
 	"edgeNodeId\x12\x1d\n" +
@@ -4358,7 +4372,8 @@ const file_edgepb_messages_proto_rawDesc = "" +
 	"\vbase_domain\x18\n" +
 	" \x01(\tR\n" +
 	"baseDomain\x12\x18\n" +
-	"\aversion\x18\v \x01(\tR\aversion\"\x1a\n" +
+	"\aversion\x18\v \x01(\tR\aversion\x12\x1b\n" +
+	"\trelay_tls\x18\f \x01(\bR\brelayTls\"\x1a\n" +
 	"\x18RegisterEdgeNodeResponse\"\xc4\x01\n" +
 	"\x1bReportClientPresenceRequest\x12 \n" +
 	"\fedge_node_id\x18\x01 \x01(\x03R\n" +

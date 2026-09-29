@@ -28,7 +28,7 @@ func TestHasBoolFlag(t *testing.T) {
 	}
 }
 
-// F1: --system bakes the
+// --system bakes the
 // marker that makes the run path use SystemDataDir. Independent of the launchd
 // domain (which is euid-based, see TestServiceConfig_DarwinDomainByEuid).
 func TestServiceConfig_SystemMarker(t *testing.T) {
@@ -158,7 +158,8 @@ func TestFilterCalabiEnv_DropsDevAndInsecureOnSystem(t *testing.T) {
 // The update manifest override has to survive `daemon install --system` into the
 // service's own environment. A systemd unit starts with almost nothing inherited,
 // so if this var did not ride the passthrough there would be no way to point an
-// installed service at a test manifest — and the whole acceptance procedure in rests on being able to.
+// installed service at a test manifest — and the whole acceptance procedure
+// rests on being able to.
 //
 // It is one entry on a deny-list away from breaking silently: clientIgnoredEnv
 // drops names, and a dropped name looks exactly like "the manifest is fine, the

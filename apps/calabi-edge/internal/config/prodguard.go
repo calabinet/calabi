@@ -7,18 +7,18 @@ import (
 )
 
 // prodguard.go — refuse to run a PRODUCTION edge in a degraded posture
-// (full-oss-plan F0.2, the edge half of coord's cmd/calabi-coord/prodguard.go).
+// (the edge half of coord's cmd/calabi-coord/prodguard.go).
 //
 // The edge's fallbacks are deliberate and correct for their intended use: a
-// relay that does not require grants is how the fleet was rolled out before R0′
-// was switched on. What makes them dangerous is that nothing distinguishes "I
-// meant this" from "my control plane vanished and I silently became a simpler,
-// more trusting server" — and once the source is public, that distinction is
-// exactly what an attacker probes.
+// relay that does not require grants is how the fleet was rolled out before
+// relay authentication was switched on. What makes them dangerous is that
+// nothing distinguishes "I meant this" from "my control plane vanished and I
+// silently became a simpler, more trusting server" — and once the source is
+// public, that distinction is exactly what an attacker probes.
 //
 // (There used to be a sharper case: a demo token in Default(), printed in the
 // public tree, accepted by any edge run without a config file. The static token
-// table it lived in is gone —
+// table it lived in is gone.)
 
 // IsProduction reports whether this process claims a production deployment.
 // Same signal as coord: CALABI_ENV, set in the compose file itself so a

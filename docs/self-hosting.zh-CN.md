@@ -151,7 +151,7 @@ CALABI_COORD_DERP_STUN_PORT=3478 \
 | `CALABI_COORD_RELAY_GRANT_KEY_FILE` | 协调器给设备签[凭证](#凭证是什么)用的密钥。默认 `./coord-grant.key`，首次启动时生成 |
 | `CALABI_COORD_GRANT_PUBKEY_FILE` | 每次启动把这把密钥的公钥写到这个文件，给边缘节点读 |
 | `CALABI_COORD_DERP_ADDR` | 一台中继，`host:port` |
-| `CALABI_COORD_DERP_STUN_PORT` | 这台中继的 STUN 端口。设备靠 STUN 测量来选中继，所以要设 |
+| `CALABI_COORD_DERP_STUN_PORT` | 这台中继的 STUN 端口，和它的 `mesh.stun_port` 一样。设备靠 STUN 测量来选中继，所以要设；这台中继关了 STUN（`stun_port: 0`）时不设 |
 | `CALABI_COORD_DERP_HOME_REGION` | `CALABI_COORD_DERP_ADDR` 这个区域的名字（默认 `default`）；用了映射文件而文件没写 `home_region` 时，是新设备起步的区域 |
 | `CALABI_COORD_DERP_MAP_FILE` | 多台中继：一个 JSON 文件（见 `apps/calabi-coord/examples/derp-map.example.json`） |
 | `CALABI_COORD_AUTHKEYS_FILE` | 你自己的永久密钥，可选。JSON：`{"key": {"meshnet": 1, "tags": ["tag:laptop"]}}` |
@@ -281,7 +281,7 @@ mesh:
 |---|---|---|---|
 | `base_domain` | 任何节点 | `localtest.me` | 这个节点服务的泛域名：隧道成为 `<名字>.<base_domain>` |
 | `control_port` | 任何节点 | `7443` | `calabi` 客户端连到哪里 |
-| `control_cert_pem` / `control_key_pem` | 任何节点 | — | 这个监听器的证书。不写的话边缘节点自签一张，放在 `state.dir`。文件变化时会重读 |
+| `control_cert_pem` / `control_key_pem` | 任何节点 | — | 节点的证书：这个监听器出示它，中继也向走 TLS 的设备出示它。不写的话边缘节点自签一张，放在 `state.dir`。文件变化时会重读。`role: mesh` 的节点也可以写，给中继用 |
 | `http_port` | 任何节点 | `8080` | HTTP 隧道的访问者 |
 | `https_port` | 任何节点 | `8443` | HTTPS 隧道的访问者，TLS 在这里终止。写 `0` 关掉 HTTPS |
 | `https_self_signed` | 你的服务器 | `false` | 没有真证书时回落到自签证书。**只给开发用** |
@@ -294,10 +294,11 @@ mesh:
 | 设置 | 适用 | 默认 | 作用 |
 |---|---|---|---|
 | `derp_port` | 任何节点 | `3340` | 设备从哪里连到中继 |
-| `stun_port` | 任何节点 | `3478` | 设备用来挑最近中继的 STUN 应答口。`0` 关掉它 |
+| `stun_port` | 任何节点 | `3478` | 设备用来挑最近中继的 STUN 应答口。`0` 关掉它：设备测不了这台中继，只要还有测得到的，就不会选它。自己的服务器上，协调器那边也别再写它的 STUN 端口（`CALABI_COORD_DERP_STUN_PORT`，或映射文件里的 `stun_port`） |
 | `label` | 任何节点 | 节点的 `region` | 这台中继广播的区域名，形式是 `self-<label>`。一个区域里放了两台中继时才设 |
 | `kind` | 任何节点 | `self` | `self` 是你自己的中继，`platform` 是我们的 |
-| `require_auth` | 任何节点 | `false` | 拒绝没有有效凭证的设备。`standalone` 节点上永远是开的 |
+| `require_auth` | 任何节点 | `false` | 拒绝没有有效凭证的设备。`standalone` 节点上永远是开的；接入 calabi.net 的节点（`multi_region.mode: bff-edge`、`kind: self`）的中继上也永远是开的：它只放行本组织的设备，公钥由 calabi.net 下发，不用写 `coord_pubkey` |
+| `require_tls` | 任何节点 | `false` | 拒绝不走 TLS 的设备。比中继 TLS 早的客户端只会明文，等它们都更新后再打开 |
 
 **会被拒绝的设置。** 边缘节点不再直连控制面，所以 `identity:`、`quota:`、`config_svc:`、`nats:`、
 `tunnel.addr` 和 `cert.addr` 都不起作用了。`presence.interval_seconds` 和 `cert.refresh_seconds` 也一样，
@@ -310,7 +311,7 @@ mesh:
 
 **用环境变量**，让一台中继完全不需要配置文件：`CALABI_EDGE_MODE`、`CALABI_EDGE_ROLE`、
 `CALABI_EDGE_ADMIN_ADDR`、`CALABI_EDGE_PUBLIC_HOST`、`CALABI_EDGE_COORD_PUBKEY`、`CALABI_EDGE_COORD_PUBKEY_FILE`，
-以及 `CALABI_EDGE_RELAY_` 加 `KIND`、`LABEL`、`DERP_PORT`、`STUN_PORT`、`REQUIRE_AUTH`、`COORD_PUBKEY`。
+以及 `CALABI_EDGE_RELAY_` 加 `KIND`、`LABEL`、`DERP_PORT`、`STUN_PORT`、`REQUIRE_AUTH`、`REQUIRE_TLS`、`COORD_PUBKEY`。
 
 ### HTTPS
 
@@ -329,6 +330,11 @@ CALABI_EDGE_RELAY_LABEL=tokyo CALABI_EDGE_COORD_PUBKEY=<calabi-coord pubkey> \
 
 它监听 3340/tcp 和 3478/udp，只为持有你协调器凭证的设备服务。把它写进协调器的 `CALABI_COORD_DERP_MAP_FILE`，
 或经管理 API 登记。每台设备测量各台中继，选最近的一台。
+
+设备在同一个端口上走 TLS 连中继，校验它证书的方式和校验你的边缘节点一样。协调器每分钟在 3340 上读一次各台中继的证书，
+把指纹告诉设备。用 `CALABI_COORD_EDGE_TRUST=system` 时，给中继配一张公共 CA 为它的主机签的证书（配置文件里的
+`tunnel.control_cert_pem` / `control_key_pem`）。没有写了 `state.dir` 的配置文件时，中继每次启动都新生成一张证书，
+设备会在一分钟内跟上新指纹。
 
 ---
 

@@ -25,6 +25,8 @@ const (
 	FieldStunPort = "stun_port"
 	// FieldEnabled holds the string denoting the enabled field in the database.
 	FieldEnabled = "enabled"
+	// FieldTLS holds the string denoting the tls field in the database.
+	FieldTLS = "tls"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// Table holds the table name of the meshrelay in the database.
@@ -40,6 +42,7 @@ var Columns = []string{
 	FieldDerpPort,
 	FieldStunPort,
 	FieldEnabled,
+	FieldTLS,
 	FieldCreatedAt,
 }
 
@@ -60,6 +63,8 @@ var (
 	DefaultStunPort int
 	// DefaultEnabled holds the default value on creation for the "enabled" field.
 	DefaultEnabled bool
+	// DefaultTLS holds the default value on creation for the "tls" field.
+	DefaultTLS bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 )
@@ -100,6 +105,11 @@ func ByStunPort(opts ...sql.OrderTermOption) OrderOption {
 // ByEnabled orders the results by the enabled field.
 func ByEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEnabled, opts...).ToFunc()
+}
+
+// ByTLS orders the results by the tls field.
+func ByTLS(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTLS, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

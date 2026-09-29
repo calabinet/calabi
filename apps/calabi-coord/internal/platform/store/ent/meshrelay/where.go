@@ -79,6 +79,11 @@ func Enabled(v bool) predicate.MeshRelay {
 	return predicate.MeshRelay(sql.FieldEQ(FieldEnabled, v))
 }
 
+// TLS applies equality check predicate on the "tls" field. It's identical to TLSEQ.
+func TLS(v bool) predicate.MeshRelay {
+	return predicate.MeshRelay(sql.FieldEQ(FieldTLS, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.MeshRelay {
 	return predicate.MeshRelay(sql.FieldEQ(FieldCreatedAt, v))
@@ -342,6 +347,16 @@ func EnabledEQ(v bool) predicate.MeshRelay {
 // EnabledNEQ applies the NEQ predicate on the "enabled" field.
 func EnabledNEQ(v bool) predicate.MeshRelay {
 	return predicate.MeshRelay(sql.FieldNEQ(FieldEnabled, v))
+}
+
+// TLSEQ applies the EQ predicate on the "tls" field.
+func TLSEQ(v bool) predicate.MeshRelay {
+	return predicate.MeshRelay(sql.FieldEQ(FieldTLS, v))
+}
+
+// TLSNEQ applies the NEQ predicate on the "tls" field.
+func TLSNEQ(v bool) predicate.MeshRelay {
+	return predicate.MeshRelay(sql.FieldNEQ(FieldTLS, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

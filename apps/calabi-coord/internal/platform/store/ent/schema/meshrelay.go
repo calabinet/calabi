@@ -10,7 +10,7 @@ import (
 	"entgo.io/ent/schema/index"
 )
 
-// MeshRelay is a calabi-derp an ORG runs itself (R2).
+// MeshRelay is a calabi-derp an ORG runs itself.
 //
 // A declaration, not a discovery: the user tells the console an address and the
 // relay itself is not touched. calabi-derp has no idea a coordinator exists and
@@ -44,6 +44,9 @@ func (MeshRelay) Fields() []ent.Field {
 		field.Bool("enabled").
 			Default(true).
 			Comment("false parks the relay: the row stays, the region leaves the map"),
+		field.Bool("tls").
+			Default(false).
+			Comment("the relay's own heartbeat says it speaks TLS on derp_port with a certificate the platform CA verifies; devices then reach it over TLS only. Rewritten by every heartbeat, so a node that stops saying it goes back to plaintext"),
 		field.Time("created_at").
 			Default(time.Now).
 			Immutable(),

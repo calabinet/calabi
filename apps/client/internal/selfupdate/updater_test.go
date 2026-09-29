@@ -17,7 +17,8 @@ import (
 // served bytes unless shaOverride is set.
 //
 // manifestPriv signs the manifest; pass nil to serve an UNSIGNED manifest (the
-// .sig then 404s), which is what a pre-UPD-1 release host looks like.
+// .sig then 404s), which is what a release host looked like before manifests
+// were signed.
 func testServer(t *testing.T, version string, installer []byte, sig, shaOverride string, manifestPriv ed25519.PrivateKey) *httptest.Server {
 	t.Helper()
 	sum := sha256.Sum256(installer)
@@ -163,7 +164,8 @@ func TestUpdater_BadSignatureRefuses(t *testing.T) {
 	}
 }
 
-// An unsigned manifest — every release host before UPD-1 — is refused outright.
+// An unsigned manifest — what every release host served before signing
+// — is refused outright.
 // There is deliberately no "verify it if a signature happens to be there" mode:
 // an attacker would simply not put one there.
 func TestUpdater_UnsignedManifestRefused(t *testing.T) {

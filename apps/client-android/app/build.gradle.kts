@@ -11,8 +11,8 @@ val bffUrl = (findProperty("calabiBffUrl") as String?) ?: "https://api.calabi.ne
 val consoleUrl = (findProperty("calabiConsoleUrl") as String?) ?: "https://console.calabi.net"
 val coordPlaintext = (findProperty("calabiCoordPlaintext") as String?)?.toBoolean() ?: false
 
-// The version is the repository's VERSION file, like every other client artifact
-// (docs/runbook/versioning.md). versionCode has to grow with every release or
+// The version is the repository's VERSION file, like every other client artifact.
+// versionCode has to grow with every release or
 // Android refuses the update: MAJOR*1000000 + MINOR*1000 + PATCH, 1.12.0 -> 1012000.
 // A pre-release suffix (1.12.0-rc.1) shares its release's code. The public source
 // tree has no VERSION file, so a build there passes -PcalabiVersion=<version>

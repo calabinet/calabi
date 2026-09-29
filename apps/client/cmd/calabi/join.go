@@ -1,7 +1,8 @@
 package main
 
 // `calabi join <invite>`: the terminal's way onto a self-hosted server, as
-// `calabi login` is onto calabi.net. Joining the coordinator is the whole sign-in — it then names the edge
+// `calabi login` is onto calabi.net.
+// Joining the coordinator is the whole sign-in — it then names the edge
 // for tunnels and signs this device's way in — so once it is done,
 // `calabi http 8080` works, and the daemon serves the tunnels and the mesh.
 

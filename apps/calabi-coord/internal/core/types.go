@@ -1,10 +1,10 @@
 // Package core is the coordinator's deployment-agnostic brain: netmap computation,
 // the store/policy/IPAM interfaces, and the domain types. It has ZERO
 // control-plane dependencies (no pkg/api) — so this exact package is what the
-// self-hosted coordinator (MESH.9) ships. The platform build wraps these
+// self-hosted coordinator ships. The platform build wraps these
 // interfaces with multi-tenant / billing / SSO stores; the self-hosted build
 // wires the in-memory / file-backed stubs in this file. See the wire_*.go seam
-// in cmd/calabi-coord
+// in cmd/calabi-coord.
 package core
 
 import (
@@ -46,7 +46,7 @@ type Node struct {
 	Endpoints  []netip.AddrPort // discovered candidate endpoints (local + STUN)
 	DERPHome   string           // region code of the node's home relay
 	// AdvertisedRoutes are the subnet-router CIDRs this node CLAIMS it can
-	// forward to (MESH.7). A claim alone routes nothing.
+	// forward to. A claim alone routes nothing.
 	AdvertisedRoutes []netip.Prefix
 	// ApprovedRoutes is the subset an admin allowed; only these ride in peers'
 	// allowed_ips. Approving a route hands this node other nodes' traffic for
@@ -63,7 +63,8 @@ type Node struct {
 	//
 	// A current client asks for EVERY subnet it advertises unless its host cannot
 	// install the 1:1 rewrite: whether a route collides with some consumer's LAN
-	// is visible to nobody, so it is no longer a per-route guess. The coordinator still
+	// is visible to nobody, so it is no longer a per-route guess.
+	// The coordinator still
 	// aliases only what is asked for, because the request doubles as the signal
 	// that the node CAN rewrite: 1.7.1 and older never send it and cannot install
 	// the rule, so aliasing their routes unasked would black-hole every one.
@@ -74,7 +75,7 @@ type Node struct {
 	// never the real CIDR; the node itself is told both, so it can install the
 	// 1:1 rewrite.
 	RouteAliases []RouteAlias
-	// Services are what this node declares it offers (MESH.8e-4). Populated when
+	// Services are what this node declares it offers. Populated when
 	// a netmap / ACL evaluation is computed (see nodesWithServices) — NOT stored
 	// on the node row; the registry is its own table.
 	Services []Service
@@ -114,12 +115,12 @@ type Node struct {
 	// that never wrote an ACL) — so clearing this here would not open a machine
 	// up, it would only make the console lie.
 	BlockIncoming *bool
-	// Approved is device approval (MESH.8e-5): a node enrolled while the meshnet
+	// Approved is device approval: a node enrolled while the meshnet
 	// requires approval starts false and reaches nothing until an admin says yes.
 	// Defaults TRUE everywhere else, so turning the switch on never retroactively
 	// parks devices that already work.
 	Approved bool
-	// Disabled is an admin kill switch (MESH.8b): a disabled node is dropped
+	// Disabled is an admin kill switch: a disabled node is dropped
 	// from every peer's netmap and refused on (re)register, so it can neither be
 	// reached nor rejoin until re-enabled. Set out-of-band by the admin surface,
 	// never by the node itself; preserved across the node's re-enrollment.
@@ -144,11 +145,11 @@ type NetMap struct {
 	Self  Node
 	Peers []Node
 	DERP  DERPMap
-	// PacketFilter is what Self enforces on INBOUND traffic (MESH.5b): compiled
+	// PacketFilter is what Self enforces on INBOUND traffic: compiled
 	// from the meshnet's ACL for this node specifically. The peer list above is
 	// the host-level gate; this is the narrower port-level one behind it.
 	PacketFilter []FilterRule
-	// RelayGrant is Self's signed authorization to use relays (R0'), opaque to
+	// RelayGrant is Self's signed authorization to use relays, opaque to
 	// everyone between here and the relay. Empty when this coordinator issues no
 	// grants — relays must then not require them. See relaygrant.go.
 	RelayGrant []byte
@@ -176,7 +177,7 @@ type NetMap struct {
 	// 0 = no self-limit, which is what a self-hosted coordinator always sends.
 	RelayBandwidthKbps      uint32
 	RelayBandwidthBurstKbps uint32
-	// MagicDNS records land here in MESH.6.
+	// MagicDNS records land here.
 }
 
 // DERPMap is the region->relay directory distributed to nodes.
@@ -207,4 +208,42 @@ type DERPNode struct {
 	HostName string
 	DERPPort int
 	STUNPort int
+	// TLS is how nodes reach DERPPort; the zero value is the plaintext protocol.
+	TLS DERPTLS
+}
+
+// DERPTLS says a relay speaks TLS on its DERP port and how a node checks its
+// certificate — the way it checks an edge.
+// A node told a relay speaks TLS never falls back to plaintext, so a
+// source sets it only for a relay it knows serves a certificate that check
+// passes: the platform's relays and an organization's own ones say so in their
+// registration (Platform); a self-hosted coordinator reads it off the relay the
+// way it reads its edge (System or Pin).
+type DERPTLS struct {
+	// Trust is meshproto.RelayTrustPlatform, RelayTrustSystem or RelayTrustPin;
+	// "" is plaintext.
+	Trust string
+	// Pins are meshproto.CertPin fingerprints, for RelayTrustPin.
+	Pins []string
+}
+
+// Enabled reports whether nodes reach the relay over TLS.
+func (t DERPTLS) Enabled() bool { return t.Trust != "" }
+
+// Equal compares two descriptions, pins in order.
+func (t DERPTLS) Equal(o DERPTLS) bool {
+	if t.Trust != o.Trust || len(t.Pins) != len(o.Pins) {
+		return false
+	}
+	for i := range t.Pins {
+		if t.Pins[i] != o.Pins[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// Equal compares two relay endpoints field by field.
+func (n DERPNode) Equal(o DERPNode) bool {
+	return n.HostName == o.HostName && n.DERPPort == o.DERPPort && n.STUNPort == o.STUNPort && n.TLS.Equal(o.TLS)
 }

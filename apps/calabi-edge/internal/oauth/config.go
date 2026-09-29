@@ -1,7 +1,7 @@
 // Package oauth implements the edge-side OAuth/OIDC authentication (④): the edge
 // gates an HTTP/HTTPS tunnel behind an identity provider (Google / GitHub).
-// Used to be excluded from the open-source build; since F3 one edge binary
-// ships and every edge, self-hosted included, can enforce it.
+// Used to be excluded from the open-source build; now one edge binary ships
+// and every edge, self-hosted included, can enforce it.
 //
 // Model (same request-1 / cookie shape as Basic auth — no per-request byte
 // mutation): an unauthenticated visitor is 302-redirected to the IdP; the IdP
@@ -169,7 +169,7 @@ func (c *Config) validSession(cookieHeader string, now time.Time) bool {
 // point back at THIS host.
 //
 // The visitor's raw request target used to be signed into the state and then
-// emitted verbatim as the post-login Location (audit finding OAUTH-1). Signing
+// emitted verbatim as the post-login Location. Signing
 // it proves we minted it — it does NOT make it ours: the value arrives from the
 // visitor, so an attacker who gets someone to open a crafted link has the edge
 // hand them a signed state that redirects to the attacker's origin after a

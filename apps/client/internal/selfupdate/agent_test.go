@@ -177,7 +177,7 @@ func TestModeSecurityInstallsOnlyCriticalReleases(t *testing.T) {
 
 // The line that keeps "notify" honest: critical overrides the WINDOW and the
 // security-only mode, but NOT someone who said "never without me". The floor
-// that overrides even this is min_supported (U3).
+// that overrides even this is min_supported.
 func TestModeNotifyIsNotOverriddenByCritical(t *testing.T) {
 	a, done := newAgent(t, agentOpts{current: "1.10.0", latest: "1.11.0", critical: true,
 		policy: Policy{Mode: ModeNotify, MaxDeferDays: 7}}, mustNotApply(t))
@@ -327,7 +327,7 @@ func TestAutoHoldsWhileTrafficIsMoving(t *testing.T) {
 }
 
 // MaxDeferDays=0 means "don't wait for anything" — a legitimate setting, and the
-// one that reproduces the pre-U2 behaviour exactly.
+// one that reproduces the behaviour from before the update policy exactly.
 func TestZeroDeferDaysIgnoresWindowAndBusy(t *testing.T) {
 	noon := time.Date(2026, 9, 15, 12, 0, 0, 0, time.Local)
 	var applied bool
@@ -344,8 +344,9 @@ func TestZeroDeferDaysIgnoresWindowAndBusy(t *testing.T) {
 // A box that is out of date and cannot fix itself must SAY SO IN THE LOG. It is
 // the steady state of every Linux and agent install (the manifest publishes no
 // artifact for them) and they are precisely the machines with no console open.
-// U1 logged it from CheckAndApply; U2 stopped routing that case through
-// CheckAndApply and the line went silent with it.
+// The first version logged it from CheckAndApply; the update policy
+// stopped routing that case through CheckAndApply and the line went silent
+// with it.
 func TestTickLogsThatItCannotApply(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(nil)
 	srv := foreignPlatformServer(t, "1.11.0", priv)

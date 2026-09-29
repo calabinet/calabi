@@ -244,7 +244,7 @@ export default function Overview() {
   // once Connect is enabled; a pure-tunnel machine's number already IS the tunnel.
   const meshOn = !!mesh?.enabled;
 
-  // M7-S5 notifications.
+  // notifications.
   useTransitionNotify(
     health?.state,
     "connected",
@@ -310,11 +310,11 @@ export default function Overview() {
   // daemon that went away) must stop contributing rather than pin its last rate
   // to the total forever. Three poll intervals is late enough not to flap.
   const throughput = freshRate(tunnelRate, 6_000) + freshRate(meshRate, 15_000);
-  // M11.19.1: "活跃隧道 N / M" should compare apples to apples — M is
+  // "活跃隧道 N / M" should compare apples to apples — M is
   // plan.max_tunnels (Org-wide cap), so N has to be the Org-wide count.
   // The daemon ships team_total alongside the filtered items list so
   // we don't need a separate /v1/tunnels?scope=team round-trip.
-  // Fallback to items.length for older daemon builds (M11.19 without .1)
+  // Fallback to items.length for older daemon builds
   // so an upgrade doesn't break the page mid-rollout.
   const activeTunnels = tunnelList?.team_total ?? tunnelList?.items?.length ?? 0;
   const myTunnels = tunnelList?.my_total ?? tunnelList?.items?.length ?? 0;
@@ -401,7 +401,7 @@ export default function Overview() {
                     : undefined
               }
             />
-            {/* M11.19.1 + M11.20.5: surface my-share when the headline counts
+            {/* surface my-share when the headline counts
                 more tunnels than just this machine's. In a personal Org or
                 a 1-member team the two numbers match and the hint is
                 pure noise → hide it.

@@ -68,7 +68,7 @@ var renamedKeys = map[string]string{
 }
 
 // deadBlocks are top-level blocks the edge stopped reading when the direct-dial
-// path to the control plane was removed (F3 step 2b). Everything in them is
+// path to the control plane was removed. Everything in them is
 // inert, so a file that still carries one is a file whose operator believes
 // something untrue about where this edge gets its answers.
 var deadBlocks = map[string]string{

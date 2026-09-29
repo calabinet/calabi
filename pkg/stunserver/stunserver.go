@@ -1,6 +1,6 @@
 // Package stunserver is calabi-derp's STUN responder: it tells a mesh node the
 // public (reflexive) address a relay sees it at, the primitive a node needs to
-// discover its NAT-mapped endpoint for hole punching (MESH.4). It answers only
+// discover its NAT-mapped endpoint for hole punching. It answers only
 // binding requests, reports only the observed source address, holds no state, and
 // sees no secrets (STUN is plaintext, unrelated to the encrypted relay path).
 package stunserver

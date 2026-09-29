@@ -262,7 +262,7 @@ type settings struct {
 	// BlockIncoming refuses every inbound CONNECTION to this phone, whatever the
 	// org's access rules allow; replies to conversations this phone started still
 	// come back. It is the one access-control decision that belongs to the person
-	// holding the device rather than to an admin — see mesh-console-ux-plan
+	// holding the device rather than to an admin.
 	//
 	// Flat bool here, unlike the desktop's pointer: this API has exactly one
 	// caller, the app in the same process, and it is never older than the core.

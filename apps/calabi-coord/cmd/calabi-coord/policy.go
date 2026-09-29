@@ -24,7 +24,7 @@ var policyState struct {
 //     startPolicyWatcher). The INITIAL load failing FAILS CLOSED (deny-all) with
 //     a loud error — never fail-open — but stays watched, so fixing the file
 //     recovers live without a restart. (The platform build swaps a DB-backed
-//     per-org policy in MESH.8.)
+//     per-org policy.)
 func policyStore(logger *slog.Logger) core.PolicyStore {
 	path := env("POLICY_FILE")
 	if path == "" {

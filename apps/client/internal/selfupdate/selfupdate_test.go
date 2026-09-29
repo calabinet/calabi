@@ -154,7 +154,7 @@ func TestFetchManifestHTTPError(t *testing.T) {
 }
 
 // VerifyManifestSignature is the gate that makes the manifest's own claims
-// (which version, which platform, which sha256) trustworthy — see UPD-1.
+// (which version, which platform, which sha256) trustworthy.
 func TestVerifyManifestSignature(t *testing.T) {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {

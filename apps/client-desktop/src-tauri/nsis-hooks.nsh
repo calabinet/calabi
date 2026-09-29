@@ -1,4 +1,4 @@
-; Calabi NSIS installer hooks — F3, docs/runbook/privileged-service-and-updates-plan.md.
+; Calabi NSIS installer hooks.
 ;
 ; Register the daemon as a LocalSystem service at install and remove it at
 ; uninstall. The installer runs perMachine (elevated), so `daemon install
