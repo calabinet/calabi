@@ -17,7 +17,7 @@
      src="https://img.shields.io/badge/%E5%8F%AF%E5%A4%8D%E7%8E%B0%E6%9E%84%E5%BB%BA-%E6%AF%8F%E4%B8%AA%E7%89%88%E6%9C%AC%E9%83%BD%E8%83%BD%E8%87%AA%E5%B7%B1%E9%87%8D%E7%BC%96%E4%B8%80%E9%81%8D-22d3ee?style=for-the-badge&labelColor=0e1630"></a>
 </p>
 
-<p align="center"><b>自托管的内网穿透与私有 WireGuard 组网</b></p>
+<p align="center"><b>自托管的开发联调隧道与私有 WireGuard 组网</b></p>
 
 <p align="center">
   <a href="README.md">English</a> | 中文
@@ -27,29 +27,28 @@
 
 ## Calabi 是什么？
 
-Calabi 让一台没有公网地址的机器变得可以访问——NAT 后面的笔记本、CGNAT 后面的
-服务器、公司内网里的机器。两条路：
+Calabi 做两件事，都跑在你自己的服务器上：
 
-- **隧道（内网穿透）**——把 `calabi-edge` 放在有公网 IP 的主机上。`calabi`
-  客户端向它发起**一条**出站 TLS + yamux 连接，边缘节点把公网来的
-  HTTP/HTTPS/TCP/UDP 流量顺着这条连接转回你笔记本或局域网里的服务。
-  **互联网上的任何人都能访问。**
+- **隧道**——给正在开发的服务一个 HTTPS（或 TCP/UDP）地址，用来接 webhook、调 OAuth
+  回调、给人看预览和演示。把 `calabi-edge` 放在你自己的一台主机上，`calabi`
+  客户端向它发起**一条**出站 TLS + yamux 连接，边缘节点把请求顺着这条连接转回你
+  笔记本上的服务。**拿到地址的人都能调用它**，除非你加了访问控制。
 - **组网（Mesh）**——把你自己的机器连成一张私有 WireGuard 网络，每台拿一个稳定的
-  `100.64.0.0/10` 地址。NAT 允许时设备之间直连打洞，打不通时退回你自己跑的中继。
+  `100.64.0.0/10` 地址。设备之间能直连就直连，连不上时走你自己跑的中继。
   **只有你的机器能访问。**
 
 ```
-  TUNNELS — 把公网流量引进来          MESH — 机器之间私下互访
+  TUNNELS — 请求送到本地服务          MESH — 机器之间私下互访
 
-  visitors                                     laptop ─────────────┐
+  callers                                      laptop ─────────────┐
      │                                            │  direct (UDP)  │
      ▼                                            │  hole-punched  │
  ┌──────────────┐                                 ▼                │
- │  calabi-edge │  public IP / DNS             ┌────────┐          │
+ │  calabi-edge │  your edge host              ┌────────┐          │
  └──────┬───────┘                              │ NAT :( │          │
         │ TLS + yamux                          └────────┘          ▼
         │ (client dialed OUT)                      │            server
-        ▼                                          ▼           (no public IP)
+        ▼                                          ▼           (behind a NAT)
  ┌──────────────┐                          ┌───────────────┐
  │    calabi    │ ──► 127.0.0.1:8080       │  calabi-edge  │  relay: ciphertext
  └──────────────┘                          │  role: mesh   │  only, never decrypts
@@ -58,9 +57,9 @@ Calabi 让一台没有公网地址的机器变得可以访问——NAT 后面的
               calabi-coord — 每台设备的身份
 ```
 
-- 左边：`calabi-edge` 在公网 IP 上收访问者的流量，`calabi` 从内网拨出一条
-  TLS + yamux 连接，流量顺着它回到 `127.0.0.1:8080`。
-- 右边：两台设备能打洞就直连（UDP）；打不通就走 `role: mesh` 的
+- 左边：`calabi-edge` 接收发往隧道地址的请求，`calabi` 从你的机器拨出一条
+  TLS + yamux 连接，请求顺着它回到 `127.0.0.1:8080`。
+- 右边：两台设备能直连就直连（UDP）；连不上就走 `role: mesh` 的
   `calabi-edge` 中继——它只转密文，永远不解密。
 - `calabi-coord` 是每台设备的身份：谁入了网、边缘节点在哪、每台设备的组网地址、谁可以访问谁。
 
@@ -88,9 +87,9 @@ Calabi 让一台没有公网地址的机器变得可以访问——NAT 后面的
 | 组件 | 是什么 | 跑在哪 |
 |---|---|---|
 | `calabi` | 客户端——开隧道、加入组网、提供本地 Web 控制台 | 你的笔记本、服务器、树莓派 |
-| `calabi-edge` | 数据面。`role: tunnel` 接公网流量做隧道；`role: mesh` 是组网中继 + STUN 探测；`role: both` 两者都做 | 有公网 IP 的主机 |
+| `calabi-edge` | 数据面。`role: tunnel` 接收发往隧道的请求；`role: mesh` 是组网中继 + STUN 探测；`role: both` 两者都做 | 你的设备和调用方都能连到的主机 |
 | `calabi-coord` | 协调器——每台设备的身份：邀请、设备登记、地址分配、ACL；告诉设备边缘节点在哪、签发边缘节点认的凭证 | 一台你的设备能连到的主机 |
-| Android App | 把手机作为一台设备加入组网（你自己服务器的，或你在 calabi.net 上的组织的），支持出口设备和快捷设置磁贴；隧道和用量只读 | Android 8.0 及以上的手机（arm64、armv7） |
+| Android App | 把手机作为一台设备加入组网（你自己服务器的，或你在 calabi.net 上的组织的），支持快捷设置磁贴；隧道和用量只读 | Android 8.0 及以上的手机（arm64、armv7） |
 
 三个程序都是纯 Go、`CGO_ENABLED=0`、无运行时依赖。`calabi-coord` 和 `calabi-edge` 合起来是你的
 服务器，客户端跑在每台设备上。
@@ -113,7 +112,7 @@ Android App（`apps/client-android`）是 Kotlin 写的界面，里面是同一�
 
 ## 隧道
 
-- **HTTP / HTTPS / TCP / UDP**——Web 应用、SSH、数据库、游戏服，任何跑在
+- **HTTP / HTTPS / TCP / UDP**——Web 应用和 API、webhook 接收端、数据库或消息队列，任何跑在
   TCP/UDP 上的东西。
 - **单条多路复用连接**——每个客户端只保持一条出站 TLS + yamux 会话，你这边
   不需要开端口、不需要做端口映射。
@@ -128,7 +127,7 @@ Android App（`apps/client-android`）是 Kotlin 写的界面，里面是同一�
 ## 组网
 
 - **WireGuard**——每台设备自己生成密钥。`calabi-coord` 拿不到私钥，也看不到你的流量。
-- **能直连就直连**——设备找到彼此的地址，穿过 NAT 直接连接；连不上时，流量走中继。
+- **能直连就直连**——设备找到彼此的地址后直接连接；连不上时，流量走中继。
 - **中继是你自己的**——`calabi-edge` 配 `role: mesh`（或 `both`，`deploy/server` 就是这么跑的）。
   它在设备之间转发加密后的包，没有任何能解密的代码。中继可以只跑一台，也可以在多个地区各跑一台。
 - **稳定地址**——每台设备拿到一个 `100.64.0.0/10` 地址，换网络也不变，
@@ -136,7 +135,7 @@ Android App（`apps/client-android`）是 Kotlin 写的界面，里面是同一�
 - **每台设备一个开关**——`calabi mesh down`（或在控制台里）让设备退出组网，隧道照常运行；
   `calabi mesh up` 再加回来。
 - **ACL**——一个 JSON 策略文件，用分组和规则描述谁能访问谁的哪些端口。改了会重新加载；文件写坏时拒绝所有流量。
-- **子网路由与出口设备**——把某台设备背后的局域网共享给整个组网，或者让一台设备的上网流量从另一台出去。
+- **子网路由与出口设备**——把某台设备背后的局域网共享给整个组网，或者让一台设备的流量经你自己网络里的一台机器出去，留在你管的网络后面。
   Linux 设备可以共享子网、当出口设备，转发和 NAT 自动配好；各平台的设备都能使用它们。
 - **按天区分直连与中继**——本地控制台把组网流量分成「直连」和「中继」两条统计，
   你能直接看到到底有多少流量真的需要中继。
@@ -251,11 +250,9 @@ apksigner verify --print-certs calabi-android.apk
 
 - 让 webhook、OAuth 回调打到你笔记本上的服务做联调。
 - 把还在改的开发服务临时分享给同事或客户看。
-- 访问 NAT / CGNAT 后面的家庭实验室、NAS、树莓派——想让公网看到就开隧道，
-  只想自己看就走组网。
-- 通过 TCP 隧道或组网访问远端机器的 SSH、数据库端口。
+- 通过组网私下访问你自己的家庭实验室、NAS、树莓派。
+- 通过组网访问你自己机器上的 SSH、数据库端口。
 - 把分散在几个云上的机器连成一张扁平的私有网络，不用去打通 VPC 对等连接。
-- 用出口设备把笔记本的流量从家里那台机器走出去。
 - 用 Android 手机通过你自己的组网、或 calabi.net 的组网访问自己的机器。
 
 ## 常见问题

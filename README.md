@@ -27,30 +27,31 @@
 
 ## What is Calabi?
 
-Calabi makes a machine reachable when it has no public address — a laptop
-behind NAT, a server behind CGNAT, a box inside a corporate network. Two ways:
+Calabi does two things, on servers you run yourself:
 
-- **Tunnels** — put `calabi-edge` on a host with a public IP. The `calabi`
-  client opens one outbound TLS + yamux connection to it, and the edge forwards
-  public HTTP/HTTPS/TCP/UDP traffic back down that connection to a service on
-  your laptop or LAN. **Anyone on the internet can reach it.**
+- **Tunnels** — give a service you are developing an HTTPS (or TCP/UDP)
+  address, for webhooks, OAuth callbacks, previews and demos. Put `calabi-edge`
+  on a host of yours. The `calabi` client opens one outbound TLS + yamux
+  connection to it, and the edge passes requests back down that connection to
+  the service on your laptop. **Anyone who has the address can call it**, until
+  you add access control.
 - **Mesh** — join your own machines into one private WireGuard network with
-  stable `100.64.0.0/10` addresses. Peers hole-punch to each other when NAT
-  allows and fall back to a relay you run yourself when it doesn't.
+  stable `100.64.0.0/10` addresses. Devices connect directly when they can, and
+  through a relay you run yourself when they can't.
   **Only your machines can reach it.**
 
 ```
-  TUNNELS — public traffic in                MESH — private machine-to-machine
+  TUNNELS — requests to local code           MESH — private machine-to-machine
 
-  visitors                                     laptop ─────────────┐
+  callers                                      laptop ─────────────┐
      │                                            │  direct (UDP)  │
      ▼                                            │  hole-punched  │
  ┌──────────────┐                                 ▼                │
- │  calabi-edge │  public IP / DNS             ┌────────┐          │
+ │  calabi-edge │  your edge host              ┌────────┐          │
  └──────┬───────┘                              │ NAT :( │          │
         │ TLS + yamux                          └────────┘          ▼
         │ (client dialed OUT)                      │            server
-        ▼                                          ▼           (no public IP)
+        ▼                                          ▼           (behind a NAT)
  ┌──────────────┐                          ┌───────────────┐
  │    calabi    │ ──► 127.0.0.1:8080       │  calabi-edge  │  relay: ciphertext
  └──────────────┘                          │  role: mesh   │  only, never decrypts
@@ -89,9 +90,9 @@ a web console. That part is a separate product and is not in this repository.
 | component | what it is | where it runs |
 |---|---|---|
 | `calabi` | the client — opens tunnels, joins the mesh, serves the local web console | your laptop, a server, a Pi |
-| `calabi-edge` | the data plane. `role: tunnel` accepts public traffic for tunnels; `role: mesh` is a mesh relay + STUN responder; `role: both` does both | a host with a public IP |
+| `calabi-edge` | the data plane. `role: tunnel` receives the requests for tunnels; `role: mesh` is a mesh relay + STUN responder; `role: both` does both | a host your devices and callers can reach |
 | `calabi-coord` | the coordinator — every device's identity: invites, device registry, IP allocation, ACLs; names the edge and signs the grants it accepts | one host, reachable by your devices |
-| Android app | puts the phone in a mesh as a device — your own server's or a calabi.net organization's — with exit devices and a Quick Settings tile; tunnels and usage read-only | an Android 8.0+ phone (arm64, armv7) |
+| Android app | puts the phone in a mesh as a device — your own server's or a calabi.net organization's — with a Quick Settings tile; tunnels and usage read-only | an Android 8.0+ phone (arm64, armv7) |
 
 The three binaries are pure Go, `CGO_ENABLED=0`, no runtime dependencies.
 `calabi-coord` and `calabi-edge` together are your server; the client runs on
@@ -119,8 +120,8 @@ code, bound in with gomobile (`apps/client/mobile`).
 
 ## Tunnels
 
-- **HTTP, HTTPS, TCP and UDP** — web apps, SSH, databases, game servers,
-  anything that speaks TCP/UDP.
+- **HTTP, HTTPS, TCP and UDP** — web apps and APIs, webhook receivers, a
+  database or a message broker: anything that speaks TCP/UDP.
 - **One multiplexed connection** — a single outbound TLS + yamux session per
   client, so there is nothing to open or forward on your side.
 - **Custom domains + HTTPS** — point DNS at your edge and map a tunnel to
@@ -152,9 +153,10 @@ code, bound in with gomobile (`apps/client/mobile`).
   reach which, on which ports. It reloads when changed; a broken file denies all
   traffic.
 - **Subnet routers and exit devices** — share a LAN behind one device with the
-  whole mesh, or send a device's internet traffic out through another. A Linux
-  device can share a subnet or be an exit device, with forwarding and NAT set up
-  for it; devices on every platform can use them.
+  whole mesh, or keep a device behind a network you run by sending its traffic
+  through one of your own machines there. A Linux device can share a subnet or
+  be an exit device, with forwarding and NAT set up for it; devices on every
+  platform can use them.
 - **Per-day usage split** — the local console books mesh traffic as *direct* vs
   *relayed*, so you can see how much actually needed a relay.
 
@@ -286,12 +288,10 @@ apksigner verify --print-certs calabi-android.apk
 
 - Test webhooks and OAuth/redirect callbacks against a service on your laptop.
 - Share a work-in-progress dev server with a teammate or a client.
-- Reach a homelab, NAS, or Raspberry Pi behind NAT / CGNAT — a tunnel if the
-  public should see it, the mesh if only you should.
-- SSH or a database port to a remote machine, over a TCP tunnel or over the mesh.
+- Reach a homelab, NAS, or Raspberry Pi of yours privately, over the mesh.
+- SSH or a database port on one of your own machines, over the mesh.
 - Join machines across several clouds into one flat private network without
   peering VPCs.
-- Route a laptop's traffic out through a machine at home via an exit device.
 - Reach your machines from an Android phone, over your own mesh or a calabi.net
   one.
 
