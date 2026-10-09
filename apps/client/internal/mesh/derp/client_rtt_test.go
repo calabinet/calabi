@@ -40,6 +40,27 @@ func TestAnUnmatchedPongDoesNotInventAnRTT(t *testing.T) {
 	}
 }
 
+// A Pong that came back is a measurement even when the clock cannot tell its
+// round trip from nothing. A relay on the same machine or LAN answers inside one
+// step of a coarse clock — Windows keeps time in steps of up to 15.6ms — so the
+// round trip read as zero, and zero is what RTT gives for "no Pong yet". The
+// relay pool takes an RTT as its proof that a relay which had been turning the
+// device away has let it in again; on such a clock it went on remembering the
+// refusal sweep after sweep.
+//
+// The mark is staged ahead of the clock, which is what a clock that has not
+// moved since the Ping, or has been set back, makes of it.
+func TestARoundTripTheClockCannotSeeIsStillAnRTT(t *testing.T) {
+	c := &Client{}
+	c.pingAt.Store(time.Now().Add(time.Hour).UnixNano())
+
+	c.observeKeepalivePong()
+
+	if got := c.RTT(); got != time.Microsecond {
+		t.Fatalf("RTT = %v after a Pong whose round trip the clock timed at zero or less, want %v: the Pong did come back", got, time.Microsecond)
+	}
+}
+
 // The mark is consumed, so one Ping yields at most one measurement — a repeated
 // Pong (a duplicate, or a probe's) must not re-time the same round trip.
 func TestTheKeepaliveMarkIsConsumedOnce(t *testing.T) {

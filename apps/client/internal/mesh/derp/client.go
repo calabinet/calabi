@@ -298,14 +298,25 @@ func (c *Client) observeKeepalivePong() {
 	// Record it FIRST, and unconditionally. The controller is an optional consumer
 	// of this number, not its owner — bundling the two meant turning the
 	// controller off also turned the measurement off.
-	c.rttMicros.Store(rtt.Microseconds())
+	//
+	// Never as 0: that is RTT's "no Pong yet". A relay on the same machine or
+	// LAN answers inside one step of a coarse clock (Windows keeps time in steps
+	// of up to 15.6ms), and the round trip then reads as zero — or as less, if
+	// the wall clock was set back meanwhile. The Pong did come back, so it is
+	// recorded as the smallest round trip there is. The relay pool reads an RTT
+	// as proof that a relay which had been turning the device away has let it in
+	// again; with a zero here it went on remembering the refusal. The controller
+	// below still gets the reading as measured, and ignores one that is not
+	// positive.
+	c.rttMicros.Store(max(rtt.Microseconds(), 1))
 	if c.sndbuf != nil {
 		c.sndbuf.observeRTT(rtt)
 	}
 }
 
 // RTT is the last measured round trip to THIS relay, or 0 if none yet. One leg:
-// this node to the relay, not this node to a peer through it.
+// this node to the relay, not this node to a peer through it. A round trip too
+// short for the clock to see is one microsecond, not 0.
 func (c *Client) RTT() time.Duration {
 	return time.Duration(c.rttMicros.Load()) * time.Microsecond
 }
