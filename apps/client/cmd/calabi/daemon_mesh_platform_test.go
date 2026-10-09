@@ -31,6 +31,13 @@ type fakeLease struct {
 	updateErr error
 	probe     localweb.MeshRelayProbe
 	probeErr  error
+	// homeSelections records each in-place relay-home re-selection as
+	// "preference|pinnedRegion".
+	homeSelections []string
+}
+
+func (f *fakeLease) setHomeSelection(pref, pin string) {
+	f.homeSelections = append(f.homeSelections, pref+"|"+pin)
 }
 
 func (f *fakeLease) status() statusapi.MeshStatus            { return f.st }

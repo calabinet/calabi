@@ -10,6 +10,117 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## 2.2.0 — 2026-10-09
+
+**Nothing to configure, and no order to update in.** No config file changed,
+and neither did anything the client, the edge and the coordinator say to each
+other. The changes are in the client and the coordinator; the edge is the 2.1.0
+code under the new version number.
+
+### Mesh
+
+- **Fixed** — **A device kept sending its internet traffic to an exit device
+  that was no longer one.** When the exit device a device had chosen stopped
+  offering to be one, or lost its approval, the device that chose it kept its
+  internet traffic routed into the mesh with no peer left to take it. It had no
+  internet access until someone deselected the exit device on it. The client
+  now routes directly for as long as the chosen device offers no IPv4 default
+  route, logs `the chosen exit device is not offering the IPv4 default route`
+  once, and goes back to using it when the offer returns — no restart, and
+  nothing to choose again. A device that offers only `::/0` counts as not
+  offering, because sending everything through an exit device covers IPv4
+  only. Update the devices that use an exit device; one still on 2.1.0 or
+  earlier behaves as before.
+- **Fixed** — **A device's home relay moved back and forth between two
+  relays.** A device measures each relay with a small UDP round trip and makes
+  the fastest one its home, which is where other devices send to reach it when
+  relayed. The figure was a single round trip, and one lost packet adds a
+  300 ms retry to it — enough to make the home look slower than a relay that
+  is really further away. The device moved, then moved back at the next
+  measurement five minutes later; each move changes its entry in every peer's
+  map and reconnects it to a relay. A relay's figure is now the best of three
+  round trips, and a home that stays silent for a whole round is asked once
+  more a few seconds later before the device leaves it.
+
+### Local console
+
+- **Added** — **The page where a device publishes subnets says whether each
+  one is in effect.** Under Mesh → Routing, a subnet you had saved looked the
+  same whether or not other devices could reach it yet, so one still waiting
+  for approval read as done. Each subnet, and the offer to act as an exit
+  device, now shows its state — Published, Pending approval, Not saved or Not
+  connected — and a stand-in address is shown as assigned only once the route
+  is approved. While something is pending, a notice says how many subnets
+  other devices cannot reach yet and who approves them. The daemon's log says
+  the same: `advertised routes are not published yet` with the routes, then
+  `all advertised routes are published`. Your own coordinator approves routes
+  by itself, so there a saved subnet goes straight to Published.
+- **Changed** — **The Mesh page says which relay is which.** It showed two
+  different things under the one word "Relay": the relay other devices send to
+  when they reach this device, and the relay this device sends to when it
+  reaches a peer — which is that peer's choice, and often a different machine.
+  The first is now "This device's home relay", with its region, its address
+  and the round trip to it. A relayed peer's tooltip names the second as the
+  peer's home relay. On calabi.net each also says whether it is one of
+  Calabi's relays or one of your own.
+
+### Windows installer
+
+- **Fixed** — **The desktop installer could finish without registering the
+  service, and report success.** The app then opened on a console that could
+  not find its daemon, and installing again — any version — ended the same
+  way. The installer registers the service by running `calabi daemon install
+  --system` as the person installing, and that command refuses when the
+  command-line client of that Windows account is in standalone mode: typed in
+  a shell, it would register a service that signs in to calabi.net, which is
+  not what someone in standalone mode is asking for. The installer ignored the
+  refusal. An upgrade never met it, because the service was already there; a
+  first install, or one after an uninstall, did. The installer now says which
+  service it wants (`--platform`, below) and no longer goes by the exit code:
+  it looks for the registered service, and if there is none, or it will not
+  start, it stops with the daemon's own message, exits 3 or 4, and leaves the
+  reason in `service-install-error.log` in the install directory — where a
+  silent install (`/S`) can find it.
+- **Added** — **`calabi daemon install --platform`.** From a client in
+  standalone mode it registers the platform service, for that one install: the
+  saved mode stays as it is, and nothing is written into the service's
+  environment. The refusal you get without it now lists it among the ways out.
+
+### Your server
+
+- **Fixed** — **A coordinator run from a policy file left every port open.**
+  For a meshnet on `CALABI_COORD_POLICY_FILE` with no ACL saved through the
+  admin API, the file decided which devices appeared in each other's maps, but
+  the packet filter sent to each device was compiled from saved ACLs alone —
+  and with none saved, that came out as "anything, from anywhere". So two
+  devices a rule connected on one port could reach each other on every port.
+  Devices the file kept apart stayed apart. The filter is now compiled from
+  the file, and the admin API's access check and save preview, which started
+  from the same wrong baseline, read it too. Update the coordinator: devices
+  get the corrected filter with their next map and need no update themselves.
+  A meshnet whose ACL was saved through the admin API was not affected.
+
+### On calabi.net
+
+- **Fixed** — **Clicking an approved route in the console's device list
+  revoked it.** Under Mesh → Devices, an approved subnet was a tag that took
+  the approval back when clicked — no question asked, and nothing to say what
+  had just happened — and other devices lost the subnet at once. An approved
+  route now opens a menu, to copy the address or to revoke, and revoking asks
+  first and says what it costs: devices lose access immediately, and a
+  stand-in address goes back to the pool, so approving again may give a
+  different one. A route waiting for approval is still approved with one
+  click, and every change is confirmed on screen. Exit devices and services
+  waiting to be confirmed work the same way.
+- **Changed** — **Switching a device between Calabi's nodes and your own moves
+  its home relay right away.** The Platform / Self-hosted switch at the top of
+  the local console also decides which relays the device prefers as its home.
+  That part followed up to half a minute later, by stopping the mesh session
+  and joining again, which interrupted every mesh connection for a moment. The
+  home relay is now picked again in place once the tunnels have reconnected,
+  and the mesh session stays up. The confirmation shown before switching says
+  the home relay moves too.
+
 ## 2.1.0 — 2026-09-29
 
 **Devices reach relays over TLS.** There is nothing to configure, and nothing

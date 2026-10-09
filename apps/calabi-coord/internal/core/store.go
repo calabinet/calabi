@@ -63,6 +63,10 @@ type NodeStore interface {
 // It started as allow-all; the ACL engine (groups / tags /
 // src->dst:port) now filters the candidate set. Keeping the interface
 // here from day one meant the netmap code never changed when ACLs landed.
+//
+// Filter cuts only the peer list. The packet filter compiles from the document
+// behind it, so a new implementation has to be readable by policyDocument too;
+// until it is, every netmap that falls back to it fails rather than open.
 type PolicyStore interface {
 	// Filter returns the subset of candidates that self is allowed to reach.
 	Filter(ctx context.Context, t MeshnetID, self *Node, candidates []*Node) ([]*Node, error)

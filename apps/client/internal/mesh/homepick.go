@@ -32,6 +32,31 @@ const (
 	// derp_home, which is pushed to every peer's netmap, and moves the relay link.
 	// A new region must be meaningfully faster before it wins.
 	homeSwitchMargin = 15 * time.Millisecond
+
+	// homeProbeSamples is how many round trips are taken per region; the SMALLEST
+	// is the region's figure.
+	//
+	// One sample is not a measurement on a lossy path. The probe retransmits
+	// every 300ms, so a region whose first datagram is dropped reads 300ms slower
+	// than it is — twenty times the switch margin above. A node 190ms from one
+	// platform relay and 240ms from another therefore re-homed whenever a single
+	// probe packet to its home was lost, then moved back five minutes later when
+	// the next round came out clean: every flip rewrote derp_home in every peer's
+	// netmap and moved the relay link, for nothing. Loss only ever ADDS time, so
+	// the minimum of a few samples is the path's real latency unless every one
+	// of them loses a packet.
+	homeProbeSamples = 3
+
+	// homeFollowUpTimeout bounds each sample after the first. The first already
+	// proved the region answers and gets the full probe timeout; a follow-up is
+	// only there to beat that figure, so it is not worth waiting long for.
+	homeFollowUpTimeout = 700 * time.Millisecond
+
+	// homeMissRetryDelay is how long homeProbe waits before asking a home that
+	// stayed silent for a whole round ONE more time. Seconds, not the five
+	// minutes to the next round: a home that is really gone must still be left
+	// promptly, and a burst of loss is over by then.
+	homeMissRetryDelay = 3 * time.Second
 )
 
 // regionRTT is one region's measured round trip, plus the STUN endpoint that
@@ -48,9 +73,9 @@ type regionRTT struct {
 // an unresolvable host, or no answer within the probe timeout is simply absent
 // from the result — unreachable relays must not be chosen as home.
 //
-// The measurement is the time to the FIRST STUN response, so a lost packet shows
-// up as a retransmit-inflated RTT rather than a failure. That is the honest
-// signal for home selection: a lossy path is a bad home even when it is near.
+// Each region's figure is the best of a few round trips (see homeProbeSamples):
+// one sample reads a single lost datagram as 300ms of latency, and acting on
+// that moved homes that had not got any worse.
 func probeRegions(ctx context.Context, ms *magicSock, m DERPMap, logger *slog.Logger) []regionRTT {
 	type result struct {
 		r  regionRTT
@@ -59,26 +84,15 @@ func probeRegions(ctx context.Context, ms *magicSock, m DERPMap, logger *slog.Lo
 	results := make([]result, len(m.Regions))
 	var wg sync.WaitGroup
 	for i, region := range m.Regions {
-		hostPort, ok := regionSTUNHostPort(region)
-		if !ok {
+		if _, ok := regionSTUNHostPort(region); !ok {
 			continue
 		}
 		wg.Add(1)
-		go func(i int, code, hostPort string) {
+		go func(i int, region DERPRegion) {
 			defer wg.Done()
-			sa, ok := resolveSTUNServer(ctx, hostPort)
-			if !ok {
-				return
-			}
-			start := time.Now()
-			if _, err := ms.Reflexive(ctx, sa); err != nil {
-				if logger != nil && ctx.Err() == nil {
-					logger.Debug("mesh: relay region unreachable for home selection", "region", code, "stun", hostPort, "err", err)
-				}
-				return
-			}
-			results[i] = result{r: regionRTT{Region: code, STUN: sa, RTT: time.Since(start)}, ok: true}
-		}(i, region.Code, hostPort)
+			r, ok := probeRegion(ctx, ms, region, logger)
+			results[i] = result{r: r, ok: ok}
+		}(i, region)
 	}
 	wg.Wait()
 
@@ -88,6 +102,102 @@ func probeRegions(ctx context.Context, ms *magicSock, m DERPMap, logger *slog.Lo
 			out = append(out, res.r)
 		}
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].RTT < out[j].RTT })
+	return out
+}
+
+// probeRegion measures one region: the best of homeProbeSamples round trips to
+// its STUN endpoint. ok=false when the region has no STUN endpoint, does not
+// resolve, or never answered.
+func probeRegion(ctx context.Context, ms *magicSock, region DERPRegion, logger *slog.Logger) (regionRTT, bool) {
+	hostPort, ok := regionSTUNHostPort(region)
+	if !ok {
+		return regionRTT{}, false
+	}
+	sa, ok := resolveSTUNServer(ctx, hostPort)
+	if !ok {
+		return regionRTT{}, false
+	}
+	first := true
+	rtt, ok := bestOf(homeProbeSamples, func() (time.Duration, bool) {
+		sctx := ctx
+		if !first {
+			var cancel context.CancelFunc
+			sctx, cancel = context.WithTimeout(ctx, homeFollowUpTimeout)
+			defer cancel()
+		}
+		first = false
+		start := time.Now()
+		if _, err := ms.Reflexive(sctx, sa); err != nil {
+			return 0, false
+		}
+		return time.Since(start), true
+	})
+	if !ok {
+		if logger != nil && ctx.Err() == nil {
+			logger.Debug("mesh: relay region unreachable for home selection", "region", region.Code, "stun", hostPort)
+		}
+		return regionRTT{}, false
+	}
+	return regionRTT{Region: region.Code, STUN: sa, RTT: rtt}, true
+}
+
+// bestOf takes up to n samples and returns the smallest. The FIRST has to
+// succeed: a region that stays silent for a whole probe timeout is unreachable,
+// and spending n timeouts to say so would make every round as slow as its
+// deadest region. Later samples that fail are simply not counted. Pure but for
+// what sample does.
+func bestOf(n int, sample func() (time.Duration, bool)) (time.Duration, bool) {
+	best, ok := sample()
+	if !ok {
+		return 0, false
+	}
+	for i := 1; i < n; i++ {
+		if d, ok := sample(); ok && d < best {
+			best = d
+		}
+	}
+	return best, true
+}
+
+// homeWorthConfirming reports whether a home that did not answer this round
+// should be asked once more before pickHome is allowed to replace it.
+//
+// Yes when it would still be the home had it answered. No when the decision does
+// not depend on it: a pinned region that answered wins outright, and a
+// preference that just excluded the home's class has already moved on — waiting
+// on the old home there would only slow down the switch the user asked for.
+// Pure.
+func homeWorthConfirming(current string, measured []regionRTT, pref homePref, pinned string) bool {
+	if current == "" {
+		return false
+	}
+	for _, m := range measured {
+		if m.Region == current {
+			return false // it answered; nothing to confirm
+		}
+	}
+	if pinned != "" && pinned != current {
+		for _, m := range measured {
+			if m.Region == pinned {
+				return false
+			}
+		}
+	}
+	if pref != homeAnyRelay && isSelfHostedRegion(current) != (pref == homePreferOwn) {
+		for _, m := range measured {
+			if isSelfHostedRegion(m.Region) == (pref == homePreferOwn) {
+				return false // the preferred class has a reachable relay; current is not in it
+			}
+		}
+	}
+	return true
+}
+
+// withRegion adds one more measurement to an RTT-ascending set, keeping it
+// ascending. Pure.
+func withRegion(measured []regionRTT, r regionRTT) []regionRTT {
+	out := append(append([]regionRTT(nil), measured...), r)
 	sort.Slice(out, func(i, j int) bool { return out[i].RTT < out[j].RTT })
 	return out
 }

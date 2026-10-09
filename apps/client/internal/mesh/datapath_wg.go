@@ -117,6 +117,11 @@ type WGDatapath struct {
 	curUnaliased []SubnetAlias
 	aliasBudget  int
 	aliasUsed    int
+	// curPublished are this node's own routes the coordinator currently routes to
+	// it; netmapSeen is whether any netmap has been applied, without which an
+	// empty curPublished means "not told yet" rather than "nothing approved".
+	curPublished []netip.Prefix
+	netmapSeen   bool
 
 	// lastPeerConf is the canonical UAPI peer string last written to the device.
 	// SetConfig compares against it and skips the write — and its replace_peers
@@ -179,6 +184,19 @@ func (d *WGDatapath) aliasReport() (aliases, unaliased []SubnetAlias, budget, us
 		append([]SubnetAlias(nil), d.curUnaliased...), d.aliasBudget, d.aliasUsed
 }
 
+func (d *WGDatapath) setPublishedReport(cfg WGConfig) {
+	d.statMu.Lock()
+	d.curPublished = append([]netip.Prefix(nil), cfg.PublishedRoutes...)
+	d.netmapSeen = true
+	d.statMu.Unlock()
+}
+
+func (d *WGDatapath) publishedReport() (published []netip.Prefix, seen bool) {
+	d.statMu.Lock()
+	defer d.statMu.Unlock()
+	return append([]netip.Prefix(nil), d.curPublished...), d.netmapSeen
+}
+
 func (d *WGDatapath) setOverlay(a netip.Addr) {
 	d.statMu.Lock()
 	d.curOverlay = a
@@ -196,7 +214,13 @@ func (d *WGDatapath) overlay() netip.Addr {
 // goroutine.
 func (d *WGDatapath) Snapshot() Status {
 	st := Status{Relay: d.relays.Home()}
+	// The leg to this node's OWN home relay — where peers send to reach it. The
+	// console shows it beside the address: a home 190ms away while the org's own
+	// relay answers in 5 is the whole story of a slow inbound path, and neither
+	// number was on the page.
+	st.RelayRTTMicros = d.bind.relayRTT(st.Relay)
 	st.SubnetAliases, st.UnaliasedRoutes, st.AliasBudgetAddrs, st.AliasUsedAddrs = d.aliasReport()
+	st.PublishedRoutes, st.NetMapSeen = d.publishedReport()
 	if o := d.overlay(); o.IsValid() {
 		st.Overlay = o.String()
 	}
@@ -250,37 +274,7 @@ func sortPeersByOverlay(peers []PeerStatus) {
 // punching found, or the relay. Purely reported state: it re-reads exactly what
 // the bind's Send would choose right now.
 func (d *WGDatapath) annotatePaths(peers []PeerStatus) {
-	home := d.relays.Home()
-	for i := range peers {
-		peers[i].Path = PathRelay
-		key, err := meshproto.ParseNodeKey(peers[i].PublicKey)
-		if err != nil {
-			continue
-		}
-		// Relayed: show WHICH relay carries it — with a fleet that is the peer's own
-		// home relay, not necessarily ours.
-		if relay := d.bind.relayFor(key); relay != "" {
-			peers[i].Endpoint = relay
-		} else {
-			peers[i].Endpoint = home
-		}
-		// The leg that actually carries this peer, which in a fleet is the peer's
-		// relay and not necessarily our home. Measured only for links we hold, so
-		// a relay we do not connect to simply reports nothing rather than
-		// borrowing home's number.
-		if d.bind.client != nil {
-			if rtt, ok := d.bind.client.RTTTo(peers[i].Endpoint); ok {
-				peers[i].RelayRTTMicros = rtt.Microseconds()
-			}
-		}
-		if ap, ok := d.bind.directPath(key); ok {
-			peers[i].Path = PathDirect
-			peers[i].Endpoint = ap.String()
-			if rtt, ok := d.bind.directRTT(key); ok {
-				peers[i].RTTMicros = rtt.Microseconds()
-			}
-		}
-	}
+	d.bind.annotate(peers, d.relays.Home())
 }
 
 // The Controller finds this datapath by the directTransport interface, so a
@@ -493,6 +487,9 @@ func (d *WGDatapath) SetConfig(cfg WGConfig) error {
 	// Snapshot is what the console reads, and an alias nobody can see is an
 	// address nobody can dial.
 	d.setAliasReport(cfg)
+	// Same reasoning for which of this node's own routes are live: an advertised
+	// route nobody approved looks, from here, exactly like one that works.
+	d.setPublishedReport(cfg)
 	// The relay self-limit, refreshed from every netmap. kbps → bytes/sec uses
 	// the same ×1024/8 the edge does, so the rate the client paces itself by and
 	// the rate the relay polices it by are the same number.

@@ -84,7 +84,6 @@ func TestZeroIntervalLoopsReturnAtOnce(t *testing.T) {
 
 	for name, loop := range map[string]func(){
 		"endpoint report": func() { c.endpointReportLoop(ctx, 1, nil) },
-		"home probe":      func() { c.homeProbeLoop(ctx, 1, nil) },
 		"disco probe":     func() { (&discoProber{}).run(ctx, 0, c.peers) },
 		"tunnel report":   func() { c.tunnelReportLoop(ctx) },
 	} {
@@ -95,5 +94,31 @@ func TestZeroIntervalLoopsReturnAtOnce(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Errorf("%s loop with a zero interval is still running", name)
 		}
+	}
+}
+
+// The home-probe loop is the exception, since SetHomeSelection: with a zero
+// interval it does not TICK — that is what the setting buys a phone — but it
+// stays, parked, to run the one probe a changed selection asks for. Parked costs
+// nothing; it wakes for the session ending or for a kick and for nothing else.
+//
+// The nil socket is the tripwire: any probe this loop started on its own would
+// dereference it.
+func TestHomeProbeLoopWithAZeroIntervalWaitsWithoutProbing(t *testing.T) {
+	c := &Controller{Timing: &Timing{}, Logger: slog.Default(), Coord: &CoordClient{}}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { defer close(done); c.homeProbeLoop(ctx, 1, nil) }()
+
+	select {
+	case <-done:
+		t.Fatal("the loop returned on its own: nothing is left to run a re-selection")
+	case <-time.After(300 * time.Millisecond):
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("the loop outlived its session")
 	}
 }

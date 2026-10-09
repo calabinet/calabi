@@ -620,8 +620,9 @@ func runPlatformDaemon(args []string) int {
 			// An egress-affinity flip is delivered through this same hook; nudge
 			// the mesh so the relay home follows the edge at once (the co-switch)
 			// instead of waiting for the next 30s reconcile. No-op unless the
-			// home preference actually changed; goroutine so this HTTP handler
-			// doesn't block on the enrollment fetch.
+			// selection actually changed; goroutine because it reads creds from
+			// disk. The edge's facility is not known yet at this point — the
+			// second nudge comes from runOneSession once an edge is picked.
 			go meshCtl.Nudge()
 		},
 	})
@@ -820,7 +821,12 @@ func runPlatformDaemon(args []string) int {
 		// the trigger can reach across goroutines to terminate the
 		// session — closing the mux is what unblocks the ReadFrame
 		// loop (see the long comment above setSessionKill).
-		connected, err := runOneSession(ctx, logger, state, insp, registry, *name, *edgeRegion, setSessionKill)
+		// The last argument: the edge's facility is what the relay home is
+		// pinned to, and it is only known once an edge has been picked — a
+		// moment after the affinity flip that started all this. Without the
+		// nudge the pin waited for the mesh's next 30s poll.
+		connected, err := runOneSession(ctx, logger, state, insp, registry, *name, *edgeRegion, setSessionKill,
+			func() { go meshCtl.Nudge() })
 		setSessionKill(nil)
 		if ctx.Err() != nil {
 			break
@@ -958,6 +964,7 @@ func runOneSession(
 	name string,
 	cliEdgeRegion string,
 	publishKill func(func()),
+	onEdgeAnchored func(),
 ) (bool, error) {
 	// edge selection.
 	//   1. CALABI_SERVER env wins (legacy single-edge override path)
@@ -1134,6 +1141,10 @@ func runOneSession(
 			if serr := creds.Save(c); serr != nil {
 				logger.Warn("persist last_edge_node_id failed",
 					"edge_node_id", pick.EdgeNodeID, "err", serr)
+			} else if onEdgeAnchored != nil {
+				// The anchor moved (a new edge, or a new region): whoever keys
+				// off it — the mesh relay home — should look again now.
+				onEdgeAnchored()
 			}
 		}
 	}

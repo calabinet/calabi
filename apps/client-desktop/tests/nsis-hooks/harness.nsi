@@ -1,4 +1,5 @@
-﻿; Test harness for NSIS_HOOK_PREINSTALL (src-tauri/nsis-hooks.nsh).
+﻿; Test harness for NSIS_HOOK_PREINSTALL and NSIS_HOOK_POSTINSTALL
+; (src-tauri/nsis-hooks.nsh).
 ;
 ; Built and driven by run.ps1 — run that, not this. It stands in for the Tauri
 ; installer's Install section at the only two points that matter here: the hook
@@ -10,6 +11,10 @@
 ;   TEST_OUT          output installer path
 ;   TEST_INSTDIR      the fake $INSTDIR
 ;   TEST_REPLACEMENT  what gets copied over $INSTDIR\calabi.exe
+;   TEST_POST         defined = also run POSTINSTALL after the file is laid down,
+;                     as the real Install section does at its very end. Off for
+;                     the PREINSTALL scenarios, whose stand-in exe is not a
+;                     daemon and would only fail it.
 ;   CALABI_SVC_ROOT / CALABI_SVC_KEY / CALABI_SVC_NAME / CALABI_UNLOCK_TRIES
 ;                     the hooks file's test overrides — a fake service key and a
 ;                     service name that does not exist, so nothing real is stopped
@@ -37,4 +42,12 @@ Section
     FileOpen $0 "$INSTDIR\file-error.txt" w
     FileClose $0
   ${EndIf}
+
+  !ifdef TEST_POST
+    !insertmacro NSIS_HOOK_POSTINSTALL
+
+    ; Reached only if POSTINSTALL did not Abort.
+    FileOpen $0 "$INSTDIR\after-post.txt" w
+    FileClose $0
+  !endif
 SectionEnd

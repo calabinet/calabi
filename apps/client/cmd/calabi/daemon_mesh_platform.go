@@ -51,6 +51,9 @@ type meshLease interface {
 	// session. mesh.ErrNotEnrolled means the caller must re-enroll instead (no
 	// session, unknown node, or a coordinator that predates the RPC).
 	updateDeclarations(ctx context.Context, services []mesh.DeclaredService, fingerprint string) error
+	// setHomeSelection revises which relays the session prefers as its home and
+	// re-selects at once, WITHOUT restarting it (mesh.Controller.SetHomeSelection).
+	setHomeSelection(preference, pinnedRegion string)
 	// probeRelayLeg drives one segment of the relay path on the session's live
 	// relay link (see internal/mesh/derp/probe.go). On the lease rather than on
 	// the controller because only the running session has a datapath.
@@ -102,8 +105,8 @@ type platformMeshController struct {
 	// MeshStatus so the console shows what is ACTUALLY running.
 	leaseOrgID int64
 	cur        meshenroll.Enrollment // last APPLIED enrollment (for change detection)
-	homePref   string                // last APPLIED relay-home bias ("own"/"platform"); a change re-homes
-	homePin    string                // last APPLIED facility pin (relay region); a change re-homes
+	homePref   string                // last APPLIED relay-home bias ("own"/"platform"); a change re-homes IN PLACE
+	homePin    string                // last APPLIED facility pin (relay region); a change re-homes IN PLACE
 	routeSig   string                // last APPLIED consumer route policy; a change re-installs
 	// deviceFP is the Publish-side fingerprint the RUNNING session registered
 	// with. It is read from creds at session start, and on a fresh install the
@@ -288,11 +291,14 @@ func (c *platformMeshController) reconcile(ctx context.Context, enr meshenroll.E
 	// NOT read as "a different org" — otherwise every daemon in the fleet churns
 	// its datapath once the moment bff-console is upgraded.
 	orgChanged := enr.OrgID != 0 && c.leaseOrgID != 0 && enr.OrgID != c.leaseOrgID
-	// A flip of the edge affinity must re-home the relay too (the co-switch), so
-	// it counts as a change even when coord/relay/name/org are identical. Same for
-	// a move between two SELF-HOSTED facilities, which the class preference alone
-	// cannot see — both are "own", so without the pin the relay stayed wherever it
-	// had measured fastest while the edge moved to the other site.
+	// A flip of the edge affinity must re-home the relay too (the co-switch). Same
+	// for a move between two SELF-HOSTED facilities, which the class preference
+	// alone cannot see — both are "own", so without the pin the relay stayed
+	// wherever it had measured fastest while the edge moved to the other site.
+	//
+	// Neither is a reason to restart the session any more: a running one takes
+	// the new selection in place (applyHomeSelectionLocked, below). They are read
+	// here so that a session STARTED by this reconcile begins with them.
 	pref := meshHomePreference()
 	pin := meshHomePin()
 	// The consumer-side route policy is part of the session too: turning
@@ -335,10 +341,12 @@ func (c *platformMeshController) reconcile(ctx context.Context, enr meshenroll.E
 		enr.CoordAddr != c.cur.CoordAddr ||
 		enr.RelayAddr != c.cur.RelayAddr ||
 		enr.NodeName != c.cur.NodeName ||
-		pref != c.homePref ||
-		pin != c.homePin ||
 		sig != c.routeSig
 	if !changed {
+		// The periodic backstop for the same in-place re-selection Nudge does on
+		// the spot: whatever moved the selection without telling us is caught
+		// here within one poll.
+		c.applyHomeSelectionLocked(pref, pin)
 		// First time we learn the org for a session that started before the
 		// control plane reported it: adopt it WITHOUT restarting. The lease
 		// really is enrolled in that meshnet — we just had no way to know — so
@@ -651,21 +659,49 @@ func (c *platformMeshController) setExitPeer(peer string) {
 	c.mu.Unlock()
 }
 
-// Nudge re-reconciles the meshnet session NOW instead of at the next 30s poll,
-// so an edge-affinity flip moves the relay home promptly (the co-switch: "use my
-// node" switches edge egress AND relay home together). Unlike Rebind it does not
-// tear the session down first — reconcile restarts it only if something it
-// watches actually changed, and the home preference (creds.PreferPlatformEdge)
-// is one of those. A no-op when nothing changed, so it is safe to call on any
-// egress/region switch. Runs a fetch, so callers on an HTTP path invoke it in a
-// goroutine.
-func (c *platformMeshController) Nudge() {
-	c.mu.Lock()
-	ctx := c.ctx
-	c.mu.Unlock()
-	if ctx != nil {
-		c.tick(ctx)
+// applyHomeSelectionLocked hands a changed relay-home selection to the RUNNING
+// session, which re-selects its home in place. Caller holds c.mu.
+//
+// With nothing running there is nothing to hand it to, and nothing is recorded
+// either: the next session reads the selection when it starts.
+func (c *platformMeshController) applyHomeSelectionLocked(pref, pin string) {
+	if c.lease == nil || (pref == c.homePref && pin == c.homePin) {
+		return
 	}
+	c.logger.Info("mesh: relay home selection changed; re-selecting without re-enrolling",
+		"preference", pref, "pinned_region", pin, "was_preference", c.homePref, "was_pinned_region", c.homePin)
+	c.lease.setHomeSelection(pref, pin)
+	c.homePref, c.homePin = pref, pin
+}
+
+// Nudge makes the relay home follow the edge NOW: an affinity flip, a region
+// switch, or the edge landing in a facility (the co-switch — "use my node" moves
+// edge egress AND relay home together).
+//
+// It reads the selection from creds and hands it to the running session. That
+// is all — no enrollment fetch, no restart.
+//
+// It used to be "reconcile now", which meant fetching the enrollment from the
+// control plane first and, on a change, tearing the session down and enrolling
+// again. Both halves were wrong for this. The fetch is unrelated to a setting
+// that lives on this machine, and when it failed the whole nudge was dropped
+// with a debug line, leaving the relay on the old class until the next 30s poll
+// (seen in the field: the edge moved in one second, the relay thirty later). And
+// the restart cost every peer connection a few seconds to change a bias that
+// only the next latency probe reads — twice, when the edge's facility became
+// known a moment after the flip.
+//
+// Safe to call at any time and from any goroutine: a no-op when nothing changed,
+// when the mesh is paused, or when no session is running. It reads creds from
+// disk, so callers on a request path still run it in a goroutine.
+func (c *platformMeshController) Nudge() {
+	pref, pin := meshHomePreference(), meshHomePin()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.paused {
+		return
+	}
+	c.applyHomeSelectionLocked(pref, pin)
 }
 
 // Advertise implements statusapi.MeshStatusSource: this node's current
@@ -729,6 +765,10 @@ func (l *runnerLease) updateDeclarations(ctx context.Context, services []mesh.De
 	return l.r.UpdateDeclarations(ctx, services, fingerprint)
 }
 
+func (l *runnerLease) setHomeSelection(preference, pinnedRegion string) {
+	l.r.SetHomeSelection(preference, pinnedRegion)
+}
+
 func (l *runnerLease) observations() []mesh.ServiceObservation {
 	return l.r.ServiceObservations()
 }
@@ -764,6 +804,7 @@ func toStatusapiMesh(m localweb.MeshStatus) statusapi.MeshStatus {
 			Endpoint:         p.Endpoint,
 			RTTMicros:        p.RTTMicros,
 			RelayRTTMicros:   p.RelayRTTMicros,
+			RelayRegion:      p.RelayRegion,
 		})
 	}
 	aliases := make([]statusapi.MeshSubnetAlias, 0, len(m.SubnetAliases))
@@ -775,12 +816,15 @@ func toStatusapiMesh(m localweb.MeshStatus) statusapi.MeshStatus {
 		UnaliasedRoutes:  append([]string(nil), m.UnaliasedRoutes...),
 		AliasBudgetAddrs: m.AliasBudgetAddrs,
 		AliasUsedAddrs:   m.AliasUsedAddrs,
+		PublishedRoutes:  append([]string(nil), m.PublishedRoutes...),
+		NetmapSeen:       m.NetmapSeen,
 		Datapath:         statusapi.MeshDatapath(m.Datapath),
 		Enabled:          m.Enabled,
 		Up:               m.Up,
 		Coord:            m.Coord,
 		Relay:            m.Relay,
 		DerpHome:         m.DerpHome,
+		RelayRTTMicros:   m.RelayRTTMicros,
 		Name:             m.Name,
 		Overlay:          m.Overlay,
 		Peers:            peers,

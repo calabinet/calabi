@@ -116,10 +116,14 @@ type MeshStatus struct {
 	// DerpHome is the region code this node is homed on ("self-…" = the org's own
 	// relay). Relay is the address; DerpHome is what tells self-hosted from
 	// platform, so the console can flag "中继节点：自建".
-	DerpHome string     `json:"derp_home,omitempty"`
-	Name     string     `json:"name,omitempty"`
-	Overlay  string     `json:"overlay,omitempty"`
-	Peers    []MeshPeer `json:"peers"`
+	DerpHome string `json:"derp_home,omitempty"`
+	// RelayRTTMicros is the round trip to that home relay in microseconds (0
+	// until its link has answered). This node to ITS relay; each peer's own
+	// figure is to the relay carrying that peer, usually a different one.
+	RelayRTTMicros int64      `json:"relay_rtt_micros,omitempty"`
+	Name           string     `json:"name,omitempty"`
+	Overlay        string     `json:"overlay,omitempty"`
+	Peers          []MeshPeer `json:"peers"`
 	// SubnetAliases is the stand-in mapping for this node's OWN subnet routes:
 	// every route the coordinator granted an alias. The daemon asks for one on
 	// every subnet it advertises, so this is not limited to LANs that collide.
@@ -131,6 +135,16 @@ type MeshStatus struct {
 	// AliasBudgetAddrs / AliasUsedAddrs explain WHY, in addresses (a /24 is 256).
 	AliasBudgetAddrs int `json:"alias_budget_addrs,omitempty"`
 	AliasUsedAddrs   int `json:"alias_used_addrs,omitempty"`
+	// PublishedRoutes are this node's OWN routes the coordinator is routing to it
+	// right now, named by the prefixes it advertised ("0.0.0.0/0" for an approved
+	// exit device). An advertised route missing from here reaches nobody yet — on
+	// the platform it is waiting for an admin — and the node's own settings read
+	// exactly the same either way, which is why this is reported.
+	//
+	// Only meaningful with NetmapSeen: before the first netmap an empty list means
+	// "not told yet", not "nothing approved".
+	PublishedRoutes []string `json:"published_routes,omitempty"`
+	NetmapSeen      bool     `json:"netmap_seen,omitempty"`
 	// Datapath is this node's own packet accounting — where traffic goes missing
 	// (see MeshDatapath). Always emitted, zeroed while the mesh is down.
 	Datapath MeshDatapath `json:"datapath"`
@@ -187,6 +201,10 @@ type MeshPeer struct {
 	// field from RTTMicros on purpose, because they are different quantities and
 	// one field would make the shorter measurement look like the better path.
 	RelayRTTMicros int64 `json:"relay_rtt_micros,omitempty"`
+	// RelayRegion is the region code of the relay carrying this peer — the PEER'S
+	// home relay, which is often not this node's own. "self-…" = the org's own
+	// relay, anything else the platform's; empty when the path is direct.
+	RelayRegion string `json:"relay_region,omitempty"`
 }
 
 // TunnelSpec is a create request. ConfigJSON is the already-transformed

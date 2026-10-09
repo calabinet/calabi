@@ -73,6 +73,45 @@ func TestResolveExitNode(t *testing.T) {
 	}
 }
 
+// A chosen peer is usable as an exit only while it carries the IPv4 default
+// route: that is the family the full-tunnel routes capture.
+func TestExitOffer(t *testing.T) {
+	own := "100.64.0.2/32"
+	cases := []struct {
+		name    string
+		routes  []string
+		usable  bool
+		offered string
+	}{
+		{"both default routes", []string{own, "0.0.0.0/0", "::/0"}, true, "0.0.0.0/0,::/0"},
+		{"IPv4 only", []string{own, "0.0.0.0/0"}, true, "0.0.0.0/0"},
+		{"IPv6 only", []string{own, "::/0"}, false, "::/0"},
+		{"approval revoked", []string{own}, false, "none"},
+		// A subnet router is not an exit device, however much it routes.
+		{"subnet routes only", []string{own, "10.0.0.0/8", "192.168.1.0/24"}, false, "none"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var aips []netip.Prefix
+			for _, r := range tc.routes {
+				aips = append(aips, netip.MustParsePrefix(r))
+			}
+			cfg := WGConfig{Peers: []WGPeer{
+				{PublicKey: mustKey(2), AllowedIPs: aips},
+				// Another peer's default route says nothing about the chosen one.
+				{PublicKey: mustKey(3), AllowedIPs: []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0")}},
+			}}
+			usable, offered := exitOffer(cfg, mustKey(2))
+			if usable != tc.usable || offered != tc.offered {
+				t.Fatalf("exitOffer = (%v, %q), want (%v, %q)", usable, offered, tc.usable, tc.offered)
+			}
+		})
+	}
+	if usable, offered := exitOffer(WGConfig{}, mustKey(2)); usable || offered != "none" {
+		t.Fatalf("a peer the config does not have: exitOffer = (%v, %q), want (false, \"none\")", usable, offered)
+	}
+}
+
 func TestIsDefaultRoute(t *testing.T) {
 	for s, want := range map[string]bool{
 		"0.0.0.0/0":      true,

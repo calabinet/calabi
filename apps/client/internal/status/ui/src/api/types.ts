@@ -611,6 +611,11 @@ export interface MeshPeer {
   // a direct 30ms are not comparable and one column of bare numbers invites
   // exactly that comparison.
   relay_rtt_micros?: number;
+  // Region code of the relay carrying this peer — the PEER'S home relay, which is
+  // often not this device's own. "self-…" = the org's own relay, anything else
+  // the platform's (lib/relayRegion.ts). Absent on a direct path and from an
+  // older daemon: render "relay" with no owner then, never "platform".
+  relay_region?: string;
 }
 
 export interface MeshStatus {
@@ -626,6 +631,13 @@ export interface MeshStatus {
   // can say WHY rather than only THAT.
   alias_budget_addrs?: number;
   alias_used_addrs?: number;
+  // THIS node's own routes the coordinator is routing to it right now, named by
+  // the prefixes it advertised ("0.0.0.0/0" for an approved exit device). A route
+  // it advertises that is missing here reaches nobody yet — on the platform it is
+  // waiting for an admin. Only meaningful once netmap_seen: before the first
+  // netmap an empty list means "not told yet", not "nothing approved".
+  published_routes?: string[];
+  netmap_seen?: boolean;
   enabled: boolean; // a `mesh:` block is configured on this daemon
   up: boolean; // the datapath is currently live
   paused?: boolean; // stopped locally via meshDown; Start (meshUp) re-enrolls
@@ -634,6 +646,10 @@ export interface MeshStatus {
   // derp_home is the region this node is homed on ("self-…" = the org's own
   // relay). relay is the address; derp_home is what flags self-hosted vs platform.
   derp_home?: string;
+  // Round trip to that home relay in microseconds; absent until its link has
+  // answered. THIS device to ITS relay — each peer's relay_rtt_micros is to the
+  // relay carrying that peer, usually a different one.
+  relay_rtt_micros?: number;
   name?: string;
   overlay?: string; // this node's overlay IP
   // org_id is the org (== meshnet) the RUNNING session enrolled into. It can

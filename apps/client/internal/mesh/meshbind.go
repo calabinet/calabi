@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net"
 	"net/netip"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -96,6 +97,12 @@ type meshBind struct {
 	// so a relayed packet takes the peer's OWN relay rather than ours — the
 	// only relay it is listening on. Empty/absent falls back to our home relay.
 	relayOf map[meshproto.NodeKey]string
+	// regionOf maps a relay ADDRESS back to the region code it serves — the
+	// inverse of the netmap's region -> address table. It exists for the status
+	// surface, which has to say WHOSE relay carries a peer: a "self-" code is the
+	// org's own, anything else the platform's, and the address alone tells nobody
+	// that. Reported state only; nothing routes on it.
+	regionOf map[string]string
 	// srcOf remembers which peer sent DISCO from which source address, so an
 	// inbound direct WireGuard packet can be attributed to a peer (and answered
 	// over whichever transport is best at that moment) instead of being pinned to
@@ -276,9 +283,27 @@ func (b *meshBind) setPeers(cfg WGConfig) {
 		discoOf[p.PublicKey] = p.DiscoKey
 		keyOf[p.DiscoKey] = p.PublicKey
 	}
+	// Region codes in sorted order, so two regions that somehow share one address
+	// resolve to the same code on every netmap rather than whichever the map
+	// iteration happened to yield.
+	codes := make([]string, 0, len(cfg.RelayByRegion))
+	for code := range cfg.RelayByRegion {
+		codes = append(codes, code)
+	}
+	sort.Strings(codes)
+	regionOf := make(map[string]string, len(codes))
+	for _, code := range codes {
+		addr := cfg.RelayByRegion[code]
+		if addr == "" {
+			continue
+		}
+		if _, taken := regionOf[addr]; !taken {
+			regionOf[addr] = code
+		}
+	}
 	b.dmu.Lock()
 	defer b.dmu.Unlock()
-	b.discoOf, b.keyOf, b.relayOf = discoOf, keyOf, relayOf
+	b.discoOf, b.keyOf, b.relayOf, b.regionOf = discoOf, keyOf, relayOf, regionOf
 	for ap, dk := range b.srcOf {
 		if _, ok := keyOf[dk]; !ok {
 			delete(b.srcOf, ap)
@@ -292,6 +317,70 @@ func (b *meshBind) relayFor(key meshproto.NodeKey) string {
 	b.dmu.Lock()
 	defer b.dmu.Unlock()
 	return b.relayOf[key]
+}
+
+// relayRegion returns the region code of the relay at addr, or "" when the last
+// netmap named no region for it.
+func (b *meshBind) relayRegion(addr string) string {
+	b.dmu.Lock()
+	defer b.dmu.Unlock()
+	return b.regionOf[addr]
+}
+
+// relayRTT is the last keepalive round trip to the relay at addr, in
+// microseconds; 0 when there is no link to it or it has not answered yet.
+func (b *meshBind) relayRTT(addr string) int64 {
+	if b.client == nil || addr == "" {
+		return 0
+	}
+	if rtt, ok := b.client.RTTTo(addr); ok {
+		return rtt.Microseconds()
+	}
+	return 0
+}
+
+// annotate fills in each peer's live transport for the status surface — the
+// direct endpoint hole punching found, or the relay carrying it. home is this
+// node's own home relay, the fallback for a peer whose region resolves to
+// nothing. Purely reported state: it re-reads what Send would choose right now.
+//
+// A relayed peer is carried by THAT PEER'S home relay, not ours: relays do not
+// interconnect, so the only relay a peer listens on is its own. With an org that
+// runs its own relay next to the platform's, the two differ routinely — this
+// node homed on a platform relay while every peer it talks to is reached through
+// the org's — and an address alone does not say which is which. RelayRegion is
+// what lets the console name it.
+func (b *meshBind) annotate(peers []PeerStatus, home string) {
+	for i := range peers {
+		peers[i].Path = PathRelay
+		key, err := meshproto.ParseNodeKey(peers[i].PublicKey)
+		if err != nil {
+			continue
+		}
+		// Relayed: show WHICH relay carries it — with a fleet that is the peer's own
+		// home relay, not necessarily ours.
+		if relay := b.relayFor(key); relay != "" {
+			peers[i].Endpoint = relay
+		} else {
+			peers[i].Endpoint = home
+		}
+		peers[i].RelayRegion = b.relayRegion(peers[i].Endpoint)
+		// The leg that actually carries this peer, which in a fleet is the peer's
+		// relay and not necessarily our home. Measured only for links we hold, so
+		// a relay we do not connect to simply reports nothing rather than
+		// borrowing home's number.
+		peers[i].RelayRTTMicros = b.relayRTT(peers[i].Endpoint)
+		if ap, ok := b.directPath(key); ok {
+			peers[i].Path = PathDirect
+			peers[i].Endpoint = ap.String()
+			// No relay is carrying it: a region left here would label a direct
+			// path as somebody's relay.
+			peers[i].RelayRegion = ""
+			if rtt, ok := b.directRTT(key); ok {
+				peers[i].RTTMicros = rtt.Microseconds()
+			}
+		}
+	}
 }
 
 // noteDiscoSource records that a peer's DISCO traffic reaches us from `from`, so

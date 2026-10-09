@@ -129,3 +129,57 @@ export function normalizeCidr(input: string): string | null {
   });
   return `${masked.join(".")}/${bits}`;
 }
+
+/**
+ * Where one of this node's own advertised routes stands with the coordinator.
+ *
+ *  - unsaved:   in the form, not sent to the daemon yet
+ *  - offline:   the mesh is not running, so nobody can reach it whatever was approved
+ *  - checking:  the mesh is up and the coordinator has not said yet
+ *  - pending:   advertised, and the coordinator is not routing it here — on the
+ *               platform that means an admin has not approved it
+ *  - published: peers can reach it
+ */
+export type RouteStanding = "unsaved" | "offline" | "checking" | "pending" | "published";
+
+/** What the daemon reports about this node's own routes (GET /v1/mesh). */
+export interface RouteReport {
+  up: boolean;
+  netmapSeen: boolean;
+  published: string[];
+}
+
+/** isExitRoute reports whether cidr is a default route: the exit-device offer. */
+export function isExitRoute(cidr: string): boolean {
+  return cidr.trim().endsWith("/0");
+}
+
+/**
+ * routeStanding decides the standing of one advertised route.
+ *
+ * The order of the checks is the point. "pending" is a claim about what an admin
+ * has not done, so it is only made once the coordinator has actually answered:
+ * while the mesh is down or the first netmap is still on its way, an empty
+ * published list means nobody has said anything, and calling that "pending"
+ * would flash a warning at every start and after every save.
+ */
+export function routeStanding(cidr: string, saved: string[], report: RouteReport): RouteStanding {
+  const canon = (c: string) => normalizeCidr(c) ?? c.trim();
+  const want = canon(cidr);
+  if (!saved.some((r) => canon(r) === want)) return "unsaved";
+  if (!report.up) return "offline";
+  if (!report.netmapSeen) return "checking";
+  return report.published.some((r) => canon(r) === want) ? "published" : "pending";
+}
+
+/**
+ * exitStanding is routeStanding for the exit-device offer, which is a switch
+ * rather than a row: it is "saved" when the daemon is advertising it, and
+ * published when the coordinator routes a default route here.
+ */
+export function exitStanding(saved: boolean, report: RouteReport): RouteStanding {
+  if (!saved) return "unsaved";
+  if (!report.up) return "offline";
+  if (!report.netmapSeen) return "checking";
+  return report.published.some(isExitRoute) ? "published" : "pending";
+}

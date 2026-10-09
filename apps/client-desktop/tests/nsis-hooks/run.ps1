@@ -1,4 +1,5 @@
-﻿# Regression tests for NSIS_HOOK_PREINSTALL (apps/client-desktop/src-tauri/nsis-hooks.nsh).
+﻿# Regression tests for NSIS_HOOK_PREINSTALL and NSIS_HOOK_POSTINSTALL
+# (apps/client-desktop/src-tauri/nsis-hooks.nsh).
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File apps\client-desktop\tests\nsis-hooks\run.ps1
 #
@@ -14,7 +15,15 @@
 # name handed to `sc stop/start` does not exist. The "running service" is a copy
 # of PING.EXE.
 #
-# Needs makensis — `cargo tauri build` puts it under %LOCALAPPDATA%\tauri\NSIS.
+# POSTINSTALL (step 3) is here for a different silent failure. The hook ran
+# `daemon install --system`, ignored what came back, and let the installer finish:
+# when the daemon refused to register the service, the install still "completed"
+# and the app then started with no daemon to find. Those scenarios assert on what
+# is REGISTERED and on the installer's exit code — the two things a person or a
+# script launching the installer can actually see.
+#
+# Needs makensis — `cargo tauri build` puts it under %LOCALAPPDATA%\tauri\NSIS —
+# and, for step 3, `go` (it builds the stand-in daemon in .\fakedaemon).
 $ErrorActionPreference = 'Stop'
 
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -45,20 +54,21 @@ $newHash = (Get-FileHash $newExe).Hash
 $dirSpace = Join-Path $work 'Calabi Test'
 $dirPlain = Join-Path $work 'CalabiTest'
 
-function Build($name, $instdir, $tries) {
+function Build($name, $instdir, $tries, $replacement = $newExe, [switch]$Post) {
     $out = Join-Path $work "$name.exe"
     $args = @(
         '/V2',
         "/DHOOKS=$hooks",
         "/DTEST_OUT=$out",
         "/DTEST_INSTDIR=$instdir",
-        "/DTEST_REPLACEMENT=$newExe",
+        "/DTEST_REPLACEMENT=$replacement",
         '/DCALABI_SVC_ROOT=HKCU',
         '/DCALABI_SVC_KEY=Software\CalabiNsisHookTest\svc',
         "/DCALABI_SVC_NAME=$svcName",
-        "/DCALABI_UNLOCK_TRIES=$tries",
-        $harness
+        "/DCALABI_UNLOCK_TRIES=$tries"
     )
+    if ($Post) { $args += '/DTEST_POST=1' }
+    $args += $harness
     & $makensis @args | Out-Null
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $out)) { throw "makensis failed for $name" }
     return $out
@@ -67,6 +77,24 @@ function Build($name, $instdir, $tries) {
 $instSpace = Build 'inst-space' $dirSpace 20   # 10s to release the file
 $instPlain = Build 'inst-plain' $dirPlain 20
 $instShort = Build 'inst-short' $dirSpace 4    # 2s, for the give-up case
+
+# Step 3's stand-in for calabi.exe: it answers `daemon install` / `daemon start`
+# the way each scenario asks (see fakedaemon\main.go). GOWORK=off because this
+# one file lives outside every module the repo's go.work lists.
+$fakeExe = Join-Path $work 'fakedaemon.exe'
+$dirPost = Join-Path $work 'Calabi Post'
+$fakeLog = Join-Path $work 'fake-calls.log'
+$fakeKey = 'HKCU\Software\CalabiNsisHookTest\svc'
+if (-not (Get-Command go -ErrorAction SilentlyContinue)) { throw "go not found - step 3 builds its stand-in daemon with it." }
+$prevWork = $env:GOWORK
+$env:GOWORK = 'off'
+try {
+    & go build -o $fakeExe (Join-Path $here 'fakedaemon\main.go')
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $fakeExe)) { throw "go build of the stand-in daemon failed" }
+} finally {
+    $env:GOWORK = $prevWork
+}
+$instPost = Build 'inst-post' $dirPost 4 $fakeExe -Post
 
 function Set-ImagePath($value) {
     if (Test-Path $regParent) { Remove-Item $regParent -Recurse -Force }
@@ -120,6 +148,63 @@ function Scenario {
     "{0}  {1,-52} {2,5:N1}s  exit={3}  {4}" -f $verdict, $name, $sw.Elapsed.TotalSeconds, $p.ExitCode, ($problems -join '; ')
 }
 
+# PostScenario runs the installer with POSTINSTALL enabled against the stand-in
+# daemon and checks the three things that matter afterwards: is the "service"
+# registered, did the installer say so truthfully (exit code), and what did the
+# hook actually run.
+function PostScenario {
+    param($name, $installMode, $startMode, [bool]$preRegistered, [bool]$expectOk, $expectInErrorLog = '')
+
+    if (Test-Path $dirPost) { [System.IO.Directory]::Delete($dirPost, $true) }
+    New-Item -ItemType Directory -Force -Path $dirPost | Out-Null
+    if (Test-Path $fakeLog) { Remove-Item $fakeLog -Force }
+    # An upgrade finds the service already there, pointing at this install.
+    if ($preRegistered) { Set-ImagePath "`"$dirPost\calabi.exe`" daemon" } else { Set-ImagePath $null }
+
+    $env:CALABI_FAKE_INSTALL = $installMode
+    $env:CALABI_FAKE_START = $startMode
+    $env:CALABI_FAKE_REGKEY = $fakeKey
+    $env:CALABI_FAKE_LOG = $fakeLog
+
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    $p = Start-Process -FilePath $instPost -ArgumentList '/S' -Wait -PassThru
+    $sw.Stop()
+
+    $afterPost = Test-Path (Join-Path $dirPost 'after-post.txt')
+    $registered = [bool](Get-ItemProperty -Path $regKey -Name 'ImagePath' -ErrorAction SilentlyContinue)
+    $calls = @()
+    if (Test-Path $fakeLog) { $calls = @(Get-Content $fakeLog) }
+    $errLogPath = Join-Path $dirPost 'service-install-error.log'
+    $errLog = ''
+    if (Test-Path $errLogPath) { $errLog = [System.IO.File]::ReadAllText($errLogPath) }
+
+    $problems = @()
+    # Always: the hook must state its intent. Without --platform a command-line
+    # mode the user saved long ago decides whether a desktop install works.
+    if ($calls.Count -lt 1 -or $calls[0] -ne 'daemon install --system --platform') {
+        $problems += "first command was '$($calls[0])', want 'daemon install --system --platform'"
+    }
+    if ($expectOk) {
+        if (-not $afterPost) { $problems += 'hook aborted' }
+        if ($p.ExitCode -ne 0) { $problems += "installer exited $($p.ExitCode)" }
+        if (-not $registered) { $problems += 'service is NOT registered' }
+        if ($calls.Count -ne 2 -or $calls[1] -ne 'daemon start') { $problems += "ran [$($calls -join ' | ')], want install then start" }
+        if ($errLog) { $problems += 'left a service-install-error.log behind' }
+    } else {
+        if ($afterPost) { $problems += 'hook did NOT abort' }
+        # The whole point: an installer that could not set the service up must
+        # not report success.
+        if ($p.ExitCode -eq 0) { $problems += 'installer exited 0 (reported success)' }
+        if (-not $errLog) { $problems += 'no service-install-error.log - a silent run leaves no reason anywhere' }
+        elseif ($expectInErrorLog -and $errLog -notlike "*$expectInErrorLog*") { $problems += "error log does not carry the daemon's reason ('$expectInErrorLog')" }
+        if ($installMode -eq 'refuse' -and ($calls -contains 'daemon start')) { $problems += 'tried to START a service that was never registered' }
+    }
+
+    $verdict = if ($problems.Count -eq 0) { 'PASS' } else { 'FAIL' }
+    if ($problems.Count -gt 0) { $script:failures++ }
+    "{0}  {1,-52} {2,5:N1}s  exit={3}  {4}" -f $verdict, $name, $sw.Elapsed.TotalSeconds, $p.ExitCode, ($problems -join '; ')
+}
+
 try {
     ''
     '--- step 1: whose service is it ---'
@@ -137,9 +222,21 @@ try {
     Scenario 'ours, running, releases after ~3s'             $instSpace $dirSpace "`"$dirSpace\calabi.exe`" daemon" 4 $true 2.0
     # Never releases within 2s: must abort, not "succeed" by skipping the file.
     Scenario 'ours, running, never releases (gives up)'      $instShort $dirSpace "`"$dirSpace\calabi.exe`" daemon" 30 $false
+
+    ''
+    '--- step 3: registering the service ---'
+    PostScenario 'fresh install: registered and started'           'ok'     'ok'   $false $true
+    # install fails with "already exists" on every upgrade; that is not a failure.
+    PostScenario 'upgrade: already registered, install says so'    'exists' 'ok'   $true  $true
+    # The field failure: refused, nothing registered, and the installer said "Completed".
+    PostScenario 'install refused: nothing registered'             'refuse' 'ok'   $false $false 'standalone mode'
+    PostScenario 'registered, but the service will not start'      'ok'     'fail' $false $false 'did not respond'
 }
 finally {
     Set-ImagePath $null
+    foreach ($v in 'CALABI_FAKE_INSTALL', 'CALABI_FAKE_START', 'CALABI_FAKE_REGKEY', 'CALABI_FAKE_LOG') {
+        Remove-Item "Env:$v" -ErrorAction SilentlyContinue
+    }
 }
 
 ''

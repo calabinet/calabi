@@ -396,12 +396,26 @@ export default function Layout() {
   //
   // (The ORG switch above still reloads, and should: it swaps the bearer, so
   // every cached response belongs to a different tenant.)
-  const refetchAfterEgressSwitch = () =>
-    Promise.all(
+  //
+  // The mesh relay follows the edge a moment LATER: the edge has to be picked
+  // before its facility is known, then the device re-measures its relays and the
+  // coordinator hands the new home back. A single refetch at the instant of the
+  // switch therefore reads the old relay, and the page sat on it until the next
+  // 5s poll — so the overview showed the edge row change and the relay row lag,
+  // seconds after the daemon had already moved. Look again shortly after instead
+  // of making everybody's poll faster.
+  const refetchAfterEgressSwitch = () => {
+    for (const delay of [1500, 4000]) {
+      window.setTimeout(() => {
+        for (const k of ["snapshot", "mesh"]) void qc.invalidateQueries({ queryKey: [k] });
+      }, delay);
+    }
+    return Promise.all(
       ["snapshot", "edges", "edge-affinity", "tunnels", "mesh", "usage", "usage-today", "usage-mesh"].map(
         (k) => qc.invalidateQueries({ queryKey: [k] }),
       ),
     );
+  };
 
   const switchRegionMu = useMutation({
     mutationFn: (region: string) => api.switchRegion(region),

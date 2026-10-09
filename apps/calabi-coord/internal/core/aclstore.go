@@ -12,10 +12,10 @@ import (
 
 // ACLStore holds one ACL document per meshnet — the SaaS per-org policy the
 // console editor reads and writes. meshnet == org, so this is the
-// org's access-control document. The platform build backs it with a DB table
-// (mesh_acls, calabi-coord-owned); the self-hosted build leaves it nil (its single
-// ACL comes from a file — see cmd/calabi-coord/policy.go). A meshnet with no
-// stored doc is "not found" and treated as allow-all by ACLFilter.
+// org's access-control document. With a database it is a table (mesh_acls,
+// calabi-coord-owned), in memory without one. A meshnet with no stored doc is
+// "not found" and runs on ACLFilter's Fallback: allow-all, or the policy file
+// (cmd/calabi-coord/policy.go).
 type ACLStore interface {
 	// GetACL returns the meshnet's ACL doc and whether one is stored. A missing
 	// doc returns (zero, false, nil) — NOT an error.
@@ -116,6 +116,10 @@ func (s *MemACLStore) SetACL(_ context.Context, t MeshnetID, p ACLPolicy) error 
 // stance (cf. the quota gate). ACL here is the netmap-visibility layer; a brief
 // window of the fallback default on a transient DB error is preferable to
 // cutting a node off from its map entirely.
+//
+// The pull as a whole still fails on that read, one step later: its packet
+// filter compiles from currentPolicy, which will not stand the fallback in for
+// a doc the meshnet may have — the fallback could open ports that doc closes.
 type ACLFilter struct {
 	Store    ACLStore
 	Fallback PolicyStore

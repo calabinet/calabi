@@ -39,6 +39,12 @@ type WGConfig struct {
 	// through (full-tunnel). It's a LOCAL choice (never from the
 	// coordinator): the consumer opts in to one advertised exit node. Zero = no
 	// exit node — advertised 0.0.0.0/0 routes are then ignored, never auto-used.
+	//
+	// Whoever sets it must name a peer whose AllowedIPs below carry 0.0.0.0/0
+	// (exitOffer). The datapath installs the full-tunnel routes on this field
+	// alone and gives WireGuard the default route from the peer's allowed-ips
+	// alone; a peer named here without one is every internet-bound packet routed
+	// into the tun and dropped.
 	ExitNode meshproto.NodeKey
 	// RelayByRegion resolves a DERP region code to the relay address serving it.
 	// The datapath needs it twice: to reach a peer via THAT peer's
@@ -57,6 +63,11 @@ type WGConfig struct {
 	UnaliasedRoutes  []SubnetAlias
 	AliasBudgetAddrs int
 	AliasUsedAddrs   int
+	// PublishedRoutes are THIS node's own routes the coordinator is routing to it
+	// right now, as the real prefixes it advertised (selfPublishedRoutes). Reported
+	// state like the three above: an advertised route that is absent here is
+	// waiting for approval, and the node's own configuration cannot show that.
+	PublishedRoutes []netip.Prefix
 	// Filter / FilterEnabled are the node's INBOUND packet filter,
 	// straight from the netmap. FilterEnabled false = the coordinator doesn't
 	// compile filters, so nothing is filtered.
@@ -107,6 +118,7 @@ func BuildWGConfig(nm NetMap) WGConfig {
 		cfg.UnaliasedRoutes = append(cfg.UnaliasedRoutes, SubnetAlias{Real: r})
 	}
 	cfg.AliasBudgetAddrs, cfg.AliasUsedAddrs = nm.AliasBudgetAddrs, nm.AliasUsedAddrs
+	cfg.PublishedRoutes = selfPublishedRoutes(nm)
 	cfg.RelayByRegion = relayAddrsByRegion(nm.DERP)
 	cfg.RelayTLS = relayTLSByAddr(nm.DERP)
 	cfg.SelfRelay = cfg.RelayByRegion[nm.Self.DERPHome]
@@ -177,6 +189,8 @@ func ownOverlayOnly(p Peer) []netip.Prefix {
 // IP, e.g. "office" or "100.64.0.2") to that peer's node key, so the datapath
 // can single out which peer carries the default route. Empty selection, or one
 // that matches no peer, yields the zero key (no exit node). Never matches self.
+// It finds the peer and nothing more: whether that peer is an exit device right
+// now is exitOffer's question.
 func ResolveExitNode(nm NetMap, sel string) meshproto.NodeKey {
 	sel = strings.TrimSpace(sel)
 	if sel == "" {
@@ -189,6 +203,42 @@ func ResolveExitNode(nm NetMap, sel string) meshproto.NodeKey {
 		}
 	}
 	return meshproto.NodeKey{}
+}
+
+// exitOffer reports what the peer this node chose as its exit device offers in
+// cfg: whether it can be used as one, and which default routes it carries
+// ("none" for none), for the log.
+//
+// Being in the netmap does not make a peer an exit device. It is one for as long
+// as the coordinator publishes a default route for it, which on the platform is
+// for as long as an admin approves one — and revoking the approval removes the
+// route and leaves the peer. The route that counts is IPv4's: the full tunnel
+// captures IPv4 only (splitDefaultV4), so a peer left with ::/0 alone can take
+// nothing of what the exit routes would send it.
+//
+// Read from cfg — the allowed-ips the datapath is about to be handed — and not
+// from the netmap, so a default route lost anywhere between the two reads as
+// "not offered" rather than as a full tunnel with no peer at the far end of it.
+func exitOffer(cfg WGConfig, exit meshproto.NodeKey) (usable bool, offered string) {
+	var defaults []string
+	for _, p := range cfg.Peers {
+		if !p.PublicKey.Equal(exit) {
+			continue
+		}
+		for _, aip := range p.AllowedIPs {
+			if !isDefaultRoute(aip) {
+				continue
+			}
+			if aip.Addr().Is4() {
+				usable = true
+			}
+			defaults = append(defaults, aip.String())
+		}
+	}
+	if len(defaults) == 0 {
+		return false, "none"
+	}
+	return usable, strings.Join(defaults, ",")
 }
 
 // droppedRoute records an advertised subnet that selectSubnetRoutes declined to

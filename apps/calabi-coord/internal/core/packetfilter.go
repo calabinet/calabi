@@ -46,9 +46,9 @@ type FilterRule struct {
 func allPorts() PortRange { return PortRange{First: 0, Last: 65535} }
 
 // CompilePacketFilter builds the inbound filter for `self` from the meshnet's
-// policy. A nil policy is the allow-all default (no stored doc) and compiles to
-// a single "everything from everywhere" rule, so a meshnet that has never
-// written rules behaves exactly as it does today.
+// policy. A nil policy is the allow-all default (no stored doc and no policy
+// file) and compiles to a single "everything from everywhere" rule, so a
+// meshnet that has never written rules behaves exactly as it does today.
 //
 // Sources are the OVERLAY addresses of the peers a rule's src selectors match,
 // plus those peers' advertised subnet routes — traffic forwarded by a subnet

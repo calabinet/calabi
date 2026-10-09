@@ -54,7 +54,7 @@ type AccessCheck struct {
 }
 
 // reachable reports whether the pair is mutually visible under p (nil = the
-// allow-all default a meshnet with no stored doc runs on).
+// allow-all default: no stored doc and no policy file).
 func reachable(p *ACLPolicy, a, b *Node) bool {
 	if p == nil {
 		return true
@@ -83,8 +83,8 @@ func matchingRule(p *ACLPolicy, src, dst *Node) int {
 
 // DiffPolicies reports what changes between two policies over a node set: which
 // pairs gain reachability and which LOSE it. `before` nil means the meshnet
-// currently runs on the allow-all default (no stored doc) — the case where the
-// first save is most likely to cut everything by surprise.
+// currently runs on the allow-all default (no stored doc, no policy file) — the
+// case where the first save is most likely to cut everything by surprise.
 //
 // Pairs are unordered (i<j) because the netmap layer is undirected. Disabled
 // nodes are skipped: they are already out of every netmap, so counting them
@@ -123,8 +123,8 @@ func pairOf(a, b *Node) ReachPair {
 }
 
 // PreviewACL computes what saving `doc` would do to the caller's meshnet. The
-// baseline is what the meshnet runs on RIGHT NOW: its stored doc, or the
-// allow-all default when it has none.
+// baseline is what the meshnet runs on RIGHT NOW: its stored doc, else the
+// policy file, else the allow-all default (see currentPolicy).
 func (c *Coordinator) PreviewACL(ctx context.Context, t MeshnetID, doc ACLPolicy) (ACLDiff, error) {
 	nodes, err := c.nodesWithServices(ctx, t)
 	if err != nil {
@@ -170,22 +170,53 @@ func (c *Coordinator) CheckAccess(ctx context.Context, t MeshnetID, srcName, dst
 	}, nil
 }
 
-// currentPolicy returns the meshnet's stored doc, or nil when it has none (=
-// running on the allow-all default). A store read error is an error here, not a
-// silent allow-all: a preview that quietly compares against the wrong baseline
-// would tell the admin the opposite of the truth.
+// currentPolicy returns the document the meshnet runs on: its stored doc, else
+// the one the netmap filter falls back to (the policy file, when one is
+// configured). nil only for the allow-all default. A store read error is an
+// error here, not a fallback: a preview that quietly compares against the wrong
+// baseline would tell the admin the opposite of the truth, and a packet filter
+// compiled from the file could open ports the meshnet's own doc closes.
 func (c *Coordinator) currentPolicy(ctx context.Context, t MeshnetID) (*ACLPolicy, error) {
-	if c.ACL == nil {
+	if c.ACL != nil {
+		doc, ok, err := c.ACL.GetACL(ctx, t)
+		if err != nil {
+			return nil, fmt.Errorf("core: read acl: %w", err)
+		}
+		if ok {
+			return &doc, nil
+		}
+	}
+	return policyDocument(c.Policy)
+}
+
+// policyDocument returns the document p enforces for a meshnet with no stored
+// doc. nil = allow-all.
+//
+// It is what keeps the packet filter, the checker and the preview on the SAME
+// document the peer list was cut with. They used to read the ACL store alone,
+// so a meshnet on CALABI_COORD_POLICY_FILE got the file's peers and an
+// allow-all filter: every port open, from everywhere.
+//
+// A PolicyStore not listed here is an error, not nil. nil compiles to "every
+// port from everywhere", so defaulting to it would reopen that hole, silently,
+// for whatever policy source is added next.
+func policyDocument(p PolicyStore) (*ACLPolicy, error) {
+	switch p := p.(type) {
+	case nil, AllowAllPolicy:
 		return nil, nil
+	case ACLFilter:
+		// Its store is c.ACL, already read by currentPolicy; what is left is
+		// the default it falls back to.
+		return policyDocument(p.Fallback)
+	case *ReloadablePolicy:
+		// Never nil, even when the file failed to load: that is an EMPTY doc
+		// (deny-all), and has to stay one here.
+		doc := p.Doc()
+		return &doc, nil
+	case MemPolicy:
+		return &p.Policy, nil
 	}
-	doc, ok, err := c.ACL.GetACL(ctx, t)
-	if err != nil {
-		return nil, fmt.Errorf("core: read acl: %w", err)
-	}
-	if !ok {
-		return nil, nil
-	}
-	return &doc, nil
+	return nil, fmt.Errorf("core: cannot tell which ACL document %T enforces", p)
 }
 
 func findNodeByName(nodes []*Node, name string) *Node {

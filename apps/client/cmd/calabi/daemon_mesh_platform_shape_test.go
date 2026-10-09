@@ -1,10 +1,13 @@
 package main
 
 import (
+	"encoding/json"
+	"net/netip"
 	"reflect"
 	"testing"
 
 	"github.com/calabinet/calabi/apps/client/internal/localweb"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
 	"github.com/calabinet/calabi/apps/client/internal/platform/statusapi"
 )
 
@@ -187,6 +190,98 @@ func TestToStatusapiMeshCarriesSubnetAliases(t *testing.T) {
 	}
 	if got.SubnetAliases[0].Alias != "100.96.5.0/24" || got.SubnetAliases[0].Real != "192.168.1.0/24" {
 		t.Errorf("mapping came across as %+v", got.SubnetAliases[0])
+	}
+}
+
+// Same for which of this node's own routes are live. Losing these in the copy
+// would show every published route as waiting for approval — on the platform
+// daemon only, which is the one every installed machine runs.
+func TestToStatusapiMeshCarriesPublishedRoutes(t *testing.T) {
+	got := toStatusapiMesh(localweb.MeshStatus{
+		PublishedRoutes: []string{"192.168.1.0/24", "0.0.0.0/0"},
+		NetmapSeen:      true,
+	})
+	if !reflect.DeepEqual(got.PublishedRoutes, []string{"192.168.1.0/24", "0.0.0.0/0"}) {
+		t.Errorf("published routes came across as %v", got.PublishedRoutes)
+	}
+	if !got.NetmapSeen {
+		t.Error("netmap_seen was dropped: the console would read every route as unknown")
+	}
+}
+
+// The whole way out, as the console receives it: a datapath snapshot, through
+// both status shapes, to the JSON keys the SPA reads (api/types.ts MeshStatus).
+// A renamed tag would compile, pass every test above, and show every route as
+// "checking" for ever.
+func TestOwnRouteReportReachesTheWireUnderTheNamesTheConsoleReads(t *testing.T) {
+	snap := mesh.Status{
+		PublishedRoutes: []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24"), netip.MustParsePrefix("0.0.0.0/0")},
+		NetMapSeen:      true,
+	}
+	var ms localweb.MeshStatus
+	ms.PublishedRoutes, ms.NetmapSeen = ownRouteReport(snap)
+
+	for kind, v := range map[string]any{"local": ms, "platform": toStatusapiMesh(ms)} {
+		raw, err := json.Marshal(v)
+		if err != nil {
+			t.Fatalf("%s daemon: marshal: %v", kind, err)
+		}
+		var wire struct {
+			PublishedRoutes []string `json:"published_routes"`
+			NetmapSeen      bool     `json:"netmap_seen"`
+		}
+		if err := json.Unmarshal(raw, &wire); err != nil {
+			t.Fatalf("%s daemon: unmarshal: %v", kind, err)
+		}
+		if !reflect.DeepEqual(wire.PublishedRoutes, []string{"192.168.1.0/24", "0.0.0.0/0"}) {
+			t.Errorf("%s daemon: published_routes = %v", kind, wire.PublishedRoutes)
+		}
+		if !wire.NetmapSeen {
+			t.Errorf("%s daemon: netmap_seen missing from %s", kind, raw)
+		}
+	}
+}
+
+// Which relay is whose. The home relay's own latency and the region of the
+// relay carrying each peer are what let the console tell "this machine's relay"
+// from "the relay that peer is reached through" — two different relays more
+// often than not. Both must reach the wire under the names the SPA reads, on
+// both daemon kinds.
+func TestRelayFactsReachTheWireUnderTheNamesTheConsoleReads(t *testing.T) {
+	ms := localweb.MeshStatus{
+		Relay:          "edge01-lax.example.net:3340",
+		DerpHome:       "us-west",
+		RelayRTTMicros: 187000,
+		Peers: []localweb.MeshPeer{{
+			PublicKey:      "k",
+			Path:           "relay",
+			Endpoint:       "relay.office.example.net:3340",
+			RelayRTTMicros: 4800,
+			RelayRegion:    "self-office",
+		}},
+	}
+	for kind, v := range map[string]any{"local": ms, "platform": toStatusapiMesh(ms)} {
+		raw, err := json.Marshal(v)
+		if err != nil {
+			t.Fatalf("%s daemon: marshal: %v", kind, err)
+		}
+		var wire struct {
+			DerpHome       string `json:"derp_home"`
+			RelayRTTMicros int64  `json:"relay_rtt_micros"`
+			Peers          []struct {
+				RelayRegion    string `json:"relay_region"`
+				RelayRTTMicros int64  `json:"relay_rtt_micros"`
+			} `json:"peers"`
+		}
+		if err := json.Unmarshal(raw, &wire); err != nil {
+			t.Fatalf("%s daemon: unmarshal: %v", kind, err)
+		}
+		if wire.DerpHome != "us-west" || wire.RelayRTTMicros != 187000 {
+			t.Errorf("%s daemon: home relay came across as region %q rtt %d", kind, wire.DerpHome, wire.RelayRTTMicros)
+		}
+		if len(wire.Peers) != 1 || wire.Peers[0].RelayRegion != "self-office" || wire.Peers[0].RelayRTTMicros != 4800 {
+			t.Errorf("%s daemon: peer relay came across as %+v", kind, wire.Peers)
+		}
 	}
 }
 

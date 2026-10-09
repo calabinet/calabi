@@ -51,17 +51,31 @@ func serviceInstallEnv(installArgs []string) (map[string]string, error) {
 	//
 	// Baking CALABI_MODE=standalone instead would just move the failure: with
 	// no --config there is nothing for a local supervisor to run, so the
-	// service would crash-loop on "missing --config". So refuse, and name both
-	// ways out. (An explicit CALABI_MODE=platform in the install shell is the
-	// third: clientIsStandalone reads the env first.)
-	if clientIsStandalone() {
+	// service would crash-loop on "missing --config". So refuse, and name the
+	// ways out. (An explicit CALABI_MODE=platform in the install shell is one
+	// more: clientIsStandalone reads the env first — but passthroughEnv then
+	// bakes it into the service for good, which --platform does not.)
+	//
+	// --platform is the caller saying "I do mean the platform service", for this
+	// one install, without touching the saved mode. It exists for the desktop
+	// installer. That package's whole product is the platform service, and it
+	// runs this command as whoever double-clicked it — so a mode that user once
+	// saved for the COMMAND LINE made the install refuse, and the installer
+	// (which ignored the exit code) finished "successfully" with no service: the
+	// app then started and found no daemon, on a machine that had just been
+	// told the install worked. The refusal protects someone typing `daemon
+	// install` in a standalone shell; it was never meant to veto an installer
+	// whose intent is not in doubt.
+	if clientIsStandalone() && !hasBoolFlag(installArgs, "platform") {
 		return nil, errors.New(
 			"this client is in standalone mode, but `daemon install` without --config registers a PLATFORM\n" +
 				"service — and the mode does not follow the install (a service reads its own data directory,\n" +
 				"resolves to \"platform\", and starts talking to the control plane).\n" +
 				"Install the local supervisor instead:\n" +
 				"  calabi daemon install --config calabi.yaml\n" +
-				"or, if you did mean the platform service:\n" +
+				"or, if you did mean the platform service, say so for this install:\n" +
+				"  calabi daemon install --platform\n" +
+				"or switch this client over for good:\n" +
 				"  calabi mode platform     (then re-run the install)")
 	}
 	// Region / edge-affinity ride along in every mode so the service picks the

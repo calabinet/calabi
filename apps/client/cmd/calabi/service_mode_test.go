@@ -36,10 +36,56 @@ func TestServiceInstallEnv_StandaloneWithoutConfigRefuses(t *testing.T) {
 			"the installed service would resolve to platform mode and dial the control plane", env)
 	}
 	// The message has to name a way out, or the user is stuck with a refusal.
-	for _, want := range []string{"--config", "calabi mode platform"} {
+	for _, want := range []string{"--config", "calabi mode platform", "--platform"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("refusal does not mention %q:\n%s", want, err)
 		}
+	}
+}
+
+// --platform is "I do mean the platform service" for ONE install. The desktop
+// installer passes it: its product is the platform service, and it runs as
+// whoever launched it, so a standalone mode that user saved for the command line
+// used to make the install refuse — and the installer finished with no service
+// and no message.
+func TestServiceInstallEnv_PlatformFlagOverridesStandaloneForThisInstall(t *testing.T) {
+	stubKeyVerify(t)
+	dir := t.TempDir()
+	t.Setenv("CALABI_CONFIG", filepath.Join(dir, "creds.json"))
+	t.Setenv("CALABI_API_KEY", "")
+	// Persisted, not just in the environment: this is the state a real machine
+	// is in — the mode was saved long ago and nothing in this shell mentions it.
+	t.Setenv("CALABI_MODE", "standalone")
+	if code := runMode([]string{"standalone"}); code != 0 {
+		t.Fatalf("runMode standalone: exit %d", code)
+	}
+	t.Setenv("CALABI_MODE", "")
+
+	if _, err := serviceInstallEnv([]string{"--system"}); err == nil {
+		t.Fatal("setup: a persisted standalone mode did not refuse a plain --system install")
+	}
+	env, err := serviceInstallEnv([]string{"--system", "--platform"})
+	if err != nil {
+		t.Fatalf("--platform did not get the install past the saved standalone mode: %v", err)
+	}
+	// Nothing about the mode may be BAKED into the service: it reads its own
+	// data directory, and that is where "use my own server" is recorded later.
+	// A pinned CALABI_MODE would override it for the life of the service.
+	if v, ok := env["CALABI_MODE"]; ok {
+		t.Fatalf("the install baked CALABI_MODE=%q into the service", v)
+	}
+	// And the saved mode is untouched — this was for one install.
+	if !clientIsStandalone() {
+		t.Fatal("--platform changed the saved client mode; it must only cover this install")
+	}
+}
+
+// An install-only flag must not reach the service's own command line: the
+// daemon the service manager starts would not know it.
+func TestPlatformFlagStaysOutOfTheServiceCommandLine(t *testing.T) {
+	got := serviceArguments([]string{"--system", "--platform"})
+	if len(got) != 1 || got[0] != "daemon" {
+		t.Fatalf("service arguments = %v, want just [daemon]", got)
 	}
 }
 

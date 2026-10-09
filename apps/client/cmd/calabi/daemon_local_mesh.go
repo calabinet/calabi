@@ -480,11 +480,9 @@ func (r *meshRunner) runControlPlane(ctx context.Context, data *meshDataPlane) e
 			DeviceFingerprint: resolveFingerprint(r.logger),
 			Services:          declaredServices(r.cfg.Services),
 		},
-		ExitNode:         r.cfg.ExitNode,
-		HomePreference:   r.cfg.HomePreference,
-		PinnedHomeRegion: r.cfg.PinnedHomeRegion,
-		Routes:           r.routePolicy(),
-		BlockIncoming:    r.cfg.BlockIncoming,
+		ExitNode:      r.cfg.ExitNode,
+		Routes:        r.routePolicy(),
+		BlockIncoming: r.cfg.BlockIncoming,
 		// Relays are checked the way this coordinator was: calabi.net's CA for
 		// calabi.net only (mesh.Controller.PlatformRelays).
 		PlatformRelays: t.Mode == trust.Platform,
@@ -493,9 +491,7 @@ func (r *meshRunner) runControlPlane(ctx context.Context, data *meshDataPlane) e
 	// Retained so the status endpoint can read the service self-check. Cleared
 	// on the way out: a stale controller would keep serving the observations of
 	// a session that has ended, which is worse than showing none.
-	r.mu.Lock()
-	r.ctrl = ctrl
-	r.mu.Unlock()
+	r.publishController(ctrl)
 	defer func() {
 		r.mu.Lock()
 		if r.ctrl == ctrl {
@@ -631,6 +627,36 @@ func (r *meshRunner) UpdateDeclarations(ctx context.Context, services []mesh.Dec
 	return nil
 }
 
+// publishController makes ctrl the runner's current session, handing it the
+// home selection on the way.
+//
+// The selection is copied in under the SAME lock that publishes the controller.
+// SetHomeSelection writes r.cfg and looks for r.ctrl under that lock too, so a
+// change lands on this session whichever of the two runs first: before this, it
+// is picked up by the copy; after, it finds the controller. Read the config any
+// earlier and a change arriving in between would reach neither — the session
+// would run on the old selection until something else restarted it.
+func (r *meshRunner) publishController(ctrl *mesh.Controller) {
+	r.mu.Lock()
+	ctrl.HomePreference, ctrl.PinnedHomeRegion = r.cfg.HomePreference, r.cfg.PinnedHomeRegion
+	r.ctrl = ctrl
+	r.mu.Unlock()
+}
+
+// SetHomeSelection revises which relays this node prefers as its home, on the
+// RUNNING session, and remembers it so a session restart for some other reason
+// starts with what the user last chose. No session is not an error: the next one
+// reads the config written here.
+func (r *meshRunner) SetHomeSelection(preference, pinnedRegion string) {
+	r.mu.Lock()
+	r.cfg.HomePreference, r.cfg.PinnedHomeRegion = preference, pinnedRegion
+	ctrl := r.ctrl
+	r.mu.Unlock()
+	if ctrl != nil {
+		ctrl.SetHomeSelection(preference, pinnedRegion)
+	}
+}
+
 // toMeshServiceDecls is declaredServices' inverse, for writing an accepted
 // update back into the runner's config.
 func toMeshServiceDecls(in []mesh.DeclaredService) []meshServiceDecl {
@@ -653,6 +679,17 @@ func (r *meshRunner) Stop() {
 	}
 	cancel()
 	<-done
+}
+
+// ownRouteReport is the part of a datapath snapshot that says which of this
+// node's own routes the coordinator is routing to it, in the shape /v1/mesh
+// serves. Split out so the step from the mesh core to the wire can be tested
+// without a tun device.
+func ownRouteReport(snap mesh.Status) (published []string, netmapSeen bool) {
+	for _, p := range snap.PublishedRoutes {
+		published = append(published, p.String())
+	}
+	return published, snap.NetMapSeen
 }
 
 // MeshStatus implements localweb.MeshSource: the node's mesh state for the
@@ -679,6 +716,7 @@ func (r *meshRunner) MeshStatus() localweb.MeshStatus {
 		if snap.Relay != "" {
 			ms.Relay = snap.Relay // the relay actually homed at, which may have moved
 		}
+		ms.RelayRTTMicros = snap.RelayRTTMicros
 		for _, a := range snap.SubnetAliases {
 			ms.SubnetAliases = append(ms.SubnetAliases, localweb.MeshSubnetAlias{
 				Alias: a.Alias.String(), Real: a.Real.String(),
@@ -688,6 +726,7 @@ func (r *meshRunner) MeshStatus() localweb.MeshStatus {
 			ms.UnaliasedRoutes = append(ms.UnaliasedRoutes, a.Real.String())
 		}
 		ms.AliasBudgetAddrs, ms.AliasUsedAddrs = snap.AliasBudgetAddrs, snap.AliasUsedAddrs
+		ms.PublishedRoutes, ms.NetmapSeen = ownRouteReport(snap)
 		ms.Datapath = localweb.MeshDatapath(snap.Datapath)
 		// Peer NAMES come from the netmap, live state from WireGuard, and the
 		// two meet here keyed by node key. The datapath deliberately knows
@@ -718,6 +757,7 @@ func (r *meshRunner) MeshStatus() localweb.MeshStatus {
 				Endpoint:         p.Endpoint,
 				RTTMicros:        p.RTTMicros,
 				RelayRTTMicros:   p.RelayRTTMicros,
+				RelayRegion:      p.RelayRegion,
 			})
 		}
 	}

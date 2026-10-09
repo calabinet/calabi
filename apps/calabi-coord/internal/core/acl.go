@@ -305,10 +305,15 @@ func (r *ReloadablePolicy) Set(p ACLPolicy) {
 	r.mu.Unlock()
 }
 
+// Doc returns the current policy snapshot: the document Filter evaluates, and
+// the one the packet filter compiles from (see policyDocument).
+func (r *ReloadablePolicy) Doc() ACLPolicy {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.policy
+}
+
 // Filter evaluates against the current policy snapshot.
 func (r *ReloadablePolicy) Filter(ctx context.Context, t MeshnetID, self *Node, candidates []*Node) ([]*Node, error) {
-	r.mu.RLock()
-	p := r.policy
-	r.mu.RUnlock()
-	return MemPolicy{Policy: p}.Filter(ctx, t, self, candidates)
+	return MemPolicy{Policy: r.Doc()}.Filter(ctx, t, self, candidates)
 }

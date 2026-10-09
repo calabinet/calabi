@@ -10,8 +10,9 @@
 ; calabi.exe is shipped next to calabi-desktop.exe via bundle.resources, so
 ; $INSTDIR\calabi.exe is the daemon the service runs.
 ;
-; Tests: apps/client-desktop/tests/nsis-hooks/run.ps1 drives PREINSTALL against a
-; fake service key and a stand-in exe. It never touches a real service.
+; Tests: apps/client-desktop/tests/nsis-hooks/run.ps1 drives PREINSTALL and
+; POSTINSTALL against a fake service key and stand-in exes. It never touches a
+; real service.
 
 ; Overridable ONLY so the test harness can point PREINSTALL at a fake service.
 ; The installer build defines none of these.
@@ -123,14 +124,74 @@
   Pop $R0
 !macroend
 
+; POSTINSTALL registers the service and starts it -- and says so when it could
+; not.
+;
+; It used to run both commands, print their exit codes into a details pane
+; nobody opens, and carry on. So when `daemon install` refused, the installer
+; finished with "Completed", the app started, and found no daemon: a machine
+; that had just been told the install worked, with nothing anywhere saying why.
+; That is exactly what a fresh install did for anyone whose command-line client
+; had ever been put in standalone mode (the install refused to register a
+; PLATFORM service from a standalone shell), and it stayed hidden for as long as
+; the service already existed -- an upgrade's `daemon install` fails harmlessly
+; with "already exists", which is why the exit code was being ignored at all.
+;
+; Two changes:
+;
+;   --platform   This package's product IS the platform service; whichever mode
+;                the installing user once saved for the command line has no say
+;                in it. The flag covers this one install and is not baked into
+;                the service (see serviceInstallEnv in the daemon).
+;
+;   the outcome  Whether the service is registered is read from the service key,
+;                not from the exit code: non-zero is the NORMAL answer on an
+;                upgrade. If the key is not there, the install failed -- say so,
+;                with what the daemon printed, and fail the installer (a silent
+;                run exits non-zero, and the reason is left in
+;                $INSTDIR\service-install-error.log because a silent run has no
+;                window to show it in).
 !macro NSIS_HOOK_POSTINSTALL
+  Push $R0
+  Push $R1
+  Push $R2
+
   DetailPrint "Registering Calabi system service..."
-  nsExec::ExecToLog '"$INSTDIR\calabi.exe" daemon install --system'
-  Pop $0
-  DetailPrint "calabi daemon install --system exited: $0"
-  nsExec::ExecToLog '"$INSTDIR\calabi.exe" daemon start'
-  Pop $0
-  DetailPrint "calabi daemon start exited: $0"
+  nsExec::ExecToStack '"$INSTDIR\calabi.exe" daemon install --system --platform'
+  Pop $R0 ; exit code (or "error" / "timeout")
+  Pop $R1 ; everything it printed
+  DetailPrint "calabi daemon install --system exited: $R0"
+
+  ReadRegStr $R2 ${CALABI_SVC_ROOT} "${CALABI_SVC_KEY}" "ImagePath"
+  ${If} $R2 == ""
+    DetailPrint "The Calabi service is not registered."
+    FileOpen $R2 "$INSTDIR\service-install-error.log" w
+    FileWrite $R2 "calabi daemon install --system --platform exited: $R0$\r$\n$R1$\r$\n"
+    FileClose $R2
+    MessageBox MB_OK|MB_ICONSTOP "Calabi's files are installed, but its background service could not be registered. The app would start and find nothing to talk to.$\r$\n$\r$\nWhat the service installer said:$\r$\n$\r$\n$R1$\r$\n$\r$\nFix that, then run this installer again." /SD IDOK
+    SetErrorLevel 3
+    Abort
+  ${EndIf}
+  ; Registered. Clear what an earlier failed attempt left behind.
+  Delete "$INSTDIR\service-install-error.log"
+
+  nsExec::ExecToStack '"$INSTDIR\calabi.exe" daemon start'
+  Pop $R0
+  Pop $R1
+  DetailPrint "calabi daemon start exited: $R0"
+  ${If} $R0 != 0
+    DetailPrint "The Calabi service did not start."
+    FileOpen $R2 "$INSTDIR\service-install-error.log" w
+    FileWrite $R2 "calabi daemon start exited: $R0$\r$\n$R1$\r$\n"
+    FileClose $R2
+    MessageBox MB_OK|MB_ICONSTOP "Calabi is installed and its background service is registered, but the service did not start. The app would start and find nothing to talk to.$\r$\n$\r$\nWhat it said:$\r$\n$\r$\n$R1$\r$\n$\r$\nStart the Calabi service from Services, or run this installer again." /SD IDOK
+    SetErrorLevel 4
+    Abort
+  ${EndIf}
+
+  Pop $R2
+  Pop $R1
+  Pop $R0
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL

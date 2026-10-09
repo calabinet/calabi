@@ -75,12 +75,16 @@ type Controller struct {
 	// home. Empty = no preference (pure latency — the default and the self-hosted
 	// behavior). A soft preference: it never strands a node whose preferred class
 	// has no reachable relay.
+	//
+	// Set before Run; once the session is up it changes only through
+	// SetHomeSelection, which is what homeMu guards it for.
 	HomePreference string
 	// PinnedHomeRegion, when set, is the relay region this node homes on whenever
 	// it answers a probe: the relay in the SAME facility as the edge the node's
 	// tunnels are anchored to. It is what makes "switch my self-hosted node" move
 	// the relay along with the edge instead of leaving it at whichever facility
-	// measured fastest. Empty = pure latency within the preferred class.
+	// measured fastest. Empty = pure latency within the preferred class. Same
+	// rule as HomePreference: SetHomeSelection after Run.
 	PinnedHomeRegion string
 	// PlatformRelays says the coordinator is calabi.net — it was checked against
 	// the CA compiled into this client (trust.Platform). Only then does a relay
@@ -139,6 +143,23 @@ type Controller struct {
 	homeMu     sync.Mutex
 	derpMap    DERPMap
 	homeRegion string
+
+	// homeProbeMu serialises homeProbe. Several things start one — the first
+	// netmap, the periodic loop, a wake, a network change, a changed selection —
+	// and two overlapping probes would each decide from their own measurement
+	// and write the home in whichever order they happened to finish.
+	homeProbeMu sync.Mutex
+
+	// rehome carries SetHomeSelection's "re-select now" to the session's probe
+	// loop. Buffered by one, so a burst coalesces and the caller never blocks.
+	// Created on first use (rehomeKicks).
+	rehomeOnce sync.Once
+	rehome     chan struct{}
+
+	// homeMissRetry overrides homeMissRetryDelay when non-zero. Same-package
+	// tests set it before the probe so a confirmation can be watched without
+	// waiting out the real delay.
+	homeMissRetry time.Duration
 
 	// netChanged carries NetworkChanged signals to the running session's loop.
 	// Buffered by one so NetworkChanged never blocks and a burst of changes
@@ -297,6 +318,15 @@ func (c *Controller) Run(ctx context.Context) error {
 	// fingerprint of the set they came from. Same ownership, same reason.
 	dropAliases, aliasFP := func() {}, ""
 	defer func() { dropAliases() }()
+	// And the routes this node advertises that the coordinator is not routing to
+	// it. waitingSeen separates "no netmap yet" from "nothing waiting", so a
+	// session whose routes are all live from the first netmap stays quiet, while
+	// one that later gets them approved still logs the change.
+	waitingFP, waitingSeen := "", false
+	// And what the chosen exit device offered when it could not be used as one
+	// ("" while it can), so the WARN is said when that changes and not on each of
+	// the several netmaps a minute that repeat it.
+	exitGap := ""
 	return c.Coord.Watch(ctx, reg.NodeID, func(nm NetMap) {
 		c.setOverlay(nm.Self.Overlay)
 		c.setSelfServices(nm.SelfServices)
@@ -320,12 +350,42 @@ func (c *Controller) Run(ctx context.Context) error {
 		cfg.BlockIncoming = c.BlockIncoming
 		cfg.RelayPlatformTrust = c.PlatformRelays
 		if c.ExitNode != "" {
-			if cfg.ExitNode = ResolveExitNode(nm, c.ExitNode); cfg.ExitNode.IsZero() {
+			exit, gap := ResolveExitNode(nm, c.ExitNode), ""
+			if exit.IsZero() {
 				c.Logger.Warn("mesh: exit node not found in netmap; routing directly until it appears", "exit_node", c.ExitNode)
+			} else if usable, offered := exitOffer(cfg, exit); usable {
+				cfg.ExitNode = exit
+			} else {
+				// The chosen device is there and is not an exit: an admin revoked its
+				// approval, or it stopped offering. Leaving ExitNode zero is what
+				// makes the datapath take the full-tunnel routes down, and the next
+				// netmap that carries the route again puts them back.
+				gap = offered
 			}
+			if gap != "" && gap != exitGap {
+				c.Logger.Warn("mesh: the chosen exit device is not offering the IPv4 default route (not approved as an exit device, or no longer offering to be one); routing directly until it does",
+					"exit_node", c.ExitNode, "default_routes_offered", gap)
+			}
+			exitGap = gap
 		}
 		if err := c.Datapath.SetConfig(cfg); err != nil {
 			c.Logger.Warn("mesh: datapath SetConfig failed", "err", err)
+		}
+		// An advertised route is a claim until the coordinator publishes it, and on
+		// the platform that takes an admin. The node's own configuration reads the
+		// same before and after, so say which routes nobody can reach yet — once
+		// per change, since an unchanged netmap is re-pushed every 15 minutes. A
+		// headless subnet router has no console to show this on.
+		waiting := unpublishedRoutes(c.Params.AdvertiseRoutes, cfg.PublishedRoutes)
+		if fp := routesFingerprint(waiting); !waitingSeen || fp != waitingFP {
+			switch {
+			case len(waiting) > 0:
+				c.Logger.Warn("mesh: advertised routes are not published yet; peers cannot reach them until an admin approves them",
+					"routes", fp)
+			case waitingSeen:
+				c.Logger.Info("mesh: all advertised routes are published")
+			}
+			waitingFP, waitingSeen = fp, true
 		}
 		// Subnet aliases (this node's own, assigned by the coordinator): install the
 		// 1:1 rewrite so traffic arriving for the stand-in prefix reaches the real
@@ -495,18 +555,35 @@ func (c *Controller) setHome(region string) bool {
 // reflexive address it advertises. A changed home is reported immediately rather
 // than at the next tick — peers should stop relaying via a far hop promptly.
 func (c *Controller) homeProbe(ctx context.Context, nodeID int64, ms *magicSock) {
+	c.homeProbeMu.Lock()
+	defer c.homeProbeMu.Unlock()
 	m := c.getDERPMap()
 	if len(m.Regions) == 0 || ctx.Err() != nil {
 		return
 	}
 	measured := probeRegions(ctx, ms, m, c.Logger)
+	cur := c.getHome()
+	// The selection is read AFTER measuring, so a probe that was already in
+	// flight when it changed still decides by the new one.
+	pref, pin := c.homeSelection()
+	// One silent round does not cost a home its place. Ask it once more, a few
+	// seconds on: a home that is really gone is still left promptly, and one
+	// that only lost a handful of datagrams is not moved off — moving is what
+	// every peer's netmap and this node's relay link then have to follow.
+	if homeWorthConfirming(cur, measured, pref, pin) {
+		if r, ok := c.confirmHome(ctx, ms, m, cur); ok {
+			c.Logger.Info("mesh: home relay missed a latency probe but answered the retry; keeping it in the running",
+				"home_relay", cur, "rtt", r.RTT)
+			measured = withRegion(measured, r)
+		}
+		pref, pin = c.homeSelection() // it may have changed while we waited
+	}
 	if len(measured) == 0 {
 		c.Logger.Warn("mesh: no relay region answered a latency probe; keeping the coordinator's home",
 			"regions", len(m.Regions))
 		return
 	}
-	cur := c.getHome()
-	home := pickHome(cur, measured, c.homePref(), c.PinnedHomeRegion)
+	home := pickHome(cur, measured, pref, pin)
 	if sa, ok := stunFor(home, measured); ok {
 		c.setStunServer(sa)
 	}
@@ -518,18 +595,82 @@ func (c *Controller) homeProbe(ctx context.Context, nodeID int64, ms *magicSock)
 	c.reportEndpoints(ctx, nodeID, ms)
 }
 
-// homePref maps the daemon's edge-affinity string onto the home-selection bias,
-// so "use my node" (own) homes on a self-hosted relay and "platform" avoids it.
-// Anything else (the common case: no BYOI relay) is no preference — pure latency.
-func (c *Controller) homePref() homePref {
+// confirmHome waits a moment and measures ONE region again — the home that
+// stayed silent this round. ok=false when it is still silent, is no longer in
+// the map, or the session ended while waiting.
+func (c *Controller) confirmHome(ctx context.Context, ms *magicSock, m DERPMap, home string) (regionRTT, bool) {
+	var region DERPRegion
+	found := false
+	for _, r := range m.Regions {
+		if r.Code == home {
+			region, found = r, true
+			break
+		}
+	}
+	if !found {
+		return regionRTT{}, false // the map dropped it; there is nothing to go back to
+	}
+	wait := c.homeMissRetry
+	if wait <= 0 {
+		wait = homeMissRetryDelay
+	}
+	t := time.NewTimer(wait)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return regionRTT{}, false
+	case <-t.C:
+	}
+	return probeRegion(ctx, ms, region, c.Logger)
+}
+
+// homeSelection is the current home-selection bias: the daemon's edge-affinity
+// string mapped onto a preference — "use my node" (own) homes on a self-hosted
+// relay, "platform" avoids it, anything else (the common case: no BYOI relay) is
+// pure latency — and the pinned region.
+func (c *Controller) homeSelection() (homePref, string) {
+	c.homeMu.Lock()
+	defer c.homeMu.Unlock()
+	pref := homeAnyRelay
 	switch c.HomePreference {
 	case "own":
-		return homePreferOwn
+		pref = homePreferOwn
 	case "platform":
-		return homePreferPlatform
-	default:
-		return homeAnyRelay
+		pref = homePreferPlatform
 	}
+	return pref, c.PinnedHomeRegion
+}
+
+// SetHomeSelection revises the home-relay preference and pin on the RUNNING
+// session and re-selects the home at once. Reports whether anything changed.
+//
+// This is the cheap path for "the user flipped which node they use". It used to
+// cost a whole new session — leave the meshnet, enroll again, reconfigure
+// WireGuard, re-dial every relay, re-punch every direct path — to change a bias
+// that only one function reads. Every peer connection dropped for a few seconds
+// so that the next latency probe would pick from a different list.
+//
+// Nothing here talks to the network: the probe loop does, on its own goroutine.
+// Before the first netmap there is no map to probe, and that is fine — the
+// first netmap's own probe reads the selection set here.
+func (c *Controller) SetHomeSelection(preference, pinnedRegion string) bool {
+	c.homeMu.Lock()
+	changed := c.HomePreference != preference || c.PinnedHomeRegion != pinnedRegion
+	c.HomePreference, c.PinnedHomeRegion = preference, pinnedRegion
+	c.homeMu.Unlock()
+	if !changed {
+		return false
+	}
+	select {
+	case c.rehomeKicks() <- struct{}{}:
+	default: // one already pending; it will read what was just written
+	}
+	return true
+}
+
+func (c *Controller) rehomeKicks() chan struct{} {
+	c.rehomeOnce.Do(func() { c.rehome = make(chan struct{}, 1) })
+	return c.rehome
 }
 
 // rttOf is the measured round trip of a region, for logging.
@@ -544,18 +685,27 @@ func rttOf(region string, measured []regionRTT) time.Duration {
 
 // homeProbeLoop re-measures the fleet periodically so a node that moves (or whose
 // path to its home degrades) re-homes without reconnecting.
+//
+// It also runs the probe a changed selection asks for (SetHomeSelection), which
+// is why it keeps running where the periodic timer is off (a phone): there the
+// home is otherwise re-measured on a changed relay map, a wake and a network
+// change only.
 func (c *Controller) homeProbeLoop(ctx context.Context, nodeID int64, ms *magicSock) {
-	every := c.timing().HomeProbe
-	if every <= 0 {
-		return // re-measured on a changed relay map, a wake and a network change only
+	var tick <-chan time.Time // nil = never fires
+	if every := c.timing().HomeProbe; every > 0 {
+		t := time.NewTicker(every)
+		defer t.Stop()
+		tick = t.C
 	}
-	t := time.NewTicker(every)
-	defer t.Stop()
+	kick := c.rehomeKicks()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-t.C:
+		case <-tick:
+			c.homeProbe(ctx, nodeID, ms)
+		case <-kick:
+			c.Logger.Info("mesh: relay home selection changed; re-selecting on the running session")
 			c.homeProbe(ctx, nodeID, ms)
 		}
 	}

@@ -3,6 +3,7 @@ package mesh
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"net/netip"
 	"strconv"
 	"strings"
 )
@@ -16,7 +17,12 @@ type Status struct {
 	// reach it. With a relay fleet this can differ from the relay the
 	// node was configured with: the node re-homes onto the one it measured closest.
 	Relay string
-	Peers []PeerStatus
+	// RelayRTTMicros is the last keepalive round trip to that home relay, in
+	// microseconds; 0 until the link has answered once. One leg, this node to its
+	// relay — the same quantity PeerStatus.RelayRTTMicros reports for the relay
+	// carrying a peer, which is usually a DIFFERENT relay.
+	RelayRTTMicros int64
+	Peers          []PeerStatus
 	// SubnetAliases are the stand-in prefixes the coordinator granted THIS node's
 	// own subnet routes. Every subnet it advertises asks for one (AliasRequest),
 	// so this is filled for an ordinary subnet router — not only for one whose
@@ -33,6 +39,18 @@ type Status struct {
 	// addresses, so the console can say why rather than only that.
 	AliasBudgetAddrs int
 	AliasUsedAddrs   int
+	// PublishedRoutes are this node's own routes the coordinator is routing to it
+	// right now, named by the real prefixes it advertised (an approved exit
+	// device shows up as the default route). A route the node advertises that is
+	// NOT here is not reachable by anyone yet — on the platform it is waiting for
+	// an admin — and nothing else on this machine says so.
+	//
+	// Meaningful only once NetMapSeen: before the first netmap, empty means "not
+	// told yet", and reading it as "nothing approved" would flash a warning at
+	// every start.
+	PublishedRoutes []netip.Prefix
+	// NetMapSeen is whether this datapath has applied a netmap at all.
+	NetMapSeen bool
 	// Datapath is this node's own packet accounting (see dpstats.go): what the
 	// direct socket carried, what our queue dropped, what the filter refused.
 	// Peers[] above reports WireGuard's view; this is the layer under it, and
@@ -78,6 +96,11 @@ type PeerStatus struct {
 	// better path when it is only a shorter measurement, which is exactly the
 	// class of error the throughput chart made by dividing by the wrong clock.
 	RelayRTTMicros int64
+	// RelayRegion is the region code of the relay carrying this peer — the PEER'S
+	// home relay, not this node's — and "" when the path is direct or the netmap
+	// names no region for that address. A "self-" code is the org's own relay;
+	// anything else is the platform's. The address in Endpoint does not say which.
+	RelayRegion string
 }
 
 // parseUAPI turns a wireguard-go IpcGet() dump into per-peer status. The dump is

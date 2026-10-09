@@ -36,17 +36,33 @@ import {
   Tooltip,
   Typography,
 } from "antd";
-import { DeleteOutlined, PlayCircleOutlined, PlusOutlined, PoweroffOutlined } from "@ant-design/icons";
+import {
+  DeleteOutlined,
+  PlayCircleOutlined,
+  PlusOutlined,
+  PoweroffOutlined,
+  QuestionCircleOutlined,
+} from "@ant-design/icons";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { api, ApiError } from "../api/client";
-import { parseRoute, formatRoute } from "../lib/cidr";
+import {
+  exitStanding,
+  formatRoute,
+  parseRoute,
+  routeStanding,
+  type RouteReport,
+  type RouteStanding,
+} from "../lib/cidr";
+import { relayOwner, relayOwnerKind } from "../lib/relayRegion";
 import { useLocation, useNavigate } from "react-router-dom";
 import Services from "./Services";
 
 import type {
+  AccountMe,
   MeshAdvertise,
+  MeshOrgNode,
   MeshPeer,
   MeshStatus,
   OrgListResponse,
@@ -217,6 +233,18 @@ export default function Mesh() {
     return o.kind === "personal" ? t("mesh.orgPersonal") : o.name || `#${id}`;
   };
   const meshOrgName = orgNameOf(meshOrgID);
+  // Whose relay this device is homed on, read off the region code. Only the
+  // platform has two kinds to tell apart; a device signed in to a self-hosted
+  // server gets the region and the address with no owner on them. (`me` is
+  // already cached by the Layout under the same key.)
+  const { data: me } = useQuery<AccountMe>({
+    queryKey: ["me"],
+    queryFn: api.me,
+    retry: false,
+  });
+  const standalone = me?.plan?.code === "standalone";
+  const homeOwner = relayOwner(data?.derp_home);
+  const homeKind = relayOwnerKind(homeOwner, standalone);
   const orgMismatch = meshOrgID > 0 && activeOrgID > 0 && meshOrgID !== activeOrgID;
 
   const stop = useMutation({
@@ -422,11 +450,29 @@ export default function Mesh() {
           // direct figure is this node to the peer. Same column, deliberately not
           // the same presentation.
           const relayRtt = !direct && p.relay_rtt_micros ? fmtRtt(p.relay_rtt_micros) : "";
+          // WHOSE relay carries it. A relayed peer is reached through that peer's
+          // own home relay, not this device's — so with an org that runs a relay
+          // next to the platform's, this column and the "home relay" card above
+          // routinely name two different machines. Both used to say only "relay":
+          // the card showed one address, the tooltip here another, and nothing
+          // said they were different things. Unknown (an older daemon) stays a
+          // bare "relay" rather than guessing an owner, and so does every relay
+          // of a self-hosted server, where there is one kind only.
+          const owner = direct ? null : relayOwner(p.relay_region);
+          const kind = relayOwnerKind(owner, standalone);
+          const ownerKind = kind ? t(kind === "self" ? "topbar.egressOwn" : "topbar.egressPlatform") : "";
           return (
             <Tooltip
               title={
                 p.endpoint ? (
                   <>
+                    {!direct && (
+                      <>
+                        {t("mesh.peerRelay")}
+                        {owner ? (ownerKind ? ` · ${ownerKind} · ${owner.label}` : ` · ${owner.label}`) : ""}
+                        <br />
+                      </>
+                    )}
                     {p.endpoint}
                     {rtt ? (
                       <>
@@ -442,13 +488,23 @@ export default function Mesh() {
                         <span style={{ opacity: 0.75 }}>{t("mesh.relayRttHint")}</span>
                       </>
                     ) : null}
+                    {!direct && (
+                      <>
+                        <br />
+                        <span style={{ opacity: 0.75 }}>{t("mesh.peerRelayTip")}</span>
+                      </>
+                    )}
                   </>
                 ) : undefined
               }
             >
               <span>
                 <Tag color={direct ? "green" : "default"} style={{ marginInlineEnd: rtt || relayRtt ? 4 : undefined }}>
-                  {direct ? t("mesh.pathDirect") : t("mesh.pathRelay")}
+                  {direct
+                    ? t("mesh.pathDirect")
+                    : kind
+                      ? t(kind === "self" ? "mesh.pathRelaySelf" : "mesh.pathRelayPlatform")
+                      : t("mesh.pathRelay")}
                 </Tag>
                 {rtt ? (
                   <Text type="secondary" style={{ fontSize: 12 }}>
@@ -623,12 +679,45 @@ export default function Mesh() {
                 <code style={{ fontSize: 12 }}>{data.coord || "—"}</code>
               </div>
             </Col>
+            {/* THIS device's home relay: where others send to reach it. It is one
+                of three relay-ish things on this page — the edge its tunnels use
+                (top right), this, and the relay each peer below is reached
+                through — and it used to be a bare address under the word "relay",
+                next to a region picker it does not follow. So it names itself,
+                says whose it is, and shows how far away it is: a home 190ms out
+                while the org's own relay answers in 5 is the whole explanation of
+                a slow inbound path, and neither number was here. */}
             <Col xs={24} md={8}>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {t("mesh.relay")}
-              </Text>
+              <Space size={4}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {t("mesh.homeRelay")}
+                </Text>
+                <Tooltip title={t(standalone ? "mesh.homeRelayTipSelfHosted" : "mesh.homeRelayTip")}>
+                  <QuestionCircleOutlined
+                    aria-label={t(standalone ? "mesh.homeRelayTipSelfHosted" : "mesh.homeRelayTip")}
+                    style={{ fontSize: 12, color: "#94a3b8", cursor: "help" }}
+                  />
+                </Tooltip>
+              </Space>
               <div>
-                <code style={{ fontSize: 12 }}>{data.relay || "—"}</code>
+                {data.relay ? (
+                  <Space size={6} wrap>
+                    {homeKind && (
+                      <Tag color={homeKind === "self" ? "green" : "blue"} style={{ marginInlineEnd: 0 }}>
+                        {t(homeKind === "self" ? "topbar.egressOwn" : "topbar.egressPlatform")}
+                      </Tag>
+                    )}
+                    {homeOwner && <Text style={{ fontSize: 12 }}>{homeOwner.label}</Text>}
+                    <code style={{ fontSize: 12 }}>{data.relay}</code>
+                    {data.relay_rtt_micros ? (
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {fmtRtt(data.relay_rtt_micros)}
+                      </Text>
+                    ) : null}
+                  </Space>
+                ) : (
+                  <code style={{ fontSize: 12 }}>—</code>
+                )}
               </div>
             </Col>
           </Row>
@@ -739,6 +828,49 @@ function SettingRow({
   );
 }
 
+// StandingTag says where one of this machine's own offers stands with the
+// coordinator: published, or still waiting for an admin.
+//
+// The row it sits on reads the same either way — "192.168.1.0/24" is what this
+// machine ASKED for, before approval and after — so a subnet nobody could reach
+// yet looked exactly like one that worked.
+function StandingTag({ standing, exit = false }: { standing: RouteStanding; exit?: boolean }) {
+  const { t } = useTranslation();
+  let color: string | undefined;
+  let label: string;
+  let tip: string;
+  switch (standing) {
+    case "published":
+      color = "green";
+      label = t(exit ? "mesh.adv.stateApproved" : "mesh.adv.stateLive");
+      tip = t(exit ? "mesh.adv.tipExitApproved" : "mesh.adv.tipLive");
+      break;
+    case "pending":
+      color = "orange";
+      label = t("mesh.adv.statePending");
+      tip = t(exit ? "mesh.adv.tipExitPending" : "mesh.adv.tipPending");
+      break;
+    case "unsaved":
+      label = t("mesh.adv.stateUnsaved");
+      tip = t("mesh.adv.tipUnsaved");
+      break;
+    case "offline":
+      label = t("mesh.adv.stateOffline");
+      tip = t("mesh.adv.tipOffline");
+      break;
+    default:
+      label = t("mesh.adv.stateChecking");
+      tip = t("mesh.adv.tipChecking");
+  }
+  return (
+    <Tooltip title={tip}>
+      <Tag color={color} style={{ margin: 0, fontSize: 11, flexShrink: 0 }}>
+        {label}
+      </Tag>
+    </Tooltip>
+  );
+}
+
 // CidrListEditor edits a list of prefixes as ROWS: type one, add it, and each
 // entry gets its own delete button.
 //
@@ -752,12 +884,15 @@ function CidrListEditor({
   onChange,
   placeholder,
   enforceWidth = true,
+  rowExtra,
 }: {
   value: string[];
   onChange: (v: string[]) => void;
   placeholder: string;
   /** Apply the publish-side width limit. Off for the exclusion list. */
   enforceWidth?: boolean;
+  /** Rendered on each row, before its delete button. */
+  rowExtra?: (cidr: string) => React.ReactNode;
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState("");
@@ -832,7 +967,10 @@ function CidrListEditor({
                 background: "rgba(255,255,255,0.04)",
               }}
             >
-              <Text style={{ fontFamily: "monospace", fontSize: 13 }}>{formatRoute(cidr)}</Text>
+              <Text style={{ fontFamily: "monospace", fontSize: 13, flex: 1, minWidth: 0 }}>
+                {formatRoute(cidr)}
+              </Text>
+              {rowExtra?.(cidr)}
               <Tooltip title={t("mesh.adv.remove")}>
                 <Button
                   type="text"
@@ -892,6 +1030,33 @@ function MeshAdvertiseCard() {
   const refusedAliases = live?.unaliased_routes || [];
   const aliasBudget = live?.alias_budget_addrs || 0;
   const aliasUsed = live?.alias_used_addrs || 0;
+  // Already cached by the Layout under the same key. Used for one thing: saying
+  // WHERE a waiting route gets approved — a self-hosted server has no web console.
+  const { data: me } = useQuery<AccountMe>({
+    queryKey: ["me"],
+    queryFn: api.me,
+    retry: false,
+  });
+  const standalone = me?.plan?.code === "standalone";
+  // The org's device list, for one fact about THIS machine: whether it has been
+  // let in at all. An org can auto-approve routes and still review devices, and a
+  // device waiting for that review is in nobody's netmap — so a route the
+  // coordinator already approved reaches no one, and "published" would be wrong.
+  //
+  // Same key the 设备 tab reads. Polled only while the answer is "waiting": that
+  // is the one state that has to notice by itself that it ended.
+  const selfPendingIn = (items?: MeshOrgNode[]) =>
+    !!live?.overlay &&
+    (items ?? []).some((n) => n.overlay === live.overlay && n.approved === false);
+  const { data: orgNodes } = useQuery({
+    queryKey: ["mesh-org-nodes"],
+    queryFn: api.meshOrgNodes,
+    staleTime: 60_000,
+    retry: false,
+    throwOnError: false,
+    refetchInterval: (q) => (selfPendingIn(q.state.data?.items) ? 5_000 : false),
+  });
+  const devicePending = selfPendingIn(orgNodes?.items);
 
   // Each switch gates its own inputs; the values persist while a switch is off
   // so toggling back doesn't lose what you typed.
@@ -985,6 +1150,24 @@ function MeshAdvertiseCard() {
   const routesLocked = !data.forwarding_supported && (data.routes || []).length === 0;
   const exitNodeLocked = !data.forwarding_supported && !data.advertise_exit_node;
 
+  // Where each offer stands with the coordinator. Saving is only the request:
+  // on the platform a route takes effect once an admin approves it, and this
+  // page reads the same before and after unless it says which is which.
+  const report: RouteReport = {
+    up: !!live?.up,
+    netmapSeen: !!live?.netmap_seen,
+    // A device that is itself waiting to be let in publishes nothing, whatever
+    // the coordinator has approved for it.
+    published: devicePending ? [] : live?.published_routes || [],
+  };
+  const standingOf = (cidr: string) => routeStanding(cidr, data.routes || [], report);
+  const pendingCount = routesOn ? routes.filter((r) => standingOf(r) === "pending").length : 0;
+  const anyPublished = routesOn && routes.some((r) => standingOf(r) === "published");
+  const exitState = exitStanding(data.advertise_exit_node, report);
+  const pendingWhere = devicePending
+    ? t("mesh.adv.pendingDevice")
+    : t(standalone ? "mesh.adv.pendingWhereSelfHosted" : "mesh.adv.pendingWhere");
+
   const label = (text: string, isDirty: boolean) => (
     <span>
       {text}
@@ -1076,7 +1259,17 @@ function MeshAdvertiseCard() {
                     value={routes}
                     onChange={setRoutes}
                     placeholder="192.168.1.0/24 · 192.168.1.22"
+                    rowExtra={(cidr) => <StandingTag standing={standingOf(cidr)} />}
                   />
+                  {pendingCount > 0 && (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      style={{ marginTop: 8, maxWidth: 560 }}
+                      message={t("mesh.adv.pendingTitle", { count: pendingCount })}
+                      description={pendingWhere}
+                    />
+                  )}
                   {routesOn && routes.length > 0 && (
                     <div style={{ marginTop: 12 }}>
                       <Text strong style={{ fontSize: 13 }}>
@@ -1117,13 +1310,17 @@ function MeshAdvertiseCard() {
                             ))}
                           </div>
                         </div>
-                      ) : aliasSupported !== false && refusedAliases.length === 0 ? (
+                      ) : aliasSupported !== false &&
+                        refusedAliases.length === 0 &&
+                        (anyPublished || pendingCount > 0) ? (
                         // "waiting for an address" is only true while one is
                         // coming. A host that cannot install the rewrite is not
-                        // waiting for anything.
+                        // waiting for anything — and neither is a route no admin
+                        // has approved: the coordinator assigns nothing until
+                        // then, so that line used to name the wrong party.
                         <div style={{ marginTop: 8 }}>
                           <Text type="secondary" style={{ fontSize: 12 }}>
-                            {t("mesh.adv.aliasPending")}
+                            {t(anyPublished ? "mesh.adv.aliasPending" : "mesh.adv.aliasAfterApproval")}
                           </Text>
                         </div>
                       ) : null}
@@ -1156,7 +1353,16 @@ function MeshAdvertiseCard() {
                   checked={exitNodeOn}
                   onChange={setExitNodeOn}
                   disabled={exitNodeLocked}
-                />
+                >
+                  <Space size={8} align="start">
+                    <StandingTag standing={exitState} exit />
+                    {exitState === "pending" && (
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {pendingWhere}
+                      </Text>
+                    )}
+                  </Space>
+                </SettingRow>
               </Space>
             ),
           },
