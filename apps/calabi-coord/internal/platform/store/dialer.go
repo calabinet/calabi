@@ -63,6 +63,18 @@ func withSQLiteParams(dsn string) string {
 	// store is this file, so a registration must not fail the same way.
 	if !strings.Contains(dsn, "busy_timeout") {
 		dsn += sep + "_pragma=busy_timeout(10000)"
+		sep = "&"
+	}
+	// The busy timeout covers a connection that holds no lock yet. A
+	// transaction begun the default (deferred) way holds a read lock from its
+	// first read and asks for the write lock at its first write; if another
+	// connection is writing at that point SQLite refuses the step at once with
+	// SQLITE_BUSY, without waiting. ReplaceTunnels reads and then writes, so a
+	// device's tunnel report failed whenever it overlapped another write.
+	// Begun immediate, a transaction takes the write lock up front, where the
+	// timeout applies.
+	if !strings.Contains(dsn, "_txlock=") {
+		dsn += sep + "_txlock=immediate"
 	}
 	return dsn
 }
