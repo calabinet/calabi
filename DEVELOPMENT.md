@@ -32,7 +32,7 @@ Or one at a time:
 
 ## Run all three on one machine
 
-The coordinator hands out identities, the edge serves tunnels, the client joins
+The coordinator hands out identities, the edge serves endpoints, the client joins
 and opens one. Every address below is `127.0.0.1`.
 
 ### 1. A directory to work in
@@ -155,7 +155,7 @@ bash devenv.sh ./calabi join --no-start-daemon "calabi://join?…"
 
 For a second device, copy the script with `device-b` and another status port.
 
-### 7. A tunnel
+### 7. An endpoint
 
 Serve something on `127.0.0.1:9999`, then:
 
@@ -273,7 +273,7 @@ Yes — `calabi login` with your account, no local coordinator or edge. Use that
 for changes to the client alone. The local stack is what lets you change the
 edge or the coordinator and see the effect.
 
-### The client connects but the tunnel returns nothing.
+### The client connects but the endpoint returns nothing.
 
-Check the port. The tunnel URL is printed without one because a real edge serves
+Check the port. The endpoint URL is printed without one because a real edge serves
 `:80`, while `edge.yaml` here uses `:8081`.

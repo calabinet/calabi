@@ -117,7 +117,7 @@ code under the new version number.
   the local console also decides which relays the device prefers as its home.
   That part followed up to half a minute later, by stopping the mesh session
   and joining again, which interrupted every mesh connection for a moment. The
-  home relay is now picked again in place once the tunnels have reconnected,
+  home relay is now picked again in place once the endpoints have reconnected,
   and the mesh session stays up. The confirmation shown before switching says
   the home relay moves too.
 
@@ -236,11 +236,11 @@ before you pull.
 `docker-compose.yml` along with the new image. That file writes the edge's
 config, and the version of it shipped before this release is one the new edge
 refuses: it had no `public:` block, which is now required of a node that serves
-tunnels. Your `.env` needs nothing new — the value comes from
+endpoints. Your `.env` needs nothing new — the value comes from
 `CALABI_PUBLIC_HOST`, which you already set.
 
 **If you wrote your own edge config**, two things can stop it: `public.host` is
-now required on a node that serves tunnels, and a handful of settings that had
+now required on a node that serves endpoints, and a handful of settings that had
 quietly done nothing for some time are now refused instead of ignored. Both are
 spelled out under "Your server" below, and the edge names the exact line on
 startup rather than coming up half-working.
@@ -317,7 +317,7 @@ too, but it migrates itself and needs nothing from you — also below.
   the listener, forget the other line, and every client goes on dialing a port
   nothing is listening on.
 
-  The layout now follows the two services. `tunnel:` holds what only tunnels
+  The layout now follows the two services. `tunnel:` holds what only endpoints
   read, `mesh:` (formerly `relay:`) what only the mesh relay reads, and the top
   level what both use. Where this node can be reached is one setting, and each
   service names only the port it wants:
@@ -333,7 +333,7 @@ too, but it migrates itself and needs nothing from you — also below.
     host: server.example.com
 
   tunnel:
-    base_domain: tunnels.example.com
+    base_domain: endpoints.example.com
     control_port: 7443
     http_port: 80
     https_port: 443
@@ -346,7 +346,7 @@ too, but it migrates itself and needs nothing from you — also below.
   A node running `role: mesh` can now delete its whole `tunnel:` block, and one
   running `role: tunnel` its whole `mesh:` block.
 
-  `public.host` is **required** on a node that serves tunnels. It is what
+  `public.host` is **required** on a node that serves endpoints. It is what
   clients dial and the name its certificate is issued for. It used to be
   optional, falling back to the listener's bind address — a usable dial string
   only on the one machine that is also the client. A node that only relays mesh
@@ -385,7 +385,7 @@ too, but it migrates itself and needs nothing from you — also below.
   the default, and never be told.
 
   One more rename, for anyone running several edges in one region: the edge
-  config's `mesh:` block used to mean **edge-to-edge forwarding of tunnel
+  config's `mesh:` block used to mean **edge-to-edge forwarding of endpoint
   traffic**, which has nothing to do with the mesh. It is now
   `tunnel.peer_forward:`. This is the one old spelling that is *not* migrated
   silently — `mesh:` means the relay now, and quietly reading a peer-forward
@@ -404,7 +404,7 @@ too, but it migrates itself and needs nothing from you — also below.
 
 - **Changed** — **The daemon's config file is now `calabi.yaml`, and the
   coordinator moved to a `server:` block.** The file stopped being about
-  tunnels a while ago: a machine that only joins your server has a complete,
+  endpoints a while ago: a machine that only joins your server has a complete,
   working config in which `tunnels:` is empty. And the coordinator — which
   server the device belongs to, and how it proves itself there — was nested
   under `mesh:`, which read as though a device that never turns the mesh on
@@ -420,7 +420,7 @@ too, but it migrates itself and needs nothing from you — also below.
     pins: ["sha256:…"]
     auth_key: ck_…
   mesh:
-    enabled: true          # optional — tunnels work without it
+    enabled: true          # optional — endpoints work without it
   tunnels: []
   ```
 
@@ -459,7 +459,7 @@ and one release covers both. **Mesh**, **Your server** and **Mobile** are
 changes in what this release ships, built from this tree. The last section,
 **On calabi.net**, is the hosted control plane: its code is not in this
 repository, and a self-hosted deployment does not get it. This time that section
-is the larger one — bandwidth limits and tunnel approval are decisions a control
+is the larger one — bandwidth limits and endpoint approval are decisions a control
 plane makes, and a coordinator with no control plane behind it makes none of
 them.
 
@@ -482,7 +482,7 @@ them.
   and instructions to run them, because a rule naming a metric nothing emits
   parses perfectly, loads without a warning, and then never fires — which looks
   exactly like a healthy server. The README says which failures the alerts
-  deliberately ignore, and how to add your tunnels' upstreams if you run those
+  deliberately ignore, and how to add your endpoints' upstreams if you run those
   too.
 
 ### Mobile
@@ -520,7 +520,7 @@ self-hosted deployment does not get it. The code for the first two entries is
 here, but what switches them on is not: an edge and a coordinator with no
 control plane behind them apply no limits at all.
 
-- **Added** — **Bandwidth is limited in two tiers.** Each tunnel has its own
+- **Added** — **Bandwidth is limited in two tiers.** Each endpoint has its own
   allowance, and everything an organization runs shares a second one above it.
   Before, the allowance sat on a client connection, so an organization got a
   multiple of it by opening several.
@@ -529,9 +529,9 @@ control plane behind them apply no limits at all.
   the relay enforces it if the client does not — a relay cannot slow traffic
   down gently, it can only drop, and inside WireGuard a dropped packet costs a
   round trip.
-- **Added** — **Tunnels created by members can require an administrator's
-  approval**, under Tunnels → Settings. Off by default, and turning it on does
-  not touch tunnels that already exist. A tunnel waiting for approval is created
+- **Added** — **Endpoints created by members can require an administrator's
+  approval**, under Endpoints → Settings. Off by default, and turning it on does
+  not touch endpoints that already exist. An endpoint waiting for approval is created
   but not served; the daemon and the CLI say which it is instead of reporting a
   failure. Turning the setting back off releases everything queued.
 - **Changed** — **The website and the console follow your system's light or dark
@@ -546,11 +546,11 @@ a self-hosted Calabi server, and the coordinator is every device's identity. A
 device joins it once — an invite scanned on the phone, pasted into the console,
 or `calabi join` in a terminal — and from then on the coordinator tells it where
 the edge is and signs the grant the edge lets it in with. The same device has
-tunnels and the mesh, and the mesh can be switched off on it without losing the
-tunnels. `deploy/server` runs the coordinator and the edge from one compose file
+endpoints and the mesh, and the mesh can be switched off on it without losing the
+endpoints. `deploy/server` runs the coordinator and the edge from one compose file
 and one `.env`.
 
-**What is in this repository and what is not.** **Your server**, **Tunnels**,
+**What is in this repository and what is not.** **Your server**, **Endpoints**,
 **Mesh**, **Local console** and **Mobile** below are changes in what this
 release ships, built from this tree. The last section, **On calabi.net**, is the
 hosted control plane: its code is not in this repository, and a self-hosted
@@ -561,7 +561,7 @@ deployment does not get it.
 - **A self-hosted edge takes no tokens any more.** It needs `mode: standalone`
   and the coordinator's public key (`coord_pubkey`, or `coord_pubkey_file` where
   the coordinator writes it; `calabi-coord pubkey` prints it), and accepts
-  devices by the coordinator's grants, for tunnels and relay alike. A config
+  devices by the coordinator's grants, for endpoints and relay alike. A config
   that still lists `accepted_tokens` is refused at start and says why; an empty
   list is ignored, so calabi.net's own edges, whose files carry
   `accepted_tokens: []`, start as before.
@@ -592,7 +592,7 @@ deployment does not get it.
 
 - **Added** — **`deploy/server`**: the coordinator and the edge on one machine,
   from one `docker-compose.yml` and one `.env` (the public address, an admin
-  token, the tunnel domain). The edge's config is written from the `.env`, the
+  token, the endpoint domain). The edge's config is written from the `.env`, the
   coordinator hands the edge its public key over a shared volume and reads the
   edge's certificate itself, and both run with `CALABI_ENV=production`. It runs
   with Docker Compose or `podman compose`.
@@ -606,7 +606,7 @@ deployment does not get it.
   (`./coord-grant.key`, or `CALABI_COORD_RELAY_GRANT_KEY_FILE`).
   `CALABI_COORD_GRANT_PUBKEY_FILE` writes the public half for an edge to read;
   `calabi-coord pubkey` prints it. A grant lasts an hour and devices renew it; a
-  disabled or deleted device keeps its tunnels at most until its grant runs out.
+  disabled or deleted device keeps its endpoints at most until its grant runs out.
 - **Added** — **The coordinator names the edge.** `CALABI_COORD_EDGE_ADDR` is
   where devices dial it. Its fingerprint comes from `CALABI_COORD_EDGE_PIN`, or
   the coordinator reads the certificate the edge presents
@@ -643,7 +643,7 @@ deployment does not get it.
   hour's bytes; the new columns are added on start. The key file is re-read when
   it changes, every two seconds.
 
-### Tunnels
+### Endpoints
 
 - **Added** — **`calabi join <invite>`**, the terminal's way onto your server:
   it hands the join to the running daemon, or saves it and starts the daemon.
@@ -670,9 +670,9 @@ deployment does not get it.
 ### Mesh
 
 - **Added** — **The mesh is a switch, not the sign-in.** Off — in the console,
-  or `calabi mesh down` — the device leaves the mesh and keeps its tunnels, and
+  or `calabi mesh down` — the device leaves the mesh and keeps its endpoints, and
   stays off across restarts; `calabi mesh up` with no arguments puts it back. A
-  daemon reports its tunnels to the coordinator either way.
+  daemon reports its endpoints to the coordinator either way.
 - **Added** — **A key is only for joining.** A device that has joined comes back
   by proving it holds its device key. A daemon remembers which device it is
   (`mesh-reauth.json` in its data directory), so `auth_key:` can come out of its
@@ -686,10 +686,10 @@ deployment does not get it.
   `mesh:` block.
 - **Added** — **The relay address is optional.** Without `--relay` a device takes
   its relays from the coordinator's directory.
-- **Added** — **Tunnels and traffic on your coordinator.** A daemon that has
-  joined reports its tunnels — name, type, addresses, whether each is up, bytes —
+- **Added** — **Endpoints and traffic on your coordinator.** A daemon that has
+  joined reports its endpoints — name, type, addresses, whether each is up, bytes —
   every five minutes and whenever the list changes. The coordinator keeps the
-  list and, with a database, tunnel traffic by the hour for 92 days, and gives
+  list and, with a database, endpoint traffic by the hour for 92 days, and gives
   both, with this month's relayed traffic, to the phone and the console.
   calabi.net's coordinator refuses these calls.
 - **Fixed** — **A disabled device kept its session.** Every call on a disabled
@@ -728,12 +728,12 @@ deployment does not get it.
   calabi.net, it offers to sign out first.
 - **Added** — In self-hosted mode: the server in the account menu; a
   *Self-hosted server* card in Settings with the coordinator, the edge this
-  device's tunnels run on, and the mesh switch; *Tunnels on this network* and
+  device's endpoints run on, and the mesh switch; *Endpoints on this network* and
   *Network traffic this month*; banners when the machine is not connected yet,
   when the coordinator's certificate changed (both fingerprints, and a button
   that trusts only the one presented now), when the device waits for approval,
   needs a new invite, or is disabled. *Disconnect and forget this server* tells
-  the coordinator, deletes the console's `tunnels.yaml` — tunnels included,
+  the coordinator, deletes the console's `tunnels.yaml` — endpoints included,
   counted in the confirmation — and goes back to the calabi.net sign-in page.
 - **Added** — A standalone daemon's console saves what the device advertises,
   its routing settings and its declared services into the config.
@@ -749,7 +749,7 @@ deployment does not get it.
   certificate that is neither in the invite nor trusted by the system is shown
   for you to compare with `calabi-coord fingerprint`.
 - **Added** — Joined to your own server, the phone shows its devices, the
-  tunnels of the desktop daemons, and this month's traffic, also while it is not
+  endpoints of the desktop daemons, and this month's traffic, also while it is not
   connected. Settings shows the server where the organization was; *Leave this
   server* leaves it. When the server presents another certificate, the phone
   shows both fingerprints and keeps trying with the old one until you trust the
@@ -757,7 +757,7 @@ deployment does not get it.
 - **Added** — **Quick Settings tile.** Settings has a *Quick Settings tile* row:
   on Android 13 and later one system dialog adds it; before that the app shows
   the steps, with separate ones for Huawei and Honor.
-- **Changed** — The *Devices* tab is now *Mesh*, beside *Tunnels*.
+- **Changed** — The *Devices* tab is now *Mesh*, beside *Endpoints*.
 
 ### On calabi.net
 
@@ -905,9 +905,9 @@ is printed on the releases page, to check before installing.
   that way it says so and opens the vendor's page for allowing background
   activity (Huawei, Honor, Xiaomi); on other phones it asks to be exempt from
   battery optimization.
-- **Tunnels, read-only** — the tunnels you can see in the organization, with
+- **Endpoints, read-only** — the endpoints you can see in the organization, with
   their public addresses to copy, share or open, and access records for the last
-  24 hours or 7 days. The phone does not serve tunnels.
+  24 hours or 7 days. The phone does not serve endpoints.
 - **Usage** — this month's traffic against the plan's limit, the last seven
   days, and mesh device seats.
 - **Replace an old device** — reinstalling the app creates a new mesh key, so
@@ -941,8 +941,8 @@ self-hosted deployment does not get it.
   turn them off again.
 - **Fixed** — Saving one mesh setting could switch another back — device
   approval, connection records, route approval.
-- **Fixed** — A member could read a colleague's tunnel by its ID through the API
-  although the list hid it. They now get the same "not found" as for a tunnel
+- **Fixed** — A member could read a colleague's endpoint by its ID through the API
+  although the list hid it. They now get the same "not found" as for an endpoint
   that does not exist.
 - **Fixed** — Typing the two-step verification code through an input method put
   each digit into two boxes.
@@ -985,7 +985,7 @@ self-hosted deployment does not get it.
 - **Added** — The download page offers the macOS desktop package, and a GitHub
   download link beside every file.
 - **Fixed** — Actions inside a drawer no longer open a second dialog on top of
-  it: creating a tunnel for a client that is offline, and reopening a support
+  it: creating an endpoint for a client that is offline, and reopening a support
   ticket, now ask in place.
 
 ## 1.11.0 — 2026-09-16
@@ -998,7 +998,7 @@ says so where you will see it, and — where it is allowed to — installs it on
 schedule you choose. Client and edge move together, as always.
 
 **What is in this repository and what is not.** Calabi is also a hosted service,
-and one release covers both. **Updates**, **Tunnels** and **Local console** below
+and one release covers both. **Updates**, **Endpoints** and **Local console** below
 are changes in the binaries attached to this release, built from this tree. The
 last section, **On calabi.net**, is the hosted control plane: its code is not in
 this repository, and a self-hosted deployment does not get it.
@@ -1051,7 +1051,7 @@ this repository, and a self-hosted deployment does not get it.
   and the account card is gone — the organization you are serving now appears in
   the account menu, where the rest of your identity already was.
 
-### Tunnels
+### Endpoints
 
 - **Fixed** — **`calabi http 8080` works in an official build.** One-shot
   commands never looked for an edge; they used a default address that release
@@ -1062,11 +1062,11 @@ this repository, and a self-hosted deployment does not get it.
 - **Fixed** — Restarting a self-hosted edge no longer takes the command line down
   with it. The edge a client is anchored to is a preference, not a wall.
 - **Fixed** — A one-shot command no longer serves the full dashboard page, which
-  had no API behind it, and no longer counts tunnels pushed from the control
-  plane as its own — which is why its own tunnel appeared twice.
-- **Fixed** — A tunnel created from the command line now registers the device,
+  had no API behind it, and no longer counts endpoints pushed from the control
+  plane as its own — which is why its own endpoint appeared twice.
+- **Fixed** — An endpoint created from the command line now registers the device,
   like every other way of creating one.
-- **Fixed** — A tunnel whose upstream has never been probed is no longer reported
+- **Fixed** — An endpoint whose upstream has never been probed is no longer reported
   as healthy.
 - **Fixed** — (edge) A subdomain sequence that rolled backwards could land on a
   row belonging to another organization, and the edge claimed it.
@@ -1081,7 +1081,7 @@ this repository, and a self-hosted deployment does not get it.
   is instead of looking broken.
 - **Fixed** — `--standalone` survives `daemon install`. The service came back
   wired to the platform, quietly undoing the choice.
-- **Fixed** — The overview's tunnel card showed the organization's quota rather
+- **Fixed** — The overview's endpoint card showed the organization's quota rather
   than the one that applies to you, and the relay figure had quietly become a
   local measurement while its label still said otherwise.
 
@@ -1098,12 +1098,12 @@ self-hosted deployment does not get it.
   are still per member.
 - **Fixed** — The monthly-traffic card said "0" for organizations serving from
   their own edges.
-- **Changed** — A tunnel's **Settings** tab is administrators only. Mesh
+- **Changed** — An endpoint's **Settings** tab is administrators only. Mesh
   connection records are now visible to auditors, and members can see the
   records for their own devices.
-- **Changed** — Creating and editing a tunnel, and adding a self-hosted node,
+- **Changed** — Creating and editing an endpoint, and adding a self-hosted node,
   are drawers rather than full pages.
-- **Added** — A tunnel records **which door it was created from** — command
+- **Added** — An endpoint records **which door it was created from** — command
   line, local console, web console or API key — shown in the admin console.
 
 ## 1.10.0 — 2026-09-14
@@ -1113,7 +1113,7 @@ asked twice: **who may reach this, and can you find out afterwards who did.**
 Client and edge move together, as always.
 
 **What is in this repository and what is not.** Calabi is also a hosted service,
-and one release covers both. **Tunnels**, **Mesh** and **Local console** below
+and one release covers both. **Endpoints**, **Mesh** and **Local console** below
 are changes in the binaries attached to this release, built from this tree. The
 last section, **On calabi.net**, is the hosted control plane: it changes what
 calabi.net users see, its code is not in this repository, and a self-hosted
@@ -1125,21 +1125,21 @@ on calabi.net.
 
 - An IP allow list of `0.0.0.0/0` no longer counts as access protection, and
   neither does a deny list on its own. If your organization requires protection,
-  tunnels configured that way now appear in the violations list. Nothing that is
+  endpoints configured that way now appear in the violations list. Nothing that is
   running is stopped.
 - `--ip-allow` and `--ip-deny` now take effect. The client always sent them; they
-  used to be accepted, noted as self-hosted-only, and discarded. A tunnel started
+  used to be accepted, noted as self-hosted-only, and discarded. An endpoint started
   with them is now really restricted by them.
 - **Upgrade your self-hosted edges along with the client.** An edge older than
-  1.10.0 does not understand a tunnel that references an organization's sign-in
-  application, and serves that tunnel **with no sign-in at all** rather than
+  1.10.0 does not understand an endpoint that references an organization's sign-in
+  application, and serves that endpoint **with no sign-in at all** rather than
   refusing. Older edges also collect no access records.
 
-### Tunnels
+### Endpoints
 
 - **Added** — **A per-visitor rate limit** (`per_ip_per_minute`) beside the
-  existing per-tunnel one. A single cap shared by all visitors is also the lever
-  an abuser pulls to take the tunnel down for everyone; the two now apply
+  existing per-endpoint one. A single cap shared by all visitors is also the lever
+  an abuser pulls to take the endpoint down for everyone; the two now apply
   together, and the existing setting still means exactly what it meant before.
 - **Changed** — **Every refusal the edge serves now looks the same.** Being
   turned away by a password prompt, by a sign-in that was declined, or by a
@@ -1153,13 +1153,13 @@ on calabi.net.
   had no way to detect: `--basic-auth` went nowhere, every console correctly
   showed no protection, and the warning that would have said so was suppressed by
   the very flag that made it wrong.
-- **Fixed** — Two ways the edge's port pool disagreed with the tunnels that
+- **Fixed** — Two ways the edge's port pool disagreed with the endpoints that
   actually exist. At startup the pool was empty, so the first claim could hand
-  out a port a live tunnel held — and the loser was deleted. And a port
+  out a port a live endpoint held — and the loser was deleted. And a port
   persisted during a session was not marked as taken, so the same number was
   offered again and the claim was refused with "remote port already bound",
-  leaving a tunnel waiting for a client that was already connected. Ports are
-  now reserved when the tunnel is persisted and released when it is deleted.
+  leaving an endpoint waiting for a client that was already connected. Ports are
+  now reserved when the endpoint is persisted and released when it is deleted.
 
 ### Mesh
 
@@ -1193,54 +1193,54 @@ on calabi.net.
 - **Fixed** — The console occasionally bounced to its login screen, and opening a
   new tab worked. Two parts of the daemon refreshed the sign-in at the same time
   and one of them was told to sign in again; every part now shares one refresh.
-- **Changed** — The tunnel pages were rebuilt: creating one is a series of steps
+- **Changed** — The endpoint pages were rebuilt: creating one is a series of steps
   rather than one long form, and the protocol is shown as a badge.
 
 ### On calabi.net
 
 The hosted control plane. **None of this is in this repository**, and a
 self-hosted deployment does not get it — it is here because the same binaries
-serve both, and because two of these change what an already-running tunnel does.
+serve both, and because two of these change what an already-running endpoint does.
 
-- **Added** — **Access records.** Per tunnel and per hour: which visitor
+- **Added** — **Access records.** Per endpoint and per hour: which visitor
   addresses connected and how each connection ended. Off by default, enabled per
   organization, with a retention period you choose. These are connections, not
   requests: one keep-alive connection carrying fifty requests is one row.
   Request lines, paths, headers and user agents are not recorded — that is the
-  local console's job, on your own machine. A tunnel being scanned cannot make
-  the table grow without bound: at most 256 distinct addresses per tunnel per
+  local console's job, on your own machine. An endpoint being scanned cannot make
+  the table grow without bound: at most 256 distinct addresses per endpoint per
   hour are listed individually, and the rest are counted together. The edge-side
   collection ships in `calabi-edge`; everything that stores, keeps or reads them
   does not.
 - **Added** — **Reusable IP policies, and an organization baseline.** Name an
-  allow/deny list once and reference it from any number of tunnels instead of
-  copying addresses into each. An organization can require that every tunnel it
+  allow/deny list once and reference it from any number of endpoints instead of
+  copying addresses into each. An organization can require that every endpoint it
   publishes has access protection, and can name a default IP policy applied to
-  new tunnels that arrive without any — without which `calabi http 8080` is not
+  new endpoints that arrive without any — without which `calabi http 8080` is not
   governed by the baseline, it is refused by it.
 - **Added** — A second baseline covering **raw ports only**: TCP, UDP and SNI
-  tunnels must carry IP rules. The people willing to publish an unprotected demo
+  endpoints must carry IP rules. The people willing to publish an unprotected demo
   link and the people willing to publish an unprotected database port are not
   the same people, and one switch for both made them choose neither. This also
-  closes a gap: a raw-port tunnel carrying Basic Auth used to count as
+  closes a gap: a raw-port endpoint carrying Basic Auth used to count as
   protected, while the edge — which passes those bytes through untouched — never
   asked anyone for a password.
 - **Added** — **Organization sign-in applications.** An OAuth client secret is
   now stored once for the organization instead of being copied into every
-  tunnel's configuration, where anything that could read the tunnel list could
-  read it. Tunnels reference the application by name, and the edge fetches the
+  endpoint's configuration, where anything that could read the endpoint list could
+  read it. Endpoints reference the application by name, and the edge fetches the
   credential over its own authenticated connection when it serves one. Deleting
-  an application that tunnels still reference is refused, and says how many.
-- **Added** — **Offline notification**, per tunnel and off by default. A tunnel
+  an application that endpoints still reference is refused, and says how many.
+- **Added** — **Offline notification**, per endpoint and off by default. An endpoint
   that stops serving can email you instead of waiting for somebody to hit a 502.
   Ten minutes of grace, so a reconnect or a deploy does not trigger it, and one
   message per outage rather than one per report.
-- **Added** — Tunnels can be **disabled automatically after N days with no
+- **Added** — Endpoints can be **disabled automatically after N days with no
   visitor**. This is the only setting here that touches something already
   running, so it acts only when it can tell "nobody used it" apart from "we were
   not watching": access records must be on, and must have been on long enough.
 - **Added** — **Per-member quotas.** An organization can set a default quota that
-  new members inherit, and override it for one person: tunnels, raw-port tunnels
+  new members inherit, and override it for one person: endpoints, raw-port endpoints
   and mesh devices. Personal limits are not reserved capacity — the organization
   total is still the ceiling, and the limit that applies is the smaller of the
   two. Administrators are not bound by the default, but are bound by a limit set
@@ -1257,18 +1257,18 @@ serve both, and because two of these change what an already-running tunnel does.
   rule, now closed — and a device publishing an approved route cannot be deleted
   by its owner until the route is withdrawn.
 - **Changed** — Removing a member now **disables the mesh devices in their
-  name**, stops their tunnels and revokes the API keys they minted, before the
+  name**, stops their endpoints and revokes the API keys they minted, before the
   membership goes. Until now a removed member's connected daemon kept serving on
-  the organization's domain, their keys kept managing its tunnels, and a laptop
+  the organization's domain, their keys kept managing its endpoints, and a laptop
   that never disconnected stayed inside the private network indefinitely — the
-  console door closed, the data plane's did not. Tagged devices and tunnels
+  console door closed, the data plane's did not. Tagged devices and endpoints
   running on an organization agent are left alone: stopping a CI runner because
   whoever installed it left is an incident, not offboarding.
 - **Changed** — Switching organizations ends the session you switched away from.
-- **Fixed** — A tunnel that has not been claimed no longer has its configuration
+- **Fixed** — An endpoint that has not been claimed no longer has its configuration
   broadcast to every edge, self-hosted edges included.
 - **Fixed** — An installed agent never reported whether it could reach the
-  service it forwards to. The console showed such tunnels as online while the
+  service it forwards to. The console showed such endpoints as online while the
   local probe had been failing since the agent started; only interactive
   sessions reported. Agents carry their credential in the environment, and the
   health reporter was the one code path that looked only in the credentials
@@ -1285,7 +1285,7 @@ local console.
 **Upgrade clients before the coordinator.** A 1.9.0 coordinator refuses to enroll
 nodes that speak an older mesh protocol — every client before 1.9.0 — while a
 1.9.0 client still enrolls with an older coordinator. If you run your own
-coordinator, update your clients first. Tunnels are not affected either way.
+coordinator, update your clients first. Endpoints are not affected either way.
 
 ### Mesh
 
@@ -1327,7 +1327,7 @@ coordinator, update your clients first. Tunnels are not affected either way.
   relay usage.
 - **Fixed** — A coordinator whose auth-keys file is set but unreadable now refuses
   to start, instead of falling back to a built-in development key.
-- **Fixed** — A signed-in client whose tunnel session stayed up for a long time
+- **Fixed** — A signed-in client whose endpoint session stayed up for a long time
   let its access token expire, after which the mesh's next re-enrollment was
   refused every 30 seconds, indefinitely. The client now refreshes the sign-in
   once when the coordinator refuses it, and retries.
@@ -1389,7 +1389,7 @@ coordinator, update your clients first. Tunnels are not affected either way.
 ## 1.8.1 — 2026-09-09
 
 A follow-up to 1.8.0, and almost entirely about things that reported the wrong
-state: a tunnel that stayed down for five minutes after its network came back, a
+state: an endpoint that stayed down for five minutes after its network came back, a
 console that called a working feature unavailable, and a startup line that
 announced a problem which did not exist. Client only — the edge is unchanged, and
 is rebuilt at the same version as always.
@@ -1399,15 +1399,15 @@ is rebuilt at the same version as always.
 - **Fixed** — A regression in 1.8.0. When the control plane could not be reached
   at all — the ordinary shape of a network outage — the client classified it as
   "there is no edge in your region", a condition only a person can resolve, and
-  dropped to retrying every five minutes. Tunnels came back up to five minutes
+  dropped to retrying every five minutes. Endpoints came back up to five minutes
   after the link did, while the mesh returned in seconds. 1.8.0's note that
   network failures retry with a back-off capped at one minute was true of the
   policy and not of this path; it is true of both now.
-- **Fixed** — A tunnel session whose link died waited for the operating system to
+- **Fixed** — An endpoint session whose link died waited for the operating system to
   notice, which took minutes. The session now watches for silence from the edge
   itself and drops the session after three missed heartbeats (45 seconds by
   default), the same way the mesh already did.
-- **Fixed** — Suspending and resuming a machine is detected on the tunnel plane
+- **Fixed** — Suspending and resuming a machine is detected on the endpoint plane
   too, instead of only on the mesh.
 - **Added** — The session watchdog logs its interval and deadline when it arms.
   A mechanism that is silent when all is well cannot otherwise be told from one
@@ -1514,14 +1514,14 @@ them apart. Client and edge move together, as always.
 ### Client
 
 - **Fixed** — After a network outage lasting more than about 2.5 minutes, the
-  client stopped reconnecting its tunnels permanently and waited for someone to
+  client stopped reconnecting its endpoints permanently and waited for someone to
   click something in the local console. On a machine installed as a service
   there is nobody to click, so the only cure was restarting the service — while
   the mesh, which has no such limit, came back on its own. Network failures now
   retry indefinitely with a back-off capped at one minute. The "no edge in this
   region, switch manually" prompt still appears, because that one a user can act
   on, but the client keeps retrying underneath it.
-- **Fixed** — Suspending and resuming a machine left the tunnel session holding
+- **Fixed** — Suspending and resuming a machine left the endpoint session holding
   a TCP connection the far side had long forgotten, and it was only noticed when
   the OS keep-alive gave up minutes later. Resume is now detected and the
   session re-established within seconds, the same way the mesh already did.

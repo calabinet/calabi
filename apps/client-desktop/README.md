@@ -13,7 +13,7 @@ Released for Windows (a setup `.exe`) and macOS (a `.pkg`).
   `src-tauri/tauri.windows.conf.json`) and registers it with
   `calabi daemon install --system` (`src-tauri/nsis-hooks.nsh`). The macOS
   `.pkg` installs the app and the client as a LaunchDaemon. The service runs the
-  tunnels and the mesh whether the app is open or not.
+  endpoints and the mesh whether the app is open or not.
 - **The app attaches to the service.** It finds the service's console and shows
   it in the window; the tray shows the service's state, checked every five
   seconds. A release build never starts a daemon of its own.

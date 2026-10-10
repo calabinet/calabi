@@ -56,7 +56,7 @@ with no exploit path, output from an automated scanner with nothing behind it,
 rate limiting on unauthenticated endpoints, self-XSS, and anything that needs
 an attacker to already have root on the victim's machine.
 
-Please do not test against other people's servers or tunnels. A self-hosted
+Please do not test against other people's servers or endpoints. A self-hosted
 server of your own ([DEVELOPMENT.md](DEVELOPMENT.md) or
 [docs/self-hosting.md](docs/self-hosting.md)) is the right place.
 

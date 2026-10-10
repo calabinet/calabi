@@ -39,16 +39,16 @@ groups:
       #
       #   this server   internal_error, replay_head_failed, and the global_*
       #                 pair — the edge is saturated and dropping traffic.
-      #   your upstream open_upstream_failed: whatever the tunnel points at
+      #   your upstream open_upstream_failed: whatever the endpoint points at
       #                 refused the connection. SEE THE NOTE BELOW.
       #   by design     rate_limited, conn_capped, daily_capped, ip_denied,
-      #                 auth_required, oauth_redirect — the per-tunnel policy
+      #                 auth_required, oauth_redirect — the per-endpoint policy
       #                 you configured, doing its job.
       #
       # Excluded as ambient: no_tunnel, peek_failed, sniff_failed. A public edge
       # is scanned continuously by strangers; those are not your server failing.
       #
-      # IF YOU ALSO RUN THE SERVICES BEHIND YOUR TUNNELS — which a self-hoster
+      # IF YOU ALSO RUN THE SERVICES BEHIND YOUR ENDPOINTS — which a self-hoster
       # usually does — then open_upstream_failed IS actionable for you, unlike
       # on a shared platform where it belongs to someone else. Add it:
       #
@@ -69,7 +69,7 @@ groups:
       #
       # Devices talk to the coordinator to join, to refresh grants and to fetch
       # the network map. Sustained errors here mean devices cannot join or are
-      # losing their place in the mesh, even while tunnels keep working.
+      # losing their place in the mesh, even while endpoints keep working.
       #
       # PermissionDenied and Unauthenticated are deliberately absent: those are
       # a caller being refused, which is the server working.

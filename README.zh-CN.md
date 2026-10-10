@@ -17,7 +17,7 @@
      src="https://img.shields.io/badge/%E5%8F%AF%E5%A4%8D%E7%8E%B0%E6%9E%84%E5%BB%BA-%E6%AF%8F%E4%B8%AA%E7%89%88%E6%9C%AC%E9%83%BD%E8%83%BD%E8%87%AA%E5%B7%B1%E9%87%8D%E7%BC%96%E4%B8%80%E9%81%8D-22d3ee?style=for-the-badge&labelColor=0e1630"></a>
 </p>
 
-<p align="center"><b>自托管的开发联调隧道与私有 WireGuard 组网</b></p>
+<p align="center"><b>自托管的开发联调端点与私有 WireGuard 组网</b></p>
 
 <p align="center">
   <a href="README.md">English</a> | 中文
@@ -29,7 +29,7 @@
 
 Calabi 做两件事，都跑在你自己的服务器上：
 
-- **隧道**——给正在开发的服务一个 HTTPS（或 TCP/UDP）地址，用来接 webhook、调 OAuth
+- **端点**——给正在开发的服务一个 HTTPS（或 TCP/UDP）地址，用来接 webhook、调 OAuth
   回调、给人看预览和演示。把 `calabi-edge` 放在你自己的一台主机上，`calabi`
   客户端向它发起**一条**出站 TLS + yamux 连接，边缘节点把请求顺着这条连接转回你
   笔记本上的服务。**拿到地址的人都能调用它**，除非你加了访问控制。
@@ -38,17 +38,17 @@ Calabi 做两件事，都跑在你自己的服务器上：
   **只有你的机器能访问。**
 
 ```
-  TUNNELS — 请求送到本地服务          MESH — 机器之间私下互访
+  ENDPOINTS — 请求送到本地服务        MESH — 机器之间私下互访
 
   callers                                      laptop ─────────────┐
      │                                            │  direct (UDP)  │
-     ▼                                            │  hole-punched  │
+     ▼                                            │  when it can   │
  ┌──────────────┐                                 ▼                │
  │  calabi-edge │  your edge host              ┌────────┐          │
- └──────┬───────┘                              │ NAT :( │          │
+ └──────┬───────┘                              │ no path│          │
         │ TLS + yamux                          └────────┘          ▼
         │ (client dialed OUT)                      │            server
-        ▼                                          ▼           (behind a NAT)
+        ▼                                          ▼         (another network)
  ┌──────────────┐                          ┌───────────────┐
  │    calabi    │ ──► 127.0.0.1:8080       │  calabi-edge  │  relay: ciphertext
  └──────────────┘                          │  role: mesh   │  only, never decrypts
@@ -57,7 +57,7 @@ Calabi 做两件事，都跑在你自己的服务器上：
               calabi-coord — 每台设备的身份
 ```
 
-- 左边：`calabi-edge` 接收发往隧道地址的请求，`calabi` 从你的机器拨出一条
+- 左边：`calabi-edge` 接收发往端点地址的请求，`calabi` 从你的机器拨出一条
   TLS + yamux 连接，请求顺着它回到 `127.0.0.1:8080`。
 - 右边：两台设备能直连就直连（UDP）；连不上就走 `role: mesh` 的
   `calabi-edge` 中继——它只转密文，永远不解密。
@@ -65,13 +65,13 @@ Calabi 做两件事，都跑在你自己的服务器上：
 
 两种模式都不需要在你的机器上开任何入站端口：连接都是客户端拨出去的。
 
-`calabi-coord` 和 `calabi-edge` 合起来就是你的服务器。设备用邀请入网一次，从此隧道和组网都能用；
-组网可以在某台设备上关掉，它的隧道照常运行。
+`calabi-coord` 和 `calabi-edge` 合起来就是你的服务器。设备用邀请入网一次，从此端点和组网都能用；
+组网可以在某台设备上关掉，它的端点照常运行。
 
 ### 这个仓库里有什么
 
 数据面：`calabi` 客户端、`calabi-edge` 数据节点、`calabi-coord` 协调器。
-在自己的机器上跑隧道和组网所需要的东西，这里都有。自建时不需要账号，也不连我们的任何服务。
+在自己的机器上跑端点和组网所需要的东西，这里都有。自建时不需要账号，也不连我们的任何服务。
 
 仓库里还有 Android App：用邀请加入你自己的服务器，或者登录 calabi.net、加入那个
 组织的组网。
@@ -80,16 +80,23 @@ Calabi 做两件事，都跑在你自己的服务器上：
 账号与组织、托管在多个地域的边缘节点、团队权限、用量与计费，以及网页控制台。
 那部分是另一个产品，不在这个仓库里。
 
+<p align="center">
+  <a href="https://download.calabi.net/video/intro/v3/intro-16x9.zh-CN.mp4"><img src="docs/images/intro-cover.zh-CN.jpg" width="720" alt="一分钟看托管平台（视频，69 秒）"></a>
+  <br>
+  <sub>一分钟看托管平台——<a href="https://download.calabi.net/video/intro/v3/intro-16x9.zh-CN.mp4">看片子</a>（69 秒，有声音）。<br>
+  片中是 calabi.net 上的用法，设备靠登录加入；在你自己的服务器上，设备用邀请入网。</sub>
+</p>
+
 ---
 
 ## 三个程序和一个 Android App
 
 | 组件 | 是什么 | 跑在哪 |
 |---|---|---|
-| `calabi` | 客户端——开隧道、加入组网、提供本地 Web 控制台 | 你的笔记本、服务器、树莓派 |
-| `calabi-edge` | 数据面。`role: tunnel` 接收发往隧道的请求；`role: mesh` 是组网中继 + STUN 探测；`role: both` 两者都做 | 你的设备和调用方都能连到的主机 |
+| `calabi` | 客户端——开端点、加入组网、提供本地 Web 控制台 | 你的笔记本、服务器、树莓派 |
+| `calabi-edge` | 数据面。`role: tunnel` 接收发往端点的请求；`role: mesh` 是组网中继 + STUN 探测；`role: both` 两者都做 | 你的设备和调用方都能连到的主机 |
 | `calabi-coord` | 协调器——每台设备的身份：邀请、设备登记、地址分配、ACL；告诉设备边缘节点在哪、签发边缘节点认的凭证 | 一台你的设备能连到的主机 |
-| Android App | 把手机作为一台设备加入组网（你自己服务器的，或你在 calabi.net 上的组织的），支持快捷设置磁贴；隧道和用量只读 | Android 8.0 及以上的手机（arm64、armv7） |
+| Android App | 把手机作为一台设备加入组网（你自己服务器的，或你在 calabi.net 上的组织的），支持快捷设置磁贴；端点和用量只读 | Android 8.0 及以上的手机（arm64、armv7） |
 
 三个程序都是纯 Go、`CGO_ENABLED=0`、无运行时依赖。`calabi-coord` 和 `calabi-edge` 合起来是你的
 服务器，客户端跑在每台设备上。
@@ -107,21 +114,21 @@ Android App（`apps/client-android`）是 Kotlin 写的界面，里面是同一�
   凭证有效期一小时，设备自己续。
 - **设备**——`calabi-coord device list | approve | disable | enable | delete`。
   停用或删除的设备，协调器立刻拒绝；边缘节点在它的凭证到期时拒绝，最长一小时。
-- **隧道和流量集中在一处**——每个入网的守护进程把自己的隧道报给协调器；协调器有数据库时
+- **端点和流量集中在一处**——每个入网的守护进程把自己的端点报给协调器；协调器有数据库时
   按小时记下它们的流量，保留 92 天。手机和控制台都能看。
 
-## 隧道
+## 端点
 
 - **HTTP / HTTPS / TCP / UDP**——Web 应用和 API、webhook 接收端、数据库或消息队列，任何跑在
   TCP/UDP 上的东西。
 - **单条多路复用连接**——每个客户端只保持一条出站 TLS + yamux 会话，你这边
-  不需要开端口、不需要做端口映射。
-- **自定义域名 + HTTPS**——把 DNS 指到你的边缘节点，就能把隧道绑到
+  不用开任何端口。
+- **自定义域名 + HTTPS**——把 DNS 指到你的边缘节点，就能把端点绑到
   `app.example.com`；HTTPS 也可以由边缘终止。
-- **按隧道的访问控制**——任意隧道都能配 IP 黑白名单；Web 隧道还支持 HTTP Basic
+- **按端点的访问控制**——任意端点都能配 IP 黑白名单；HTTP 端点还支持 HTTP Basic
   认证、OAuth（Google / GitHub）、请求头注入与删除、限速。Basic 认证的密码在
   本地就用 bcrypt 哈希过，明文不会离开你的机器。
-- **一个守护进程**——一台设备的所有隧道在一个进程里、断线自动重连，可以在控制台里建，
+- **一个守护进程**——一台设备的所有端点在一个进程里、断线自动重连，可以在控制台里建，
   也可以从 YAML 文件读，还能装成开机自启的系统服务（Windows 服务 / systemd / launchd）。
 
 ## 组网
@@ -132,20 +139,20 @@ Android App（`apps/client-android`）是 Kotlin 写的界面，里面是同一�
   它在设备之间转发加密后的包，没有任何能解密的代码。中继可以只跑一台，也可以在多个地区各跑一台。
 - **稳定地址**——每台设备拿到一个 `100.64.0.0/10` 地址，换网络也不变，
   各平台都可用。
-- **每台设备一个开关**——`calabi mesh down`（或在控制台里）让设备退出组网，隧道照常运行；
+- **每台设备一个开关**——`calabi mesh down`（或在控制台里）让设备退出组网，端点照常运行；
   `calabi mesh up` 再加回来。
 - **ACL**——一个 JSON 策略文件，用分组和规则描述谁能访问谁的哪些端口。改了会重新加载；文件写坏时拒绝所有流量。
 - **子网路由与出口设备**——把某台设备背后的局域网共享给整个组网，或者让一台设备的流量经你自己网络里的一台机器出去，留在你管的网络后面。
-  Linux 设备可以共享子网、当出口设备，转发和 NAT 自动配好；各平台的设备都能使用它们。
+  Linux 设备可以共享子网、当出口设备，转发自动配好；各平台的设备都能使用它们。
 - **按天区分直连与中继**——本地控制台把组网流量分成「直连」和「中继」两条统计，
   你能直接看到到底有多少流量真的需要中继。
 
 ## 本地控制台
 
-守护进程运行时会在 **`http://127.0.0.1:7400`** 提供一个 Web 控制台：隧道列表和
+守护进程运行时会在 **`http://127.0.0.1:7400`** 提供一个 Web 控制台：端点列表和
 实时流量、请求检查器（可一键重放）、组网对端及其当前传输路径、日志，以及直接在
-浏览器里新建 / 编辑 / 删除隧道。它只通过 loopback 和本地守护进程通信。机器连你自己的
-服务器也在这里：粘贴邀请即可，不用手写配置文件。入网后，它还显示你服务器上的所有隧道和本月流量。
+浏览器里新建 / 编辑 / 删除端点。它只通过 loopback 和本地守护进程通信。机器连你自己的
+服务器也在这里：粘贴邀请即可，不用手写配置文件。入网后，它还显示你服务器上的所有端点和本月流量。
 界面支持 10 种语言。
 
 ---
@@ -184,32 +191,32 @@ Docker 镜像：`calabinet/calabi`、`calabinet/calabi-edge`、`calabinet/calabi
 
 ## 五分钟上手 —— 你自己的服务器
 
-`calabi-coord` 和 `calabi-edge` 合起来就是你的服务器。在一台有公网地址、装了 Docker Compose（或 `podman compose`）的 Linux 机器上，
+`calabi-coord` 和 `calabi-edge` 合起来就是你的服务器。在一台有外部 IP、装了 Docker Compose（或 `podman compose`）的 Linux 机器上，
 [`deploy/server`](deploy/server) 用一份 `.env` 把两者一起跑起来：
 
 ```bash
 cd deploy/server
-cp .env.example .env     # 填 CALABI_PUBLIC_HOST、CALABI_ADMIN_TOKEN；要 HTTP 隧道再填 CALABI_TUNNEL_DOMAIN
+cp .env.example .env     # 填 CALABI_PUBLIC_HOST、CALABI_ADMIN_TOKEN；要 HTTP 端点再填 CALABI_TUNNEL_DOMAIN
 docker compose up -d
 
 # 给每台设备一份邀请：一条 calabi://join 链接和一个二维码
 docker compose exec coord calabi-coord invite --note laptop
 ```
 
-开放 7012 和 7443（设备）、80 和 443（HTTP 隧道）、20000–20999 tcp/udp（TCP、UDP 隧道）、3340 和 3478/udp（组网中继）。
+开放 7012 和 7443（设备）、80 和 443（HTTP 端点）、20000–20999 tcp/udp（TCP、UDP 端点）、3340 和 3478/udp（组网中继）。
 
 然后在每台设备上——Android App 则扫二维码：
 
 ```bash
-calabi join "calabi://join?…"    # 入网就是登录：隧道和组网现在都能用了
-calabi http 8080                 # → https://u000001.<你的隧道域名>
+calabi join "calabi://join?…"    # 入网就是登录：端点和组网现在都能用了
+calabi http 8080                 # → https://u000001.<你的 CALABI_TUNNEL_DOMAIN>
 ping 100.64.0.2                  # 另一台设备，走 WireGuard
 ```
 
-入网后，客户端的守护进程就在运行。在它的控制台 `http://127.0.0.1:7400` 里可以新建隧道、开关组网；组网关着时隧道照常。
+入网后，客户端的守护进程就在运行。在它的控制台 `http://127.0.0.1:7400` 里可以新建端点、开关组网；组网关着时端点照常。
 不用抄 token，也不用确认边缘节点的证书：两者都由协调器提供。
 
-**完整文档**——不用 Docker 直接跑程序、协调器和边缘节点的每一项设置、按隧道的安全策略、用配置文件自动入网的
+**完整文档**——不用 Docker 直接跑程序、协调器和边缘节点的每一项设置、按端点的安全策略、用配置文件自动入网的
 服务器和批量设备、`:7400` 控制台、ACL、子网路由和出口设备：见
 **[docs/self-hosting.zh-CN.md](docs/self-hosting.zh-CN.md)**（英文版：[self-hosting.md](docs/self-hosting.md)）。
 
@@ -276,7 +283,7 @@ git commit -s -m "your message"
 ```
 
 - **[CONTRIBUTING.md](CONTRIBUTING.md)**——这里收什么改动，以及一个 PR 怎么进到发布的二进制里。
-- **[DEVELOPMENT.md](DEVELOPMENT.md)**——在一台机器上把三个程序编出来跑通，不需要账号，也不需要公网地址。
+- **[DEVELOPMENT.md](DEVELOPMENT.md)**——在一台机器上把三个程序编出来跑通，不需要账号，也不需要外部地址。
 - **[SECURITY.md](SECURITY.md)**——怎么报告安全漏洞。走私下渠道，别开 issue。
 
 每个 PR 上，CI 都会在 Linux、macOS 和 Windows 上构建、检查并跑测试，也会检查签名。

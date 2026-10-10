@@ -102,7 +102,7 @@ tests:
               summary: "edge has been returning global_conn_capped continuously for 10m"
               description: "Break it down with: sum by (proxy_type, outcome) (rate(calabi_edge_visitor_requests_total[5m])). global_* means the edge is saturated; internal_error means read its logs."
 
-  # SILENT: the per-tunnel policy you configured, refusing visitors all day.
+  # SILENT: the per-endpoint policy you configured, refusing visitors all day.
   - interval: 1m
     input_series:
       - series: 'calabi_edge_visitor_requests_total{outcome="ok",proxy_type="http"}'

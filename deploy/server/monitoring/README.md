@@ -47,14 +47,14 @@ than a healthy one.
 `CalabiEdgeFailingVisitors` counts only outcomes your server controls. It stays
 silent for:
 
-- **Your tunnel's upstream being down** (`open_upstream_failed`) — see below.
+- **Your endpoint's upstream being down** (`open_upstream_failed`) — see below.
 - **Your own access rules** refusing visitors: rate limits, IP restrictions,
   connection and daily caps, basic auth, OAuth. That is the policy you
   configured, working.
 - **Strangers scanning your address** (`no_tunnel`, `sniff_failed`). A public
   edge is scanned continuously. It is not a fault.
 
-### If you run the services behind your tunnels
+### If you run the services behind your endpoints
 
 Then `open_upstream_failed` **is** yours to fix, and you probably want to hear
 about it. In `alerts.yml`, add it to the list:
@@ -93,7 +93,7 @@ sum by (proxy_type, outcome) (rate(calabi_edge_visitor_requests_total[5m]))
 # Throughput through the edge, both directions.
 sum(rate(calabi_edge_bytes_transferred_total[5m]))
 
-# Tunnels currently registered.
+# Endpoints currently registered.
 sum by (proxy_type) (calabi_edge_active_proxies)
 
 # Devices connected to the edge.

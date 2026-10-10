@@ -1,12 +1,12 @@
 # Your own Calabi server
 
 The coordinator and the edge on one machine, with Docker. Devices join with an
-invite; from then on the same device has tunnels and the mesh.
+invite; from then on the same device has endpoints and the mesh.
 
 - **coord** (`calabinet/calabi-coord`) — the devices of your network, their
   `100.64.x.x` addresses, ACLs and invites. It signs the grant each device signs
   in to the edge with.
-- **edge** (`calabinet/calabi-edge`) — public tunnels to your devices' local
+- **edge** (`calabinet/calabi-edge`) — public endpoints for your devices' local
   services, and the relay the mesh falls back on when two devices can't reach
   each other directly.
 
@@ -20,13 +20,13 @@ invite; from then on the same device has tunnels and the mesh.
   | port | for |
   |---|---|
   | 7012/tcp | devices ↔ the coordinator |
-  | 7443/tcp | devices' tunnel connections |
-  | 80/tcp, 443/tcp | visitors to HTTP tunnels |
-  | 20000–20999/tcp and /udp | visitors to TCP and UDP tunnels (a port a tunnel asks for with `--remote-port` has to be open too) |
+  | 7443/tcp | devices' connections for endpoints |
+  | 80/tcp, 443/tcp | visitors to HTTP endpoints |
+  | 20000–20999/tcp and /udp | visitors to TCP and UDP endpoints (a port an endpoint asks for with `--remote-port` has to be open too) |
   | 3340/tcp, 3478/udp | the mesh relay, and STUN |
 
-- For HTTP tunnels, a domain with a wildcard record pointing at the machine
-  (`*.tunnels.example.com`). The mesh and TCP/UDP tunnels need none.
+- For HTTP endpoints, a domain with a wildcard record pointing at the machine
+  (`*.endpoints.example.com`). The mesh and TCP/UDP endpoints need none.
 
 ## Start
 
@@ -52,9 +52,9 @@ within 24 hours unless you say otherwise: `--uses 5`, `--reusable`,
   code.
 
 Then, on that computer, `calabi http 8080` gives the service on port 8080 a
-public address under your tunnel domain, and the device reaches the others in
+public address under your endpoint domain, and the device reaches the others in
 the network at their `100.64.x.x` addresses. The mesh can be switched off on a
-device; its tunnels keep working.
+device; its endpoints keep working.
 
 ## Devices
 
@@ -66,7 +66,7 @@ docker compose exec coord calabi-coord device delete 3
 docker compose exec coord calabi-coord device approve 3    # when the network requires approval
 ```
 
-A disabled or deleted device leaves the mesh at once; its tunnels stop when the
+A disabled or deleted device leaves the mesh at once; its endpoints stop when the
 grant it holds runs out, within the hour.
 
 ```bash
@@ -83,12 +83,12 @@ docker compose exec coord calabi-coord authkey revoke 2    # stops new devices j
   whose fingerprint every device has pinned. Without it, every device joins
   again with a new invite.
 - Back up `calabi_edge-state` too: the edge's certificate and the counter behind
-  tunnel names (`u000001`, …). A new edge certificate reaches the devices through
+  endpoint names (`u000001`, …). A new edge certificate reaches the devices through
   the coordinator, with nothing for you to do.
 
 ## HTTPS
 
-The edge serves HTTPS for your tunnel domain with a self-signed wildcard
+The edge serves HTTPS for your endpoint domain with a self-signed wildcard
 certificate, so browsers warn. Automatic Let's Encrypt certificates are not
 there yet.
 

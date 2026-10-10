@@ -22,7 +22,7 @@ scrape_configs:
     static_configs:
       - targets: ["127.0.0.1:9122"]
 
-  # The edge: tunnels and the mesh relay.
+  # The edge: endpoints and the mesh relay.
   # The `admin.addr` field in the edge config ../docker-compose.yml writes.
   - job_name: edge
     static_configs:

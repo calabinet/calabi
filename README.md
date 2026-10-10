@@ -17,7 +17,7 @@
      src="https://img.shields.io/badge/REPRODUCIBLE%20BUILDS-rebuild%20every%20release%20yourself-22d3ee?style=for-the-badge&labelColor=0e1630"></a>
 </p>
 
-<p align="center"><b>Self-hosted tunnels and a private WireGuard mesh</b></p>
+<p align="center"><b>Self-hosted endpoints for local development, and a private WireGuard mesh</b></p>
 
 <p align="center">
   English | <a href="README.zh-CN.md">中文</a>
@@ -29,7 +29,7 @@
 
 Calabi does two things, on servers you run yourself:
 
-- **Tunnels** — give a service you are developing an HTTPS (or TCP/UDP)
+- **Endpoints** — give a service you are developing an HTTPS (or TCP/UDP)
   address, for webhooks, OAuth callbacks, previews and demos. Put `calabi-edge`
   on a host of yours. The `calabi` client opens one outbound TLS + yamux
   connection to it, and the edge passes requests back down that connection to
@@ -41,17 +41,17 @@ Calabi does two things, on servers you run yourself:
   **Only your machines can reach it.**
 
 ```
-  TUNNELS — requests to local code           MESH — private machine-to-machine
+  ENDPOINTS — requests to local code         MESH — private machine-to-machine
 
   callers                                      laptop ─────────────┐
      │                                            │  direct (UDP)  │
-     ▼                                            │  hole-punched  │
+     ▼                                            │  when it can   │
  ┌──────────────┐                                 ▼                │
  │  calabi-edge │  your edge host              ┌────────┐          │
- └──────┬───────┘                              │ NAT :( │          │
+ └──────┬───────┘                              │ no path│          │
         │ TLS + yamux                          └────────┘          ▼
         │ (client dialed OUT)                      │            server
-        ▼                                          ▼           (behind a NAT)
+        ▼                                          ▼         (another network)
  ┌──────────────┐                          ┌───────────────┐
  │    calabi    │ ──► 127.0.0.1:8080       │  calabi-edge  │  relay: ciphertext
  └──────────────┘                          │  role: mesh   │  only, never decrypts
@@ -65,13 +65,13 @@ Nothing here opens an inbound port on your laptop. In both modes the client
 dials out.
 
 `calabi-coord` and `calabi-edge` together are your server. A device joins it
-once, with an invite, and has tunnels and the mesh from then on; the mesh can be
-off on a device while its tunnels run.
+once, with an invite, and has endpoints and the mesh from then on; the mesh can
+be off on a device while its endpoints run.
 
 ### What is in this repository
 
 The data plane: the `calabi` client, the `calabi-edge` data node, and the
-`calabi-coord` coordinator. Everything needed to run tunnels and a mesh on
+`calabi-coord` coordinator. Everything needed to run endpoints and a mesh on
 your own machines is here. Self-hosted, it needs no account and connects to no
 service of ours.
 
@@ -83,16 +83,23 @@ plane and adds the control plane around it: accounts and organizations, a
 managed edge fleet across regions, team access control, usage and billing, and
 a web console. That part is a separate product and is not in this repository.
 
+<p align="center">
+  <a href="https://download.calabi.net/video/intro/v3/intro-16x9.en.mp4"><img src="docs/images/intro-cover.en.jpg" width="720" alt="The hosted platform in one minute (video, 69 seconds)"></a>
+  <br>
+  <sub>The hosted platform in one minute — <a href="https://download.calabi.net/video/intro/v3/intro-16x9.en.mp4">watch the film</a> (69 seconds, with sound).<br>
+  It shows calabi.net, where a device signs in. On your own server a device joins with an invite.</sub>
+</p>
+
 ---
 
 ## Three binaries and an Android app
 
 | component | what it is | where it runs |
 |---|---|---|
-| `calabi` | the client — opens tunnels, joins the mesh, serves the local web console | your laptop, a server, a Pi |
-| `calabi-edge` | the data plane. `role: tunnel` receives the requests for tunnels; `role: mesh` is a mesh relay + STUN responder; `role: both` does both | a host your devices and callers can reach |
+| `calabi` | the client — opens endpoints, joins the mesh, serves the local web console | your laptop, a server, a Pi |
+| `calabi-edge` | the data plane. `role: tunnel` receives the requests for endpoints; `role: mesh` is a mesh relay + STUN responder; `role: both` does both | a host your devices and callers can reach |
 | `calabi-coord` | the coordinator — every device's identity: invites, device registry, IP allocation, ACLs; names the edge and signs the grants it accepts | one host, reachable by your devices |
-| Android app | puts the phone in a mesh as a device — your own server's or a calabi.net organization's — with a Quick Settings tile; tunnels and usage read-only | an Android 8.0+ phone (arm64, armv7) |
+| Android app | puts the phone in a mesh as a device — your own server's or a calabi.net organization's — with a Quick Settings tile; endpoints and usage read-only | an Android 8.0+ phone (arm64, armv7) |
 
 The three binaries are pure Go, `CGO_ENABLED=0`, no runtime dependencies.
 `calabi-coord` and `calabi-edge` together are your server; the client runs on
@@ -114,23 +121,23 @@ code, bound in with gomobile (`apps/client/mobile`).
 - **Devices** — `calabi-coord device list | approve | disable | enable |
   delete`. A device you disable or delete is refused by the coordinator at once,
   and by the edge when its grant runs out, within the hour.
-- **Tunnels and traffic in one place** — every joined daemon reports its tunnels
-  to the coordinator, which, with a database, keeps their traffic by the hour
-  for 92 days. The phone and the console show both.
+- **Endpoints and traffic in one place** — every joined daemon reports its
+  endpoints to the coordinator, which, with a database, keeps their traffic by
+  the hour for 92 days. The phone and the console show both.
 
-## Tunnels
+## Endpoints
 
 - **HTTP, HTTPS, TCP and UDP** — web apps and APIs, webhook receivers, a
   database or a message broker: anything that speaks TCP/UDP.
 - **One multiplexed connection** — a single outbound TLS + yamux session per
-  client, so there is nothing to open or forward on your side.
-- **Custom domains + HTTPS** — point DNS at your edge and map a tunnel to
+  client, so there is nothing to open on your side.
+- **Custom domains + HTTPS** — point DNS at your edge and map an endpoint to
   `app.example.com`; the edge can terminate HTTPS.
-- **Per-tunnel access control** — IP allow/deny lists on any tunnel, HTTP Basic
-  auth and OAuth (Google/GitHub) on web tunnels, header injection/removal, and
-  per-tunnel rate limits. Basic-auth passwords are bcrypt-hashed locally before
+- **Per-endpoint access control** — IP allow/deny lists on any endpoint, HTTP
+  Basic auth and OAuth (Google/GitHub) on HTTP endpoints, header
+  injection/removal, and per-endpoint rate limits. Basic-auth passwords are bcrypt-hashed locally before
   they ever leave your machine.
-- **One daemon** — every tunnel of a device in one process, with
+- **One daemon** — every endpoint of a device in one process, with
   auto-reconnect, created in the console or read from a YAML file, installable
   as a boot-start OS service (Windows service / systemd / launchd).
 
@@ -139,7 +146,7 @@ code, bound in with gomobile (`apps/client/mobile`).
 - **WireGuard** — each device makes its own keys. `calabi-coord` never has a
   private key and never sees your traffic.
 - **Direct when possible** — devices find each other's addresses and connect
-  directly through NAT. When that fails, traffic goes through a relay.
+  directly. When that fails, traffic goes through a relay.
 - **Your own relay** — `calabi-edge` with `role: mesh` (or `both`, as
   `deploy/server` runs it). It forwards encrypted packets between devices and has
   no code that could decrypt them. Run one relay or several, in different
@@ -147,7 +154,7 @@ code, bound in with gomobile (`apps/client/mobile`).
 - **Stable addresses** — every device gets a `100.64.0.0/10` address that
   follows it across networks, on every platform.
 - **A switch on each device** — `calabi mesh down`, or the console, takes a
-  device out of the mesh and leaves its tunnels running; `calabi mesh up` puts
+  device out of the mesh and leaves its endpoints running; `calabi mesh up` puts
   it back.
 - **ACLs** — a JSON policy file of groups and rules decides which devices may
   reach which, on which ports. It reloads when changed; a broken file denies all
@@ -155,7 +162,7 @@ code, bound in with gomobile (`apps/client/mobile`).
 - **Subnet routers and exit devices** — share a LAN behind one device with the
   whole mesh, or keep a device behind a network you run by sending its traffic
   through one of your own machines there. A Linux device can share a subnet or
-  be an exit device, with forwarding and NAT set up for it; devices on every
+  be an exit device, with forwarding set up for it; devices on every
   platform can use them.
 - **Per-day usage split** — the local console books mesh traffic as *direct* vs
   *relayed*, so you can see how much actually needed a relay.
@@ -163,11 +170,11 @@ code, bound in with gomobile (`apps/client/mobile`).
 ## The local console
 
 While the daemon runs it serves a web console on **`http://127.0.0.1:7400`** —
-live tunnel list with traffic counters, a request inspector with one-click
+live endpoint list with traffic counters, a request inspector with one-click
 replay, mesh peers and their transport, daemon logs, and create / edit / delete
-tunnels straight from the browser. It talks only to the local daemon over
+endpoints straight from the browser. It talks only to the local daemon over
 loopback. It is also where a machine joins your server: paste an invite — no
-config file to write. Joined, it shows every tunnel on your server and this
+config file to write. Joined, it shows every endpoint on your server and this
 month's traffic. Available in 10 languages.
 
 ---
@@ -208,36 +215,36 @@ core is built into an `.aar` by `scripts/mobile/build-core-android.ps1`
 ## Quick start — your own server
 
 `calabi-coord` and `calabi-edge` together are your server. On a Linux machine
-with a public address and Docker Compose (or `podman compose`), [`deploy/server`](deploy/server)
+with an external IP address and Docker Compose (or `podman compose`), [`deploy/server`](deploy/server)
 runs both from one `.env`:
 
 ```bash
 cd deploy/server
-cp .env.example .env     # CALABI_PUBLIC_HOST, CALABI_ADMIN_TOKEN, and CALABI_TUNNEL_DOMAIN for HTTP tunnels
+cp .env.example .env     # CALABI_PUBLIC_HOST, CALABI_ADMIN_TOKEN, and CALABI_TUNNEL_DOMAIN for HTTP endpoints
 docker compose up -d
 
 # an invite for each device: a calabi://join link and a QR code
 docker compose exec coord calabi-coord invite --note laptop
 ```
 
-Open 7012 and 7443 (devices), 80 and 443 (HTTP tunnels), 20000–20999 tcp/udp
-(TCP and UDP tunnels), 3340 and 3478/udp (the mesh relay).
+Open 7012 and 7443 (devices), 80 and 443 (HTTP endpoints), 20000–20999 tcp/udp
+(TCP and UDP endpoints), 3340 and 3478/udp (the mesh relay).
 
 Then on each device — the Android app scans the QR code instead:
 
 ```bash
-calabi join "calabi://join?…"    # joining is the sign-in: tunnels and the mesh both work now
-calabi http 8080                 # → https://u000001.<your tunnel domain>
+calabi join "calabi://join?…"    # joining is the sign-in: endpoints and the mesh both work now
+calabi http 8080                 # → https://u000001.<your CALABI_TUNNEL_DOMAIN>
 ping 100.64.0.2                  # another device, over WireGuard
 ```
 
 After joining, the client's daemon is running. Its console at
-`http://127.0.0.1:7400` creates tunnels and switches the mesh on and off; tunnels
-keep working with the mesh off. There is no token to copy and no edge
+`http://127.0.0.1:7400` creates endpoints and switches the mesh on and off;
+endpoints keep working with the mesh off. There is no token to copy and no edge
 certificate to confirm: the coordinator provides both.
 
 **Full guide** — running the binaries without Docker, every coordinator and edge
-setting, per-tunnel security policy, servers and fleets that join from a config
+setting, per-endpoint security policy, servers and fleets that join from a config
 file, the `:7400` console, ACLs, subnet routers and exit devices:
 see **[docs/self-hosting.md](docs/self-hosting.md)**.
 
@@ -322,7 +329,7 @@ git commit -s -m "your message"
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — what belongs here, and how a pull
   request reaches the released binaries.
 - **[DEVELOPMENT.md](DEVELOPMENT.md)** — build the three programs and run them
-  against each other on one machine, with no account and no public address.
+  against each other on one machine, with no account and no external address.
 - **[SECURITY.md](SECURITY.md)** — reporting a vulnerability. Privately, never
   as an issue.
 

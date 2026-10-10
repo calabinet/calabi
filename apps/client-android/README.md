@@ -70,4 +70,4 @@ maintainers' tree; it checks that the APK is signed by the certificate in
 | `BootReceiver.kt` | Connect at startup |
 | `BackgroundRun.kt` | Where each phone maker lets an app keep running in the background |
 | `CoreClient.kt` | Calls the core's in-process `/v1/*` API |
-| `ui/` | Sign-in, mesh, tunnels, settings (Jetpack Compose); `SelfHostedScreen.kt` is joining a self-hosted server |
+| `ui/` | Sign-in, mesh, endpoints, settings (Jetpack Compose); `SelfHostedScreen.kt` is joining a self-hosted server |

@@ -5,17 +5,17 @@
 #   docker compose exec coord calabi-coord invite --note "my laptop"
 #
 # A device joins with the invite link (`calabi join "<link>"`, or the client's
-# console → Connect to a self-hosted server). After that one step it has tunnels
+# console → Connect to a self-hosted server). After that one step it has endpoints
 # and the mesh.
 #
 #   coord   the coordinator (7012/tcp): devices, addresses, ACLs, invites; signs grants
-#   edge    tunnels (7443/tcp; 80/tcp, 443/tcp; 20000–20999 tcp and udp)
+#   edge    endpoints (7443/tcp; 80/tcp, 443/tcp; 20000–20999 tcp and udp)
 #           and the mesh relay (3340/tcp, 3478/udp)
 #
 # Open all of those ports to the internet (README.md has the table). The
 # coordinator's admin ports (9122, 9500) listen on 127.0.0.1 only.
 #
-# Both use the host's network: the edge's TCP and UDP tunnels use a thousand
+# Both use the host's network: the edge's TCP and UDP endpoints use a thousand
 # ports (20000–20999).
 #
 # Runs with Docker Compose or podman compose.
@@ -87,7 +87,7 @@ services:
         node_label: ${CALABI_NODE_NAME:-calabi-server}
         mode: standalone
         role: both
-        # Devices get in with grants the coordinator signs, for tunnels and mesh alike.
+        # Devices get in with grants the coordinator signs, for endpoints and mesh alike.
         coord_pubkey_file: /coord/coord.pub
         # Where devices and clients reach this node. The coordinator is told the
         # same host above (CALABI_COORD_EDGE_ADDR); this is the edge's own copy,
@@ -102,7 +102,7 @@ services:
         log:
           level: info
           format: text
-        # Only the tunnel service reads this block.
+        # Only the endpoint service reads this block.
         tunnel:
           base_domain: "${CALABI_TUNNEL_DOMAIN:-}"
           control_port: 7443
