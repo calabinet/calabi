@@ -308,31 +308,33 @@ your own.
 
 **This node — read by both services, or by neither**
 
+<!-- The values in the "for" column are joined with &nbsp;. Without it GitHub squeezes the column to one word per line wherever no value is wider: in the mesh table every value is "any node". -->
+
 | setting | for | default | what it does |
 |---|---|---|---|
-| `node_label` | any node | `edge-dev-1` | This node's name for people (`lax-1`, `sgp-01`). It reaches your clients, the logs and every usage record |
-| `region` | any node | `local` | Which region this node is in. Also gives the relay its region code, `self-<region>` |
-| `mode` | any node | `platform` | Whose per-endpoint security policy the edge trusts: `standalone` — a server you run — the client's, `platform` the control plane's |
-| `role` | any node | `tunnel` | Which of the two services this node provides: `tunnel`, `mesh`, or `both` |
-| `coord_pubkey` | any node | — | Your coordinator's public grant key, base64. `calabi-coord pubkey` prints it |
-| `coord_pubkey_file` | any node | — | The same key read from a file. The edge waits for it to appear |
-| `public.host` | any node | — | Where this node is reached from outside it, a name or IP with no port — clients reach its endpoints here and devices reach its relay. **Required on a node that serves endpoints** |
-| `admin.addr` | any node | `:9101` | `/healthz`, `/readyz`, `/metrics`. Keep it off the public internet |
-| `state.dir` | any node | — | Where small things survive a restart: the subdomain counter and the self-signed certificates |
+| `node_label` | any&nbsp;node | `edge-dev-1` | This node's name for people (`lax-1`, `sgp-01`). It reaches your clients, the logs and every usage record |
+| `region` | any&nbsp;node | `local` | Which region this node is in. Also gives the relay its region code, `self-<region>` |
+| `mode` | any&nbsp;node | `platform` | Whose per-endpoint security policy the edge trusts: `standalone` — a server you run — the client's, `platform` the control plane's |
+| `role` | any&nbsp;node | `tunnel` | Which of the two services this node provides: `tunnel`, `mesh`, or `both` |
+| `coord_pubkey` | any&nbsp;node | — | Your coordinator's public grant key, base64. `calabi-coord pubkey` prints it |
+| `coord_pubkey_file` | any&nbsp;node | — | The same key read from a file. The edge waits for it to appear |
+| `public.host` | any&nbsp;node | — | Where this node is reached from outside it, a name or IP with no port — clients reach its endpoints here and devices reach its relay. **Required on a node that serves endpoints** |
+| `admin.addr` | any&nbsp;node | `:9101` | `/healthz`, `/readyz`, `/metrics`. Keep it off the public internet |
+| `state.dir` | any&nbsp;node | — | Where small things survive a restart: the subdomain counter and the self-signed certificates |
 | `multi_region.*` | calabi.net | `mode: cluster` | The hosted platform's control-plane connection: `mode: bff-edge`, `bff_edge_addr`, `client_cert`, `client_key`, `ca`, `server_name` |
-| `log.level` / `log.format` | any node | `info` / `text` | `debug`/`info`/`warn`/`error`, and `text`/`json` |
+| `log.level` / `log.format` | any&nbsp;node | `info` / `text` | `debug`/`info`/`warn`/`error`, and `text`/`json` |
 
 **`tunnel:` — read only by the endpoint service**
 
 | setting | for | default | what it does |
 |---|---|---|---|
-| `base_domain` | any node | `localtest.me` | The wildcard domain this node serves: endpoints become `<name>.<base_domain>` |
-| `control_port` | any node | `7443` | Where the `calabi` client connects |
-| `control_cert_pem` / `control_key_pem` | any node | — | The node's certificate: that listener presents it, and so does the relay to devices that reach it over TLS. Left out, the edge makes a self-signed one in `state.dir`. Re-read when the files change. A `role: mesh` node may set it too, for its relay |
-| `http_port` | any node | `8080` | Visitors to HTTP endpoints |
-| `https_port` | any node | `8443` | Visitors to HTTPS endpoints, with TLS terminated here. `0` turns HTTPS off |
-| `https_self_signed` | your server | `false` | Fall back to a self-signed certificate when there is no real one. **Development only** |
-| `sni_port` | any node | — | TLS passed straight through to the client without being decrypted here. Leave it out to turn it off |
+| `base_domain` | any&nbsp;node | `localtest.me` | The wildcard domain this node serves: endpoints become `<name>.<base_domain>` |
+| `control_port` | any&nbsp;node | `7443` | Where the `calabi` client connects |
+| `control_cert_pem` / `control_key_pem` | any&nbsp;node | — | The node's certificate: that listener presents it, and so does the relay to devices that reach it over TLS. Left out, the edge makes a self-signed one in `state.dir`. Re-read when the files change. A `role: mesh` node may set it too, for its relay |
+| `http_port` | any&nbsp;node | `8080` | Visitors to HTTP endpoints |
+| `https_port` | any&nbsp;node | `8443` | Visitors to HTTPS endpoints, with TLS terminated here. `0` turns HTTPS off |
+| `https_self_signed` | your&nbsp;server | `false` | Fall back to a self-signed certificate when there is no real one. **Development only** |
+| `sni_port` | any&nbsp;node | — | TLS passed straight through to the client without being decrypted here. Leave it out to turn it off |
 | `peer_forward.forward_addr` | calabi.net | — | Where this edge accepts visitor traffic relayed by its neighbours. **An internal address, never the public one** |
 | `peer_forward.advertise_addr` | calabi.net | — | The internal `host:port` its neighbours dial to reach that. Both must be set |
 
@@ -340,12 +342,12 @@ your own.
 
 | setting | for | default | what it does |
 |---|---|---|---|
-| `derp_port` | any node | `3340` | Where devices reach the relay |
-| `stun_port` | any node | `3478` | The STUN responder devices measure to pick their nearest relay. `0` turns it off: devices then cannot measure this relay, and do not pick it over one they can. On a server of your own, also leave its STUN port out of the coordinator (`CALABI_COORD_DERP_STUN_PORT`, or `stun_port` in the map file) |
-| `label` | any node | the node's `region` | The region name this relay advertises, as `self-<label>`. Set it only when one region has two relays |
-| `kind` | any node | `self` | `self` for a relay of your own, `platform` for one of ours |
-| `require_auth` | any node | `false` | Refuse devices without a valid grant. Always on for a `standalone` node, and for the relay of a node connected to calabi.net (`multi_region.mode: bff-edge`, `kind: self`): that relay admits its organization's devices only, and learns the key from calabi.net, so it needs no `coord_pubkey` |
-| `require_tls` | any node | `false` | Refuse devices that reach the relay without TLS. Clients older than relay TLS only speak plaintext, so leave it off until they have all been updated |
+| `derp_port` | any&nbsp;node | `3340` | Where devices reach the relay |
+| `stun_port` | any&nbsp;node | `3478` | The STUN responder devices measure to pick their nearest relay. `0` turns it off: devices then cannot measure this relay, and do not pick it over one they can. On a server of your own, also leave its STUN port out of the coordinator (`CALABI_COORD_DERP_STUN_PORT`, or `stun_port` in the map file) |
+| `label` | any&nbsp;node | the node's `region` | The region name this relay advertises, as `self-<label>`. Set it only when one region has two relays |
+| `kind` | any&nbsp;node | `self` | `self` for a relay of your own, `platform` for one of ours |
+| `require_auth` | any&nbsp;node | `false` | Refuse devices without a valid grant. Always on for a `standalone` node, and for the relay of a node connected to calabi.net (`multi_region.mode: bff-edge`, `kind: self`): that relay admits its organization's devices only, and learns the key from calabi.net, so it needs no `coord_pubkey` |
+| `require_tls` | any&nbsp;node | `false` | Refuse devices that reach the relay without TLS. Clients older than relay TLS only speak plaintext, so leave it off until they have all been updated |
 
 **Settings that are refused.** The edge stopped reaching the control plane
 directly, so `identity:`, `quota:`, `config_svc:`, `nats:`, `tunnel.addr` and

@@ -261,31 +261,33 @@ mesh:
 
 **这台节点——两个服务都读，或者都不读**
 
+<!-- 「适用」这一列的值用 &#8288;（不占宽度、不许在此断行）把字连起来。不连的话 GitHub 会把这一列挤到一个字宽：组网那张表这一列全是「任何节点」，会一字一行。 -->
+
 | 设置 | 适用 | 默认 | 作用 |
 |---|---|---|---|
-| `node_label` | 任何节点 | `edge-dev-1` | 这个节点给人看的名字（`lax-1`、`sgp-01`）。它会到达你的客户端、日志和每一条用量记录 |
-| `region` | 任何节点 | `local` | 这个节点在哪个区域。中继的区域码也从它来，`self-<region>` |
-| `mode` | 任何节点 | `platform` | 每个端点的安全策略信谁的：`standalone`（你自己的服务器）信客户端的，`platform` 信控制面的 |
-| `role` | 任何节点 | `tunnel` | 这台节点提供两种服务里的哪种：`tunnel`、`mesh` 或 `both` |
-| `coord_pubkey` | 任何节点 | — | 你的协调器的凭证公钥，base64。`calabi-coord pubkey` 打印它 |
-| `coord_pubkey_file` | 任何节点 | — | 同一把公钥，改成读文件。边缘节点会等它出现 |
-| `public.host` | 任何节点 | — | 这个节点在外面怎么被找到，写主机名或 IP、不带端口——客户端从这里连它的端点，设备从这里连它的中继。**服务端点的节点必填** |
-| `admin.addr` | 任何节点 | `:9101` | `/healthz`、`/readyz`、`/metrics`。不要放到公网上 |
-| `state.dir` | 任何节点 | — | 重启后还要在的小东西：子域名计数器和自签证书 |
+| `node_label` | 任&#8288;何&#8288;节&#8288;点 | `edge-dev-1` | 这个节点给人看的名字（`lax-1`、`sgp-01`）。它会到达你的客户端、日志和每一条用量记录 |
+| `region` | 任&#8288;何&#8288;节&#8288;点 | `local` | 这个节点在哪个区域。中继的区域码也从它来，`self-<region>` |
+| `mode` | 任&#8288;何&#8288;节&#8288;点 | `platform` | 每个端点的安全策略信谁的：`standalone`（你自己的服务器）信客户端的，`platform` 信控制面的 |
+| `role` | 任&#8288;何&#8288;节&#8288;点 | `tunnel` | 这台节点提供两种服务里的哪种：`tunnel`、`mesh` 或 `both` |
+| `coord_pubkey` | 任&#8288;何&#8288;节&#8288;点 | — | 你的协调器的凭证公钥，base64。`calabi-coord pubkey` 打印它 |
+| `coord_pubkey_file` | 任&#8288;何&#8288;节&#8288;点 | — | 同一把公钥，改成读文件。边缘节点会等它出现 |
+| `public.host` | 任&#8288;何&#8288;节&#8288;点 | — | 这个节点在外面怎么被找到，写主机名或 IP、不带端口——客户端从这里连它的端点，设备从这里连它的中继。**服务端点的节点必填** |
+| `admin.addr` | 任&#8288;何&#8288;节&#8288;点 | `:9101` | `/healthz`、`/readyz`、`/metrics`。不要放到公网上 |
+| `state.dir` | 任&#8288;何&#8288;节&#8288;点 | — | 重启后还要在的小东西：子域名计数器和自签证书 |
 | `multi_region.*` | calabi.net | `mode: cluster` | 托管平台连控制面用的：`mode: bff-edge`、`bff_edge_addr`、`client_cert`、`client_key`、`ca`、`server_name` |
-| `log.level` / `log.format` | 任何节点 | `info` / `text` | `debug`/`info`/`warn`/`error`，以及 `text`/`json` |
+| `log.level` / `log.format` | 任&#8288;何&#8288;节&#8288;点 | `info` / `text` | `debug`/`info`/`warn`/`error`，以及 `text`/`json` |
 
 **`tunnel:`——只有端点服务读**
 
 | 设置 | 适用 | 默认 | 作用 |
 |---|---|---|---|
-| `base_domain` | 任何节点 | `localtest.me` | 这个节点服务的泛域名：端点成为 `<名字>.<base_domain>` |
-| `control_port` | 任何节点 | `7443` | `calabi` 客户端连到哪里 |
-| `control_cert_pem` / `control_key_pem` | 任何节点 | — | 节点的证书：这个监听器出示它，中继也向走 TLS 的设备出示它。不写的话边缘节点自签一张，放在 `state.dir`。文件变化时会重读。`role: mesh` 的节点也可以写，给中继用 |
-| `http_port` | 任何节点 | `8080` | HTTP 端点的访问者 |
-| `https_port` | 任何节点 | `8443` | HTTPS 端点的访问者，TLS 在这里终止。写 `0` 关掉 HTTPS |
-| `https_self_signed` | 你的服务器 | `false` | 没有真证书时回落到自签证书。**只给开发用** |
-| `sni_port` | 任何节点 | — | TLS 原样透传给客户端，不在这里解密。不写就关掉 |
+| `base_domain` | 任&#8288;何&#8288;节&#8288;点 | `localtest.me` | 这个节点服务的泛域名：端点成为 `<名字>.<base_domain>` |
+| `control_port` | 任&#8288;何&#8288;节&#8288;点 | `7443` | `calabi` 客户端连到哪里 |
+| `control_cert_pem` / `control_key_pem` | 任&#8288;何&#8288;节&#8288;点 | — | 节点的证书：这个监听器出示它，中继也向走 TLS 的设备出示它。不写的话边缘节点自签一张，放在 `state.dir`。文件变化时会重读。`role: mesh` 的节点也可以写，给中继用 |
+| `http_port` | 任&#8288;何&#8288;节&#8288;点 | `8080` | HTTP 端点的访问者 |
+| `https_port` | 任&#8288;何&#8288;节&#8288;点 | `8443` | HTTPS 端点的访问者，TLS 在这里终止。写 `0` 关掉 HTTPS |
+| `https_self_signed` | 你&#8288;的&#8288;服&#8288;务&#8288;器 | `false` | 没有真证书时回落到自签证书。**只给开发用** |
+| `sni_port` | 任&#8288;何&#8288;节&#8288;点 | — | TLS 原样透传给客户端，不在这里解密。不写就关掉 |
 | `peer_forward.forward_addr` | calabi.net | — | 这台在哪里接收邻居转发来的访客流量。**是内网地址，绝不能用公网的那个** |
 | `peer_forward.advertise_addr` | calabi.net | — | 邻居拨过来用的内网 `host:port`。两个都要设 |
 
@@ -293,12 +295,12 @@ mesh:
 
 | 设置 | 适用 | 默认 | 作用 |
 |---|---|---|---|
-| `derp_port` | 任何节点 | `3340` | 设备从哪里连到中继 |
-| `stun_port` | 任何节点 | `3478` | 设备用来挑最近中继的 STUN 应答口。`0` 关掉它：设备测不了这台中继，只要还有测得到的，就不会选它。自己的服务器上，协调器那边也别再写它的 STUN 端口（`CALABI_COORD_DERP_STUN_PORT`，或映射文件里的 `stun_port`） |
-| `label` | 任何节点 | 节点的 `region` | 这台中继广播的区域名，形式是 `self-<label>`。一个区域里放了两台中继时才设 |
-| `kind` | 任何节点 | `self` | `self` 是你自己的中继，`platform` 是我们的 |
-| `require_auth` | 任何节点 | `false` | 拒绝没有有效凭证的设备。`standalone` 节点上永远是开的；接入 calabi.net 的节点（`multi_region.mode: bff-edge`、`kind: self`）的中继上也永远是开的：它只放行本组织的设备，公钥由 calabi.net 下发，不用写 `coord_pubkey` |
-| `require_tls` | 任何节点 | `false` | 拒绝不走 TLS 的设备。比中继 TLS 早的客户端只会明文，等它们都更新后再打开 |
+| `derp_port` | 任&#8288;何&#8288;节&#8288;点 | `3340` | 设备从哪里连到中继 |
+| `stun_port` | 任&#8288;何&#8288;节&#8288;点 | `3478` | 设备用来挑最近中继的 STUN 应答口。`0` 关掉它：设备测不了这台中继，只要还有测得到的，就不会选它。自己的服务器上，协调器那边也别再写它的 STUN 端口（`CALABI_COORD_DERP_STUN_PORT`，或映射文件里的 `stun_port`） |
+| `label` | 任&#8288;何&#8288;节&#8288;点 | 节点的 `region` | 这台中继广播的区域名，形式是 `self-<label>`。一个区域里放了两台中继时才设 |
+| `kind` | 任&#8288;何&#8288;节&#8288;点 | `self` | `self` 是你自己的中继，`platform` 是我们的 |
+| `require_auth` | 任&#8288;何&#8288;节&#8288;点 | `false` | 拒绝没有有效凭证的设备。`standalone` 节点上永远是开的；接入 calabi.net 的节点（`multi_region.mode: bff-edge`、`kind: self`）的中继上也永远是开的：它只放行本组织的设备，公钥由 calabi.net 下发，不用写 `coord_pubkey` |
+| `require_tls` | 任&#8288;何&#8288;节&#8288;点 | `false` | 拒绝不走 TLS 的设备。比中继 TLS 早的客户端只会明文，等它们都更新后再打开 |
 
 **会被拒绝的设置。** 边缘节点不再直连控制面，所以 `identity:`、`quota:`、`config_svc:`、`nats:`、
 `tunnel.addr` 和 `cert.addr` 都不起作用了。`presence.interval_seconds` 和 `cert.refresh_seconds` 也一样，
