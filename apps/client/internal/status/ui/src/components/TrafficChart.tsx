@@ -11,8 +11,9 @@
 // only plots.
 import { useEffect, useRef, useState } from "react";
 import { Card, Typography } from "antd";
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Tooltip, XAxis, YAxis } from "recharts";
 import { useTranslation } from "react-i18next";
+import ChartFrame from "./ChartFrame";
 
 const { Text } = Typography;
 
@@ -58,16 +59,14 @@ export default function TrafficChart({ rate, sampleAt, title }: Props) {
   const peak = points.reduce((m, p) => Math.max(m, p.bps), 0);
   const current = points.length > 0 ? points[points.length - 1].bps : 0;
 
-  // The Card stretches to fill its flex parent (the Overview bottom
-   // row gives this card flex:auto height). The inner chart wrapper
-   // uses height:100% so ResponsiveContainer sizes against the
-   // available space instead of the old fixed 180px — that fixed
-   // height was the reason the page needed a scrollbar.
+  // The Card stretches to fill its flex parent (the Overview bottom row gives
+  // this card a share of whatever height is left) and the chart follows the
+  // card — see ChartFrame for why it has to be out of flow to do that.
   return (
     <Card
       size="small"
       style={{ width: "100%", display: "flex", flexDirection: "column" }}
-      bodyStyle={{ padding: 12, flex: 1, minHeight: 0 }}
+      bodyStyle={{ padding: 12, flex: 1, minHeight: 0, display: "flex" }}
       title={
         <span>
           {displayTitle}
@@ -78,35 +77,33 @@ export default function TrafficChart({ rate, sampleAt, title }: Props) {
         </span>
       }
     >
-      <div style={{ width: "100%", height: "100%", minHeight: 160 }}>
-        <ResponsiveContainer>
-          <AreaChart data={points}>
-            <defs>
-              <linearGradient id="trafficGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.45} />
-                <stop offset="95%" stopColor="#22d3ee" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <XAxis dataKey="t" hide />
-            <YAxis tickFormatter={(v) => fmtRate(v)} width={70} tick={{ fontSize: 11, fill: "#94a3b8" }} />
-            <Tooltip
-              labelFormatter={(t) => new Date(t as number).toLocaleTimeString()}
-              formatter={(v: number) => [fmtRate(v), t("trafficChart.rate")]}
-              contentStyle={{ background: "#0b1022", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8 }}
-              labelStyle={{ color: "#94a3b8" }}
-              itemStyle={{ color: "#e2e8f0" }}
-            />
-            <Area
-              type="monotone"
-              dataKey="bps"
-              stroke="#22d3ee"
-              strokeWidth={2}
-              fill="url(#trafficGradient)"
-              isAnimationActive={false}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+      <ChartFrame>
+        <AreaChart data={points}>
+          <defs>
+            <linearGradient id="trafficGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.45} />
+              <stop offset="95%" stopColor="#22d3ee" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis dataKey="t" hide />
+          <YAxis tickFormatter={(v) => fmtRate(v)} width={70} tick={{ fontSize: 11, fill: "#94a3b8" }} />
+          <Tooltip
+            labelFormatter={(t) => new Date(t as number).toLocaleTimeString()}
+            formatter={(v: number) => [fmtRate(v), t("trafficChart.rate")]}
+            contentStyle={{ background: "#0b1022", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8 }}
+            labelStyle={{ color: "#94a3b8" }}
+            itemStyle={{ color: "#e2e8f0" }}
+          />
+          <Area
+            type="monotone"
+            dataKey="bps"
+            stroke="#22d3ee"
+            strokeWidth={2}
+            fill="url(#trafficGradient)"
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      </ChartFrame>
     </Card>
   );
 }

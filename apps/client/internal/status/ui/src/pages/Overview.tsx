@@ -7,7 +7,6 @@ import {
   Col,
   Progress,
   Row,
-  Space,
   Statistic,
   Tag,
   Tooltip,
@@ -30,7 +29,11 @@ import TrafficChart from "../components/TrafficChart";
 import { freshRate, useCounterRate } from "../hooks/use-counter-rate";
 import { useMemberQuota } from "../lib/memberQuota";
 import DailyTrafficChart from "../components/DailyTrafficChart";
-import { SelfHostedUsageCard } from "../components/SelfHosted";
+import {
+  SelfHostedUsageChart,
+  SelfHostedUsageNote,
+  useSelfHostedUsage,
+} from "../components/SelfHosted";
 import { UpdateTag } from "../components/UpdateNotice";
 import {
   notify,
@@ -85,6 +88,32 @@ const pillStyle: React.CSSProperties = {
 };
 const pillDot: React.CSSProperties = { color: "#5e7fff", fontSize: 11 };
 
+// A field label in the 本机信息 card. A block with its own line-height: as a bare
+// inline span it sat in a 22px line box sized for the 14px text around it, 4px
+// a field more than a 12px label needs — and this card's height is the floor of
+// the page's bottom row (see the layout note in Overview below).
+const infoLabel: React.CSSProperties = {
+  display: "block",
+  fontSize: 12,
+  lineHeight: "18px",
+};
+// A label that carries tags (自建 / 启动中). The tags ride on the LABEL's line,
+// sized to its 18px, not after the value: beside a 30-character address a
+// longer translation ("selbst gehostet") wrapped onto a third line of its own,
+// and two such fields made the card about 50px taller in German than in English.
+const infoLabelRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 6,
+};
+const infoTag: React.CSSProperties = {
+  marginInlineEnd: 0,
+  paddingInline: 6,
+  fontSize: 11,
+  lineHeight: "16px",
+};
+
 export default function Overview() {
   const { t } = useTranslation();
 
@@ -118,6 +147,14 @@ export default function Overview() {
   // saying 升级套餐 on a platform whose console has no plans page — the rest
   // of the advice (wait for the monthly reset) is still true and stays.
   const hideCommerce = me?.ui?.hide_commerce === true;
+  // Connected to a self-hosted server rather than calabi.net. That daemon
+  // answers /v1 itself (internal/localweb) instead of proxying bff-console, and
+  // its usage figures are this machine's own meters, not an organisation's.
+  const standalone = me?.plan?.code === "standalone";
+  // What that server's coordinator keeps for the whole network, and how this
+  // page shows it (in the chart slot, or as one line) — see the layout note
+  // above the return. Asks nothing of a calabi.net daemon.
+  const networkUsage = useSelfHostedUsage(standalone);
 
   const { data: usage } = useQuery<CurrentUsage>({
     queryKey: ["usage"],
@@ -188,8 +225,15 @@ export default function Overview() {
   // 10.47 GB while that same owner's agent read 4.44 MB.
   //
   // `scope` is the server saying which it gave us. It is now always "org"; the
-  // branches below stay because a client can meet an older bff-console, and
-  // because standalone answers with no usage endpoint at all.
+  // branches below stay because a client can meet an older bff-console.
+  //
+  // A self-hosted server is the other case with no org figures, and it does NOT
+  // show as a missing answer: its daemon answers the usage path with 200, from
+  // this machine's own tunnel meter (localweb.handleUsageNow) — one bytes_total,
+  // no scope, no relay field of either class. Read as an org answer, those
+  // absent fields came out as a relay of exactly 0: 中继 0 B on a machine whose
+  // own mesh meter had counted the relayed bytes all along. So there the relay
+  // half is that mesh meter — this machine's, like the tunnel half beside it.
   const ownScope = usage?.scope === "own";
   // selfTunnel: the self-hosted tunnel slice. Org scope carries the BYOI split; an
   // own-scoped view has none (self_hosted_bytes_total is always 0), but on a
@@ -201,10 +245,11 @@ export default function Overview() {
     u?.platform_bytes_total ?? u?.bytes_total ?? 0;
   // relayFor: the org's relay for the class this node is homed on — platform relay
   // (billed) or the org's OWN self-hosted relay ("self-…" regions: reported to the
-  // platform, tagged, un-billed). undefined on an own-scoped view (no org relay),
-  // so the caller falls back to the local per-device meter.
+  // platform, tagged, un-billed). undefined on an own-scoped view and on a
+  // self-hosted server (no org relay in either), so the caller falls back to the
+  // local per-device meter.
   const relayFor = (u?: CurrentUsage): number | undefined => {
-    if (ownScope || !u) return undefined;
+    if (standalone || ownScope || !u) return undefined;
     return relayIsSelfHosted
       ? u.self_hosted_relay_bytes_total ?? 0
       : u.platform_relay_bytes_total ?? 0;
@@ -243,6 +288,9 @@ export default function Overview() {
   // Whether to show the per-category split under the big number. Only meaningful
   // once Connect is enabled; a pure-tunnel machine's number already IS the tunnel.
   const meshOn = !!mesh?.enabled;
+  // The 中继节点 field is showing an address (not 未启用 / 已暂停 / 连接中), so
+  // the tags that qualify that address have something to qualify.
+  const relayShown = meshOn && !mesh?.paused && !!mesh?.relay;
 
   // notifications.
   useTransitionNotify(
@@ -345,11 +393,34 @@ export default function Overview() {
   const quotaErr = quotaPct >= 100;
 
   // Layout.tsx's Content scrolls (overflow:auto), so this page uses
-  // minHeight:100% (not height:100%): on a tall window the flex column fills the
-  // viewport and the bottom charts grow via flex:1; on a SHORT window (the smaller
-  // desktop shell) the charts hold their min-height floor and the page scrolls
-  // instead of squeezing them into a distorted sliver. height:100% would have
-  // pinned the page to the viewport and let the charts collapse below usable size.
+  // minHeight:100% (not height:100%): the flex column fills the window and the
+  // bottom row takes whatever the title and stat cards leave; once that is less
+  // than the row's floor the page scrolls instead of squeezing the charts into a
+  // distorted sliver. height:100% would have pinned the page to the viewport and
+  // let the charts collapse below usable size.
+  //
+  // The price of minHeight is that the page's height is driven by its content,
+  // so nothing in the bottom row may take its height from an earlier measurement
+  // of itself — see ChartFrame, which exists for that reason.
+  //
+  // The floor is budgeted against the desktop shell: a fixed 1100×720 window
+  // (client-desktop main.rs) that nobody can make taller. That is 608px of
+  // content; the title and the stat cards at their tallest (the split wrapped
+  // onto two lines, plus the quota bar or the self-hosted pill — 182px) leave
+  // 374px for the bottom row. Both things that set the row's minimum have to
+  // come in under that, or the shell opens with a scrollbar every time: two
+  // chart cards at CHART_MIN_HEIGHT (358px with the gap), and the 本机信息
+  // card's own content (365px with all six fields, tagged or not).
+  //
+  // A self-hosted server has one more thing to show — the network's usage, as
+  // its coordinator keeps it — and no room for it as a block of its own: a card
+  // between the stat cards and the bottom row put the page 78px over (100px in
+  // the languages whose split wraps). So it goes INTO the row: the usage card
+  // takes the seven-day chart's slot and draws the network's seven days there
+  // (see SelfHosted.tsx), at the same floor as the chart card it replaces. Only
+  // when the coordinator has no figures to chart does anything sit above the row
+  // — one line, 36px, which the self-hosted stat cards leave room for: they
+  // carry no quota bar and no pill, 134px at their tallest against 182px.
   return (
     <div
       style={{
@@ -518,17 +589,19 @@ export default function Overview() {
         </Col>
       </Row>
 
-      {/* Self-hosted: the whole network's traffic this month, from the
-          coordinator (tunnels + relay, in this browser's calendar). */}
-      {me?.plan?.code === "standalone" && <SelfHostedUsageCard />}
+      {/* Self-hosted, and the coordinator has no figures to chart: say so in
+          one line. With figures, they are the first card of the row below. */}
+      {networkUsage.view === "note" && (
+        <SelfHostedUsageNote data={networkUsage.data} error={networkUsage.error} />
+      )}
 
-      {/* Bottom row absorbs remaining vertical space. The chart grows
-          to whatever's left; the info card is fixed-width and packs
-          the same 6 fields in a tight 2-col grid so it stays visible
-          without a scrollbar. minHeight:0 on both the wrapper and the
-          flex children is needed for the chart's ResponsiveContainer
-          to size itself against the flex height instead of overflowing. */}
-      <Row gutter={[12, 12]} style={{ flex: 1, minHeight: 412, margin: 0 }} wrap={false}>
+      {/* Bottom row takes the remaining height, and gives it back when the stat
+          cards above grow — their extra lines arrive with the data, after the
+          first layout. No minHeight on the row or on the chart slots: the floor
+          is the content's own (the chart cards at ChartFrame's minimum, or the
+          fixed-width info card when that is taller), so there is no row-level
+          figure to keep in step with them. */}
+      <Row gutter={[12, 12]} style={{ flex: 1, margin: 0 }} wrap={false}>
         <Col
           flex="auto"
           style={{
@@ -540,15 +613,22 @@ export default function Overview() {
           }}
         >
           {/* Last-7-days daily bars (history) on top, live throughput below.
-              Each takes half the remaining height. */}
-          <div style={{ flex: 1, minHeight: 200, display: "flex" }}>
-            <DailyTrafficChart
-              days={7}
-              selfHostedEdge={onSelfHostedEdge}
-              selfHostedRelay={relayIsSelfHosted}
-            />
+              Each takes half the remaining height. On a self-hosted server the
+              seven days drawn are the NETWORK's, with its month beside them;
+              this machine's own today and month stay in the stat cards. */}
+          <div style={{ flex: 1, display: "flex" }}>
+            {networkUsage.view === "chart" ? (
+              <SelfHostedUsageChart data={networkUsage.data} />
+            ) : (
+              <DailyTrafficChart
+                days={7}
+                selfHostedEdge={onSelfHostedEdge}
+                selfHostedRelay={relayIsSelfHosted}
+                localRelay={standalone ? meshUsage?.daily : undefined}
+              />
+            )}
           </div>
-          <div style={{ flex: 1, minHeight: 200, display: "flex" }}>
+          <div style={{ flex: 1, display: "flex" }}>
             <TrafficChart rate={throughput} sampleAt={snapAt} />
           </div>
         </Col>
@@ -559,9 +639,9 @@ export default function Overview() {
             style={{ width: "100%", display: "flex", flexDirection: "column" }}
             bodyStyle={{ flex: 1, overflow: "auto", padding: 12 }}
           >
-            <Row gutter={[12, 10]}>
+            <Row gutter={[12, 8]}>
               <Col span={24}>
-                <Text type="secondary" style={{ fontSize: 12 }}>{t("overview.clientVersion")}</Text>
+                <Text type="secondary" style={infoLabel}>{t("overview.clientVersion")}</Text>
                 {/* A signal, not a control: this card is 320px and a button here
                     could not explain itself on a machine that cannot self-install.
                     The controls live in Settings. */}
@@ -580,7 +660,7 @@ export default function Overview() {
                   and collided with 设备 = a mesh node. This install's device
                   identity is the row below. */}
               <Col span={24}>
-                <Text type="secondary" style={{ fontSize: 12 }}>{t("overview.sessionCaller")}</Text>
+                <Text type="secondary" style={infoLabel}>{t("overview.sessionCaller")}</Text>
                 <div><code style={{ fontSize: 11 }}>{snap?.session_id || "—"}</code></div>
                 <div><code style={{ fontSize: 11 }}>{snap?.client_id || "—"}</code></div>
               </Col>
@@ -589,7 +669,7 @@ export default function Overview() {
                   shows no link to its client record, and there was previously
                   nothing on the machine that would tell you. */}
               <Col span={24}>
-                <Text type="secondary" style={{ fontSize: 12 }}>{t("overview.deviceIdentity")}</Text>
+                <Text type="secondary" style={infoLabel}>{t("overview.deviceIdentity")}</Text>
                 <div>
                   <code style={{ fontSize: 11 }}>{snap?.fingerprint || t("overview.noFingerprint")}</code>
                   {!!snap?.device_id && (
@@ -602,18 +682,18 @@ export default function Overview() {
                   中继节点 row's self-hosted tag so the two nodes read consistently
                   once 数据节点 is switched to 自建. */}
               <Col span={24}>
-                <Text type="secondary" style={{ fontSize: 12 }}>{t("overview.edgeNode")}</Text>
+                <div style={infoLabelRow}>
+                  <Text type="secondary" style={infoLabel}>{t("overview.edgeNode")}</Text>
+                  {onSelfHostedEdge && (
+                    <Tooltip title={t("overview.edgeSelfTip")}>
+                      <Tag color="green" style={infoTag}>
+                        {t("overview.edgeSelf")}
+                      </Tag>
+                    </Tooltip>
+                  )}
+                </div>
                 <div>
-                  <Space size={4} wrap>
-                    <code style={{ fontSize: 12 }}>{snap?.server_addr || "—"}</code>
-                    {onSelfHostedEdge && (
-                      <Tooltip title={t("overview.edgeSelfTip")}>
-                        <Tag color="green" style={{ marginInlineEnd: 0 }}>
-                          {t("overview.edgeSelf")}
-                        </Tag>
-                      </Tooltip>
-                    )}
-                  </Space>
+                  <code style={{ fontSize: 12 }}>{snap?.server_addr || "—"}</code>
                 </div>
               </Col>
               {/* 中继节点 (Connect/组网): the relay this node is homed on. relay is
@@ -621,7 +701,23 @@ export default function Overview() {
                   relay, so flag it — this is where switching 数据出口 to 自建
                   shows up (edge egress + relay home move together). */}
               <Col span={24}>
-                <Text type="secondary" style={{ fontSize: 12 }}>{t("overview.relayNode")}</Text>
+                <div style={infoLabelRow}>
+                  <Text type="secondary" style={infoLabel}>{t("overview.relayNode")}</Text>
+                  {relayShown && !mesh?.up && (
+                    <Tooltip title={t("overview.meshDatapathPendingTip")}>
+                      <Tag color="orange" style={infoTag}>
+                        {t("overview.meshDatapathPending")}
+                      </Tag>
+                    </Tooltip>
+                  )}
+                  {relayShown && relayIsSelfHosted && (
+                    <Tooltip title={t("overview.relaySelfTip")}>
+                      <Tag color="green" style={infoTag}>
+                        {t("overview.relaySelf")}
+                      </Tag>
+                    </Tooltip>
+                  )}
+                </div>
                 <div>
                   {!mesh?.enabled ? (
                     <Text type="secondary" style={{ fontSize: 12 }}>{t("overview.meshOff")}</Text>
@@ -636,29 +732,13 @@ export default function Overview() {
                     // source, showed its address the whole time.
                     <Text type="secondary" style={{ fontSize: 12 }}>{t("overview.meshConnecting")}</Text>
                   ) : (
-                    <Space size={4} wrap>
-                      <code style={{ fontSize: 12 }}>{mesh.relay}</code>
-                      {!mesh.up && (
-                        <Tooltip title={t("overview.meshDatapathPendingTip")}>
-                          <Tag color="orange" style={{ marginInlineEnd: 0 }}>
-                            {t("overview.meshDatapathPending")}
-                          </Tag>
-                        </Tooltip>
-                      )}
-                      {mesh.derp_home?.startsWith("self-") && (
-                        <Tooltip title={t("overview.relaySelfTip")}>
-                          <Tag color="green" style={{ marginInlineEnd: 0 }}>
-                            {t("overview.relaySelf")}
-                          </Tag>
-                        </Tooltip>
-                      )}
-                    </Space>
+                    <code style={{ fontSize: 12 }}>{mesh.relay}</code>
                   )}
                 </div>
               </Col>
               {mesh?.up && (
                 <Col span={24}>
-                  <Text type="secondary" style={{ fontSize: 12 }}>{t("overview.overlayAddr")}</Text>
+                  <Text type="secondary" style={infoLabel}>{t("overview.overlayAddr")}</Text>
                   <div>
                     <code style={{ fontSize: 12 }}>{mesh.overlay || "—"}</code>
                     <Text type="secondary" style={{ fontSize: 11, marginLeft: 8 }}>

@@ -170,7 +170,7 @@ export default function Services() {
       publish_addr: addr,
       publish_proto: s.proto,
     });
-    navigate("/tunnels/new?" + q.toString());
+    navigate("/endpoints/new?" + q.toString());
   };
 
   // A daemon with no mesh at all. Said once, in the same words as the 设备 tab,

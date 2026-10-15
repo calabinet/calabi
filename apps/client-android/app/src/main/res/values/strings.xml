@@ -88,16 +88,16 @@
     <string name="settings_sign_out_confirm">Sign out?</string>
     <string name="settings_sign_out_body">This phone leaves the mesh until you sign in again.</string>
 
-    <string name="tab_tunnels">Tunnels</string>
+    <string name="tab_tunnels">Endpoints</string>
     <string name="back">Back</string>
     <string name="refresh">Refresh</string>
     <string name="load_failed">Could not load. Try again later.</string>
 
-    <string name="tunnels_title">Tunnels</string>
-    <string name="tunnels_scope_own">Only tunnels you created are listed.</string>
-    <string name="tunnels_empty">No tunnels yet. Tunnels are created in the Calabi client on a computer or in the web console.</string>
-    <string name="tunnels_scope_self_hosted">Only tunnels on computers that joined this network are listed.</string>
-    <string name="tunnels_empty_self_hosted">No tunnels yet. Tunnels configured on a computer that joined this network appear here.</string>
+    <string name="tunnels_title">Endpoints</string>
+    <string name="tunnels_scope_own">Only endpoints you created are listed.</string>
+    <string name="tunnels_empty">No endpoints yet. Endpoints are created in the Calabi client on a computer or in the web console.</string>
+    <string name="tunnels_scope_self_hosted">Only endpoints on computers that joined this network are listed.</string>
+    <string name="tunnels_empty_self_hosted">No endpoints yet. Endpoints configured on a computer that joined this network appear here.</string>
     <string name="tunnel_state_active">Online</string>
     <string name="tunnel_state_offline">Offline</string>
     <string name="tunnel_state_pending">Awaiting connection</string>
@@ -132,7 +132,7 @@
     <string name="access_visitors">Visitors</string>
     <string name="access_note">Hourly counts of connections, recorded at the edge.</string>
     <string name="access_empty">No connections in this range.</string>
-    <string name="access_records_off">This organization keeps no tunnel access records.</string>
+    <string name="access_records_off">This organization keeps no endpoint access records.</string>
     <string name="access_retention">Kept for %1$d days.</string>
     <string name="access_truncated">Showing the latest %1$d rows.</string>
     <string name="access_other">Other addresses</string>
@@ -147,7 +147,7 @@
     <string name="usage_month">Traffic this month</string>
     <string name="usage_unlimited">Unlimited</string>
     <string name="usage_limit_unknown">Limit unavailable right now</string>
-    <string name="usage_tunnels">Tunnels %1$s</string>
+    <string name="usage_tunnels">Endpoints %1$s</string>
     <string name="usage_relay">Relay %1$s</string>
     <string name="usage_self_hosted">Self-hosted nodes %1$s, not counted</string>
     <string name="usage_week">Last 7 days</string>

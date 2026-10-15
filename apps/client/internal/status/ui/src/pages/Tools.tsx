@@ -40,7 +40,7 @@ export default function Tools() {
     // Straight into the create flow with the scanned port already filled in.
     // A query parameter rather than router state, because the create flow is a
     // page now: it has to mean the same thing after a reload.
-    navigate("/tunnels/new?prefill_port=" + port);
+    navigate("/endpoints/new?prefill_port=" + port);
   }
 
   return (

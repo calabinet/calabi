@@ -27,6 +27,13 @@ function ServicesMoved() {
   return <Navigate to={`/mesh/services${search}`} replace />;
 }
 
+// 端点 was at /tunnels until 2026-10, when the object was renamed from "tunnel"
+// to "endpoint". Carries /new and ?prefill_port=… / ?publish_device=… over.
+function TunnelsMoved() {
+  const { pathname, search } = useLocation();
+  return <Navigate to={pathname.replace(/^\/tunnels/, "/endpoints") + search} replace />;
+}
+
 export default function App() {
   return (
     <ConsoleLockGate>
@@ -45,12 +52,12 @@ export default function App() {
         >
           <Route index element={<Navigate to="/overview" replace />} />
           <Route path="overview" element={<Overview />} />
-          <Route path="tunnels" element={<Tunnels />} />
+          <Route path="endpoints" element={<Tunnels />} />
           {/* The create flow is a PAGE, not a dialog the list opens: it has
               steps, it is linked to from 工具 and 服务, and it has to survive a
-              reload. Nested under /tunnels so the sidebar keeps 隧道 selected
+              reload. Nested under /endpoints so the sidebar keeps 隧道 selected
               (Layout reads the first path segment). */}
-          <Route path="tunnels/new" element={<TunnelNew />} />
+          <Route path="endpoints/new" element={<TunnelNew />} />
           {/* 组网 is one menu entry with three tabs, each with its own URL so a
               tab can be linked to (工具's port scanner lands on 服务) and
               survives a reload. Same shape as the web console's 组网配置. */}
@@ -62,6 +69,8 @@ export default function App() {
               access rules — so it now lives under 组网, as it does in the web
               console. The old address still works, query string included. */}
           <Route path="services" element={<ServicesMoved />} />
+          {/* The old address of 端点 and of its create page. */}
+          <Route path="tunnels/*" element={<TunnelsMoved />} />
           <Route path="logs" element={<Logs />} />
           <Route path="tools" element={<Tools />} />
           <Route path="settings" element={<Settings />} />

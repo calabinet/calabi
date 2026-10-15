@@ -667,9 +667,9 @@ export default function Layout() {
               label: <Link to="/overview">{t("nav.overview")}</Link>,
             },
             {
-              key: "tunnels",
+              key: "endpoints",
               icon: <BarsOutlined />,
-              label: <Link to="/tunnels">{t("nav.tunnels")}</Link>,
+              label: <Link to="/endpoints">{t("nav.tunnels")}</Link>,
             },
             {
               key: "mesh",

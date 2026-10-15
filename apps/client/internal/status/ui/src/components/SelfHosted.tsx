@@ -16,11 +16,14 @@ import {
   SafetyCertificateOutlined,
 } from "@ant-design/icons";
 import { Alert, Button, Card, Descriptions, Modal, Space, Switch, Table, Tag, Typography, message } from "antd";
+import { Bar, BarChart, CartesianGrid, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../api/client";
 import type { SelfHostedEdgeState, SelfHostedPart, SelfHostedStatus, SelfHostedTunnel, SelfHostedUsage } from "../api/types";
+import { dayLabel } from "../lib/usageDays";
+import ChartFrame from "./ChartFrame";
 
 const { Text } = Typography;
 
@@ -418,13 +421,28 @@ export function SelfHostedTunnelsCard() {
   );
 }
 
-// SelfHostedUsageCard is the network's traffic this month — tunnels plus relay,
-// in this browser's calendar — and its devices. A self-hosted server has no
-// limit; a coordinator without a database keeps no traffic, and says so.
-export function SelfHostedUsageCard() {
-  const { t, i18n } = useTranslation();
-  const { data: st } = useSelfHosted();
-  const hasMesh = st?.mode === "self_hosted" && !!st.mesh;
+// ---- the network's usage, on Overview ---------------------------------------
+//
+// What the coordinator keeps for the whole network: this month's traffic
+// (tunnels plus relay, in this browser's calendar), each of the last seven
+// days, and the devices. A self-hosted server has no limit.
+//
+// It is shown in one of two ways, and never as a block of its own above the
+// page's bottom row — the desktop shell is 720px tall and that block is what
+// made a self-hosted console open with a scrollbar every time:
+//
+//   "chart"  the figures, with the seven days as a real chart, in the slot
+//            where a calabi.net console draws this machine's own seven days;
+//   "note"   one line, when there are no figures to chart: the coordinator has
+//            no database and keeps no traffic, or it could not be asked. This
+//            machine's own chart then stays where it is.
+//
+// "none" is a console with no coordinator behind it: nothing to show.
+export type NetworkUsageView = "none" | "chart" | "note";
+
+export function useSelfHostedUsage(enabled = true) {
+  const { data: st } = useSelfHosted(enabled);
+  const hasMesh = enabled && st?.mode === "self_hosted" && !!st.mesh;
   const { data, error } = useQuery<SelfHostedUsage>({
     queryKey: ["selfhosted-usage"],
     queryFn: () => api.selfHostedUsage(7),
@@ -432,74 +450,122 @@ export function SelfHostedUsageCard() {
     retry: false,
     refetchInterval: 60_000,
   });
-  if (!hasMesh) return null;
+  // Still loading counts as "chart": that is where nearly every console ends
+  // up, and starting anywhere else would move the page's blocks on every load.
+  const view: NetworkUsageView = !hasMesh ? "none" : error || (data && !data.month) ? "note" : "chart";
+  return { view, data, error };
+}
+
+function devicesText(t: (k: string) => string, data: SelfHostedUsage): string {
+  return `${data.devices.used} / ${data.devices.limit > 0 ? data.devices.limit : t("selfHosted.usageUnlimited")}`;
+}
+
+// The chart card's summary column. Nothing in it wraps, so its height is the
+// same in every language — it is part of the floor of Overview's bottom row.
+const usageLine: React.CSSProperties = { display: "block", fontSize: 12, lineHeight: "18px" };
+
+// SelfHostedUsageChart fills a slot of Overview's bottom row the way the other
+// chart cards do: the card stretches to the slot and the chart follows the
+// card (see ChartFrame).
+export function SelfHostedUsageChart({ data }: { data?: SelfHostedUsage }) {
+  const { t } = useTranslation();
   const month = data?.month;
-  const max = Math.max(1, ...(data?.days ?? []).map((d) => d.bytes));
-  const dayName = (iso: string) => {
-    try {
-      return new Date(iso).toLocaleDateString(i18n.language, { weekday: "short" });
-    } catch {
-      return "";
-    }
-  };
+  const rows = (data?.days ?? []).map((d) => ({ label: dayLabel(d.start), bytes: d.bytes }));
   return (
-    <Card title={t("selfHosted.usageTitle")} size="small">
-      {error ? (
-        <Alert type="info" showIcon message={readFailureText(t, error)} />
-      ) : (
-        <div style={{ display: "flex", gap: 32, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <Space direction="vertical" size={2}>
-            {month ? (
-              <>
-                <Text style={{ fontSize: 24, fontWeight: 600 }}>{fmtBytes(month.tunnel_bytes + month.relay_bytes)}</Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {t("selfHosted.usageTunnels", { v: fmtBytes(month.tunnel_bytes) })}
-                  {" · "}
-                  {data?.relay_not_recorded
-                    ? t("selfHosted.usageRelayNotRecorded")
-                    : t("selfHosted.usageRelay", { v: fmtBytes(month.relay_bytes) })}
-                </Text>
-              </>
-            ) : (
-              <Text type="secondary">{data?.unavailable ? t("selfHosted.usageUnavailable") : "—"}</Text>
-            )}
-          </Space>
-          {(data?.days?.length ?? 0) > 0 && (
-            <Space direction="vertical" size={4}>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {t("selfHosted.week")}
-              </Text>
-              <div style={{ display: "flex", gap: 6, alignItems: "flex-end", height: 56 }}>
-                {data!.days.map((d, i) => (
-                  <div key={d.start} title={fmtBytes(d.bytes)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                    <div
-                      style={{
-                        width: 18,
-                        height: d.bytes ? Math.max(4, Math.round((40 * d.bytes) / max)) : 2,
-                        borderRadius: 3,
-                        background: d.bytes ? (i === data!.days.length - 1 ? "#5e7fff" : "rgba(94,127,255,0.45)") : "rgba(148,163,184,0.35)",
-                      }}
-                    />
-                    <span style={{ fontSize: 10, color: "#94a3b8" }}>{dayName(d.start)}</span>
-                  </div>
-                ))}
-              </div>
-            </Space>
-          )}
-          {data?.devices && (
-            <Space direction="vertical" size={2}>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {t("selfHosted.usageDevices")}
-              </Text>
-              <Text style={{ fontSize: 16 }}>
-                {data.devices.used}
-                {" / "}
-                {data.devices.limit > 0 ? data.devices.limit : t("selfHosted.usageUnlimited")}
-              </Text>
-            </Space>
-          )}
+    <Card
+      size="small"
+      title={t("selfHosted.usageTitle")}
+      style={{ width: "100%", display: "flex", flexDirection: "column" }}
+      bodyStyle={{ padding: 12, flex: 1, minHeight: 0, display: "flex", gap: 16 }}
+    >
+      <div style={{ flex: "0 0 auto", minWidth: 148, whiteSpace: "nowrap" }}>
+        <Text style={{ display: "block", fontSize: 24, fontWeight: 600, lineHeight: "32px" }}>
+          {month ? fmtBytes(month.tunnel_bytes + month.relay_bytes) : "—"}
+        </Text>
+        {month && (
+          <>
+            <Text type="secondary" style={usageLine}>
+              {t("selfHosted.usageTunnels", { v: fmtBytes(month.tunnel_bytes) })}
+            </Text>
+            <Text type="secondary" style={usageLine}>
+              {data?.relay_not_recorded
+                ? t("selfHosted.usageRelayNotRecorded")
+                : t("selfHosted.usageRelay", { v: fmtBytes(month.relay_bytes) })}
+            </Text>
+          </>
+        )}
+        {data?.devices && (
+          <div style={{ marginTop: 8 }}>
+            <Text type="secondary" style={usageLine}>
+              {t("selfHosted.usageDevices")}
+            </Text>
+            <Text style={{ display: "block", lineHeight: "20px" }}>{devicesText(t, data)}</Text>
+          </div>
+        )}
+      </div>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+        <Text type="secondary" style={usageLine}>
+          {t("selfHosted.week")}
+        </Text>
+        <div style={{ flex: 1, display: "flex" }}>
+          {/* 96 + the label's 18 = the summary column's 114: the card is no
+              taller at its floor than the chart card it stands in for. */}
+          <ChartFrame minHeight={96}>
+            {/* recharts measures an axis's labels in a hidden span, at the font
+                size it reads off a tick ONCE, when the axis mounts — and this
+                chart mounts before its days arrive, with no tick to read. From
+                then on it measured at the page's 16px what it draws at 11px:
+                "667.57 MB" came out too wide for the axis and was broken in
+                two, and every other tick was dropped for want of room. The key
+                mounts the chart afresh when the first days arrive, so its axes
+                mount with their ticks; the non-breaking space leaves a label
+                nowhere to break whatever the measurement says. */}
+            <BarChart key={rows.length ? "days" : "empty"} data={rows} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.08)" />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#94a3b8" }} />
+              <YAxis
+                tickFormatter={(v: number) => fmtBytes(v).replace(" ", " ")}
+                width={72}
+                tick={{ fontSize: 11, fill: "#94a3b8" }}
+              />
+              <ChartTooltip
+                cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                formatter={(v: number) => [fmtBytes(Number(v)), t("dailyChart.total")]}
+                contentStyle={{ background: "#0b1022", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8 }}
+                labelStyle={{ color: "#94a3b8" }}
+                itemStyle={{ color: "#e2e8f0" }}
+              />
+              <Bar dataKey="bytes" fill="#3a5cff" radius={[3, 3, 0, 0]} maxBarSize={40} />
+            </BarChart>
+          </ChartFrame>
         </div>
-      )}
+      </div>
+    </Card>
+  );
+}
+
+// SelfHostedUsageNote is the one line that stands in for the chart: why there
+// are no figures, and the devices when the coordinator did answer. One line in
+// every language — it is cut short rather than wrapped, because Overview has
+// no height to give it a second.
+export function SelfHostedUsageNote({ data, error }: { data?: SelfHostedUsage; error?: unknown }) {
+  const { t } = useTranslation();
+  return (
+    <Card size="small" bodyStyle={{ padding: "6px 12px" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 12, whiteSpace: "nowrap" }}>
+        <Text strong>{t("selfHosted.usageTitle")}</Text>
+        <Text type="secondary" style={{ flex: 1, minWidth: 0, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis" }}>
+          {error ? readFailureText(t, error) : data?.unavailable ? t("selfHosted.usageUnavailable") : "—"}
+        </Text>
+        {!error && data?.devices && (
+          <span>
+            <Text type="secondary" style={{ fontSize: 12, marginRight: 8 }}>
+              {t("selfHosted.usageDevices")}
+            </Text>
+            <Text>{devicesText(t, data)}</Text>
+          </span>
+        )}
+      </div>
     </Card>
   );
 }

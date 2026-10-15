@@ -31,7 +31,7 @@ FROM alpine:3.20
 ARG TARGETARCH
 
 LABEL org.opencontainers.image.title="calabi" \
-      org.opencontainers.image.description="Calabi tunnel client (calabi CLI + local daemon)" \
+      org.opencontainers.image.description="Calabi client (calabi CLI + local daemon)" \
       org.opencontainers.image.source="https://github.com/calabinet/calabi" \
       org.opencontainers.image.vendor="Calabi"
 
@@ -43,7 +43,7 @@ LABEL org.opencontainers.image.title="calabi" \
 # wireguard-tools: `wg show <ifname>` reads the mesh device's UAPI socket — the
 # primary handshake/transfer diagnostic.
 # iptables: subnet-router NAT MASQUERADEs mesh traffic to advertised
-# LAN CIDRs. All unused by the http/tcp tunnel path; kept in the single client
+# LAN CIDRs. All unused by the http/tcp endpoint path; kept in the single client
 # image so mesh works + is debuggable out of the box.
 RUN apk add --no-cache ca-certificates tzdata iproute2 wireguard-tools iptables && \
     addgroup -S calabi && adduser -S -G calabi -h /home/calabi calabi

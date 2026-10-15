@@ -87,16 +87,16 @@
     <string name="settings_sign_out_confirm">退出登录？</string>
     <string name="settings_sign_out_body">这部手机会断开组网，重新登录后才能再连接。</string>
 
-    <string name="tab_tunnels">隧道</string>
+    <string name="tab_tunnels">端点</string>
     <string name="back">返回</string>
     <string name="refresh">刷新</string>
     <string name="load_failed">加载失败，稍后再试。</string>
 
-    <string name="tunnels_title">隧道</string>
-    <string name="tunnels_scope_own">只列出你创建的隧道。</string>
-    <string name="tunnels_empty">还没有隧道。隧道在电脑上的 Calabi 客户端或网页控制台里创建。</string>
-    <string name="tunnels_scope_self_hosted">只列出已加入这个组网的电脑上的隧道。</string>
-    <string name="tunnels_empty_self_hosted">还没有隧道。已加入这个组网的电脑上配置的隧道会显示在这里。</string>
+    <string name="tunnels_title">端点</string>
+    <string name="tunnels_scope_own">只列出你创建的端点。</string>
+    <string name="tunnels_empty">还没有端点。端点在电脑上的 Calabi 客户端或网页控制台里创建。</string>
+    <string name="tunnels_scope_self_hosted">只列出已加入这个组网的电脑上的端点。</string>
+    <string name="tunnels_empty_self_hosted">还没有端点。已加入这个组网的电脑上配置的端点会显示在这里。</string>
     <string name="tunnel_state_active">在线</string>
     <string name="tunnel_state_offline">离线</string>
     <string name="tunnel_state_pending">待接入</string>
@@ -131,7 +131,7 @@
     <string name="access_visitors">访客</string>
     <string name="access_note">按小时聚合，单位是连接，在边缘节点采集。</string>
     <string name="access_empty">这段时间没有访问。</string>
-    <string name="access_records_off">本组织不保留隧道访问记录。</string>
+    <string name="access_records_off">本组织不保留端点访问记录。</string>
     <string name="access_retention">记录保留 %1$d 天。</string>
     <string name="access_truncated">只显示最近的 %1$d 行。</string>
     <string name="access_other">其他地址</string>
@@ -146,7 +146,7 @@
     <string name="usage_month">本月流量</string>
     <string name="usage_unlimited">不限</string>
     <string name="usage_limit_unknown">暂时读不到上限</string>
-    <string name="usage_tunnels">隧道 %1$s</string>
+    <string name="usage_tunnels">端点 %1$s</string>
     <string name="usage_relay">组网中继 %1$s</string>
     <string name="usage_self_hosted">自建节点 %1$s，不计入</string>
     <string name="usage_week">近 7 天</string>

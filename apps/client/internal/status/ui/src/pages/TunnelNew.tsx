@@ -83,8 +83,8 @@ import type {
 const { Title, Text } = Typography;
 
 // PlanFeatures mirrors the gating subset of quota-svc features_json (see
-// apps/bff-console/internal/handlers/tunnels.go planFeatures). tcp/udp = 专业版+;
-// sni = 增强版; ip_policy / basic_auth = 基础版+.
+// apps/bff-console/internal/handlers/tunnels.go planFeatures). tcp/udp = 基础版+;
+// sni = 商业版+; ip_policy / basic_auth = 所有套餐（2026-06-30 起含体验版）.
 // NOTE: custom_domain is NOT plan-gated here — 自购域名 ⟺ 自建节点, so the
 // http/https domain form keys off onOwnEdge (current edge ownership), not
 // features.custom_domain.
@@ -561,14 +561,14 @@ export default function TunnelNew() {
     orgSec?.require_protection === true ||
     (orgSec?.require_bare_port_protection === true && barePort);
   const barePortOnly = !!orgSec && !orgSec.require_protection && protectionRequired;
-  // IP rules are a paid capability (bff-console 403s ip_policy on free plans);
+  // IP rules are plan-gated (bff-console 403s a plan without ip_policy);
   // standalone has no plan to gate against. Hidden rather than shown-and-403'd —
   // except when the org REQUIRES protection, where hiding the only control that
   // could satisfy it would leave a dead end with no explanation.
   const ipAvailable = standalone || features.ip_policy || protectionRequired;
   // Basic auth has two gates and they say different things. PROTOCOL — a raw
   // port is byte passthrough, so there is no request to challenge; hidden, with
-  // a line saying why. PLAN — basic_auth is paid and the server refuses it, so
+  // a line saying why. PLAN — a plan without basic_auth is refused, so
   // don't tease a field that 403s on submit.
   const basicAuthAvailable = !barePort && (standalone || features.basic_auth);
 
@@ -863,7 +863,7 @@ export default function TunnelNew() {
   // click would be the 412 this whole flow exists to move earlier.
   const blockReason = unfinished || (protectionAnswered ? "" : t("wizard.protNeeded"));
 
-  const backToList = () => navigate("/tunnels");
+  const backToList = () => navigate("/endpoints");
 
   const next = async () => {
     try {
@@ -980,7 +980,7 @@ export default function TunnelNew() {
             <Descriptions.Item label={t("wizard.localServiceLabel")}>
               <code style={{ fontSize: 12 }}>{created?.local_addr || "—"}</code>
             </Descriptions.Item>
-            <Descriptions.Item label={t("tunnels.public")}>
+            <Descriptions.Item label={t("wizard.doneAddress")}>
               {publicAddr?.kind === "ready" ? (
                 <CopyableAddr full={publicAddr.full} display={publicAddr.display} />
               ) : (

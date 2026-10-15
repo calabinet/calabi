@@ -10,6 +10,80 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## 2.2.1 — 2026-10-15
+
+**Nothing to configure, and no order to update in.** No config file changed,
+and neither did anything the client, the edge and the coordinator say to each
+other. The changes are in the client, the Android app and the coordinator; the
+edge is the 2.2.0 code under the new version number.
+
+### Local console
+
+- **Changed** — **Tunnels are called endpoints.** The local console says
+  endpoint wherever it said tunnel — the menu, the list, the wizard, the
+  messages — in all ten languages, as the web console and the documentation
+  already do. Where it said visitor it now says caller, source address or
+  request, whichever was meant. The pages moved with the name: `#/tunnels` is
+  `#/endpoints` and `#/tunnels/new` is `#/endpoints/new`; the old addresses,
+  with whatever follows them, still lead to the new ones, so a bookmark keeps
+  working. The command line and what it prints, the configuration keys and
+  the daemon's own API keep their names: nothing that reads or scripts the
+  client needs editing.
+- **Changed** — **An endpoint's address is labelled External.** The tag in
+  front of an address in the endpoint list, and the address row at the end of
+  the wizard, said Public. They say External now, the name the web console
+  uses.
+- **Fixed** — **The Overview page was taller than the window.** Once its
+  figures had loaded, the page came out 68–90 px taller than the space it had:
+  a scrollbar appeared and the live throughput chart sat below the edge of the
+  window — every time in the desktop app, whose window has a fixed size. The
+  charts now take the space they are given, and the page fits.
+- **Fixed** — **Connected to your own server, the Overview page had three
+  more faults.**
+  - The relay share of today's and this month's traffic always read 0 B, and
+    the 7-day chart showed no relay bars, however much the device relayed.
+    Both now come from the device's own mesh metering, as the endpoint share
+    already did.
+  - The 7-day chart ran backwards, with today on the left, and on a machine
+    west of Greenwich every date under it was a day early.
+  - With a coordinator connected, the page did not fit in the desktop app. The
+    card with the coordinator's mesh usage now takes the place of the 7-day
+    chart in the bottom row, and draws its own last 7 days as a full chart.
+- **Fixed** — **The German sign-in page.** The text of the button for
+  connecting to a self-hosted server ran past the edges of the button. It is
+  shorter now.
+
+### Mesh
+
+- **Fixed** — **On Windows, a relay close by could stay marked as refusing
+  the device.** A relay that refused a device and later admitted it is struck
+  off the refused list once it answers a keepalive. Windows clocks can move in
+  steps as coarse as 15.6 ms, and a relay on the same machine or the same LAN
+  answers within one step, so the round trip measured exactly 0 — which the
+  client read as no answer yet. The refusal stayed on the list: if the link
+  dropped afterwards, redialling the home relay could wait out the rest of a
+  backoff of up to five minutes, and the relay's round-trip time came and went
+  in the status. An answer now counts however short the round trip.
+
+### Mobile
+
+- **Changed** — **The Android app says endpoints too.** The tab, the list, its
+  empty and scope notes and the usage figures say Endpoints where they said
+  Tunnels, in English and in Chinese.
+
+### Your server
+
+- **Fixed** — **On a coordinator that stores to SQLite, a device's report of
+  its endpoints could fail.** The coordinator replaces a device's endpoint list
+  in a transaction that reads first and writes second. If another write was
+  under way when it came to write, SQLite refused at once instead of waiting
+  — the busy timeout does not cover that step — and the report failed until
+  the client sent it again a minute later. Transactions now take the write
+  lock when they begin, and wait for it under the busy timeout. Nothing to
+  migrate: the change is in how the coordinator opens its database file, and
+  it takes effect when the coordinator restarts. A coordinator on PostgreSQL
+  was not affected.
+
 ## 2.2.0 — 2026-10-09
 
 **Nothing to configure, and no order to update in.** No config file changed,

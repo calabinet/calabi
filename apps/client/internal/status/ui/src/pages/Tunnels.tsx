@@ -151,7 +151,7 @@ export default function Tunnels() {
   const [secRow, setSecRow] = useState<RemoteTunnel | null>(null);
   const [editRow, setEditRow] = useState<RemoteTunnel | null>(null);
   const [takeoverRow, setTakeoverRow] = useState<RemoteTunnel | null>(null);
-  // The create flow lives at /tunnels/new — a page with steps, not a dialog
+  // The create flow lives at /endpoints/new — a page with steps, not a dialog
   // this list opens. The prefill/publish deep links from 工具 and 服务 point
   // straight at it, so nothing about them is this page's business any more.
   const navigate = useNavigate();
@@ -751,7 +751,7 @@ export default function Tunnels() {
             <Button
               type="primary"
               icon={<PlusOutlined />}
-              onClick={() => navigate("/tunnels/new")}
+              onClick={() => navigate("/endpoints/new")}
               disabled={capped || memberCapped || !canManage}
             >
               {t("tunnels.newTunnel")}

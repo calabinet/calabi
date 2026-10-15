@@ -88,7 +88,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 # ============================================================================
 FROM alpine:3.20
 LABEL org.opencontainers.image.title="calabi" \
-      org.opencontainers.image.description="Calabi tunnel client (calabi CLI + local daemon)" \
+      org.opencontainers.image.description="Calabi client (calabi CLI + local daemon)" \
       org.opencontainers.image.source="https://github.com/calabinet/calabi" \
       org.opencontainers.image.vendor="Calabi"
 
@@ -101,7 +101,7 @@ LABEL org.opencontainers.image.title="calabi" \
 # (/var/run/wireguard/*.sock, exposed by the datapath) — the primary handshake/
 # transfer diagnostic.
 # iptables: subnet-router NAT MASQUERADEs mesh traffic to advertised
-# LAN CIDRs. All unused by the http/tcp tunnel path; kept in the single client
+# LAN CIDRs. All unused by the http/tcp endpoint path; kept in the single client
 # image so mesh works + is debuggable out of the box.
 RUN apk add --no-cache ca-certificates tzdata iproute2 wireguard-tools iptables && \
     addgroup -S calabi && adduser -S -G calabi -h /home/calabi calabi
@@ -127,9 +127,9 @@ COPY --from=builder /out/calabi /usr/local/bin/calabi
 USER calabi:calabi
 # `calabi` is the entrypoint, so image args are calabi subcommands. The default
 # command runs the long-lived daemon as an API-key AGENT — supply the key via
-# the environment and the container stays online + serves your tunnels:
+# the environment and the container stays online + serves your endpoints:
 #   docker run -d -e CALABI_API_KEY=tk_… calabinet/calabi:latest
-# Override the command for a one-off foreground tunnel:
+# Override the command for a one-off foreground endpoint:
 #   docker run --rm -it -e CALABI_API_KEY=tk_… calabinet/calabi:latest http 8080
 ENTRYPOINT ["/usr/local/bin/calabi"]
 CMD ["daemon"]

@@ -25,7 +25,6 @@ import {
   BarChart,
   CartesianGrid,
   Legend,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -33,7 +32,9 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api } from "../api/client";
-import type { UsageBucket, UsageHistory } from "../api/types";
+import type { MeshUsageDay, UsageBucket, UsageHistory } from "../api/types";
+import { dayLabel, oldestFirst } from "../lib/usageDays";
+import ChartFrame from "./ChartFrame";
 
 const { Text } = Typography;
 
@@ -47,15 +48,6 @@ function fmtBytes(n: number): string {
     i++;
   }
   return `${v.toFixed(i === 0 ? 0 : 2)} ${units[i]}`;
-}
-
-// dayLabel turns a bucket ts into a short "M/D" tick. The standalone meter
-// emits "2026-06-14"; the platform emits an ISO timestamp — new Date() parses
-// both; on parse failure we show the raw string.
-function dayLabel(ts: string): string {
-  const d = new Date(ts);
-  if (Number.isNaN(d.getTime())) return ts;
-  return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
 // splitBucket picks the day's tunnel + relay figures for THIS machine.
@@ -86,6 +78,7 @@ export default function DailyTrafficChart({
   days = 7,
   selfHostedEdge = false,
   selfHostedRelay = false,
+  localRelay,
 }: {
   days?: number;
   /** This machine egresses through a self-hosted (BYOI) edge — same signal the
@@ -93,6 +86,12 @@ export default function DailyTrafficChart({
   selfHostedEdge?: boolean;
   /** This machine homes on one of the org's own relays ("self-…" region). */
   selfHostedRelay?: boolean;
+  /** Connected to a self-hosted server: the buckets are this machine's own
+   *  tunnel meter and carry no relay of either class, so the relay series is
+   *  the machine's mesh meter instead — its days, under the same local date the
+   *  buckets use for `ts`. The 今日 / 本月 cards take their relay half from the
+   *  same meter, so a day's bar and the card above it agree. */
+  localRelay?: MeshUsageDay[];
 }) {
   const { t } = useTranslation();
   const { data } = useQuery<UsageHistory>({
@@ -102,23 +101,28 @@ export default function DailyTrafficChart({
     retry: false,
   });
 
-  // Buckets arrive NEWEST-first (i=0 = today); a bar chart reads left→right, so
-  // render oldest→newest. The endpoint always returns exactly `days` buckets
-  // (gaps zero-filled), so a slice keeps the window even if it ever returns more.
-  const rows = [...(data?.buckets ?? [])]
-    .reverse()
+  // A bar chart reads left→right, so render oldest→newest — the two daemons
+  // that answer this path disagree about the order they send (lib/usageDays).
+  // The endpoint always returns exactly `days` buckets (gaps zero-filled), so a
+  // slice keeps the window even if it ever returns more.
+  const relayByDate = new Map((localRelay ?? []).map((d) => [d.date, d.relay]));
+  const rows = oldestFirst(data?.buckets ?? [])
     .slice(-days)
-    .map((b) => ({
-      label: dayLabel(b.ts),
-      ...splitBucket(b, selfHostedEdge, selfHostedRelay),
-    }));
+    .map((b) => {
+      const split = splitBucket(b, selfHostedEdge, selfHostedRelay);
+      return {
+        label: dayLabel(b.ts),
+        tunnel: split.tunnel,
+        relay: localRelay ? relayByDate.get(b.ts) ?? 0 : split.relay,
+      };
+    });
   const total = rows.reduce((s, r) => s + r.tunnel + r.relay, 0);
 
   return (
     <Card
       size="small"
       style={{ width: "100%", display: "flex", flexDirection: "column" }}
-      bodyStyle={{ padding: 12, flex: 1, minHeight: 0 }}
+      bodyStyle={{ padding: 12, flex: 1, minHeight: 0, display: "flex" }}
       title={
         <span>
           {t("dailyChart.title", { n: days })}
@@ -128,43 +132,41 @@ export default function DailyTrafficChart({
         </span>
       }
     >
-      <div style={{ width: "100%", height: "100%", minHeight: 140 }}>
-        <ResponsiveContainer>
-          <BarChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.08)" />
-            <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#94a3b8" }} />
-            <YAxis tickFormatter={fmtBytes} width={64} tick={{ fontSize: 11, fill: "#94a3b8" }} />
-            <Tooltip
-              cursor={{ fill: "rgba(255,255,255,0.05)" }}
-              formatter={(v: number) => fmtBytes(Number(v))}
-              contentStyle={{ background: "#0b1022", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8 }}
-              labelStyle={{ color: "#94a3b8" }}
-              itemStyle={{ color: "#e2e8f0" }}
-            />
-            <Legend
-              verticalAlign="top"
-              height={20}
-              iconSize={8}
-              wrapperStyle={{ fontSize: 11, color: "#94a3b8" }}
-            />
-            <Bar
-              dataKey="tunnel"
-              stackId="a"
-              name={t("dailyChart.tunnel")}
-              fill="#3a5cff"
-              maxBarSize={40}
-            />
-            <Bar
-              dataKey="relay"
-              stackId="a"
-              name={t("dailyChart.relay")}
-              fill="#22c1a4"
-              radius={[3, 3, 0, 0]}
-              maxBarSize={40}
-            />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+      <ChartFrame>
+        <BarChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.08)" />
+          <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#94a3b8" }} />
+          <YAxis tickFormatter={fmtBytes} width={64} tick={{ fontSize: 11, fill: "#94a3b8" }} />
+          <Tooltip
+            cursor={{ fill: "rgba(255,255,255,0.05)" }}
+            formatter={(v: number) => fmtBytes(Number(v))}
+            contentStyle={{ background: "#0b1022", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8 }}
+            labelStyle={{ color: "#94a3b8" }}
+            itemStyle={{ color: "#e2e8f0" }}
+          />
+          <Legend
+            verticalAlign="top"
+            height={20}
+            iconSize={8}
+            wrapperStyle={{ fontSize: 11, color: "#94a3b8" }}
+          />
+          <Bar
+            dataKey="tunnel"
+            stackId="a"
+            name={t("dailyChart.tunnel")}
+            fill="#3a5cff"
+            maxBarSize={40}
+          />
+          <Bar
+            dataKey="relay"
+            stackId="a"
+            name={t("dailyChart.relay")}
+            fill="#22c1a4"
+            radius={[3, 3, 0, 0]}
+            maxBarSize={40}
+          />
+        </BarChart>
+      </ChartFrame>
     </Card>
   );
 }
