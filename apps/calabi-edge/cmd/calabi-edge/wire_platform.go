@@ -497,6 +497,9 @@ func wirePlatform(ctx context.Context, logger *slog.Logger, in platformInputs) (
 				RelayDerpPort: platformRelayDerp,
 				RelayStunPort: platformRelayStun,
 				Version:       version,
+				// Whether a TLS passthrough visitor can reach this node. The
+				// console offers TLS endpoints only where this is true.
+				TLSPassthrough: in.tlsPassthrough,
 			}, relayTLS)
 		}},
 		{"evict-consumer", func(ctx context.Context) error {

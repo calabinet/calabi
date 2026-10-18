@@ -32,6 +32,9 @@ type platformInputs struct {
 	// relayCert is what the relay port presents (controlCert.certificate): the
 	// heartbeats say whether devices can verify it (relayverify.go).
 	relayCert func(*tls.ClientHelloInfo) (*tls.Certificate, error)
+	// tlsPassthrough is acceptsTLSPassthrough: reported to the edge directory
+	// so the console offers TLS endpoints only on nodes that serve them.
+	tlsPassthrough bool
 }
 
 // namedRunner is one long-lived task of the process: a listener, the relay, the

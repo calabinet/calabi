@@ -59,6 +59,8 @@ import { notify } from "../hooks/use-notifications";
 import { useServiceMode } from "../hooks/use-service-mode";
 import { useMemberQuota } from "../lib/memberQuota";
 import { effectiveState, type EffectiveState } from "../lib/tunnelState";
+import { isBarePortType, typeLabel } from "../lib/tunnelType";
+import { securityErrorText } from "../lib/securityError";
 import {
   CopyableAddr,
   edgeHttpURL,
@@ -525,7 +527,7 @@ export default function Tunnels() {
       title: t("tunnels.colType"),
       dataIndex: "type",
       width: 80,
-      render: (ty) => <Tag>{(ty || "").toUpperCase()}</Tag>,
+      render: (ty) => <Tag>{typeLabel(ty)}</Tag>,
     },
     {
       // Merged 公网 + 本地 into one "地址" column: public address on top,
@@ -975,7 +977,7 @@ function EditTunnelModal({
       )}
       <Form layout="vertical" form={form} onFinish={(v) => save.mutate(v)}>
         <Form.Item label={t("tunnels.colType")}>
-          <Tag>{(tunnel?.type || "").toUpperCase()}</Tag>
+          <Tag>{typeLabel(tunnel?.type)}</Tag>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {t("tunnels.edit.endpointFixed")}
           </Typography.Text>
@@ -1146,6 +1148,18 @@ function parseSecurityBasicAuth(cfg?: string): { user: string; hash: string }[] 
     return [];
   }
 }
+
+// One setting a plan change left on an endpoint: shown read-only with a way to
+// take it off (see SecurityDrawer).
+type KeptRow = {
+  key: string;
+  title: string;
+  summary: string;
+  /** True once the user has chosen to remove it (takes effect on Save). */
+  cleared: boolean;
+  remove: () => void;
+  undo: () => void;
+};
 
 type RateCfg = {
   /** Aggregate cap for the whole tunnel. 0 = none. */
@@ -1358,6 +1372,17 @@ function SecurityDrawer({
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  // Sections are gated by the tunnel's TYPE as well as the plan, and the two say
+  // different things. tcp/udp/sni are byte passthrough: the edge applies only
+  // the IP rules and the rate limit to them (listener/tcp.go, udp.go, sni.go),
+  // so Basic auth, the login and header rewriting have nothing to act on.
+  // Offering them there let people set a protection that guarded nothing.
+  // Hidden with a line saying why — never folded into the plan notice, because
+  // no upgrade makes them apply. Same rule as the web console's drawer.
+  const barePort = isBarePortType(tunnel?.type);
+  const showBasicAuth = basicAuthEnabled && !barePort;
+  const showHeaders = headerRewriteEnabled && !barePort;
+  const showOAuth = oauthEnabled && !barePort;
   const initIP = useMemo(() => parseSecurityIP(tunnel?.config_json), [tunnel?.config_json, tunnel?.id]);
   const initBA = useMemo(() => parseSecurityBasicAuth(tunnel?.config_json), [tunnel?.config_json, tunnel?.id]);
   const initRate = useMemo(() => parseSecurityRateLimit(tunnel?.config_json), [tunnel?.config_json, tunnel?.id]);
@@ -1397,7 +1422,7 @@ function SecurityDrawer({
   const { data: loginPolicies } = useQuery<OAuthPolicy[]>({
     queryKey: ["org-oauth-policies"],
     queryFn: () => api.orgOAuthPolicies().then((r) => r.items || []).catch(() => []),
-    enabled: !!tunnel && oauthEnabled,
+    enabled: !!tunnel && showOAuth,
     retry: false,
     staleTime: 60_000,
   });
@@ -1456,22 +1481,119 @@ function SecurityDrawer({
       qc.invalidateQueries({ queryKey: ["tunnels"] });
       onClose();
     },
-    onError: (e: any) => message.error(e?.message || t("tunnels.security.failed")),
+    // The server's sentence is a fixed Chinese string; the code is what is
+    // stable, so the message is rebuilt from it in the viewer's language.
+    onError: (e: any) =>
+      message.error(
+        securityErrorText(t, e?.body?.code, e?.body?.value, { hideCommerce, typeName: typeLabel(tunnel?.type) }) ||
+          e?.message ||
+          t("tunnels.security.failed"),
+      ),
   });
 
   // Roll every plan-locked feature into ONE notice instead of repeating an
   // upgrade box under each section. The user is a paying customer, so the copy
   // says "higher-tier plan", never "paid feature". Standalone has no plan to
   // upgrade — there the unavailable sections are simply hidden, no notice.
+  // What the TYPE rules out is left off this list: no plan makes it apply.
   const lockedFeatures = standalone
     ? []
     : ([
         !ipPolicyEnabled && t("tunnels.ipPolicy.title"),
-        !basicAuthEnabled && t("tunnels.basicAuth.title"),
+        !barePort && !basicAuthEnabled && t("tunnels.basicAuth.title"),
         !rateLimitEnabled && t("tunnels.rateLimit.title"),
-        !headerRewriteEnabled && t("tunnels.headers.title"),
-        !oauthEnabled && t("tunnels.oauth.title"),
+        !barePort && !headerRewriteEnabled && t("tunnels.headers.title"),
+        !barePort && !oauthEnabled && t("tunnels.oauth.title"),
       ].filter(Boolean) as string[]);
+
+  // Settings a bare port already carries — written before this drawer looked at
+  // the type, or through the API. Save keeps them: the hidden sections' state
+  // still holds the stored values and buildSecurityConfig writes them back
+  // (bff-console keeps a Basic-auth user's hash, and supplies the stored OAuth
+  // secret when none is sent). Removing somebody's configuration is not this
+  // drawer's call; saying that it does nothing is.
+  const inertStored = barePort
+    ? ([
+        initBA.length > 0 && t("tunnels.basicAuth.title"),
+        (initRH.set.length > 0 || initRH.remove.length > 0) && t("tunnels.headers.title"),
+        (!!initOA.provider || !!initOA.from_policy) && t("tunnels.oauth.title"),
+      ].filter(Boolean) as string[])
+    : [];
+  const typeName = typeLabel(tunnel?.type);
+
+  // What a plan change left behind: settings the plan no longer includes but
+  // the endpoint still carries — and the edge still applies, because it never
+  // looks at plans. Their sections are hidden above, so without a line here the
+  // endpoint would be enforcing rules its owner cannot see or take off. Each row
+  // is the stored value, read-only, with a way to remove it; saving without
+  // touching it keeps it (bff-console lets an unchanged block through the plan
+  // gate), and removing is a normal edit that the gate never sees. Standalone
+  // has every feature on, so it never has any.
+  const providerName = (p: string) => (p === "github" ? "GitHub" : p === "google" ? "Google" : p);
+  const keptRows = (
+    [
+      !rateLimitEnabled &&
+        (initRate.per_minute > 0 || initRate.per_ip_per_minute > 0) && {
+          key: "rate",
+          title: t("tunnels.rateLimit.title"),
+          summary: [
+            initRate.per_minute > 0 && `${initRate.per_minute} ${t("tunnels.rateLimit.unitTotal")}`,
+            initRate.per_ip_per_minute > 0 && `${initRate.per_ip_per_minute} ${t("tunnels.rateLimit.unitPerIP")}`,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          cleared: !(rate && rate > 0) && !(ratePerIP && ratePerIP > 0),
+          remove: () => {
+            setRate(null);
+            setRatePerIP(null);
+          },
+          undo: () => {
+            setRate(initRate.per_minute || null);
+            setRatePerIP(initRate.per_ip_per_minute || null);
+          },
+        },
+      !barePort &&
+        !headerRewriteEnabled &&
+        (initRH.set.length > 0 || initRH.remove.length > 0) && {
+          key: "headers",
+          title: t("tunnels.headers.title"),
+          summary: t("tunnels.security.headersSummary", { set: initRH.set.length, remove: initRH.remove.length }),
+          cleared: hdrSet.every((h) => !h.name.trim()) && splitLines(hdrRemove).length === 0,
+          remove: () => {
+            setHdrSet([]);
+            setHdrRemove("");
+          },
+          undo: () => {
+            setHdrSet(initRH.set);
+            setHdrRemove(initRH.remove.join("\n"));
+          },
+        },
+      !barePort &&
+        !oauthEnabled &&
+        (!!initOA.provider || !!initOA.from_policy) && {
+          key: "oauth",
+          title: t("tunnels.oauth.title"),
+          summary: initOA.from_policy
+            ? initOA.from_policy
+            : [providerName(initOA.provider), initOA.client_id].filter(Boolean).join(" · "),
+          cleared: !oaProvider && !oaFromPolicy,
+          remove: () => {
+            setOaProvider("");
+            setOaFromPolicy("");
+            setOaClientId("");
+            setOaEmails("");
+            setOaDomains("");
+          },
+          undo: () => {
+            setOaProvider(initOA.provider);
+            setOaFromPolicy(initOA.from_policy);
+            setOaClientId(initOA.client_id);
+            setOaEmails(initOA.allow_emails.join("\n"));
+            setOaDomains(initOA.allow_domains.join("\n"));
+          },
+        },
+    ] as (KeptRow | false)[]
+  ).filter((r): r is KeptRow => !!r);
 
   return (
     <Drawer
@@ -1489,10 +1611,11 @@ function SecurityDrawer({
               loading={save.isPending}
               disabled={
                 !ipPolicyEnabled &&
-                !basicAuthEnabled &&
+                !showBasicAuth &&
                 !rateLimitEnabled &&
-                !headerRewriteEnabled &&
-                !oauthEnabled
+                !showHeaders &&
+                !showOAuth &&
+                keptRows.length === 0
               }
               onClick={() => save.mutate()}
             >
@@ -1513,6 +1636,65 @@ function SecurityDrawer({
           )}
         />
       )}
+
+      {keptRows.length > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={t("tunnels.security.stillActive")}
+          description={
+            <Space direction="vertical" size={6} style={{ width: "100%", marginTop: 6 }}>
+              {keptRows.map((r) => (
+                <div key={r.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div>
+                      <strong>{r.title}</strong>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--c-faint)" }}>{r.summary}</div>
+                  </div>
+                  <span style={{ flexShrink: 0 }}>
+                    {r.cleared ? (
+                      <>
+                        <Tag>{t("tunnels.security.removePending")}</Tag>
+                        <Button type="link" size="small" onClick={r.undo}>
+                          {t("tunnels.security.undo")}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button size="small" danger onClick={r.remove}>
+                        {t("tunnels.security.remove")}
+                      </Button>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </Space>
+          }
+        />
+      )}
+
+      {barePort &&
+        (inertStored.length > 0 ? (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={t("tunnels.security.barePortNote", { type: typeName })}
+            description={
+              <>
+                <div style={{ marginBottom: 6 }}>{t("tunnels.security.inertStored", { type: typeName })}</div>
+                {inertStored.map((name) => (
+                  <Tag key={name}>{name}</Tag>
+                ))}
+              </>
+            }
+          />
+        ) : (
+          <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
+            {t("tunnels.security.barePortNote", { type: typeName })}
+          </Typography.Paragraph>
+        ))}
 
       {ipPolicyEnabled && (
         <>
@@ -1572,7 +1754,7 @@ function SecurityDrawer({
         </>
       )}
 
-      {basicAuthEnabled && (
+      {showBasicAuth && (
         <>
           <Divider />
           <Typography.Title level={5} style={{ marginTop: 0 }}>{t("tunnels.basicAuth.title")}</Typography.Title>
@@ -1647,7 +1829,7 @@ function SecurityDrawer({
         </>
       )}
 
-      {headerRewriteEnabled && (
+      {showHeaders && (
         <>
           <Divider />
           <Typography.Title level={5} style={{ marginTop: 0 }}>{t("tunnels.headers.title")}</Typography.Title>
@@ -1689,7 +1871,7 @@ function SecurityDrawer({
         </>
       )}
 
-      {oauthEnabled && (
+      {showOAuth && (
         <>
       <Divider />
       <Typography.Title level={5} style={{ marginTop: 0 }}>{t("tunnels.oauth.title")}</Typography.Title>

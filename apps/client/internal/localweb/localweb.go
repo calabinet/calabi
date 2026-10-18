@@ -367,13 +367,15 @@ type remoteTunnel struct {
 	EdgeNodeID int64  `json:"edge_node_id,omitempty"`
 }
 
+// toRemote is the row the console reads. config_json goes out with the OAuth
+// client secret replaced by client_secret_set (see redactConfigJSON).
 func toRemote(t ConfiguredTunnel) remoteTunnel {
 	return remoteTunnel{
 		ID: t.ID, Name: t.Name, Type: t.Type, LocalAddr: t.LocalAddr,
 		Domain: t.Domain, RemotePort: t.RemotePort, EdgeNodeID: t.EdgeNodeID,
 		// "enabled" = the configured intent; the SPA overlays live/offline from
 		// the /tunnels snapshot.
-		Status: "enabled", ConfigJSON: t.ConfigJSON,
+		Status: "enabled", ConfigJSON: redactConfigJSON(t.ConfigJSON),
 	}
 }
 
@@ -418,7 +420,7 @@ func (s *Server) createTunnel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	cfgJSON, err := transformSecurityConfig(body.ConfigJSON)
+	cfgJSON, err := transformSecurityConfig(body.ConfigJSON, "")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -434,7 +436,8 @@ func (s *Server) createTunnel(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, remoteTunnel{
 		ID: id, Name: body.Name, Type: body.Type, LocalAddr: body.LocalAddr,
-		Domain: body.Domain, RemotePort: body.RemotePort, Status: "enabled", ConfigJSON: cfgJSON,
+		Domain: body.Domain, RemotePort: body.RemotePort, Status: "enabled",
+		ConfigJSON: redactConfigJSON(cfgJSON),
 	})
 }
 
@@ -534,7 +537,15 @@ func (s *Server) updateSecurity(w http.ResponseWriter, r *http.Request, id int64
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	cfgJSON, err := transformSecurityConfig(body.ConfigJSON)
+	// The stored config, for the OAuth secret the console cannot send back.
+	prev := ""
+	for _, t := range s.list() {
+		if t.ID == id {
+			prev = t.ConfigJSON
+			break
+		}
+	}
+	cfgJSON, err := transformSecurityConfig(body.ConfigJSON, prev)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -543,7 +554,7 @@ func (s *Server) updateSecurity(w http.ResponseWriter, r *http.Request, id int64
 		writeWriterErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "status": "enabled", "config_json": cfgJSON})
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "status": "enabled", "config_json": redactConfigJSON(cfgJSON)})
 }
 
 // --- platform-shaped stubs (benign empties so SPA pages render) ------------
@@ -621,7 +632,13 @@ func (s *Server) handleConfigExport(w http.ResponseWriter, r *http.Request) {
 	}
 	items := make([]remoteTunnel, 0)
 	for _, t := range s.list() {
-		items = append(items, toRemote(t))
+		row := toRemote(t)
+		// Unredacted, unlike every other read: import writes config_json back
+		// verbatim, so a backup without the OAuth secret would restore a tunnel
+		// whose login cannot work. This is the local-token gated file the owner
+		// asked for, not the open loopback list.
+		row.ConfigJSON = t.ConfigJSON
+		items = append(items, row)
 	}
 	w.Header().Set("Content-Disposition", `attachment; filename="calabi-config.json"`)
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -866,9 +883,11 @@ func (s *Server) handleInspectCaptures(w http.ResponseWriter, r *http.Request) {
 
 // transformSecurityConfig mirrors bff-console: it bcrypt-hashes any cleartext
 // basic-auth password the SPA sends ({user, password}) into {user, hash} and
-// strips the cleartext, leaving the rest of the config_json (ip / rate / headers
-// / oauth) untouched. Returns "" for an empty input.
-func transformSecurityConfig(raw string) (string, error) {
+// strips the cleartext, and fills in the stored OAuth client secret from prev
+// (the tunnel's current config_json; "" on create) when the save carries none.
+// The rest of the config_json (ip / rate / headers) is untouched. Returns "" for
+// an empty input.
+func transformSecurityConfig(raw, prev string) (string, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return "", nil
@@ -908,11 +927,83 @@ func transformSecurityConfig(raw string) (string, error) {
 			ba["users"] = users
 		}
 	}
+	// The console never receives the OAuth client secret (see redactConfigJSON),
+	// so it cannot send it back: every ordinary save arrives without one. An
+	// absent secret therefore means "unchanged" and the stored value is supplied;
+	// only a save that types a new one rotates it. Same as bff-console's
+	// transformAndGateSecurity.
+	if oa, ok := sec["oauth"].(map[string]any); ok {
+		provider, _ := oa["provider"].(string)
+		csec, _ := oa["client_secret"].(string)
+		if strings.TrimSpace(provider) != "" && strings.TrimSpace(csec) == "" {
+			if stored := storedOAuthSecret(prev); stored != "" {
+				oa["client_secret"] = stored
+			}
+		}
+		// Never persist the presence flag: the server says it on the way out.
+		delete(oa, "client_secret_set")
+	}
 	out, err := json.Marshal(doc)
 	if err != nil {
 		return "", err
 	}
 	return string(out), nil
+}
+
+// storedOAuthSecret digs the currently-stored secret out of a config blob.
+// Returns "" for anything it cannot read — an unparseable blob must not be a
+// way to make the caller's missing secret look present.
+func storedOAuthSecret(configJSON string) string {
+	if strings.TrimSpace(configJSON) == "" {
+		return ""
+	}
+	var cfg struct {
+		Security struct {
+			OAuth struct {
+				ClientSecret string `json:"client_secret"`
+			} `json:"oauth"`
+		} `json:"security"`
+	}
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		return ""
+	}
+	return cfg.Security.OAuth.ClientSecret
+}
+
+// redactConfigJSON removes the OAuth client secret from a config blob on its
+// way OUT, leaving client_secret_set behind so the console can tell
+// "configured, hidden" from "not configured". The same as bff-console's
+// redactTunnelConfig, so the one console reads both daemons alike.
+//
+// The secret is stored in plaintext because the edge has to present it to the
+// provider, and the list it would ride on is an open loopback GET. Maps, not
+// structs: a struct round-trip would drop every key it does not know about.
+// Unparseable input is returned untouched — refusing to render a tunnel because
+// its config is malformed would turn a display concern into an outage.
+func redactConfigJSON(configJSON string) string {
+	if !strings.Contains(configJSON, "client_secret") {
+		return configJSON // the common case: no OAuth on this tunnel
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		return configJSON
+	}
+	sec, _ := cfg["security"].(map[string]any)
+	if sec == nil {
+		return configJSON
+	}
+	oa, _ := sec["oauth"].(map[string]any)
+	if oa == nil {
+		return configJSON
+	}
+	secret, _ := oa["client_secret"].(string)
+	delete(oa, "client_secret")
+	oa["client_secret_set"] = strings.TrimSpace(secret) != ""
+	out, err := json.Marshal(cfg)
+	if err != nil {
+		return configJSON
+	}
+	return string(out)
 }
 
 // --- helpers ----------------------------------------------------------------

@@ -17,6 +17,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	proto "github.com/calabinet/calabi/pkg/protocol"
 )
@@ -41,10 +42,17 @@ func registerRefusal(err error) (string, bool) {
 			"waiting for an admin to approve it. It has been saved — ask an admin to " +
 			"approve it in the console (Tunnels → Settings), then run this again.", true
 	case proto.CodeProxyPolicyRequired:
-		// The edge's own message names what is missing and the ways out, so it
-		// is repeated rather than replaced.
-		return fmt.Sprintf("this organization requires every tunnel to have access "+
-			"protection: %s", pe.MessageEN), false
+		// The edge carries the control plane's own sentence, which names the rule
+		// that applied and the ways out — printed as it is. A fixed "requires
+		// every tunnel to have access protection" in front of it doubled the
+		// sentence for that rule and contradicted the other one, which is about
+		// raw-port tunnels only. The code still decides that this is a policy
+		// answer; only the words come from the edge.
+		if msg := strings.TrimSpace(pe.MessageEN); msg != "" {
+			return msg, false
+		}
+		return "this organization requires access protection on this tunnel; " +
+			"ask an owner or admin of the organization what its rule is.", false
 	}
 	return "", false
 }

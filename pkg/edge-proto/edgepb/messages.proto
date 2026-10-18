@@ -595,6 +595,12 @@ message RegisterEdgeNodeRequest {
   // number as control_plane.RegisterEdgeNodeRequest.relay_tls. False from a
   // node older than relay TLS: its devices keep the plaintext protocol.
   bool   relay_tls       = 12;
+  // A TLS passthrough (sni) visitor can reach this node: it passes TLS through
+  // on its HTTPS port (a node that serves one organization) or runs the
+  // dedicated sni_port listener. Same field number as
+  // control_plane.RegisterEdgeNodeRequest.tls_passthrough; the console offers
+  // TLS endpoints only on nodes that report it.
+  bool   tls_passthrough = 13;
 }
 
 // [mirrored from proto/calabi/v1/control_plane/identity.proto]

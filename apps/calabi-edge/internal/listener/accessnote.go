@@ -12,6 +12,7 @@
 package listener
 
 import (
+	"log/slog"
 	"net"
 
 	"github.com/calabinet/calabi/apps/calabi-edge/internal/accesslog"
@@ -39,4 +40,16 @@ func noteAccess(sess *session.Session, proxyID, visitorIP, outcome string) {
 // an already-extracted address string.
 func noteAccessAddr(sess *session.Session, proxyID string, addr net.Addr, outcome string) {
 	noteAccess(sess, proxyID, extractIP(addr), outcome)
+}
+
+// logPolicyDenial is independent of the access-record sink: BYOI nodes without
+// a bus cannot publish those records, but operators still need to diagnose a
+// refusal before TLS reaches the daemon. Never log the policy itself or TLS
+// payloads. The forward listener must supply the original visitor's IP.
+func logPolicyDenial(logger *slog.Logger, sess *session.Session, p *session.Proxy, visitorIP, outcome string) {
+	logger.Info("visitor denied by security policy",
+		"outcome", outcome, "visitor_ip", visitorIP,
+		"domain", p.Domain, "proxy_type", string(p.Type),
+		"proxy_id", p.ID, "session_id", sess.ID,
+		"org_id", sess.OrgID(), "tunnel_id", p.TunnelID)
 }

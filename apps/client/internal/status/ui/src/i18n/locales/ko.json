@@ -229,7 +229,20 @@
       "saved": "보안 정책이 저장됨",
       "failed": "보안 정책 저장 실패",
       "lockedNotice": "일부 기능은 요금제 업그레이드가 필요합니다: {{features}}.",
-      "lockedNoticeContact": "현재 요금제에 포함되지 않습니다: {{features}}. 사용하려면 플랫폼 관리자에게 문의하세요."
+      "lockedNoticeContact": "현재 요금제에 포함되지 않습니다: {{features}}. 사용하려면 플랫폼 관리자에게 문의하세요.",
+      "barePortNote": "{{type}} 엔드포인트는 바이트를 그대로 전달하고 요청을 해석하지 않으므로 IP 접근 제어와 속도 제한만 설정할 수 있습니다. 기본 인증, OAuth 로그인 인증, 요청 헤더는 HTTP/HTTPS 엔드포인트에서만 동작합니다.",
+      "inertStored": "이 엔드포인트에는 아래 설정이 저장되어 있지만 {{type}} 엔드포인트에서는 적용되지 않습니다. 저장해도 그대로 유지됩니다:",
+      "stillActive": "현재 요금제에는 아래 항목이 포함되어 있지 않지만, 이 엔드포인트에는 이미 설정되어 있어 계속 적용됩니다. 저장해도 그대로 유지되며, 없애려면 「제거」를 누르세요.",
+      "remove": "제거",
+      "removePending": "저장 후 제거됨",
+      "undo": "실행 취소",
+      "headersSummary": "설정 {{set}}개, 제거 {{remove}}개",
+      "err": {
+        "ipInvalid": "잘못된 IP 또는 CIDR: {{value}}",
+        "headerName": "잘못된 요청 헤더 이름: {{value}}",
+        "headerForbidden": "헤더 「{{value}}」은(는) 다시 쓸 수 없습니다(전송 프레이밍에 영향을 줍니다).",
+        "oauthCredentials": "OAuth 로그인 인증에는 Client ID와 Client Secret이 필요합니다."
+      }
     },
     "edit": {
       "title": "엔드포인트 편집",
@@ -314,7 +327,7 @@
     "publishBanner": "서비스 \"{{name}}\" 공개 중",
     "publishBannerDesc": "로컬 주소는 서비스에서 자동으로 채워졌습니다. 아래에서 엔드포인트의 유형과 주소를 선택하세요. 이것은 별도의 엔드포인트이며, 이 서비스의 메시 내 접근에는 영향을 주지 않습니다.",
     "localServiceLabel": "로컬 서비스",
-    "localServiceTip": "클라이언트가 로컬 서비스에 연결하는 방식입니다. HTTP는 평문으로 연결하고, HTTPS는 TLS로 감쌉니다(자체 서명 인증서도 허용).",
+    "localServiceTip": "클라이언트가 로컬 서비스에 연결하는 방식입니다. HTTP는 평문으로 연결하고, HTTPS는 TLS로 감쌉니다(자체 서명 인증서도 허용). TLS는 연결을 그대로 서비스에 넘기고, 서비스가 자체 인증서로 핸드셰이크를 완료합니다.",
     "checkBtn": "확인",
     "checkRunning": "로컬 서비스를 확인하는 중…",
     "checkOk": "로컬 서비스에 연결됩니다 · {{ms}} ms",
@@ -359,7 +372,7 @@
     "protPickPolicyFirst": "IP 정책을 고르거나 ‘설정 안 함’으로 되돌리세요.",
     "protAddrsEmpty": "주소를 하나 이상 입력하거나 ‘설정 안 함’으로 되돌리세요 — 빈 목록은 더 엄격한 규칙이 아니라 규칙 없음이며, 엣지는 모두를 통과시킵니다.",
     "protNeeded": "이 조직은 이런 종류의 엔드포인트에 접근 정책을 요구합니다. 정책을 고르거나 허용할 주소를 입력하세요.",
-    "protBarePortHelp": "이 조직은 TCP/UDP/SNI 엔드포인트에 IP 규칙을 요구합니다. 원시 포트는 로그인을 붙일 수 없어 주소 목록만이 사람을 막을 수 있습니다.",
+    "protBarePortHelp": "이 조직은 TCP/UDP/TLS 엔드포인트에 IP 규칙을 요구합니다. 원시 포트는 로그인을 붙일 수 없어 주소 목록만이 사람을 막을 수 있습니다.",
     "protRequiredHelp": "이 조직은 모든 엔드포인트에 접근 보호를 요구합니다.",
     "protOptionalHelp": "선택 사항입니다. 생성 후 엔드포인트의 보안 설정에서도 추가할 수 있습니다.",
     "protNoDefaultWarn": "이 조직은 접근 보호를 요구하지만 기본 IP 정책이 없습니다. 그래서 명령줄 생성(calabi http 8080)은 그대로 거부됩니다. 기본 정책은 관리자가 웹 콘솔의 «엔드포인트 → 설정»에서 설정합니다.",
@@ -390,7 +403,14 @@
     "doneMissingBody": "서버에 이 레코드가 더 이상 없습니다(#{{id}}). 삭제되었거나, 클라이언트가 인수할 때 새 행으로 대체되었을 수 있습니다. 엔드포인트 목록을 확인하고, 정말 없다면 다시 만든 뒤 이 번호를 운영 담당자에게 알려주세요.",
     "ipNeedPlan": "현재 요금제에는 IP 접근 제어가 없습니다. 이 조직은 접근 보호를 요구하지 않으므로 엔드포인트는 지금 이대로 만들 수 있습니다. 출발지 주소를 제한하려면 요금제를 업그레이드하세요.",
     "ipNeedPlanNoUpgrade": "현재 요금제에는 IP 접근 제어가 없습니다. 이 조직은 접근 보호를 요구하지 않으므로 엔드포인트는 지금 이대로 만들 수 있습니다.",
-    "typePortCapped": "{{type}}(TCP/UDP 엔드포인트 할당량 소진)"
+    "typePortCapped": "{{type}}(TCP/UDP 엔드포인트 할당량 소진)",
+    "tlsNeedsOwnNode": "TLS (자체 호스팅 노드를 통한 연결 필요)",
+    "tlsNeedsUpgrade": "TLS (먼저 노드 업데이트 필요)",
+    "tlsNeedsDomain": "TLS (노드에 검증된 도메인 필요)",
+    "tlsNeedsHttpsPort": "TLS (노드에 HTTPS 포트 없음)",
+    "tlsPrefixRequired": "TLS 엔드포인트에는 이름이 필요합니다. 인증서와 일치해야 합니다",
+    "typeHelpHttps": "엣지가 플랫폼에서 발급한 인증서로 복호화한 뒤 서비스로 전달하므로 OAuth 로그인 인증, 기본 인증, 헤더 재작성을 추가할 수 있습니다. 자체 인증서를 쓰고 엣지가 복호화하지 않게 하려면 TLS를 선택하세요.",
+    "typeHelpTls": "서비스 자체 인증서를 사용합니다. 엣지는 도메인 이름만 보고 전달하며 복호화하지 않으므로 내용을 볼 수 없습니다. 접근 제어는 IP 규칙과 속도 제한만 가능합니다."
   },
   "inspector": {
     "title": "요청 검사기 · {{name}}",

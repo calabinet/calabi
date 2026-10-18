@@ -104,3 +104,26 @@ func TestPersistErrorControlPlainMessageUntouched(t *testing.T) {
 		t.Fatalf("a plain message was rewritten: %q -> %q", plain, got)
 	}
 }
+
+// A refusal tagged with Refused reaches the client as the control plane's
+// sentence alone — no sentinel text, no transport envelope — under the code
+// its sentinel names. persistErrorMessage's stripper is not involved: the
+// adapter hands over the bare message, which is why this is the path the
+// adapter takes now (a fmt.Errorf wrap put the sentinel's text in front of the
+// envelope, so the stripper never matched).
+func TestPersistErrorRefusedCarriesOnlyTheSentence(t *testing.T) {
+	const msg = "custom domain \"shop.example.com\" is not registered; run `calabi domains create shop.example.com` first"
+	err := Refused(ErrProxyRefused, msg)
+	if !errors.Is(err, ErrProxyRefused) {
+		t.Fatal("Refused lost its sentinel")
+	}
+	if got := persistErrorCode(err); got != proto.CodeForbidden {
+		t.Fatalf("persistErrorCode = %d, want %d (CodeForbidden)", got, proto.CodeForbidden)
+	}
+	if got := persistErrorMessage(err); got != msg {
+		t.Fatalf("message = %q, want %q", got, msg)
+	}
+	if got := persistErrorCode(Refused(ErrProxyPolicyRequired, msg)); got != proto.CodeProxyPolicyRequired {
+		t.Fatalf("a baseline refusal = %d, want %d", got, proto.CodeProxyPolicyRequired)
+	}
+}

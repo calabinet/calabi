@@ -229,7 +229,20 @@
       "saved": "Sicherheitsrichtlinie gespeichert",
       "failed": "Sicherheitsrichtlinie konnte nicht gespeichert werden",
       "lockedNotice": "Einige Funktionen erfordern ein Tarif-Upgrade: {{features}}.",
-      "lockedNoticeContact": "Dein Tarif enthält nicht: {{features}}. Wende dich an deinen Plattform-Administrator, um sie freizuschalten."
+      "lockedNoticeContact": "Dein Tarif enthält nicht: {{features}}. Wende dich an deinen Plattform-Administrator, um sie freizuschalten.",
+      "barePortNote": "{{type}}-Endpunkte leiten Bytes unverändert weiter und lesen keine Anfragen, daher gibt es für sie nur IP-Zugriffssteuerung und Ratenbegrenzung. Basic-Authentifizierung, OAuth-Authentifizierung und Anfrage-Header wirken nur bei HTTP/HTTPS-Endpunkten.",
+      "inertStored": "Für diesen Endpunkt sind die folgenden Einstellungen gespeichert, bei einem {{type}}-Endpunkt wirken sie aber nicht. Beim Speichern bleiben sie unverändert erhalten:",
+      "stillActive": "Ihr Tarif enthält die folgenden Einstellungen nicht, sie sind aber bereits für diesen Endpunkt gesetzt und weiterhin wirksam. Beim Speichern bleiben sie unverändert; mit „Entfernen“ lässt sich eine davon löschen.",
+      "remove": "Entfernen",
+      "removePending": "Wird beim Speichern entfernt",
+      "undo": "Rückgängig",
+      "headersSummary": "{{set}} setzen, {{remove}} entfernen",
+      "err": {
+        "ipInvalid": "Ungültige IP-Adresse oder CIDR: {{value}}",
+        "headerName": "Ungültiger Name für den Anfrage-Header: {{value}}",
+        "headerForbidden": "Der Header „{{value}}“ kann nicht umgeschrieben werden (er betrifft die Übertragungsrahmung).",
+        "oauthCredentials": "Für die OAuth-Anmeldung sind Client-ID und Client-Secret erforderlich."
+      }
     },
     "edit": {
       "title": "Endpunkt bearbeiten",
@@ -314,7 +327,7 @@
     "publishBanner": "Dienst „{{name}}“ wird veröffentlicht",
     "publishBannerDesc": "Die lokale Adresse wurde aus dem Dienst übernommen; wähle unten Typ und Adresse des Endpunkts. Dies ist ein separater Endpunkt — der Mesh-Zugriff auf den Dienst ändert sich dadurch nicht.",
     "localServiceLabel": "Lokaler Dienst",
-    "localServiceTip": "So verbindet sich der Client mit deinem lokalen Dienst: HTTP unverschlüsselt, HTTPS zusätzlich per TLS (selbstsignierte Zertifikate werden akzeptiert).",
+    "localServiceTip": "So verbindet sich der Client mit deinem lokalen Dienst: HTTP unverschlüsselt, HTTPS zusätzlich per TLS (selbstsignierte Zertifikate werden akzeptiert). TLS reicht die Verbindung unverändert an deinen Dienst weiter; er schließt den Handshake mit seinem eigenen Zertifikat ab.",
     "checkBtn": "Prüfen",
     "checkRunning": "Lokaler Dienst wird geprüft…",
     "checkOk": "Lokaler Dienst erreichbar · {{ms}} ms",
@@ -359,7 +372,7 @@
     "protPickPolicyFirst": "Wählen Sie eine IP-Richtlinie oder gehen Sie zurück auf „jetzt nicht“.",
     "protAddrsEmpty": "Geben Sie mindestens eine Adresse ein oder gehen Sie zurück auf „jetzt nicht“ — eine leere Liste ist keine strengere Regel, sondern gar keine, und der Edge lässt jeden durch.",
     "protNeeded": "Diese Organisation verlangt für diese Art Endpunkt eine Zugriffsregel. Wählen Sie eine Richtlinie oder tragen Sie die erlaubten Adressen ein.",
-    "protBarePortHelp": "Diese Organisation verlangt für TCP/UDP/SNI-Endpunkte eine IP-Regel. Ein roher Port hat kein Login, also kann nur eine Adressliste jemanden abweisen.",
+    "protBarePortHelp": "Diese Organisation verlangt für TCP/UDP/TLS-Endpunkte eine IP-Regel. Ein roher Port hat kein Login, also kann nur eine Adressliste jemanden abweisen.",
     "protRequiredHelp": "Diese Organisation verlangt Zugriffsschutz für jeden Endpunkt.",
     "protOptionalHelp": "Optional — lässt sich auch später in den Sicherheitseinstellungen des Endpunkts ergänzen.",
     "protNoDefaultWarn": "Diese Organisation verlangt Zugriffsschutz, hat aber keine Standard-IP-Richtlinie. Damit wird ein Anlegen über die Kommandozeile (calabi http 8080) rundweg abgelehnt. Die Standardrichtlinie setzt eine Administratorin unter Endpunkte → Einstellungen in der Web-Konsole.",
@@ -390,7 +403,14 @@
     "doneMissingBody": "Der Server kennt diesen Datensatz nicht mehr (#{{id}}). Er wurde gelöscht oder beim Übernehmen durch eine neue Zeile ersetzt. Prüfen Sie die Endpunktliste; falls er wirklich fehlt, legen Sie ihn neu an und geben Sie diese Nummer an den Betrieb weiter.",
     "ipNeedPlan": "Dieser Tarif enthält keine IP-Zugriffskontrolle. Diese Organisation verlangt keinen Zugriffsschutz, der Endpunkt lässt sich also so anlegen — für eine Einschränkung der Quelladressen ein Upgrade wählen.",
     "ipNeedPlanNoUpgrade": "Dieser Tarif enthält keine IP-Zugriffskontrolle. Die Organisation verlangt keinen Zugriffsschutz, der Endpunkt lässt sich also so anlegen.",
-    "typePortCapped": "{{type}} (Kontingent für TCP/UDP-Endpunkte aufgebraucht)"
+    "typePortCapped": "{{type}} (Kontingent für TCP/UDP-Endpunkte aufgebraucht)",
+    "tlsNeedsOwnNode": "TLS (Verbindung über einen selbst gehosteten Knoten nötig)",
+    "tlsNeedsUpgrade": "TLS (Knoten zuerst aktualisieren)",
+    "tlsNeedsDomain": "TLS (verifizierte Domain auf deinem Knoten nötig)",
+    "tlsNeedsHttpsPort": "TLS (Knoten hat keinen HTTPS-Port)",
+    "tlsPrefixRequired": "Ein TLS-Endpunkt braucht einen Namen: dein Zertifikat muss dazu passen",
+    "typeHelpHttps": "Der Edge entschlüsselt mit einem von der Plattform ausgestellten Zertifikat und leitet dann an deinen Dienst weiter – daher sind OAuth-Anmeldung, Basic-Authentifizierung und Header-Umschreibungen möglich. Wenn du dein eigenes Zertifikat behalten willst und der Edge nicht entschlüsseln soll, wähle TLS.",
+    "typeHelpTls": "Dein Dienst verwendet sein eigenes Zertifikat. Der Edge leitet nur anhand des Domainnamens weiter und entschlüsselt nie, sieht also keine Inhalte. Zugriffskontrolle gibt es nur über IP-Regeln und Ratenbegrenzung."
   },
   "inspector": {
     "title": "Anfrage-Inspektor · {{name}}",

@@ -10,6 +10,101 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## 2.3.0 — 2026-10-18
+
+**TLS endpoints, on your own node.** Nothing to configure: no config file
+changed. Update the node before you create a TLS endpoint on it — an older node
+can't serve one. Nodes run by Calabi don't take TLS endpoints.
+
+### Endpoints
+
+- **Added** — **TLS endpoints.** A self-hosted node — one connected to
+  calabi.net, or one you run with your own coordinator — now also serves TLS
+  endpoints on its HTTPS port. For each connection it reads the server name
+  from the start of the TLS handshake, before answering: the name of a TLS
+  endpoint goes to your service as it is, and the node never decrypts it nor
+  holds a certificate for it; any other name is served as HTTPS, exactly as
+  before. A node with no TLS endpoint on it doesn't read the handshake at all.
+  Create one in the console, or with `calabi sni <local-port> --domain <name>`;
+  the documentation has a page on TLS endpoints, including how your service
+  gets its certificate (TLS-ALPN-01 works through the endpoint). The separate
+  `sni_port` listener stays, off by default.
+- **Changed** — **A name is an HTTPS endpoint or a TLS endpoint on a node, not
+  both.** Port 443 serves both kinds, so a second endpoint with the same name
+  is refused, whichever kind came first.
+- **Fixed** — **A TLS endpoint on a node that could not serve it showed as
+  online.** Registering an `sni` endpoint on a node with no way in for it —
+  before this release, every node without `sni_port` — succeeded, and the
+  client showed it online while nothing could reach it. The node now refuses
+  it and says where TLS endpoints are served.
+- **Fixed** — **The command line called a domain problem an access-protection
+  rule.** `calabi http 8080 --domain <name>` with a domain that was not
+  registered or not verified printed "this organization requires every tunnel
+  to have access protection" in front of the real reason. It now prints the
+  reason alone, and an organization's protection rule prints its own sentence
+  once.
+- **Fixed** — **An IP rule could close a TLS connection without an ordinary
+  node log explaining why.** Refusals now appear at INFO level with the
+  endpoint's domain and ID, the source IP and `outcome=denied_ip`, including
+  on self-hosted nodes that do not report access records to calabi.net. The
+  rule is still enforced before a connection reaches the client. TLS
+  passthrough cannot return an HTTP error page without terminating TLS.
+
+### Local console
+
+- **Added** — **TLS in the new-endpoint wizard.** It can be chosen when this
+  device is connected through your own node, the node is up to date, and it
+  serves a verified domain; otherwise the option says which of these is
+  missing. Connected to your own server, it can be chosen when the node's
+  HTTPS port is on. Lists and details call the type TLS.
+- **Changed** — **Access control offers only what an endpoint's type can use.**
+  TCP, UDP and TLS endpoints pass bytes through, not HTTP requests, so the
+  node never applied Basic auth, OAuth sign-in or header rewrite on them; the
+  access-control panel no longer offers these there. An endpoint that already
+  has them shows which, and saving keeps them as they are.
+- **Changed** — **Settings your plan no longer includes are listed.** When a
+  plan that included a rate limit, header rewrite or OAuth sign-in ends, an
+  endpoint that has one keeps it, and the node keeps applying it. The
+  access-control panel used to hide it; it now lists it, read-only, with a
+  button to remove it. Errors from saving are shown in the dashboard's language.
+- **Fixed** — **Connected to your own server, saving access control removed the
+  OAuth client secret.** On an endpoint with its own OAuth sign-in, saving any
+  access-control change — an IP rule, for example — dropped the client secret,
+  and the sign-in stopped working. The endpoint list also returned the secret
+  in plain text. The secret is now kept unless you enter a new one, and lists
+  say only that one is set. A configuration export still includes it, so an
+  import restores a working sign-in.
+
+### On calabi.net
+
+- **Added** — **TLS endpoints in the web console**, on any plan. They need a
+  self-hosted node that is up to date and a verified domain it serves; the
+  console says which is missing, and the server refuses the same cases.
+- **Changed** — **TCP, UDP and TLS endpoints take only IP restrictions and rate
+  limiting.** The node never applied Basic auth, OAuth sign-in or header
+  rewrite on them. The security panel no longer offers these on such
+  endpoints, and the server refuses new ones from any client. Ones already
+  stored stay as they are and can be removed.
+- **Changed** — **Organization login policies need a plan with OAuth sign-in.**
+  Saving a login policy, or pointing an endpoint at one, now needs the same
+  plan as setting up sign-in on the endpoint itself; before, neither was
+  checked. Policies, and endpoints that already point at one, keep working and
+  can still be listed and removed.
+- **Fixed** — **An endpoint could hold a domain that was not its
+  organization's.** Endpoints created from the command line as `sni`, endpoints
+  claimed under a different domain, and TCP or UDP endpoints given a domain
+  skipped the check that the domain is the organization's own and verified.
+  As a domain belongs to one endpoint at a time, such an endpoint kept the
+  domain's owner from using it. Every way a domain reaches an endpoint now
+  checks it.
+- **Fixed** — **After a plan ended, some endpoints could not be saved.** An
+  endpoint with a rate limit, header rewrite or OAuth sign-in that the new plan
+  doesn't include keeps it, and the node keeps applying it — but every save of
+  that endpoint, even of an IP rule, was refused for a setting the console no
+  longer showed. Saving now keeps such settings unchanged, the security panel
+  lists them and can remove them, and changing them still needs a plan that
+  includes them. Errors from saving are shown in the console's language.
+
 ## 2.2.1 — 2026-10-15
 
 **Nothing to configure, and no order to update in.** No config file changed,

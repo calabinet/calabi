@@ -23,9 +23,11 @@ type Target struct {
 
 // Router holds the routing tables.
 //
-// Tables are kept separate per kind so the same domain or port can be
-// registered as different kinds (e.g. an HTTP route on `foo.calabi.net`
-// and an SNI passthrough on the same name listening on a different port).
+// Tables are kept separate per kind, and a port number may be in both the TCP
+// and the UDP table. A NAME may not be in both the HTTP and the SNI table: the
+// HTTPS port serves both (an SNI name is passed through, any other name is
+// terminated), so one name in both would leave which one a visitor reaches to
+// the order of lookups. The first registration keeps the name.
 type Router struct {
 	mu sync.RWMutex
 
@@ -64,6 +66,9 @@ func (r *Router) RegisterHTTP(domain string, sess any, sessionID, proxyID string
 	defer r.mu.Unlock()
 	if _, exists := r.httpByDomain[d]; exists {
 		return errors.New("domain already registered")
+	}
+	if _, exists := r.sniByDomain[d]; exists {
+		return errors.New("domain already registered as a TLS passthrough (sni) route")
 	}
 	e := &entry{
 		Target: Target{SessionID: sessionID, ProxyID: proxyID, Session: sess},
@@ -110,8 +115,8 @@ func (r *Router) RegisterUDP(port uint32, sess any, sessionID, proxyID string) e
 }
 
 // RegisterSNI binds an SNI server_name -> (sess, proxyID). The SNI table
-// is independent from HTTP because the routing key is the TLS SNI
-// extension (no Host header) and the listener binds a different port.
+// is separate from HTTP because the routing key is the TLS SNI extension
+// (no Host header); the name must not already be an HTTP route (see Router).
 func (r *Router) RegisterSNI(domain string, sess any, sessionID, proxyID string) error {
 	d := strings.ToLower(strings.TrimSpace(domain))
 	if d == "" {
@@ -121,6 +126,9 @@ func (r *Router) RegisterSNI(domain string, sess any, sessionID, proxyID string)
 	defer r.mu.Unlock()
 	if _, exists := r.sniByDomain[d]; exists {
 		return errors.New("sni domain already registered")
+	}
+	if _, exists := r.httpByDomain[d]; exists {
+		return errors.New("sni domain already registered as an http route")
 	}
 	e := &entry{
 		Target: Target{SessionID: sessionID, ProxyID: proxyID, Session: sess},
@@ -180,6 +188,15 @@ func (r *Router) LookupSNI(host string) (Target, bool) {
 		return Target{}, false
 	}
 	return e.Target, true
+}
+
+// HasSNIRoutes reports whether any SNI route exists. The HTTPS listener asks
+// before reading a ClientHello itself: with none, it terminates exactly as a
+// node without passthrough does.
+func (r *Router) HasSNIRoutes() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.sniByDomain) > 0
 }
 
 // connCloser is implemented by *session.Session. Declared here (rather than

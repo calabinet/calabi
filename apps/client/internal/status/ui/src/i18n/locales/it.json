@@ -229,7 +229,20 @@
       "saved": "Policy di sicurezza salvata",
       "failed": "Impossibile salvare la policy di sicurezza",
       "lockedNotice": "Alcune funzioni richiedono l'upgrade del piano: {{features}}.",
-      "lockedNoticeContact": "Il tuo piano non include: {{features}}. Chiedi all'amministratore della piattaforma di abilitarle."
+      "lockedNoticeContact": "Il tuo piano non include: {{features}}. Chiedi all'amministratore della piattaforma di abilitarle.",
+      "barePortNote": "Gli endpoint {{type}} inoltrano i byte così come sono e non leggono la richiesta, quindi ammettono solo il controllo accessi IP e il limite di velocità. Autenticazione Basic, autenticazione OAuth e header delle richieste funzionano solo sugli endpoint HTTP/HTTPS.",
+      "inertStored": "Questo endpoint ha salvate le impostazioni qui sotto, ma su un endpoint {{type}} non hanno effetto. Il salvataggio le conserva così come sono:",
+      "stillActive": "Il tuo piano non include le impostazioni qui sotto, ma sono già impostate su questo endpoint e restano attive. Salvando vengono mantenute così come sono; fai clic su «Rimuovi» per eliminarne una.",
+      "remove": "Rimuovi",
+      "removePending": "Rimosso al salvataggio",
+      "undo": "Annulla",
+      "headersSummary": "Imposta {{set}}, rimuove {{remove}}",
+      "err": {
+        "ipInvalid": "IP o CIDR non valido: {{value}}",
+        "headerName": "Nome dell'intestazione della richiesta non valido: {{value}}",
+        "headerForbidden": "L'intestazione «{{value}}» non può essere riscritta (influisce sul framing del trasporto).",
+        "oauthCredentials": "L'accesso OAuth richiede un Client ID e un Client Secret."
+      }
     },
     "edit": {
       "title": "Modifica endpoint",
@@ -314,7 +327,7 @@
     "publishBanner": "Pubblicazione del servizio «{{name}}»",
     "publishBannerDesc": "L'indirizzo locale è stato ripreso dal servizio; scegli qui sotto il tipo e l'indirizzo dell'endpoint. Questo è un endpoint separato: non cambia l'accesso al servizio all'interno della Mesh.",
     "localServiceLabel": "Servizio locale",
-    "localServiceTip": "Come il client si collega al tuo servizio locale: HTTP in chiaro, HTTPS incapsulato in TLS (i certificati autofirmati sono accettati).",
+    "localServiceTip": "Come il client si collega al tuo servizio locale: HTTP in chiaro, HTTPS incapsulato in TLS (i certificati autofirmati sono accettati). TLS passa la connessione così com'è al tuo servizio, che completa l'handshake con il proprio certificato.",
     "checkBtn": "Verifica",
     "checkRunning": "Verifica del servizio locale…",
     "checkOk": "Servizio locale raggiungibile · {{ms}} ms",
@@ -359,7 +372,7 @@
     "protPickPolicyFirst": "Scegli una policy IP, oppure torna a «non ora».",
     "protAddrsEmpty": "Inserisci almeno un indirizzo, oppure torna a «non ora»: un elenco vuoto non è una regola più stretta, è nessuna regola, e l'edge fa passare tutti.",
     "protNeeded": "Questa organizzazione richiede una regola di accesso per questo tipo di endpoint. Scegli una policy o inserisci gli indirizzi ammessi.",
-    "protBarePortHelp": "Questa organizzazione richiede una regola IP sugli endpoint TCP/UDP/SNI. Una porta grezza non ha un login, quindi solo un elenco di indirizzi può respingere qualcuno.",
+    "protBarePortHelp": "Questa organizzazione richiede una regola IP sugli endpoint TCP/UDP/TLS. Una porta grezza non ha un login, quindi solo un elenco di indirizzi può respingere qualcuno.",
     "protRequiredHelp": "Questa organizzazione richiede la protezione degli accessi su ogni endpoint.",
     "protOptionalHelp": "Facoltativa: puoi aggiungerla anche dopo, dalle impostazioni di sicurezza dell'endpoint.",
     "protNoDefaultWarn": "Questa organizzazione richiede la protezione degli accessi ma non ha una policy IP predefinita, quindi una creazione da riga di comando (calabi http 8080) viene rifiutata senz'altro. La policy predefinita si imposta in Endpoint → Impostazioni nella console web.",
@@ -390,7 +403,14 @@
     "doneMissingBody": "Il server non ha più questo record (#{{id}}). È stato eliminato, oppure sostituito da una nuova riga quando un client lo ha preso in carico. Controlla l'elenco degli endpoint; se manca davvero, ricrealo e comunica questo numero a chi gestisce la piattaforma.",
     "ipNeedPlan": "Questo piano non include il controllo accessi per IP. Questa organizzazione non richiede protezione degli accessi, quindi l'endpoint si può creare così com'è; passa a un piano superiore per limitare gli indirizzi di origine.",
     "ipNeedPlanNoUpgrade": "Questo piano non include il controllo accessi per IP. L'organizzazione non richiede protezione degli accessi, quindi l'endpoint si può creare così com'è.",
-    "typePortCapped": "{{type}} (quota di endpoint TCP/UDP esaurita)"
+    "typePortCapped": "{{type}} (quota di endpoint TCP/UDP esaurita)",
+    "tlsNeedsOwnNode": "TLS (serve la connessione tramite un nodo self-hosted)",
+    "tlsNeedsUpgrade": "TLS (aggiorna prima il nodo)",
+    "tlsNeedsDomain": "TLS (richiede un dominio verificato sul tuo nodo)",
+    "tlsNeedsHttpsPort": "TLS (il nodo non ha una porta HTTPS)",
+    "tlsPrefixRequired": "Un endpoint TLS ha bisogno di un nome: il tuo certificato deve corrispondere",
+    "typeHelpHttps": "L'edge decifra con un certificato emesso dalla piattaforma, poi inoltra al tuo servizio: per questo puoi aggiungere accesso OAuth, autenticazione Basic e riscrittura degli header. Per usare il tuo certificato senza che l'edge decifri, scegli TLS.",
+    "typeHelpTls": "Il tuo servizio usa il proprio certificato. L'edge instrada solo in base al nome di dominio e non decifra mai, quindi non vede il contenuto. Il controllo degli accessi si limita a regole IP e limiti di velocità."
   },
   "inspector": {
     "title": "Ispettore richieste · {{name}}",

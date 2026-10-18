@@ -181,11 +181,14 @@ func (f *Forward) handle(peer net.Conn) {
 	// alike (the origin edge terminates TLS before relaying, see https.go), so
 	// the credentials are readable exactly as on the public path. KindSNI is a
 	// raw TLS ClientHello with no HTTP semantics — the public SNI listener has
-	// no HTTP gates either, so it keeps just the IP rule and closes silently.
+	// no HTTP gates either, so it keeps just the IP rule and logs the refusal
+	// before closing without an HTTP response.
 	if p := sess.Proxy(target.ProxyID); p != nil {
 		if pol := p.LoadPolicy(); pol != nil {
 			if pol.HasIPRules() && !pol.AllowIPString(hdr.VisitorIP) {
-				if hdr.Kind != mesh.KindSNI {
+				if hdr.Kind == mesh.KindSNI {
+					logPolicyDenial(f.logger, sess, p, hdr.VisitorIP, accesslog.DeniedIP)
+				} else {
 					writeVisitorError(peer, head, 403, visitorerr.ErrIPBlocked)
 				}
 				f.observeRequest(hdr.Kind, "ip_denied")

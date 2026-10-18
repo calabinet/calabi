@@ -9,7 +9,7 @@ import (
 // untouched, and the capability map advertises them.
 func TestPlatform_AdvancedSecurityPreserved(t *testing.T) {
 	in := `{"security":{"rate_limit":{"per_minute":100},"oauth":{"provider":"google"}}}`
-	out, err := transformSecurityConfig(in)
+	out, err := transformSecurityConfig(in, "")
 	if err != nil {
 		t.Fatalf("transform: %v", err)
 	}

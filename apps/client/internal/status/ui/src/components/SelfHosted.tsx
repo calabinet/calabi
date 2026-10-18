@@ -23,6 +23,7 @@ import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../api/client";
 import type { SelfHostedEdgeState, SelfHostedPart, SelfHostedStatus, SelfHostedTunnel, SelfHostedUsage } from "../api/types";
 import { dayLabel } from "../lib/usageDays";
+import { typeLabel } from "../lib/tunnelType";
 import ChartFrame from "./ChartFrame";
 
 const { Text } = Typography;
@@ -372,7 +373,7 @@ export function SelfHostedTunnelsCard() {
               render: (_, r) => (
                 <Space size={6}>
                   <Text strong>{r.name}</Text>
-                  <Tag>{r.type.toUpperCase()}</Tag>
+                  <Tag>{typeLabel(r.type)}</Tag>
                 </Space>
               ),
             },

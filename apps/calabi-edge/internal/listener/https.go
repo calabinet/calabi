@@ -54,7 +54,19 @@ type HTTPSOptions struct {
 	// GlobalLimiter is the process-wide backpressure. nil =
 	// unlimited. Checked at accept before the TLS handshake completes work.
 	GlobalLimiter *ratelimit.GlobalLimiter
+	// Passthrough turns on TLS passthrough on this port:
+	// a ClientHello whose
+	// server_name is in the router's SNI table is handed here untouched —
+	// the bytes already read in head, the rest still in br — instead of being
+	// terminated. main sets it only on a node that serves one organization;
+	// nil terminates every connection, as before.
+	Passthrough PassthroughFunc
 }
+
+// PassthroughFunc takes over a visitor connection whose ClientHello has been
+// read but not answered: head is that ClientHello record, br holds whatever
+// follows it, host is its server_name. It owns visitor from here and closes it.
+type PassthroughFunc func(visitor net.Conn, br *bufio.Reader, head []byte, host string)
 
 // HTTPS is the TLS-terminating HTTP listener handle.
 type HTTPS struct {
@@ -83,19 +95,26 @@ func (h *HTTPS) Run(ctx context.Context) error {
 	if h.opts.GetCertificate == nil {
 		return fmt.Errorf("listener.https: GetCertificate is required when Addr=%q", h.opts.Addr)
 	}
+	// A plain TCP listener: the TLS server is wrapped around each connection in
+	// serve, which may first have to read the ClientHello itself.
+	ln, err := net.Listen("tcp", h.opts.Addr)
+	if err != nil {
+		return fmt.Errorf("listen %s: %w", h.opts.Addr, err)
+	}
+	h.logger.Info("https listener up", "addr", h.opts.Addr, "tls_passthrough", h.opts.Passthrough != nil)
+	return h.serveListener(ctx, ln)
+}
+
+// serveListener runs the accept loop on ln, a plain TCP listener, until ctx
+// ends.
+func (h *HTTPS) serveListener(ctx context.Context, ln net.Listener) error {
 	tlsCfg := &tls.Config{
 		MinVersion:     tls.VersionTLS12,
 		GetCertificate: h.opts.GetCertificate,
 		// NextProtos: http/1.1 only for now; adds h2.
 		NextProtos: []string{"http/1.1"},
 	}
-	ln, err := tls.Listen("tcp", h.opts.Addr, tlsCfg)
-	if err != nil {
-		return fmt.Errorf("listen %s: %w", h.opts.Addr, err)
-	}
 	h.ln = ln
-	h.logger.Info("https listener up", "addr", h.opts.Addr)
-
 	go func() {
 		<-ctx.Done()
 		h.stopping.Store(true)
@@ -120,14 +139,65 @@ func (h *HTTPS) Run(ctx context.Context) error {
 		}
 		go func() {
 			defer rel()
-			h.handle(conn)
+			h.serve(conn, tlsCfg)
 		}()
 	}
 }
 
+const (
+	// httpsHeadDeadline is a visitor's budget for everything before its first
+	// request head is in: ClientHello, handshake, head. Reading the ClientHello
+	// for passthrough spends from the same budget rather than adding one.
+	httpsHeadDeadline = 30 * time.Second
+	// httpsHelloBuf holds the largest ClientHello one TLS record can carry
+	// (2^14 bytes plus the record header). The dedicated sni_port listener
+	// makes do with 4 KiB; port 443 serves every visitor of the node, and a
+	// passthrough name whose hello did not fit would be terminated instead.
+	httpsHelloBuf = 5 + 16*1024
+)
+
+// serve decides who answers the ClientHello on conn. On a node with
+// Passthrough and at least one SNI route, it reads the hello's server_name
+// first: an SNI route's name is passed through untouched. Everything else —
+// another name, no server_name, not TLS, a hello that could not be read — is
+// terminated here, starting from the bytes already read, exactly as on a node
+// without passthrough. Nothing is dropped for failing to look like a
+// passthrough hello.
+func (h *HTTPS) serve(conn net.Conn, tlsCfg *tls.Config) {
+	_ = conn.SetReadDeadline(time.Now().Add(httpsHeadDeadline))
+	if h.opts.Passthrough == nil || !h.opts.Router.HasSNIRoutes() {
+		h.handle(tls.Server(conn, tlsCfg))
+		return
+	}
+	br := bufio.NewReaderSize(conn, httpsHelloBuf)
+	if total, host, err := peekClientHello(br); err == nil {
+		if _, ok := h.opts.Router.LookupSNI(host); ok {
+			head := make([]byte, total)
+			if _, err := io.ReadFull(br, head); err != nil {
+				_ = conn.Close()
+				return
+			}
+			_ = conn.SetReadDeadline(time.Time{})
+			h.opts.Passthrough(conn, br, head, host)
+			return
+		}
+	}
+	h.handle(tls.Server(&bufferedConn{Conn: conn, r: br}, tlsCfg))
+}
+
+// bufferedConn reads through r, a reader over the connection that may already
+// hold bytes read from it.
+type bufferedConn struct {
+	net.Conn
+	r *bufio.Reader
+}
+
+func (c *bufferedConn) Read(p []byte) (int, error) { return c.r.Read(p) }
+
+// handle serves one terminated visitor connection. serve has set its read
+// deadline.
 func (h *HTTPS) handle(visitor net.Conn) {
 	defer visitor.Close()
-	_ = visitor.SetReadDeadline(time.Now().Add(30 * time.Second))
 
 	br := bufio.NewReaderSize(visitor, 8192)
 	head, host, method, path, err := sniffHTTP(br)

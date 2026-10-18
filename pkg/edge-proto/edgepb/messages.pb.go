@@ -2922,9 +2922,15 @@ type RegisterEdgeNodeRequest struct {
 	// heartbeat; the coordinator then marks it TLS in the DERP map. Same field
 	// number as control_plane.RegisterEdgeNodeRequest.relay_tls. False from a
 	// node older than relay TLS: its devices keep the plaintext protocol.
-	RelayTls      bool `protobuf:"varint,12,opt,name=relay_tls,json=relayTls,proto3" json:"relay_tls,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	RelayTls bool `protobuf:"varint,12,opt,name=relay_tls,json=relayTls,proto3" json:"relay_tls,omitempty"`
+	// A TLS passthrough (sni) visitor can reach this node: it passes TLS through
+	// on its HTTPS port (a node that serves one organization) or runs the
+	// dedicated sni_port listener. Same field number as
+	// control_plane.RegisterEdgeNodeRequest.tls_passthrough; the console offers
+	// TLS endpoints only on nodes that report it.
+	TlsPassthrough bool `protobuf:"varint,13,opt,name=tls_passthrough,json=tlsPassthrough,proto3" json:"tls_passthrough,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *RegisterEdgeNodeRequest) Reset() {
@@ -3037,6 +3043,13 @@ func (x *RegisterEdgeNodeRequest) GetVersion() string {
 func (x *RegisterEdgeNodeRequest) GetRelayTls() bool {
 	if x != nil {
 		return x.RelayTls
+	}
+	return false
+}
+
+func (x *RegisterEdgeNodeRequest) GetTlsPassthrough() bool {
+	if x != nil {
+		return x.TlsPassthrough
 	}
 	return false
 }
@@ -4354,7 +4367,7 @@ const file_edgepb_messages_proto_rawDesc = "" +
 	"\rfencing_token\x18\a \x01(\x03R\ffencingToken\"i\n" +
 	"\x15ReclaimTunnelResponse\x122\n" +
 	"\x06tunnel\x18\x01 \x01(\v2\x1a.calabi.v1.bff_edge.TunnelR\x06tunnel\x12\x1c\n" +
-	"\treclaimed\x18\x02 \x01(\bR\treclaimed\"\xa6\x03\n" +
+	"\treclaimed\x18\x02 \x01(\bR\treclaimed\"\xcf\x03\n" +
 	"\x17RegisterEdgeNodeRequest\x12 \n" +
 	"\fedge_node_id\x18\x01 \x01(\x03R\n" +
 	"edgeNodeId\x12\x1d\n" +
@@ -4373,7 +4386,8 @@ const file_edgepb_messages_proto_rawDesc = "" +
 	" \x01(\tR\n" +
 	"baseDomain\x12\x18\n" +
 	"\aversion\x18\v \x01(\tR\aversion\x12\x1b\n" +
-	"\trelay_tls\x18\f \x01(\bR\brelayTls\"\x1a\n" +
+	"\trelay_tls\x18\f \x01(\bR\brelayTls\x12'\n" +
+	"\x0ftls_passthrough\x18\r \x01(\bR\x0etlsPassthrough\"\x1a\n" +
 	"\x18RegisterEdgeNodeResponse\"\xc4\x01\n" +
 	"\x1bReportClientPresenceRequest\x12 \n" +
 	"\fedge_node_id\x18\x01 \x01(\x03R\n" +

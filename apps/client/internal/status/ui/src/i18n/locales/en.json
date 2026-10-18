@@ -229,7 +229,20 @@
       "saved": "Security policy saved",
       "failed": "Failed to save security policy",
       "lockedNotice": "Some features require a plan upgrade to use: {{features}}.",
-      "lockedNoticeContact": "Your plan doesn't include: {{features}}. Ask your platform administrator to enable them."
+      "lockedNoticeContact": "Your plan doesn't include: {{features}}. Ask your platform administrator to enable them.",
+      "barePortNote": "{{type}} endpoints forward bytes as-is and never read the request, so they only take IP access control and rate limits. Basic authentication, OAuth authentication and request headers work on HTTP/HTTPS endpoints only.",
+      "inertStored": "This endpoint has the settings below saved, but they have no effect on a {{type}} endpoint. Saving keeps them as they are:",
+      "stillActive": "Your plan doesn't include the settings below, but they are already set on this endpoint and still in effect. Saving keeps them as they are; click Remove to drop one.",
+      "remove": "Remove",
+      "removePending": "Removed on save",
+      "undo": "Undo",
+      "headersSummary": "Sets {{set}}, removes {{remove}}",
+      "err": {
+        "ipInvalid": "Invalid IP or CIDR: {{value}}",
+        "headerName": "Invalid request header name: {{value}}",
+        "headerForbidden": "The header “{{value}}” can't be rewritten (it affects the transport framing).",
+        "oauthCredentials": "The OAuth login needs a Client ID and a Client Secret."
+      }
     },
     "edit": {
       "title": "Edit endpoint",
@@ -314,7 +327,7 @@
     "domainNoCert": "no cert",
     "domainNoCertHint": "This domain has no certificate yet: HTTP works now; HTTPS starts working once you issue a certificate under “Domains” in the web console.",
     "localServiceLabel": "Local service",
-    "localServiceTip": "How the client dials your local service: HTTP connects in the clear, HTTPS wraps the connection in TLS (self-signed certificates are accepted).",
+    "localServiceTip": "How the client dials your local service: HTTP connects in the clear, HTTPS wraps the connection in TLS (self-signed certificates are accepted). TLS hands the connection to your service as is; your service completes the handshake with its own certificate.",
     "checkBtn": "Check",
     "checkRunning": "Checking the local service…",
     "checkOk": "Local service is reachable · {{ms}} ms",
@@ -359,7 +372,7 @@
     "protPickPolicyFirst": "Pick an IP policy, or switch back to “not now”.",
     "protAddrsEmpty": "Enter at least one address, or switch back to “not now” — an empty list is not a stricter rule, it is no rule, and the edge lets everyone in.",
     "protNeeded": "This organization requires an access policy for this kind of endpoint. Pick a policy or enter the addresses allowed to reach it.",
-    "protBarePortHelp": "This organization requires TCP/UDP/SNI endpoints to carry an IP rule. A raw port has no login to attach, so an address list is the only thing that can turn anyone away.",
+    "protBarePortHelp": "This organization requires TCP/UDP/TLS endpoints to carry an IP rule. A raw port has no login to attach, so an address list is the only thing that can turn anyone away.",
     "protRequiredHelp": "This organization requires every endpoint to have access protection.",
     "protOptionalHelp": "Optional — you can also add this from the endpoint's security settings later.",
     "protNoDefaultWarn": "This organization requires access protection but has no default IP policy, which means a command-line create (calabi http 8080) is refused outright. An administrator sets the default under Endpoints → Settings in the web console.",
@@ -390,7 +403,14 @@
     "doneMissingBody": "The server no longer has this record (#{{id}}). It was either deleted, or replaced by a new row when a client claimed it. Check the endpoint list; if it really is gone, create it again and pass this number on to whoever runs the platform.",
     "ipNeedPlan": "This plan does not include IP access control. This organization does not require access protection, so the endpoint can be created as it is — upgrade if you want to restrict the source addresses.",
     "ipNeedPlanNoUpgrade": "This plan does not include IP access control. The organization does not require access protection, so the endpoint can be created as it is.",
-    "typePortCapped": "{{type}} (TCP/UDP endpoint allowance used up)"
+    "typePortCapped": "{{type}} (TCP/UDP endpoint allowance used up)",
+    "tlsNeedsOwnNode": "TLS (connect through a self-hosted node)",
+    "tlsNeedsUpgrade": "TLS (update your node first)",
+    "tlsNeedsDomain": "TLS (needs a verified domain on your node)",
+    "tlsNeedsHttpsPort": "TLS (the node has no HTTPS port)",
+    "tlsPrefixRequired": "A TLS endpoint needs a name: your certificate has to match it",
+    "typeHelpHttps": "The edge decrypts with a platform-issued certificate, then forwards to your service, so you can add OAuth sign-in, Basic auth and header rewrites. To keep your own certificate and have the edge not decrypt, choose TLS.",
+    "typeHelpTls": "Your service uses its own certificate. The edge routes by domain name only and never decrypts, so it cannot see the content. Access control is IP rules and rate limits only."
   },
   "inspector": {
     "title": "Request inspector · {{name}}",

@@ -20,6 +20,9 @@ import (
 // stored on Proxy.Listener; closing it stops the accept loop. For HTTP
 // and SNI proxies there's nothing to listen on per-proxy -- the global
 // HTTP / SNI listeners already route by Host / server_name respectively.
+//
+// RegisterSNI returns ErrSNIIngressOff when this node has no way in for a
+// TLS passthrough visitor at all.
 type ProxyRegistrar interface {
 	RegisterHTTP(domain string, sess *Session, proxyID string) error
 	RegisterSNI(domain string, sess *Session, proxyID string) error
@@ -27,6 +30,18 @@ type ProxyRegistrar interface {
 	RegisterUDP(remotePort uint32, sess *Session, proxyID string) (io.Closer, error)
 	UnregisterByProxyID(proxyID string)
 }
+
+// ErrSNIIngressOff is RegisterSNI's answer on a node no TLS passthrough
+// visitor can reach: a platform node (it serves every organization, so its
+// HTTPS port never passes TLS through) without the dedicated sni_port listener.
+// See cmd/calabi-edge acceptsTLSPassthrough.
+//
+// Registering anyway is what used to happen: the route went into a table no
+// listener reads, the tunnel row was reported enabled, and the client showed a
+// live tunnel nothing outside could reach. The registrar decides, because it is
+// the side that knows what the process is listening on; this package only turns
+// the answer into a refusal the client can read.
+var ErrSNIIngressOff = errors.New("this node has no TLS passthrough listener")
 
 // DomainAllocator hands out auto-assigned subdomains for NEW_PROXY when
 // the client did not specify one.
@@ -280,8 +295,18 @@ func (s *Session) handleNewProxy(f proto.Frame, registrar ProxyRegistrar, domain
 		}
 		p.Domain = req.Domain
 		if err := registrar.RegisterSNI(req.Domain, s, p.ID); err != nil {
-			resp.Error = proto.NewError(proto.CodeProxyDuplicate,
-				"calabi.err.proxy.duplicate", err.Error())
+			// Not a duplicate, and nothing the client can retry its way out
+			// of: the node itself does not take this type. Refused before the
+			// persister runs, so no row is written and nothing reports it
+			// enabled. Same on a standalone node — it has the same listener.
+			if errors.Is(err, ErrSNIIngressOff) {
+				resp.Error = proto.NewError(proto.CodeTypeNotEnabled,
+					"calabi.err.proxy.sni_not_enabled",
+					"this node does not accept sni (TLS passthrough) tunnels: they are served by your organization's own (self-hosted) nodes, or a node with tunnel.sni_port set")
+			} else {
+				resp.Error = proto.NewError(proto.CodeProxyDuplicate,
+					"calabi.err.proxy.duplicate", err.Error())
+			}
 			_ = s.SendControl(proto.FrameNewProxyResp, resp)
 			return
 		}

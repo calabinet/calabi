@@ -1,6 +1,6 @@
 [package]
 name = "calabi-desktop"
-version = "2.2.0"
+version = "2.3.0"
 description = "Calabi client — desktop shell"
 authors = ["Calabi Team"]
 license = "Proprietary"

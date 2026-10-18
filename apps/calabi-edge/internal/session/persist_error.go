@@ -37,6 +37,31 @@ var ErrProxyPolicyRequired = errors.New("tunnel refused: the organization requir
 // so and stops rather than retrying.
 var ErrProxyAwaitingApproval = errors.New("tunnel awaiting approval: an admin of this organization has to approve it before it serves")
 
+// ErrProxyRefused marks a persist the control plane refused for a reason of
+// its own that is neither of the above — a custom domain that is not the
+// org's, for one. Same seam. It exists so those stop being read as the
+// baseline: for a while every refusal of that kind reached the client as
+// CodeProxyPolicyRequired, and the client printed "this organization requires
+// every tunnel to have access protection" in front of a sentence about a
+// domain.
+var ErrProxyRefused = errors.New("tunnel refused by the control plane")
+
+// Refused tags kind (one of the sentinels above) onto the control plane's own
+// sentence. Error() is that sentence and nothing else — it is what the client
+// is shown, and the sentinel's text in front of it, or the transport's, is noise
+// the reader has to get past. The adapter used to wrap with fmt.Errorf, which
+// put both there and kept persistErrorMessage from ever seeing the envelope it
+// strips.
+func Refused(kind error, msg string) error { return &refusal{kind: kind, msg: msg} }
+
+type refusal struct {
+	kind error
+	msg  string
+}
+
+func (r *refusal) Error() string { return r.msg }
+func (r *refusal) Unwrap() error { return r.kind }
+
 // persistErrorCode picks the wire code for a definitive persist failure.
 //
 // The default stays CodeProxyDuplicate: that is what this branch was built for,
@@ -47,6 +72,9 @@ func persistErrorCode(err error) int {
 	}
 	if errors.Is(err, ErrProxyAwaitingApproval) {
 		return proto.CodeProxyAwaitingApproval
+	}
+	if errors.Is(err, ErrProxyRefused) {
+		return proto.CodeForbidden
 	}
 	return proto.CodeProxyDuplicate
 }

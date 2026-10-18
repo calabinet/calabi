@@ -143,7 +143,21 @@ func (s *SNI) handle(visitor net.Conn) {
 		return
 	}
 	_ = visitor.SetReadDeadline(time.Time{})
+	s.servePeeked(visitor, br, head, sniHost)
+}
 
+// ServePeeked passes visitor through to the tunnel serving sniHost, given its
+// ClientHello already read: head is that record, br holds what follows. It is
+// the HTTPS listener's PassthroughFunc on a node that passes TLS through on
+// port 443 — the same gates,
+// metering and access records as this listener's own connections. It closes
+// visitor.
+func (s *SNI) ServePeeked(visitor net.Conn, br *bufio.Reader, head []byte, sniHost string) {
+	defer visitor.Close()
+	s.servePeeked(visitor, br, head, sniHost)
+}
+
+func (s *SNI) servePeeked(visitor net.Conn, br *bufio.Reader, head []byte, sniHost string) {
 	target, ok := s.opts.Router.LookupSNI(sniHost)
 	if !ok {
 		// maybe a same-region peer owns this SNI host — relay the raw
@@ -163,11 +177,13 @@ func (s *SNI) handle(visitor net.Conn) {
 
 	// Security policy (server-authoritative IP allowlist). SNI is passthrough
 	// — no plaintext channel to answer on, so a denied source is closed
-	// silently (deferred visitor.Close on return). Source IP is available
-	// pre-TLS from RemoteAddr.
+	// without an HTTP response (deferred visitor.Close on return). Report the
+	// reason in the normal edge log even when access records have no sink.
+	// Source IP is available pre-TLS from RemoteAddr.
 	if p := sess.Proxy(target.ProxyID); p != nil {
 		if pol := p.LoadPolicy(); pol != nil {
 			if pol.HasIPRules() && !pol.AllowIPString(extractIP(visitor.RemoteAddr())) {
+				logPolicyDenial(s.logger, sess, p, extractIP(visitor.RemoteAddr()), accesslog.DeniedIP)
 				s.observeRequest("ip_denied")
 				noteAccessAddr(sess, target.ProxyID, visitor.RemoteAddr(), accesslog.DeniedIP)
 				return
@@ -288,30 +304,12 @@ func (s *SNI) observeBytes(direction string, n int64) {
 // References: RFC 5246 §7.4.1.2 (Handshake / ClientHello),
 // RFC 6066 §3 (server_name extension).
 func peekSNI(br *bufio.Reader) ([]byte, string, error) {
-	// Step 1: the TLS record header is 5 bytes:
-	//   ContentType(1) | ProtocolVersion(2) | Length(2)
-	recordHdr, err := br.Peek(5)
-	if err != nil {
-		return nil, "", fmt.Errorf("peek record header: %w", err)
-	}
-	if recordHdr[0] != 22 { // 22 = handshake
-		return nil, "", errors.New("not a TLS handshake (record type != 22)")
-	}
-	recLen := int(binary.BigEndian.Uint16(recordHdr[3:5]))
-	if recLen < 4 || recLen > sniPeekBuf-5 {
-		return nil, "", fmt.Errorf("implausible record length %d", recLen)
-	}
-	total := 5 + recLen
-	hello, err := br.Peek(total)
-	if err != nil {
-		return nil, "", fmt.Errorf("peek full record: %w", err)
-	}
-
-	host, err := extractSNIFromHandshake(hello[5:total])
+	total, host, err := peekClientHello(br)
 	if err != nil {
 		return nil, "", err
 	}
 	// Return a copy of hello (Peek's slice is invalidated by next Read).
+	hello, _ := br.Peek(total)
 	head := make([]byte, total)
 	copy(head, hello)
 	// Consume the bytes we just peeked so the caller can io.Copy the
@@ -321,7 +319,38 @@ func peekSNI(br *bufio.Reader) ([]byte, string, error) {
 	if _, err := br.Discard(total); err != nil {
 		return nil, "", fmt.Errorf("discard peeked bytes: %w", err)
 	}
-	return head, strings.ToLower(strings.TrimSpace(host)), nil
+	return head, host, nil
+}
+
+// peekClientHello reads the leading ClientHello record WITHOUT consuming it:
+// on return br still holds every byte, so a caller that decides not to pass the
+// connection through can hand br to a TLS terminator as if nothing had been
+// read. total is the record's length on the wire, host its server_name
+// (lowercased). The record must fit br's buffer.
+func peekClientHello(br *bufio.Reader) (total int, host string, err error) {
+	// Step 1: the TLS record header is 5 bytes:
+	//   ContentType(1) | ProtocolVersion(2) | Length(2)
+	recordHdr, err := br.Peek(5)
+	if err != nil {
+		return 0, "", fmt.Errorf("peek record header: %w", err)
+	}
+	if recordHdr[0] != 22 { // 22 = handshake
+		return 0, "", errors.New("not a TLS handshake (record type != 22)")
+	}
+	recLen := int(binary.BigEndian.Uint16(recordHdr[3:5]))
+	if recLen < 4 || recLen > br.Size()-5 {
+		return 0, "", fmt.Errorf("implausible record length %d", recLen)
+	}
+	total = 5 + recLen
+	hello, err := br.Peek(total)
+	if err != nil {
+		return 0, "", fmt.Errorf("peek full record: %w", err)
+	}
+	host, err = extractSNIFromHandshake(hello[5:total])
+	if err != nil {
+		return 0, "", err
+	}
+	return total, strings.ToLower(strings.TrimSpace(host)), nil
 }
 
 // extractSNIFromHandshake walks the body of a TLS handshake record looking

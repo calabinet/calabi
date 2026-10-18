@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -226,17 +227,12 @@ func (a *tunnelPersisterAdapter) OnProxyOpened(sess *session.Session, p *session
 		a.logger.Warn("persist tunnel failed",
 			"err", err, "proxy_id", p.ID, "type", string(p.Type),
 			"remote_port", p.RemotePort, "edge_node_id", a.tc.EdgeNodeID())
-		// Tag a governance refusal so the session layer can give the client a
-		// code that means what happened. This side is the only one that may
-		// import gRPC status codes — internal/session matches the sentinel with
-		// errors.Is instead (see internal/session/persist_error.go).
-		//
-		// FailedPrecondition from CreateTunnel is the org security baseline: it
-		// is the only thing that returns it on this path, and the shape of any
-		// future one would be the same — "the control plane will not record a
-		// proxy like this", which is what the code says.
-		if status.Code(err) == codes.FailedPrecondition {
-			return 0, fmt.Errorf("%w: %s", session.ErrProxyPolicyRequired, err)
+		// Tag the refusal so the session layer can give the client a code that
+		// means what happened. This side is the only one that may import gRPC
+		// status codes — internal/session matches the sentinel with errors.Is
+		// instead (see internal/session/persist_error.go).
+		if kind := persistRefusalKind(err); kind != nil {
+			return 0, session.Refused(kind, status.Convert(err).Message())
 		}
 		return 0, err
 	}
@@ -279,6 +275,42 @@ func (a *tunnelPersisterAdapter) OnProxyOpened(sess *session.Session, p *session
 	applyProxyPolicy(a.logger, a.tc, p, res.ConfigJSON)
 	a.logger.Debug("persisted tunnel", "id", res.TunnelID, "proxy_id", p.ID)
 	return res.TunnelID, nil
+}
+
+// baselineReason is the google.rpc.ErrorInfo reason tunnel-svc puts on every
+// refusal by the org security baseline (its baselineReason; this module cannot
+// import it). Change both or neither.
+const baselineReason = "ORG_PROTECTION_REQUIRED"
+
+// persistRefusalKind says which session sentinel a CreateTunnel error is, or
+// nil for one that is not the control plane refusing the proxy (a transport
+// failure, a collision — those keep their old handling).
+//
+// The baseline is told apart by its reason, NOT by its code. FailedPrecondition
+// is also what the custom-domain gate and the zone check return, and reading
+// every one as the baseline is how `calabi http 8080 --domain <unverified>`
+// came to print "this organization requires every tunnel to have access
+// protection" in front of a sentence about a domain. See
+// persist_refusal_test.go.
+func persistRefusalKind(err error) error {
+	st, ok := status.FromError(err)
+	if !ok {
+		return nil
+	}
+	switch st.Code() {
+	case codes.FailedPrecondition:
+		for _, d := range st.Details() {
+			if info, ok := d.(*errdetails.ErrorInfo); ok && info.GetReason() == baselineReason {
+				return session.ErrProxyPolicyRequired
+			}
+		}
+		return session.ErrProxyRefused
+	case codes.InvalidArgument, codes.PermissionDenied:
+		// A request tunnel-svc will not record as asked (a platform name on an
+		// sni tunnel, a platform name on a BYOI edge…). Its message says why.
+		return session.ErrProxyRefused
+	}
+	return nil
 }
 
 // applyProxyPolicy parses the tunnel row's server-authoritative config_json

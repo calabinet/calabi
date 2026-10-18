@@ -8,13 +8,22 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"math/big"
 	"net"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/accesslog"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/mesh"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/policy"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/router"
+	"github.com/calabinet/calabi/apps/calabi-edge/internal/session"
+	proto "github.com/calabinet/calabi/pkg/protocol"
 )
 
 // TestPeekSNI_GoldenClientHello exercises the parser against a real
@@ -163,3 +172,167 @@ func (t *teeConn) Read(p []byte) (int, error) {
 // helper to satisfy go vet about unused imports if the tls handshake
 // goes too fast and we never bind. errors.Is for ErrClosedPipe.
 var _ = errors.Is
+
+// Exercise the real IP gate, including port 443's ClientHello dispatch. A
+// blocked session makes an accidental fallthrough fail immediately rather than
+// requiring a running daemon. No access sink is how a BYOI edge without NATS
+// runs: the operator must still be able to find the refusal in its normal log.
+func TestTLSPolicyDenialIsLogged(t *testing.T) {
+	const host = "tls.example.com"
+	const visitorIP = "203.0.113.9"
+	hello := captureClientHello(t, host)
+	for _, path := range []string{"https443", "dedicated", "forward"} {
+		for _, config := range []struct {
+			name, policy string
+			denied       bool
+		}{
+			{"allowlist_miss", `{"security":{"ip":{"allow":["192.0.2.0/24"]}}}`, true},
+			{"denylist_match", `{"security":{"ip":{"deny":["203.0.113.0/24"]}}}`, true},
+			{"allowed", `{"security":{"ip":{"allow":["203.0.113.0/24"]}}}`, false},
+		} {
+			for _, withSink := range []bool{false, true} {
+				sinkName := "without_sink"
+				if withSink {
+					sinkName = "with_sink"
+				}
+				t.Run(path+"/"+config.name+"/"+sinkName, func(t *testing.T) {
+					var logs bytes.Buffer
+					logger := slog.New(slog.NewJSONHandler(&logs, nil))
+					pol, err := policy.Parse(config.policy)
+					if err != nil {
+						t.Fatal(err)
+					}
+					sess := session.New(logger, nil, nil)
+					sess.TenantID = "7"
+					p := &session.Proxy{ID: "tls-proxy", Type: proto.ProxyKindSNI, Domain: host, TunnelID: 42}
+					p.SetPolicy(pol)
+					if !sess.RegisterProxy(p) {
+						t.Fatal("register proxy")
+					}
+					sess.SetBlockReason("no upstream attached in test")
+					r := router.New()
+					if err := r.RegisterSNI(host, sess, sess.ID, p.ID); err != nil {
+						t.Fatal(err)
+					}
+					var sink tlsDenialSink
+					accesslog.SetSink(nil)
+					if withSink {
+						accesslog.SetSink(&sink)
+					}
+					t.Cleanup(func() { accesslog.SetSink(nil) })
+					var obs tlsDenialObserver
+					sni := NewSNI(logger, SNIOptions{Router: r, Observer: &obs})
+					certCalls := 0
+					https := NewHTTPS(logger, HTTPSOptions{Router: r, Passthrough: sni.ServePeeked})
+					tlsCfg := &tls.Config{GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+						certCalls++
+						return nil, errors.New("edge must not terminate a TLS endpoint")
+					}}
+					client, server := net.Pipe()
+					t.Cleanup(func() { _ = client.Close(); _ = server.Close() })
+					_ = client.SetDeadline(time.Now().Add(5 * time.Second))
+					conn := &tlsVisitorConn{Conn: server, ip: visitorIP}
+					if path == "forward" {
+						conn.ip = "198.51.100.5"
+					}
+					done := make(chan struct{})
+					go func() {
+						defer close(done)
+						switch path {
+						case "https443":
+							https.serve(conn, tlsCfg)
+						case "dedicated":
+							sni.handle(conn)
+						case "forward":
+							NewForward(logger, ForwardOptions{Router: r, Observer: &obs}).handle(conn)
+						}
+					}()
+					if path == "forward" {
+						// The forwarded visitor differs from the peer's socket IP.
+						_ = mesh.WriteFrame(client, mesh.ForwardHeader{
+							Kind: mesh.KindSNI, Host: host, VisitorIP: visitorIP, VisitorPort: 12345,
+						}, hello)
+					} else {
+						_, _ = client.Write(hello)
+					}
+					response, readErr := io.ReadAll(client)
+					if readErr != nil {
+						t.Fatal(readErr)
+					}
+					<-done
+					if len(response) != 0 || certCalls != 0 {
+						t.Fatalf("edge terminated or wrote plaintext into TLS: response=%q cert calls=%d", response, certCalls)
+					}
+					var denied []map[string]any
+					decoder := json.NewDecoder(&logs)
+					for decoder.More() {
+						var row map[string]any
+						if err := decoder.Decode(&row); err != nil {
+							t.Fatal(err)
+						}
+						if row["outcome"] == accesslog.DeniedIP {
+							denied = append(denied, row)
+						}
+					}
+					if !config.denied {
+						wantOutcome := "open_upstream_failed"
+						if path == "forward" {
+							wantOutcome = "sni_" + wantOutcome
+						}
+						if len(denied) != 0 || obs.outcome != wantOutcome {
+							t.Fatalf("allowed IP was reported as denied: logs=%v outcome=%s", denied, obs.outcome)
+						}
+						return
+					}
+					if len(denied) != 1 {
+						t.Fatalf("want exactly one IP refusal in default INFO log, got %v", denied)
+					}
+					for key, want := range map[string]any{
+						"level": "INFO", "visitor_ip": visitorIP, "domain": host,
+						"proxy_type": "sni", "proxy_id": p.ID, "session_id": sess.ID,
+						"org_id": float64(7), "tunnel_id": float64(42),
+					} {
+						if denied[0][key] != want {
+							t.Errorf("log %s = %v, want %v", key, denied[0][key], want)
+						}
+					}
+					wantOutcome := "ip_denied"
+					if path == "forward" {
+						wantOutcome = "sni_" + wantOutcome
+					}
+					if obs.outcome != wantOutcome {
+						t.Errorf("outcome = %q, want %s", obs.outcome, wantOutcome)
+					}
+					if withSink && (sink.calls != 1 || sink.orgID != 7 || sink.tunnelID != 42 || sink.ip != visitorIP || sink.outcome != accesslog.DeniedIP) {
+						t.Errorf("access sink = %+v", sink)
+					}
+				})
+			}
+		}
+	}
+}
+
+type tlsVisitorConn struct {
+	net.Conn
+	ip string
+}
+
+func (c *tlsVisitorConn) RemoteAddr() net.Addr {
+	return &net.TCPAddr{IP: net.ParseIP(c.ip), Port: 12345}
+}
+
+type tlsDenialObserver struct{ outcome string }
+
+func (o *tlsDenialObserver) OnVisitorRequest(_, outcome string)    { o.outcome = outcome }
+func (*tlsDenialObserver) OnBytesTransferred(_, _ string, _ int64) {}
+
+type tlsDenialSink struct {
+	calls           int
+	orgID, tunnelID int64
+	ip, outcome     string
+}
+
+func (s *tlsDenialSink) NoteAccess(orgID, tunnelID int64, ip, outcome string, _ time.Time) {
+	s.calls++
+	s.orgID, s.tunnelID, s.ip, s.outcome = orgID, tunnelID, ip, outcome
+}

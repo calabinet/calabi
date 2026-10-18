@@ -229,7 +229,20 @@
       "saved": "安全策略已儲存",
       "failed": "儲存安全策略失敗",
       "lockedNotice": "部分功能需升級方案後可用：{{features}}。",
-      "lockedNoticeContact": "目前方案不包含：{{features}}。如需開通請聯絡平台管理員。"
+      "lockedNoticeContact": "目前方案不包含：{{features}}。如需開通請聯絡平台管理員。",
+      "barePortNote": "{{type}} 端點按位元組原樣轉送、不解析請求，只能設定 IP 存取控制和速率限制。Basic 驗證、OAuth 登入認證和請求標頭改寫只對 HTTP/HTTPS 端點有效。",
+      "inertStored": "這個端點存著以下設定，但它們對 {{type}} 端點不生效。儲存時會原樣保留：",
+      "stillActive": "目前方案不包含下列項目，但它們已設在這個端點上，仍在生效。儲存時會原樣保留；想移除請按「移除」。",
+      "remove": "移除",
+      "removePending": "儲存後移除",
+      "undo": "復原",
+      "headersSummary": "設定 {{set}} 個、移除 {{remove}} 個",
+      "err": {
+        "ipInvalid": "無效的 IP 或 CIDR：{{value}}",
+        "headerName": "無效的請求標頭名稱：{{value}}",
+        "headerForbidden": "請求標頭「{{value}}」無法改寫（會影響傳輸框架）",
+        "oauthCredentials": "OAuth 登入認證需要 Client ID 與 Client Secret"
+      }
     },
     "edit": {
       "title": "編輯端點",
@@ -314,7 +327,7 @@
     "publishBanner": "正在發布服務「{{name}}」",
     "publishBannerDesc": "本機位址已從服務帶入；請在下方選擇端點的類型與位址。這是一個獨立的端點，不影響該服務在組網內的存取。",
     "localServiceLabel": "本機服務",
-    "localServiceTip": "用戶端依此方式連你本機的服務：HTTP 直接以明文連線，HTTPS 會再包一層 TLS（自簽憑證也接受）。",
+    "localServiceTip": "用戶端依此方式連你本機的服務：HTTP 直接以明文連線，HTTPS 會再包一層 TLS（自簽憑證也接受）。TLS 原樣把連線交給你的服務，由它用自己的憑證完成交握。",
     "checkBtn": "偵測",
     "checkRunning": "正在偵測本機服務…",
     "checkOk": "本機服務可連線 · {{ms}} ms",
@@ -348,7 +361,7 @@
     "backToList": "返回端點列表",
     "createAnother": "再建一條",
     "ipSection": "IP 存取控制",
-    "ipSectionHint": "只讓名單裡的位址連上來。TCP/UDP/SNI 端點只能用這一種。",
+    "ipSectionHint": "只讓名單裡的位址連上來。TCP/UDP/TLS 端點只能用這一種。",
     "protPolicy": "使用組織 IP 策略",
     "protCustom": "手動輸入 IP 允許清單",
     "protNone": "暫不設定",
@@ -359,7 +372,7 @@
     "protPickPolicyFirst": "選一個 IP 策略，或者改回「暫不設定」。",
     "protAddrsEmpty": "填至少一條位址，或者改回「暫不設定」——空名單不是更嚴的規則，是沒有規則，邊緣會放行所有人。",
     "protNeeded": "本組織要求這類端點必須設定存取策略，選一個策略或填寫允許的位址。",
-    "protBarePortHelp": "本組織要求 TCP/UDP/SNI 端點帶 IP 規則。裸連接埠沒有登入可掛，能擋住人的只有位址清單。",
+    "protBarePortHelp": "本組織要求 TCP/UDP/TLS 端點帶 IP 規則。裸連接埠沒有登入可掛，能擋住人的只有位址清單。",
     "protRequiredHelp": "本組織要求每個端點都要有存取保護。",
     "protOptionalHelp": "可留空，建立後也能在端點的安全設定裡加上。",
     "protNoDefaultWarn": "本組織要求存取保護，但還沒有設定預設 IP 政策——這表示命令列建立（calabi http 8080）會被直接拒絕。預設政策由管理員在 Web 主控台的「端點管理 → 設定」裡設定。",
@@ -390,7 +403,14 @@
     "doneMissingBody": "伺服器已經查不到這條記錄了（#{{id}}）。可能是被刪掉了，或者用戶端接手時新建了另一條記錄頂替它。去端點列表看一眼；如果確實沒有，重新建立一次，並把這個編號告訴維運。",
     "ipNeedPlan": "目前方案不含 IP 存取控制。本組織沒有要求存取保護，所以這個端點現在就能建；要限制來源位址，請先升級方案。",
     "ipNeedPlanNoUpgrade": "目前方案不含 IP 存取控制。本組織沒有要求存取保護，所以這個端點現在就能建。",
-    "typePortCapped": "{{type}}（TCP/UDP 端點配額已用完）"
+    "typePortCapped": "{{type}}（TCP/UDP 端點配額已用完）",
+    "tlsNeedsOwnNode": "TLS（需要經自建節點連線）",
+    "tlsNeedsUpgrade": "TLS（節點要先升級）",
+    "tlsNeedsDomain": "TLS（需要節點上的已驗證網域）",
+    "tlsNeedsHttpsPort": "TLS（節點沒開 HTTPS 連接埠）",
+    "tlsPrefixRequired": "TLS 端點要填一個名稱：你的憑證要和它對得上",
+    "typeHelpHttps": "邊緣節點用平台簽發的憑證解密，再轉給你的服務，所以能加 OAuth 登入認證、Basic 驗證、請求標頭改寫。要用自己的憑證、不讓邊緣節點解密，選 TLS。",
+    "typeHelpTls": "用你自己服務上的憑證。邊緣節點只依網域轉發、不解密，看不到內容；存取控制只有 IP 規則和速率限制。"
   },
   "inspector": {
     "title": "請求檢查器 · {{name}}",

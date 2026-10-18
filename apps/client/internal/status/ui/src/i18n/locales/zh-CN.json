@@ -229,7 +229,20 @@
       "saved": "安全策略已保存",
       "failed": "保存安全策略失败",
       "lockedNotice": "部分功能需升级套餐后可用：{{features}}。",
-      "lockedNoticeContact": "当前套餐不包含：{{features}}。如需开通请联系平台管理员。"
+      "lockedNoticeContact": "当前套餐不包含：{{features}}。如需开通请联系平台管理员。",
+      "barePortNote": "{{type}} 端点按字节原样转发、不解析请求，只能设 IP 访问控制和速率限制。Basic 认证、OAuth 登录认证和请求头改写只对 HTTP/HTTPS 端点有效。",
+      "inertStored": "这个端点存着以下设置，但它们对 {{type}} 端点不生效。保存时会原样保留：",
+      "stillActive": "当前套餐不包含下面这些项，但它们已经设在这个端点上，仍在生效。保存时会原样保留；想去掉请点「移除」。",
+      "remove": "移除",
+      "removePending": "保存后移除",
+      "undo": "撤销",
+      "headersSummary": "设置 {{set}} 个、移除 {{remove}} 个",
+      "err": {
+        "ipInvalid": "无效的 IP 或 CIDR：{{value}}",
+        "headerName": "无效的请求头名称：{{value}}",
+        "headerForbidden": "请求头「{{value}}」不可改写（影响传输框架）",
+        "oauthCredentials": "OAuth 登录认证需要 Client ID 和 Client Secret"
+      }
     },
     "edit": {
       "title": "编辑端点",
@@ -314,7 +327,7 @@
     "domainNoCert": "未签证书",
     "domainNoCertHint": "该域名尚未签发证书：HTTP 可立即使用；HTTPS 需在 Web 控制台「域名」签发证书后才会生效。",
     "localServiceLabel": "本地服务",
-    "localServiceTip": "客户端按这个方式连你本机的服务：HTTP 直接明文连，HTTPS 会再包一层 TLS（自签名证书也接受）。",
+    "localServiceTip": "客户端按这个方式连你本机的服务：HTTP 直接明文连，HTTPS 会再包一层 TLS（自签名证书也接受）。TLS 原样把连接交给你的服务，由它用自己的证书完成握手。",
     "checkBtn": "检测",
     "checkRunning": "正在检测本地服务…",
     "checkOk": "本地服务可达 · {{ms}} ms",
@@ -348,7 +361,7 @@
     "backToList": "返回端点列表",
     "createAnother": "再建一条",
     "ipSection": "IP 访问控制",
-    "ipSectionHint": "只让名单里的地址连上来。TCP/UDP/SNI 端点只能用这一种。",
+    "ipSectionHint": "只让名单里的地址连上来。TCP/UDP/TLS 端点只能用这一种。",
     "protPolicy": "使用组织 IP 策略",
     "protCustom": "手填 IP 允许名单",
     "protNone": "暂不设置",
@@ -359,7 +372,7 @@
     "protPickPolicyFirst": "选一个 IP 策略，或者改回「暂不设置」。",
     "protAddrsEmpty": "填至少一条地址，或者改回「暂不设置」——空名单不是更严的规则，是没有规则，边缘会放行所有人。",
     "protNeeded": "本组织要求这类端点必须设置访问策略，选一个策略或填写允许的地址。",
-    "protBarePortHelp": "本组织要求 TCP/UDP/SNI 端点带 IP 规则。裸端口没有登录可挂，能挡住人的只有地址清单。",
+    "protBarePortHelp": "本组织要求 TCP/UDP/TLS 端点带 IP 规则。裸端口没有登录可挂，能挡住人的只有地址清单。",
     "protRequiredHelp": "本组织要求每个端点都有访问保护。",
     "protOptionalHelp": "可留空，创建后也能在端点的安全设置里添加。",
     "protNoDefaultWarn": "本组织要求访问保护，但还没有配置默认 IP 策略——这意味着命令行创建（calabi http 8080）会被直接拒绝。默认策略由管理员在 Web 控制台的「端点管理 → 设置」里配置。",
@@ -390,7 +403,14 @@
     "doneMissingBody": "服务端已经查不到这条记录了（#{{id}}）。可能是被删掉了，或者客户端接手时新建了另一条记录顶替它。去端点列表看一眼；如果确实没有，重新创建一次，并把这个编号告诉运维。",
     "ipNeedPlan": "当前套餐不含 IP 访问控制。本组织没有要求访问保护，所以这个端点现在就能建；要限制来源地址，先升级套餐。",
     "ipNeedPlanNoUpgrade": "当前套餐不含 IP 访问控制。本组织没有要求访问保护，所以这个端点现在就能建。",
-    "typePortCapped": "{{type}}（TCP/UDP 端点配额已用完）"
+    "typePortCapped": "{{type}}（TCP/UDP 端点配额已用完）",
+    "tlsNeedsOwnNode": "TLS（需要经自建节点连接）",
+    "tlsNeedsUpgrade": "TLS（节点要先升级）",
+    "tlsNeedsDomain": "TLS（需要节点上的已验证域名）",
+    "tlsNeedsHttpsPort": "TLS（节点没开 HTTPS 端口）",
+    "tlsPrefixRequired": "TLS 端点要填一个名字：你的证书要和它对得上",
+    "typeHelpHttps": "边缘节点用平台签发的证书解密，再转给你的服务，所以能加 OAuth 登录认证、Basic 认证、请求头改写。要用自己的证书、不让边缘节点解密，选 TLS。",
+    "typeHelpTls": "用你自己服务上的证书。边缘节点只按域名转发、不解密，看不到内容；访问控制只有 IP 规则和速率限制。"
   },
   "inspector": {
     "title": "请求检查器 · {{name}}",

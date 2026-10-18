@@ -229,7 +229,20 @@
       "saved": "Política de seguridad guardada",
       "failed": "No se pudo guardar la política de seguridad",
       "lockedNotice": "Algunas funciones requieren mejorar el plan para usarse: {{features}}.",
-      "lockedNoticeContact": "Tu plan no incluye: {{features}}. Pide al administrador de la plataforma que las habilite."
+      "lockedNoticeContact": "Tu plan no incluye: {{features}}. Pide al administrador de la plataforma que las habilite.",
+      "barePortNote": "Los endpoints {{type}} reenvían los bytes tal cual y no leen la petición, así que solo admiten el control de acceso por IP y el límite de velocidad. La autenticación básica, la autenticación OAuth y los encabezados de solicitud solo funcionan en endpoints HTTP/HTTPS.",
+      "inertStored": "Este endpoint tiene guardados los ajustes siguientes, pero no tienen efecto en un endpoint {{type}}. Al guardar se conservan tal cual:",
+      "stillActive": "Su plan no incluye los ajustes siguientes, pero ya están configurados en este endpoint y siguen activos. Al guardar se conservan tal cual; pulse «Quitar» para eliminar alguno.",
+      "remove": "Quitar",
+      "removePending": "Se quitará al guardar",
+      "undo": "Deshacer",
+      "headersSummary": "Establece {{set}}, quita {{remove}}",
+      "err": {
+        "ipInvalid": "IP o CIDR no válido: {{value}}",
+        "headerName": "Nombre de encabezado de solicitud no válido: {{value}}",
+        "headerForbidden": "El encabezado «{{value}}» no se puede reescribir (afecta al encuadre del transporte).",
+        "oauthCredentials": "El inicio de sesión OAuth requiere un Client ID y un Client Secret."
+      }
     },
     "edit": {
       "title": "Editar endpoint",
@@ -314,7 +327,7 @@
     "publishBanner": "Publicando el servicio «{{name}}»",
     "publishBannerDesc": "La dirección local se ha tomado del servicio; elige abajo el tipo y la dirección del endpoint. Este es un endpoint independiente: no cambia el acceso al servicio dentro de la malla.",
     "localServiceLabel": "Servicio local",
-    "localServiceTip": "Cómo se conecta el cliente a tu servicio local: HTTP en claro, HTTPS envuelto en TLS (se aceptan certificados autofirmados).",
+    "localServiceTip": "Cómo se conecta el cliente a tu servicio local: HTTP en claro, HTTPS envuelto en TLS (se aceptan certificados autofirmados). TLS entrega la conexión tal cual a tu servicio, que completa el handshake con su propio certificado.",
     "checkBtn": "Comprobar",
     "checkRunning": "Comprobando el servicio local…",
     "checkOk": "Servicio local accesible · {{ms}} ms",
@@ -359,7 +372,7 @@
     "protPickPolicyFirst": "Elige una política IP o vuelve a «ahora no».",
     "protAddrsEmpty": "Escribe al menos una dirección o vuelve a «ahora no»: una lista vacía no es una regla más estricta, es ninguna regla, y el edge deja pasar a todo el mundo.",
     "protNeeded": "Esta organización exige una regla de acceso para este tipo de endpoint. Elige una política o escribe las direcciones permitidas.",
-    "protBarePortHelp": "Esta organización exige una regla IP en los endpoints TCP/UDP/SNI. Un puerto en bruto no admite inicio de sesión, así que solo una lista de direcciones puede rechazar a alguien.",
+    "protBarePortHelp": "Esta organización exige una regla IP en los endpoints TCP/UDP/TLS. Un puerto en bruto no admite inicio de sesión, así que solo una lista de direcciones puede rechazar a alguien.",
     "protRequiredHelp": "Esta organización exige protección de acceso en todos los endpoints.",
     "protOptionalHelp": "Opcional: también puedes añadirla después en los ajustes de seguridad del endpoint.",
     "protNoDefaultWarn": "Esta organización exige protección de acceso pero no tiene una política IP por defecto, de modo que una creación desde la línea de comandos (calabi http 8080) se rechaza sin más. La política por defecto la configura un administrador en Endpoints → Ajustes de la consola web.",
@@ -390,7 +403,14 @@
     "doneMissingBody": "El servidor ya no tiene este registro (#{{id}}). O se eliminó, o lo sustituyó una fila nueva cuando un cliente lo asumió. Revisa la lista de endpoints; si de verdad no está, créalo otra vez y pasa este número a quien opera la plataforma.",
     "ipNeedPlan": "Este plan no incluye control de acceso por IP. Esta organización no exige protección de acceso, así que el endpoint puede crearse tal cual; mejora el plan si quieres restringir las direcciones de origen.",
     "ipNeedPlanNoUpgrade": "Este plan no incluye control de acceso por IP. La organización no exige protección de acceso, así que el endpoint puede crearse tal cual.",
-    "typePortCapped": "{{type}} (cuota de endpoints TCP/UDP agotada)"
+    "typePortCapped": "{{type}} (cuota de endpoints TCP/UDP agotada)",
+    "tlsNeedsOwnNode": "TLS (conéctate a través de un nodo autoalojado)",
+    "tlsNeedsUpgrade": "TLS (actualiza primero tu nodo)",
+    "tlsNeedsDomain": "TLS (requiere un dominio verificado en tu nodo)",
+    "tlsNeedsHttpsPort": "TLS (el nodo no tiene puerto HTTPS)",
+    "tlsPrefixRequired": "Un endpoint TLS necesita un nombre: tu certificado tiene que coincidir con él",
+    "typeHelpHttps": "El edge descifra con un certificado emitido por la plataforma y luego reenvía a tu servicio, por eso puedes añadir inicio de sesión OAuth, autenticación básica y reescritura de encabezados. Para usar tu propio certificado sin que el edge descifre, elige TLS.",
+    "typeHelpTls": "Tu servicio usa su propio certificado. El edge enruta solo por nombre de dominio y nunca descifra, así que no puede ver el contenido. El control de acceso se limita a reglas IP y límites de velocidad."
   },
   "inspector": {
     "title": "Inspector de solicitudes · {{name}}",

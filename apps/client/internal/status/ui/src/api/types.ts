@@ -541,6 +541,9 @@ export interface EdgeListItem {
   // owned = this is one of the caller org's self-hosted (BYOI) edges.
   // Drives the data-egress affinity toggle in the top bar.
   owned?: boolean;
+  // tls_passthrough = the node takes TLS (passthrough, wire type sni)
+  // endpoints, as it reported itself. Absent on a node older than the field.
+  tls_passthrough?: boolean;
 }
 
 // EdgeAffinity is the daemon's data-egress preference for a BYOI org:

@@ -223,7 +223,7 @@ func run() error {
 		}
 	}
 
-	registrar := &routerBridge{r: r, logger: logger, tcpObs: metricsSet, udpObs: metricsSet}
+	registrar := newRouterBridge(r, logger, metricsSet, metricsSet, acceptsTLSPassthrough(cfg))
 
 	// presence-kick channel. The control listener pushes on session
 	// close → the (platform) presence reporter drains it next select iteration
@@ -255,14 +255,15 @@ func run() error {
 	// build returns an all-nil bundle (data plane only). run() never imports a
 	// platform package — it only consumes the returned interfaces.
 	deps, err := wirePlatform(ctx, logger, platformInputs{
-		cfg:          cfg,
-		mgr:          mgr,
-		domains:      domains,
-		ports:        ports,
-		registrar:    registrar,
-		edgeID:       edgeID,
-		presenceKick: presenceKick,
-		relayCert:    ctrlCert.certificate,
+		cfg:            cfg,
+		mgr:            mgr,
+		domains:        domains,
+		ports:          ports,
+		registrar:      registrar,
+		edgeID:         edgeID,
+		presenceKick:   presenceKick,
+		relayCert:      ctrlCert.certificate,
+		tlsPassthrough: acceptsTLSPassthrough(cfg),
 	})
 	if err != nil {
 		return err
@@ -380,8 +381,16 @@ func run() error {
 	// HTTPS terminator: compose the platform cert-svc source (deps.getCertificate,
 	// nil when self-hosted / no cert-svc) with the core self-signed wildcard dev
 	// fallback. Returns an addr-less no-op listener when HTTPS is disabled.
+	//
+	// On a node that serves one organization the same port also passes TLS
+	// through: a ClientHello for an sni tunnel's name goes to the sni
+	// listener's own handling, untouched (tlsPassthroughOn443).
+	var passthrough listener.PassthroughFunc
+	if tlsPassthroughOn443(cfg) {
+		passthrough = sni.ServePeeked
+	}
 	httpsListener, err := buildHTTPSListener(logger, cfg, r, metricsSet,
-		deps.getCertificate, deps.meshResolver, edgeID, globalLimiter)
+		deps.getCertificate, deps.meshResolver, edgeID, globalLimiter, passthrough)
 	if err != nil {
 		return err
 	}
@@ -476,6 +485,7 @@ func buildHTTPSListener(
 	meshResolver listener.OwnerResolver,
 	edgeID int64,
 	globalLimiter *ratelimit.GlobalLimiter,
+	passthrough listener.PassthroughFunc,
 ) (*listener.HTTPS, error) {
 	if cfg.Tunnel.HTTPSAddr() == "" {
 		// Pass an addr-less listener so the goroutine slot stays uniform.
@@ -546,6 +556,7 @@ func buildHTTPSListener(
 		MeshResolver:   meshResolver,
 		SelfEdgeID:     edgeID,
 		GlobalLimiter:  globalLimiter,
+		Passthrough:    passthrough,
 	}), nil
 }
 
@@ -581,6 +592,37 @@ type routerBridge struct {
 	// pressure. Set in run() after the limiter is built (registrar is
 	// constructed earlier); nil = unlimited.
 	glob *ratelimit.GlobalLimiter
+	// sniIngress: can a TLS passthrough visitor reach this node at all
+	// (acceptsTLSPassthrough; fixed for the process — none of its inputs is
+	// hot-reloaded). False makes RegisterSNI refuse rather than file a route
+	// nothing reads. See session.ErrSNIIngressOff.
+	sniIngress bool
+}
+
+// newRouterBridge is run()'s constructor for the bridge, kept separate so a
+// test builds it the same way.
+func newRouterBridge(r *router.Router, logger *slog.Logger, tcpObs listener.TCPObserver, udpObs listener.UDPObserver, sniIngress bool) *routerBridge {
+	return &routerBridge{r: r, logger: logger, tcpObs: tcpObs, udpObs: udpObs,
+		sniIngress: sniIngress}
+}
+
+// tlsPassthroughOn443 reports whether this node passes TLS through on its
+// HTTPS port: only a node that
+// serves ONE organization — a self-hosted node, whose certificate names its org
+// (cfg.OrgID), or a standalone node. A platform node serves every org; handing
+// its port 443 to whoever registers a name there first is what this must never
+// do.
+func tlsPassthroughOn443(cfg config.Config) bool {
+	return cfg.Tunnel.HTTPSAddr() != "" && (cfg.OrgID > 0 || cfg.IsStandaloneMode())
+}
+
+// acceptsTLSPassthrough reports whether a TLS passthrough (sni) visitor can
+// reach this node at all: through the HTTPS port as above, or the dedicated
+// sni_port listener. It decides whether sni tunnels may register here, and it
+// is what the node reports to the edge directory (tls_passthrough), so the
+// console offers TLS endpoints only on nodes that will serve them.
+func acceptsTLSPassthrough(cfg config.Config) bool {
+	return cfg.Tunnel.SNIAddr() != "" || tlsPassthroughOn443(cfg)
 }
 
 func (b *routerBridge) RegisterHTTP(domain string, sess *session.Session, proxyID string) error {
@@ -588,6 +630,9 @@ func (b *routerBridge) RegisterHTTP(domain string, sess *session.Session, proxyI
 }
 
 func (b *routerBridge) RegisterSNI(domain string, sess *session.Session, proxyID string) error {
+	if !b.sniIngress {
+		return session.ErrSNIIngressOff
+	}
 	return b.r.RegisterSNI(domain, sess, sess.ID, proxyID)
 }
 

@@ -144,6 +144,10 @@ type EdgeRegistration struct {
 	// Version is this calabi-edge's binary version (-ldflags), published so the
 	// consoles can show which build the edge is running.
 	Version string
+	// TLSPassthrough: a TLS passthrough (sni) visitor can reach this node —
+	// through its HTTPS port on a node that serves one organization, or the
+	// dedicated sni_port listener (cmd/calabi-edge acceptsTLSPassthrough).
+	TLSPassthrough bool
 }
 
 // RegisterEdgeNode upserts this edge's directory row. Best-effort —
@@ -156,17 +160,18 @@ func (v *Verifier) RegisterEdgeNode(ctx context.Context, in EdgeRegistration) er
 	cctx, cancel := context.WithTimeout(ctx, v.timeout)
 	defer cancel()
 	_, err := v.client.RegisterEdgeNode(cctx, &pb.RegisterEdgeNodeRequest{
-		EdgeNodeId:    in.EdgeNodeID,
-		NodeLabel:     in.NodeLabel,
-		Region:        in.Region,
-		PublicAddr:    in.PublicAddr,
-		BaseDomain:    in.BaseDomain,
-		InternalAddr:  in.InternalAddr,
-		ActiveClients: in.ActiveClients,
-		RelayDerpPort: in.RelayDerpPort,
-		RelayStunPort: in.RelayStunPort,
-		RelayTls:      in.RelayTLS,
-		Version:       in.Version,
+		EdgeNodeId:     in.EdgeNodeID,
+		NodeLabel:      in.NodeLabel,
+		Region:         in.Region,
+		PublicAddr:     in.PublicAddr,
+		BaseDomain:     in.BaseDomain,
+		InternalAddr:   in.InternalAddr,
+		ActiveClients:  in.ActiveClients,
+		RelayDerpPort:  in.RelayDerpPort,
+		RelayStunPort:  in.RelayStunPort,
+		RelayTls:       in.RelayTLS,
+		Version:        in.Version,
+		TlsPassthrough: in.TLSPassthrough,
 	})
 	return err
 }

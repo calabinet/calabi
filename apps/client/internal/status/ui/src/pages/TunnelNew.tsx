@@ -66,6 +66,7 @@ import { api, ApiError } from "../api/client";
 import { CopyableAddr, edgeHttpURL, portTunnelHost, truncateDomain } from "../lib/addr";
 import { useServiceMode } from "../hooks/use-service-mode";
 import { useMemberQuota } from "../lib/memberQuota";
+import { clientTlsOffer, isBarePortType, typeLabel } from "../lib/tunnelType";
 import type {
   AccountMe,
   ClientDevicesList,
@@ -84,7 +85,8 @@ const { Title, Text } = Typography;
 
 // PlanFeatures mirrors the gating subset of quota-svc features_json (see
 // apps/bff-console/internal/handlers/tunnels.go planFeatures). tcp/udp = 基础版+;
-// sni = 商业版+; ip_policy / basic_auth = 所有套餐（2026-06-30 起含体验版）.
+// ip_policy / basic_auth = 所有套餐（2026-06-30 起含体验版）. `sni` is no longer
+// read: TLS is gated on where it can live, not on the plan (clientTlsOffer).
 // NOTE: custom_domain is NOT plan-gated here — 自购域名 ⟺ 自建节点, so the
 // http/https domain form keys off onOwnEdge (current edge ownership), not
 // features.custom_domain.
@@ -118,21 +120,6 @@ function parseFeatures(json?: string): PlanFeatures {
     };
   } catch {
     return empty;
-  }
-}
-
-// Byte-passthrough types, which have no L7 and so can only ever be guarded by an
-// address list. Mirrors store.IsBarePort in tunnel-svc, which is the one that
-// decides — this copy exists so the form asks for the right thing before
-// submitting, not so the client can decide anything.
-function isBarePortType(tunnelType: string): boolean {
-  switch ((tunnelType || "").trim().toLowerCase()) {
-    case "tcp":
-    case "udp":
-    case "sni":
-      return true;
-    default:
-      return false;
   }
 }
 
@@ -383,8 +370,8 @@ export default function TunnelNew() {
   // daemon is connected to (snap.edge_node_id) is tagged owned in /v1/edges.
   // 自建节点出口 → 只能用自购域名（节点不服务平台 *.calabi.net）；平台出口 →
   // 只能用平台子域名（自购域名仅自建节点可用）。
-  const onOwnEdge = !!(edges?.items ?? []).find((e) => e.edge_node_id === snap?.edge_node_id)
-    ?.owned;
+  const currentEdge = (edges?.items ?? []).find((e) => e.edge_node_id === snap?.edge_node_id);
+  const onOwnEdge = !!currentEdge?.owned;
   const { data: domains } = useQuery<DomainList>({
     queryKey: ["domains"],
     queryFn: api.domains,
@@ -418,6 +405,27 @@ export default function TunnelNew() {
   const parentDomains = verifiedDomains.filter(
     (d) => !!baseDomain && d.name.toLowerCase() === baseDomain.toLowerCase(),
   );
+
+  // TLS (passthrough, wire type `sni`): whether this daemon's node can take it,
+  // or which one thing is missing — see clientTlsOffer.
+  const tlsOffer = clientTlsOffer({
+    standalone: planCode === "standalone",
+    httpsPort: snap?.https_port,
+    onOwnEdge,
+    edgeTakesTls: !!currentEdge?.tls_passthrough,
+    parentDomains: parentDomains.length,
+  });
+  const tlsOption = {
+    value: "sni",
+    label: {
+      ok: "TLS",
+      needsOwnNode: t("wizard.tlsNeedsOwnNode"),
+      needsUpgrade: t("wizard.tlsNeedsUpgrade"),
+      needsDomain: t("wizard.tlsNeedsDomain"),
+      needsHttpsPort: t("wizard.tlsNeedsHttpsPort"),
+    }[tlsOffer],
+    disabled: tlsOffer !== "ok",
+  };
 
   // The domain is two controls on one line: an OPTIONAL prefix and the parent.
   // chosenDomain is what they add up to — the name the tunnel gets. An empty
@@ -476,10 +484,8 @@ export default function TunnelNew() {
   }, [typeWatch, addrWatch]);
 
   // Self-hosted (standalone): no plans, no quota, no BYOI distinction — you own
-  // the edge, so every offered protocol is available without gating. SNI
-  // passthrough is intentionally NOT offered (it's not a headline feature and
-  // confuses self-hosters; mirrors the platform www, which dropped SNI from its
-  // marketing). The edge + CLI (`calabi sni …`) still support it via YAML.
+  // the edge, so every offered protocol is available without gating, TLS only
+  // needing the node's HTTPS port (tlsOffer).
   // Declared here, not down with the other gate values: the quota hook below
   // takes it, and a const declared further down would be in its temporal dead
   // zone by then.
@@ -502,6 +508,7 @@ export default function TunnelNew() {
     ? [
         { value: "http", label: "HTTP" },
         { value: "https", label: "HTTPS" },
+        tlsOption,
         { value: "tcp", label: "TCP" },
         { value: "udp", label: "UDP" },
       ]
@@ -529,6 +536,7 @@ export default function TunnelNew() {
         [
           { value: "http", label: "HTTP", disabled: false },
           { value: "https", label: "HTTPS", disabled: false },
+          tlsOption,
         ] as { value: string; label: string; disabled: boolean }[],
       );
 
@@ -975,7 +983,7 @@ export default function TunnelNew() {
               {created?.name || "—"}
             </Descriptions.Item>
             <Descriptions.Item label={t("wizard.typeLabel")}>
-              {(created?.type || "").toUpperCase() || "—"}
+              {typeLabel(created?.type) || "—"}
             </Descriptions.Item>
             <Descriptions.Item label={t("wizard.localServiceLabel")}>
               <code style={{ fontSize: 12 }}>{created?.local_addr || "—"}</code>
@@ -1091,7 +1099,15 @@ export default function TunnelNew() {
             <Form.Item
               label={t("wizard.localServiceLabel")}
               tooltip={t("wizard.localServiceTip")}
-              extra={<LocalCheckLine checking={checking} result={checked} />}
+              // HTTPS and TLS both mean "the service speaks TLS"; what tells
+              // them apart is who decrypts, which the name does not say.
+              extra={
+                <>
+                  {typeWatch === "https" && <div>{t("wizard.typeHelpHttps")}</div>}
+                  {typeWatch === "sni" && <div>{t("wizard.typeHelpTls")}</div>}
+                  <LocalCheckLine checking={checking} result={checked} />
+                </>
+              }
               required
             >
               <Space.Compact style={{ width: "100%" }}>
@@ -1230,14 +1246,19 @@ export default function TunnelNew() {
                                   label: (
                                     <Space>
                                       <span>{d.name}</span>
-                                      <Tag
-                                        color={hasCert ? "green" : "orange"}
-                                        style={{ marginInlineEnd: 0 }}
-                                      >
-                                        {hasCert
-                                          ? t("wizard.domainCertReady")
-                                          : t("wizard.domainNoCert")}
-                                      </Tag>
+                                      {/* A TLS endpoint brings its own
+                                          certificate; the platform's says
+                                          nothing about it. */}
+                                      {ty !== "sni" && (
+                                        <Tag
+                                          color={hasCert ? "green" : "orange"}
+                                          style={{ marginInlineEnd: 0 }}
+                                        >
+                                          {hasCert
+                                            ? t("wizard.domainCertReady")
+                                            : t("wizard.domainNoCert")}
+                                        </Tag>
+                                      )}
                                     </Space>
                                   ),
                                 };
@@ -1251,6 +1272,7 @@ export default function TunnelNew() {
                           exists, the parent itself does not. Showing both said
                           opposite things. */}
                       {chosenDomain &&
+                        ty !== "sni" &&
                         ((domainPrefix || "").trim() ? (
                           <Alert
                             type="info"
@@ -1271,10 +1293,19 @@ export default function TunnelNew() {
                 }
                 return isPaid ? (
                   <Form.Item
-                    label={t("wizard.subdomainLabel")}
+                    // Reached by TLS only on a standalone node (elsewhere TLS
+                    // needs an own node, the branch above). A TLS endpoint is
+                    // routed by its name and the user's certificate has to
+                    // match it, so there is no "leave empty for a random one":
+                    // neither the "(optional)" label nor the tip that says so.
+                    label={ty === "sni" ? t("wizard.customDomainLabel") : t("wizard.subdomainLabel")}
                     name="subdomain"
-                    tooltip={t("wizard.subdomainTip")}
+                    tooltip={ty === "sni" ? undefined : t("wizard.subdomainTip")}
+                    required={ty === "sni"}
                     rules={[
+                      ...(ty === "sni"
+                        ? [{ required: true, message: t("wizard.tlsPrefixRequired") }]
+                        : []),
                       {
                         pattern: /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/,
                         message: t("wizard.subdomainPattern"),

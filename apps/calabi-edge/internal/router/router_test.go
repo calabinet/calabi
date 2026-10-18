@@ -5,9 +5,8 @@ import (
 )
 
 // TestRouter_SNIRoundTrip exercises register/lookup/unregister for SNI,
-// which lives in its own table independent from HTTP. Same domain
-// CAN be registered as both HTTP and SNI simultaneously (different
-// listeners, different ports).
+// which lives in its own table independent from HTTP. (One name cannot be in
+// both tables — TestRouter_HTTPAndSNIExcludeEachOther.)
 func TestRouter_SNIRoundTrip(t *testing.T) {
 	r := New()
 	if err := r.RegisterSNI("FOO.example.com", "sess-A", "s1", "p1"); err != nil {
@@ -28,6 +27,67 @@ func TestRouter_SNIRoundTrip(t *testing.T) {
 	r.UnregisterByProxyID("p1")
 	if _, ok := r.LookupSNI("foo.example.com"); ok {
 		t.Fatalf("sni route survived unregister")
+	}
+}
+
+// TestRouter_HTTPAndSNIExcludeEachOther: port 443 serves both tables — a name
+// in the SNI table is passed through, any other name is terminated — so one
+// name in both would make which one a visitor reaches depend on the listener's
+// order of lookups. Whichever registered first keeps the name; the other is
+// refused, and the refusal does not disturb the holder. The control plane
+// already keeps a domain on one tunnel; a standalone node has no control plane,
+// so this is the only place that holds there.
+func TestRouter_HTTPAndSNIExcludeEachOther(t *testing.T) {
+	r := New()
+	if err := r.RegisterHTTP("web.example.com", "sess-A", "s1", "p-http"); err != nil {
+		t.Fatalf("register http: %v", err)
+	}
+	if err := r.RegisterSNI("WEB.example.com", "sess-B", "s2", "p-sni"); err == nil {
+		t.Fatal("sni on a name the http table holds should fail")
+	}
+	if _, ok := r.LookupSNI("web.example.com"); ok {
+		t.Fatal("the refused sni route was filed anyway")
+	}
+	if tgt, ok := r.LookupHTTP("web.example.com"); !ok || tgt.ProxyID != "p-http" {
+		t.Fatalf("http holder disturbed: ok=%v target=%+v", ok, tgt)
+	}
+
+	if err := r.RegisterSNI("own.example.com", "sess-B", "s2", "p-sni2"); err != nil {
+		t.Fatalf("register sni: %v", err)
+	}
+	if err := r.RegisterHTTP("own.example.com", "sess-A", "s1", "p-http2"); err == nil {
+		t.Fatal("http on a name the sni table holds should fail")
+	}
+	if _, ok := r.LookupHTTP("own.example.com"); ok {
+		t.Fatal("the refused http route was filed anyway")
+	}
+
+	// Once the holder goes, the name is free for the other kind.
+	r.UnregisterByProxyID("p-sni2")
+	if err := r.RegisterHTTP("own.example.com", "sess-A", "s1", "p-http3"); err != nil {
+		t.Fatalf("http after the sni holder left: %v", err)
+	}
+}
+
+// TestRouter_HasSNIRoutes: the HTTPS listener asks this before reading a
+// ClientHello itself, so a node with no passthrough route terminates exactly as
+// it always did.
+func TestRouter_HasSNIRoutes(t *testing.T) {
+	r := New()
+	if r.HasSNIRoutes() {
+		t.Fatal("empty router reports sni routes")
+	}
+	_ = r.RegisterHTTP("web.example.com", nil, "s", "p-http")
+	if r.HasSNIRoutes() {
+		t.Fatal("an http route counted as an sni route")
+	}
+	_ = r.RegisterSNI("own.example.com", nil, "s", "p-sni")
+	if !r.HasSNIRoutes() {
+		t.Fatal("sni route not reported")
+	}
+	r.UnregisterByProxyID("p-sni")
+	if r.HasSNIRoutes() {
+		t.Fatal("sni route still reported after unregister")
 	}
 }
 

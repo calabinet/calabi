@@ -229,7 +229,20 @@
       "saved": "Politique de sécurité enregistrée",
       "failed": "Échec de l'enregistrement de la politique de sécurité",
       "lockedNotice": "Certaines fonctionnalités nécessitent une mise à niveau de la formule : {{features}}.",
-      "lockedNoticeContact": "Votre formule n'inclut pas : {{features}}. Demandez à l'administrateur de la plateforme de les activer."
+      "lockedNoticeContact": "Votre formule n'inclut pas : {{features}}. Demandez à l'administrateur de la plateforme de les activer.",
+      "barePortNote": "Les endpoints {{type}} transmettent les octets tels quels sans lire la requête : seuls le contrôle d'accès par IP et la limite de débit s'y appliquent. L'authentification Basic, l'authentification OAuth et les en-têtes de requête ne fonctionnent que sur les endpoints HTTP/HTTPS.",
+      "inertStored": "Cet endpoint a les réglages ci-dessous enregistrés, mais ils sont sans effet sur un endpoint {{type}}. L'enregistrement les conserve tels quels :",
+      "stillActive": "Votre formule n'inclut pas les réglages ci-dessous, mais ils sont déjà définis sur cet endpoint et restent actifs. L'enregistrement les conserve tels quels ; cliquez sur « Retirer » pour en supprimer un.",
+      "remove": "Retirer",
+      "removePending": "Retiré à l'enregistrement",
+      "undo": "Annuler",
+      "headersSummary": "{{set}} à définir, {{remove}} à retirer",
+      "err": {
+        "ipInvalid": "IP ou CIDR invalide : {{value}}",
+        "headerName": "Nom d'en-tête de requête invalide : {{value}}",
+        "headerForbidden": "L'en-tête « {{value}} » ne peut pas être réécrit (il affecte le cadrage du transport).",
+        "oauthCredentials": "La connexion OAuth nécessite un Client ID et un Client Secret."
+      }
     },
     "edit": {
       "title": "Modifier l'endpoint",
@@ -314,7 +327,7 @@
     "publishBanner": "Publication du service « {{name}} »",
     "publishBannerDesc": "L'adresse locale est reprise du service ; choisissez ci-dessous le type et l'adresse de l'endpoint. Il s'agit d'un endpoint distinct — l'accès au service dans le Maillage n'est pas modifié.",
     "localServiceLabel": "Service local",
-    "localServiceTip": "Façon dont le client se connecte à ton service local : HTTP en clair, HTTPS enveloppé dans TLS (les certificats auto-signés sont acceptés).",
+    "localServiceTip": "Façon dont le client se connecte à ton service local : HTTP en clair, HTTPS enveloppé dans TLS (les certificats auto-signés sont acceptés). TLS transmet la connexion telle quelle à ton service, qui termine la négociation avec son propre certificat.",
     "checkBtn": "Vérifier",
     "checkRunning": "Vérification du service local…",
     "checkOk": "Service local joignable · {{ms}} ms",
@@ -359,7 +372,7 @@
     "protPickPolicyFirst": "Choisissez une politique IP, ou revenez à « pas maintenant ».",
     "protAddrsEmpty": "Saisissez au moins une adresse, ou revenez à « pas maintenant » — une liste vide n'est pas une règle plus stricte, c'est l'absence de règle, et l'edge laisse tout le monde passer.",
     "protNeeded": "Cette organisation exige une règle d'accès pour ce type d'endpoint. Choisissez une politique ou saisissez les adresses autorisées.",
-    "protBarePortHelp": "Cette organisation exige une règle IP sur les endpoints TCP/UDP/SNI. Un port brut n'a pas d'authentification, donc seule une liste d'adresses peut écarter quelqu'un.",
+    "protBarePortHelp": "Cette organisation exige une règle IP sur les endpoints TCP/UDP/TLS. Un port brut n'a pas d'authentification, donc seule une liste d'adresses peut écarter quelqu'un.",
     "protRequiredHelp": "Cette organisation exige une protection d'accès sur chaque endpoint.",
     "protOptionalHelp": "Facultatif — vous pourrez aussi l'ajouter ensuite dans les paramètres de sécurité de l'endpoint.",
     "protNoDefaultWarn": "Cette organisation exige une protection d'accès mais n'a pas de politique IP par défaut : une création en ligne de commande (calabi http 8080) est donc refusée d'emblée. La politique par défaut se règle sous Endpoints → Paramètres dans la console web.",
@@ -390,7 +403,14 @@
     "doneMissingBody": "Le serveur n'a plus cet enregistrement (#{{id}}). Il a été supprimé, ou remplacé par une nouvelle ligne lors de la prise en charge par un client. Vérifiez la liste des endpoints ; s'il a vraiment disparu, recréez-le et transmettez ce numéro à l'exploitation.",
     "ipNeedPlan": "Cette offre n'inclut pas le contrôle d'accès IP. Cette organisation n'exige pas de protection d'accès : l'endpoint peut donc être créé tel quel — passez à une offre supérieure pour restreindre les adresses source.",
     "ipNeedPlanNoUpgrade": "Cette offre n'inclut pas le contrôle d'accès IP. L'organisation n'exige pas de protection d'accès : l'endpoint peut donc être créé tel quel.",
-    "typePortCapped": "{{type}} (quota d'endpoints TCP/UDP épuisé)"
+    "typePortCapped": "{{type}} (quota d'endpoints TCP/UDP épuisé)",
+    "tlsNeedsOwnNode": "TLS (connexion via un nœud auto-hébergé requise)",
+    "tlsNeedsUpgrade": "TLS (mettez d'abord votre nœud à jour)",
+    "tlsNeedsDomain": "TLS (domaine vérifié requis sur votre nœud)",
+    "tlsNeedsHttpsPort": "TLS (le nœud n'a pas de port HTTPS)",
+    "tlsPrefixRequired": "Un endpoint TLS a besoin d'un nom : votre certificat doit y correspondre",
+    "typeHelpHttps": "L'edge déchiffre avec un certificat émis par la plateforme, puis transmet à votre service : vous pouvez donc ajouter la connexion OAuth, l'authentification Basic et la réécriture d'en-têtes. Pour garder votre propre certificat sans que l'edge déchiffre, choisissez TLS.",
+    "typeHelpTls": "Votre service utilise son propre certificat. L'edge achemine uniquement selon le nom de domaine et ne déchiffre jamais : il ne voit pas le contenu. Le contrôle d'accès se limite aux règles IP et aux limites de débit."
   },
   "inspector": {
     "title": "Inspecteur de requêtes · {{name}}",
