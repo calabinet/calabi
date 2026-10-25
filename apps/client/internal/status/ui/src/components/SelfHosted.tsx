@@ -1,3 +1,4 @@
+import { displayError } from "../api/userError";
 // SelfHosted.tsx — this console connected to a self-hosted server instead of
 // calabi.net:
 // the coordinator it joined, a coordinator
@@ -285,7 +286,7 @@ export function SelfHostedCard() {
                 </Space>
                 {!edge.connected && edge.error && (
                   <Text type="secondary" style={{ fontSize: 12, wordBreak: "break-word" }}>
-                    {edge.error}
+                    {displayError(edge.error, t)}
                   </Text>
                 )}
               </Space>

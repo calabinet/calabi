@@ -12,9 +12,9 @@ package session
 
 import (
 	"errors"
-	"strings"
 
 	proto "github.com/calabinet/calabi/pkg/protocol"
+	"github.com/calabinet/calabi/pkg/protocol/usererror"
 )
 
 // ErrProxyPolicyRequired marks a persist failure caused by the organization's
@@ -79,30 +79,11 @@ func persistErrorCode(err error) int {
 	return proto.CodeProxyDuplicate
 }
 
-// grpcErrPrefix is what google.golang.org/grpc's status.Error stringifies to.
-// Matched as a literal rather than parsed with the grpc packages, which this
-// side of the seam must not import.
-const grpcErrPrefix = "rpc error: code = "
-
-// persistErrorMessage returns the persister's message without the gRPC envelope
-// the transport wraps it in.
-//
-// "rpc error: code = FailedPrecondition desc = this organization requires …" is
-// read by somebody at a terminal who then has to parse past a naming of a layer
-// they cannot act on. Anything that does not carry the envelope is returned
-// untouched — a stripper that starts editing messages it does not recognise is
-// worse than no stripper.
+// persistErrorMessage keeps business refusals and hides internal RPC failures.
 func persistErrorMessage(err error) string {
 	if err == nil {
 		return ""
 	}
-	msg := err.Error()
-	if !strings.HasPrefix(msg, grpcErrPrefix) {
-		return msg
-	}
-	const sep = " desc = "
-	if i := strings.Index(msg, sep); i >= 0 {
-		return msg[i+len(sep):]
-	}
+	msg, _ := usererror.Message(400, err.Error())
 	return msg
 }

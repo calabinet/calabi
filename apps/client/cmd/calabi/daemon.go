@@ -281,7 +281,7 @@ func runPlatformDaemon(args []string) int {
 	// what you typed, not a console that quietly isn't there.
 	statusWarning, err := applyStatusAddr(*statusAddr)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi daemon:", err)
+		fmt.Fprintln(os.Stderr, "calabi daemon:", friendlyCLIError(err))
 		return 2
 	}
 
@@ -336,11 +336,11 @@ func runPlatformDaemon(args []string) int {
 	lock, err := cruntime.AcquireDaemonLock()
 	if err != nil {
 		if errors.Is(err, cruntime.ErrAlreadyRunning) {
-			fmt.Fprintln(os.Stderr, "calabi daemon:", err)
+			fmt.Fprintln(os.Stderr, "calabi daemon:", friendlyCLIError(err))
 			fmt.Fprintln(os.Stderr, "  stop the other instance first, or use `calabi daemon stop`.")
 			return 3
 		}
-		fmt.Fprintln(os.Stderr, "calabi daemon: lock:", err)
+		fmt.Fprintln(os.Stderr, "calabi daemon: lock:", friendlyCLIError(err))
 		return 1
 	}
 	defer lock.Release()
@@ -641,6 +641,8 @@ func runPlatformDaemon(args []string) int {
 	ctx, cancel := withSignalContext()
 	defer cancel()
 	consoleURL, consoleDone := startDaemonConsole(ctx, logger, state, attachAPI)
+	stopFiles := startFileControl(ctx, logger, meshCtl, consoleURL)
+	defer stopFiles()
 	// Registered after cancel's defer, so it runs first: cancel, then wait for
 	// the listener to go.
 	defer func() {

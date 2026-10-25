@@ -14,11 +14,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/calabinet/calabi/pkg/protocol/usererror"
 )
 
 // Client is a single bff-console endpoint + bearer token. Safe for
@@ -79,41 +82,64 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return fmt.Errorf("%s %s: %w", method, path, err)
+		code := http.StatusBadGateway
+		var timeout interface{ Timeout() bool }
+		if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &timeout) && timeout.Timeout()) {
+			code = http.StatusGatewayTimeout
+		}
+		if errors.Is(err, context.Canceled) {
+			code = 499
+		}
+		return &requestError{status: code, cause: err}
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20)) // 4MB cap
 	if resp.StatusCode/100 != 2 {
+		raw = usererror.JSON(resp.StatusCode, raw)
 		// Try to extract a friendlier error message from the JSON body.
 		var e struct {
 			Error string `json:"error"`
+			Hint  string `json:"hint"`
 		}
 		_ = json.Unmarshal(raw, &e)
 		msg := e.Error
 		if msg == "" {
 			msg = strings.TrimSpace(string(raw))
 		}
-		return &Error{Status: resp.StatusCode, Message: msg, Body: raw}
+		return &Error{Status: resp.StatusCode, Message: msg, Body: raw, Hint: e.Hint}
 	}
 	if out == nil || len(raw) == 0 {
 		return nil
 	}
 	if err := json.Unmarshal(raw, out); err != nil {
-		return fmt.Errorf("decode %s %s: %w (body: %q)", method, path, err, raw)
+		return &requestError{status: http.StatusInternalServerError, cause: err}
 	}
 	return nil
 }
+
+type requestError struct {
+	status int
+	cause  error
+}
+
+func (e *requestError) Error() string { msg, _ := usererror.Message(e.status, ""); return msg }
+func (e *requestError) Unwrap() error { return e.cause }
 
 // Error is the typed error Do returns for non-2xx responses.
 type Error struct {
 	Status  int
 	Message string
 	Body    []byte
+	Hint    string
 }
 
 func (e *Error) Error() string {
 	if e.Message != "" {
-		return fmt.Sprintf("HTTP %d: %s", e.Status, e.Message)
+		msg, _ := usererror.Message(e.Status, e.Message)
+		if e.Hint != "" {
+			msg += " " + e.Hint
+		}
+		return msg
 	}
 	return fmt.Sprintf("HTTP %d", e.Status)
 }

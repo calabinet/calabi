@@ -2,7 +2,10 @@ package net.calabi.app
 
 import android.app.Notification
 import android.app.PendingIntent
+import android.app.NotificationManager
 import android.content.Context
+import android.Manifest
+import android.content.pm.PackageManager
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
@@ -19,6 +22,13 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import org.json.JSONObject
 import java.util.concurrent.Executors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * The VPN. It keeps the process in the foreground while connected, lends the Go
@@ -34,8 +44,14 @@ class CalabiVpnService : VpnService() {
     private val app get() = application as CalabiApp
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
+    private val fileScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var fileWatch: Job? = null
+    private val fileNotifications by lazy { FileRequestNotifications(this) }
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var watchingSince = 0L
+
+    @Volatile
+    private var disconnecting = false
 
     /** Whether the VPN interface currently exists (establish succeeded). */
     @Volatile
@@ -53,6 +69,7 @@ class CalabiVpnService : VpnService() {
         app.vpnService = this
         AppPrefs.markVpnUp(this)
         watchNetworks()
+        watchFileRequests()
         worker.execute {
             try {
                 app.core.connect()
@@ -99,6 +116,9 @@ class CalabiVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        fileScope.cancel()
+        fileNotifications.clear()
+        disconnecting = true
         stopWatchingNetworks()
         if (app.vpnService === this) app.vpnService = null
         worker.shutdown()
@@ -107,6 +127,8 @@ class CalabiVpnService : VpnService() {
     }
 
     private fun disconnect() {
+        if (disconnecting) return
+        disconnecting = true
         AppPrefs.markVpnDown(this)
         stopWatchingNetworks()
         established = false
@@ -155,6 +177,7 @@ class CalabiVpnService : VpnService() {
     }
 
     private fun stopWatchingNetworks() {
+        main.removeCallbacks(networkChanged)
         val cb = networkCallback ?: return
         networkCallback = null
         try {
@@ -165,14 +188,32 @@ class CalabiVpnService : VpnService() {
 
     // Callbacks come in bursts (available, then link properties, then
     // capabilities); one repair is enough.
-    private val networkChanged = Runnable { worker.execute { app.core.networkChanged() } }
+    private val networkChanged = Runnable {
+        if (!disconnecting) worker.execute { app.core.networkChanged() }
+    }
 
     private fun changed() {
+        if (disconnecting) return
         // Registering replays the networks that already exist; that is the
         // network the core is connecting on, not a change.
         if (SystemClock.elapsedRealtime() - watchingSince < INITIAL_REPLAY_MS) return
         main.removeCallbacks(networkChanged)
         main.postDelayed(networkChanged, 500)
+    }
+
+    private fun watchFileRequests() {
+        if (!BuildConfig.FILE_TRANSFER_ENABLED || fileWatch != null) return
+        fileWatch = fileScope.launch {
+            while (true) {
+                try {
+                    val snapshot = CoreClient.call("GET", "/v1/files").json()
+                    val permitted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                        ContextCompat.checkSelfPermission(this@CalabiVpnService, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                    fileNotifications.update(snapshot, permitted)
+                } catch (_: Exception) { /* denied notification permission never accepts a request */ }
+                delay(2000)
+            }
+        }
     }
 
     private fun openAppIntent(): PendingIntent = PendingIntent.getActivity(

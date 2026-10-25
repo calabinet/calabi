@@ -29,7 +29,7 @@ type NodeStore interface {
 	UpdateEndpoints(ctx context.Context, id int64, eps []netip.AddrPort) error
 	// UpdateApprovedRoutes records which advertised routes an admin allowed, and
 	// marks the node reviewed.
-	UpdateApprovedRoutes(ctx context.Context, id int64, routes []netip.Prefix) error
+	UpdateApprovedRoutes(ctx context.Context, id int64, routes []netip.Prefix, realRoutes ...[]netip.Prefix) error
 	// UpdateRouteAliases records the stand-in prefixes allocated for this node's
 	// aliased subnet routes. Separate from UpdateApprovedRoutes because an
 	// approval change reconciles them as a consequence, and the two writes must

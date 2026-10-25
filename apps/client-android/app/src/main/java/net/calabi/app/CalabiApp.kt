@@ -30,6 +30,8 @@ class CalabiApp : Application() {
             .put("bff_url", BuildConfig.BFF_URL)
             .put("device_name", Build.MODEL ?: "")
             .put("coord_plaintext", BuildConfig.COORD_PLAINTEXT)
+            .put("file_transfer_p0", BuildConfig.DEBUG)
+            .put("file_transfer_v1", BuildConfig.FILE_TRANSFER_ENABLED)
         core = Mobile.new_(config.toString(), AppPlatform(this))
         createNotificationChannel()
     }
@@ -41,10 +43,25 @@ class CalabiApp : Application() {
             NotificationManager.IMPORTANCE_LOW,
         )
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        if (BuildConfig.FILE_TRANSFER_ENABLED) {
+            val manager = getSystemService(NotificationManager::class.java)
+            val legacy = manager.getNotificationChannel("files")
+            // A dedicated request channel enables banners without overriding user-muted alerts.
+            val importance = if (legacy != null && (Build.VERSION.SDK_INT < 29 || legacy.hasUserSetImportance())) legacy.importance else NotificationManager.IMPORTANCE_HIGH
+            val requests = NotificationChannel(CHANNEL_FILES, getString(R.string.files_pending), importance)
+            if (legacy != null) {
+                requests.setSound(legacy.sound, legacy.audioAttributes)
+                requests.enableVibration(legacy.shouldVibrate())
+                requests.vibrationPattern = legacy.vibrationPattern
+                requests.lockscreenVisibility = legacy.lockscreenVisibility
+            }
+            manager.createNotificationChannel(requests)
+        }
     }
 
     companion object {
         const val CHANNEL_VPN = "vpn"
+        const val CHANNEL_FILES = "file_requests"
 
         lateinit var instance: CalabiApp
             private set

@@ -399,8 +399,8 @@ func TestAnUnreachableServerIsASentenceNotATransportDump(t *testing.T) {
 			t.Errorf("%s: %d %v, want 502 with code unreachable", path, code, out)
 		}
 		msg, _ := out["error"].(string)
-		if msg != "cannot reach the server" {
-			t.Errorf("%s: error = %q, want the one sentence", path, msg)
+		if out["error_key"] != "unavailable" || !strings.Contains(msg, "try again") {
+			t.Errorf("%s: error = %q, want an actionable unavailable message", path, msg)
 		}
 		// The point of the change: whatever the wording becomes, the transport's
 		// own vocabulary must not be in it.

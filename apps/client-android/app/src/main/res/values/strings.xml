@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Calabi</string>
+    <string name="app_name" translatable="false">Calabi</string>
     <string name="notification_channel_vpn">Connection</string>
     <string name="notification_connected_title">Connected to your mesh</string>
 

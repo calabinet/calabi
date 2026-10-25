@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.calabi.app.R
+import net.calabi.app.BuildConfig
 
 @Composable
 fun Glyph(@DrawableRes res: Int, tint: Color = Palette.ink, size: Dp = 20.dp) {
@@ -279,9 +280,32 @@ fun BottomNav(tab: Int, onTab: (Int) -> Unit) {
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (BuildConfig.FILE_TRANSFER_ENABLED) {
+                val tabs = listOf(
+                    Triple(0, R.drawable.ic_mesh, R.string.tab_mesh),
+                    Triple(1, R.drawable.ic_tunnel, R.string.tab_tunnels),
+                    Triple(3, R.drawable.ic_transfer, R.string.files_tab),
+                    Triple(2, R.drawable.ic_settings, R.string.tab_settings),
+                )
+                tabs.forEach { (index, icon, label) ->
+                    Column(
+                        Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
+                            .selectable(selected = tab == index, onClick = { onTab(index) }, role = Role.Tab)
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Box(Modifier.background(if (tab == index) Palette.ink else Color.Transparent, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 5.dp)) {
+                            Glyph(icon, if (tab == index) Color.White else Palette.muted, 20.dp)
+                        }
+                        Text(stringResource(label), fontSize = 11.sp, color = if (tab == index) Palette.ink else Palette.muted)
+                    }
+                }
+            } else {
             NavItem(R.drawable.ic_mesh, stringResource(R.string.tab_mesh), tab == 0) { onTab(0) }
             NavItem(R.drawable.ic_tunnel, stringResource(R.string.tab_tunnels), tab == 1) { onTab(1) }
             NavItem(R.drawable.ic_settings, stringResource(R.string.tab_settings), tab == 2) { onTab(2) }
+            }
         }
     }
 }

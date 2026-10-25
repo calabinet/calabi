@@ -1,5 +1,6 @@
 package net.calabi.app
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
@@ -18,6 +19,7 @@ class ConnectTileService : TileService() {
     override fun onTileAdded() {
         super.onTileAdded()
         AppPrefs.setTileAdded(this, true)
+        refresh(this)
     }
 
     override fun onTileRemoved() {
@@ -39,6 +41,13 @@ class ConnectTileService : TileService() {
         super.onStopListening()
     }
 
+    override fun onDestroy() {
+        if (listening?.get() === this) listening = null
+        super.onDestroy()
+    }
+
+    // The legacy overload is needed only below API 34; the branch below guards it.
+    @SuppressLint("StartActivityAndCollapseDeprecated")
     override fun onClick() {
         super.onClick()
         if (app.vpnService != null) {
@@ -68,20 +77,15 @@ class ConnectTileService : TileService() {
     }
 
     companion object {
-        // The tile while the panel shows it. requestListeningState is ignored for a
-        // tile that is already listening, so a change made with the panel open (a
-        // tap on the tile itself) has to be drawn on the live instance directly.
-        // Found on a real phone: after tapping to disconnect the tile stayed on.
+        // Redraw a listening tile immediately, and also request a fresh callback:
+        // active tiles stop listening after an update, asynchronously. A retained
+        // instance alone does not guarantee the system still accepts its updates.
         @Volatile
         private var listening: WeakReference<ConnectTileService>? = null
 
         /** Redraws the tile after the VPN started or stopped. Call on the main thread. */
         fun refresh(context: Context) {
-            val live = listening?.get()
-            if (live != null) {
-                live.render()
-                return
-            }
+            listening?.get()?.render()
             requestListeningState(context, ComponentName(context, ConnectTileService::class.java))
         }
     }

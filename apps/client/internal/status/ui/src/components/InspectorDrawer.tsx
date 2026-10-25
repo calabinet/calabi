@@ -4,6 +4,7 @@
 //   - Replay button per HTTP capture
 //
 // Used by the Tunnels page when the user clicks "查看请求".
+import { displayError } from "../api/userError";
 import {
   CaretRightOutlined,
   CodeOutlined,
@@ -243,7 +244,9 @@ function CaptureDetail({ row }: { row: HTTPCaptureRow }) {
   const { t } = useTranslation();
   return (
     <Space direction="vertical" size="small" style={{ width: "100%" }}>
-      {row.error && <Alert showIcon type="warning" message={row.error} />}
+      {row.error && <Alert showIcon type="warning" message={displayError(row.error, t)} description={
+        <details><summary>{t("errorDiagnostics.details")}</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{row.error}</pre></details>
+      } />}
       <KVTable title={t("inspector.requestHeaders")} rows={row.request_headers} />
       {row.request_body && (
         <details>
@@ -357,8 +360,8 @@ function ConnectionsPane({ rows }: { rows: ConnectionRow[] }) {
           dataIndex: "error",
           render: (e) =>
             e ? (
-              <Tooltip title={e}>
-                <Tag color="error">err</Tag>
+              <Tooltip title={displayError(e, t)}>
+                <Tag color="error">{t("inspector.errorTag")}</Tag>
               </Tooltip>
             ) : (
               "—"

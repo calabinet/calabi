@@ -27,6 +27,12 @@
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
@@ -46,11 +52,14 @@
             android:screenOrientation="fullSensor"
             tools:replace="screenOrientation" />
 
+        <!-- VPN consent qualifies for systemExempted without alarm permissions:
+             https://developer.android.com/develop/background-work/services/fgs/service-types#system-exempted -->
         <service
             android:name=".CalabiVpnService"
             android:exported="true"
             android:foregroundServiceType="systemExempted"
-            android:permission="android.permission.BIND_VPN_SERVICE">
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            tools:ignore="ForegroundServicePermission">
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>
@@ -58,6 +67,8 @@
                 android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON"
                 android:value="true" />
         </service>
+
+        <receiver android:name=".FileRequestReceiver" android:exported="false" />
 
         <receiver
             android:name=".BootReceiver"
@@ -76,6 +87,11 @@
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
+            <!-- Connection changes originate in the app, including while the
+                 panel is closed. Allow requestListeningState to deliver them. -->
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
             <meta-data
                 android:name="android.service.quicksettings.TOGGLEABLE_TILE"
                 android:value="true" />

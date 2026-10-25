@@ -19,6 +19,9 @@ import Login from "./pages/Login";
 import Connect from "./pages/Connect";
 import Settings from "./pages/Settings";
 import Tools from "./pages/Tools";
+import FileReceipt from "./pages/FileReceipt";
+import FileBrowser from "./pages/FileBrowser";
+import { hasBrowserFiles } from "./api/files";
 
 // Keeps ?declare_port=… on the way through, so an old link from 工具 still
 // opens the declaration form prefilled.
@@ -35,6 +38,9 @@ function TunnelsMoved() {
 }
 
 export default function App() {
+  const location = useLocation();
+  if (hasBrowserFiles()) return <FileBrowser />;
+  if (location.pathname === "/file-requests") return <FileReceipt />;
   return (
     <ConsoleLockGate>
       <Routes>
@@ -58,10 +64,11 @@ export default function App() {
               reload. Nested under /endpoints so the sidebar keeps 隧道 selected
               (Layout reads the first path segment). */}
           <Route path="endpoints/new" element={<TunnelNew />} />
-          {/* 组网 is one menu entry with three tabs, each with its own URL so a
+          {/* 组网 is one menu entry with four tabs, each with its own URL so a
               tab can be linked to (工具's port scanner lands on 服务) and
               survives a reload. Same shape as the web console's 组网配置. */}
           <Route path="mesh" element={<Mesh />} />
+          <Route path="mesh/files" element={<Mesh />} />
           <Route path="mesh/services" element={<Mesh />} />
           <Route path="mesh/routing" element={<Mesh />} />
           {/* 服务 was a top-level menu entry until 2026-09-16. It is a mesh

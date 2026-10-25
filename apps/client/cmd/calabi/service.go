@@ -401,7 +401,7 @@ func runDaemonService(args []string) int {
 
 	svc, err := buildService(args[1:], extraEnv)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi daemon:", err)
+		fmt.Fprintln(os.Stderr, "calabi daemon:", friendlyCLIError(err))
 		return 1
 	}
 	// A NAMED (non-default) service is a deliberate second-client-on-this-machine
@@ -456,7 +456,7 @@ func runDaemonService(args []string) int {
 		// systemd ("unit is loaded") and Windows ("MarkedForDeletion").
 		_ = svc.Stop()
 		if err := svc.Uninstall(); err != nil {
-			fmt.Fprintln(os.Stderr, "uninstall:", err)
+			fmt.Fprintln(os.Stderr, "uninstall:", friendlyCLIError(err))
 			return 1
 		}
 		// Reap any daemon that survived on :7400 — e.g. an older registered
@@ -479,7 +479,7 @@ func runDaemonService(args []string) int {
 		}
 		startedAt := time.Now()
 		if err := svc.Start(); err != nil {
-			fmt.Fprintln(os.Stderr, "start:", err)
+			fmt.Fprintln(os.Stderr, "start:", friendlyCLIError(err))
 			return 1
 		}
 		fmt.Println("  start requested.")
@@ -487,7 +487,7 @@ func runDaemonService(args []string) int {
 		return 0
 	case "stop":
 		if err := svc.Stop(); err != nil {
-			fmt.Fprintln(os.Stderr, "stop:", err)
+			fmt.Fprintln(os.Stderr, "stop:", friendlyCLIError(err))
 			return 1
 		}
 		fmt.Println("  stop requested.")
@@ -499,7 +499,7 @@ func runDaemonService(args []string) int {
 		}
 		startedAt := time.Now()
 		if err := svc.Start(); err != nil {
-			fmt.Fprintln(os.Stderr, "restart:", err)
+			fmt.Fprintln(os.Stderr, "restart:", friendlyCLIError(err))
 			return 1
 		}
 		fmt.Println("  restart requested.")
@@ -910,11 +910,11 @@ func maybeRunUnderServiceManager() (handled bool, code int) {
 	if err != nil {
 		// Last resort: fall back to a direct run rather than failing to boot.
 		// SCM may still time out, but a daemon started another way keeps working.
-		fmt.Fprintln(os.Stderr, "calabi daemon: service wrapper:", err)
+		fmt.Fprintln(os.Stderr, "calabi daemon: service wrapper:", friendlyCLIError(err))
 		return false, 0
 	}
 	if rerr := svc.Run(); rerr != nil {
-		fmt.Fprintln(os.Stderr, "calabi daemon: service run:", rerr)
+		fmt.Fprintln(os.Stderr, "calabi daemon: service run:", friendlyCLIError(rerr))
 		return true, 1
 	}
 	return true, 0

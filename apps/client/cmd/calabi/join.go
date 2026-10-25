@@ -40,7 +40,7 @@ func runJoin(args []string) int {
 	link := strings.TrimSpace(fs.Arg(0))
 	inv, err := selfhosted.ParseInvite(link)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi join:", err)
+		fmt.Fprintln(os.Stderr, "calabi join:", friendlyCLIError(err))
 		return 2
 	}
 	in := joinRequest{Mesh: &joinMesh{Link: link, Pin: strings.TrimSpace(*pin), Name: *name}, Replace: *replace}
@@ -105,7 +105,7 @@ func runJoin(args []string) int {
 		}
 		since := time.Now()
 		if err := spawnDetachedDaemon(); err != nil {
-			fmt.Fprintln(os.Stderr, "  (could not start the daemon:", err, ")")
+			fmt.Fprintln(os.Stderr, "  (could not start the daemon:", friendlyCLIError(err), ")")
 			fmt.Fprintln(os.Stderr, "  start it with:  calabi daemon")
 		} else if u := awaitConsoleURLIn(dataDir, since, 5*time.Second); u != "" {
 			console = consoleAddrOf(u, envOr("CALABI_STATUS_ADDR", defaultStatusAddr))
@@ -166,7 +166,7 @@ func joinHere(ctx context.Context, in joinRequest) (int, map[string]any) {
 	path := managedConfigPath()
 	cur, _, err := loadLocalConfigOrEmpty(path, true)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "  (the saved config is unreadable; starting over:", err, ")")
+		fmt.Fprintln(os.Stderr, "  (the saved config is unreadable; starting over:", friendlyCLIError(err), ")")
 		cur = &localConfig{}
 	}
 	// Read before joining: a new coordinator's record replaces it.
@@ -178,7 +178,7 @@ func joinHere(ctx context.Context, in joinRequest) (int, map[string]any) {
 	if cur.Mesh.Coord != "" && cur.Mesh.Coord != next.Mesh.Coord {
 		sctx, scancel := context.WithTimeout(ctx, 8*time.Second)
 		if err := coordSignOut(sctx, cur.Mesh, oldRec); err != nil {
-			fmt.Fprintln(os.Stderr, "  (could not tell the previous server this device left:", err, ")")
+			fmt.Fprintln(os.Stderr, "  (could not tell the previous server this device left:", friendlyCLIError(err), ")")
 		}
 		scancel()
 	}

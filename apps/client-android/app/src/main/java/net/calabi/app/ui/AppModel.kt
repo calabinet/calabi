@@ -8,6 +8,7 @@ import net.calabi.app.ApiResult
 import net.calabi.app.AppPrefs
 import net.calabi.app.CalabiApp
 import net.calabi.app.CoreClient
+import net.calabi.app.UserErrors
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -22,6 +23,7 @@ data class Device(
     /** "direct" / "relay" when this phone has a live path to it, else null. */
     val path: String?,
     val rttMicros: Long,
+    val ownerEmail: String = "",
 )
 
 /** This phone's own connection (GET /v1/mesh). */
@@ -157,7 +159,7 @@ class AppModel {
         stoppedInBackground = AppPrefs.vpnStoppedFromOutside(CalabiApp.instance)
         val m = CoreClient.call("GET", "/v1/mesh").json()
         connection = Connection(
-            state = m.optString("state"), error = m.optString("error"), name = m.optString("name"),
+            state = m.optString("state"), error = UserErrors.stateError(m.optString("error")), name = m.optString("name"),
             overlay = m.optString("overlay"), selfOverlay = m.optString("self_overlay"), exitNode = m.optString("exit_node"),
             peers = m.optJSONArray("peers") ?: JSONArray(),
             certPresented = m.optString("cert_presented"), certPinned = m.optString("cert_pinned"),
@@ -340,6 +342,7 @@ private fun joinDevices(nodes: JSONArray?, connection: Connection?): List<Device
             name = n.optString("name"), os = n.optString("os"), overlay = overlay,
             online = n.optBoolean("online"), offersExit = offersExit,
             path = peer?.optString("path"), rttMicros = peer?.optLong("rtt_micros") ?: 0,
+            ownerEmail = n.optString("owner_email"),
         )
     }
     return out.sortedWith(compareByDescending<Device> { it.online }.thenBy { it.name })

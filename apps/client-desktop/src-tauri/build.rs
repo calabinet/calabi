@@ -14,7 +14,9 @@ fn main() {
 
     embed_daemon();
 
-    tauri_build::build()
+    tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
+        tauri_build::AppManifest::new().commands(&["files_action", "file_receipt_action"]),
+    )).expect("build desktop permissions");
 }
 
 /// Bake the calabi daemon binary INTO the desktop exe so the shipped

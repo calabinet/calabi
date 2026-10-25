@@ -12,6 +12,7 @@ package mesh
 import (
 	"fmt"
 	"net/netip"
+	"time"
 
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
@@ -28,16 +29,17 @@ type PeerService struct {
 
 // Peer is one node the local node may reach, as resolved from a NetMap.
 type Peer struct {
-	NodeID     int64
-	Name       string // MagicDNS label
-	Services   []PeerService
-	OS         string // "windows" / "linux" / "darwin"; "" from an older node
-	NodeKey    meshproto.NodeKey
-	DiscoKey   meshproto.DiscoKey
-	Overlay    netip.Addr
-	AllowedIPs []netip.Prefix
-	Endpoints  []netip.AddrPort
-	DERPHome   string
+	FileTransfer *meshpb.FileTransferInfo
+	NodeID       int64
+	Name         string // MagicDNS label
+	Services     []PeerService
+	OS           string // "windows" / "linux" / "darwin"; "" from an older node
+	NodeKey      meshproto.NodeKey
+	DiscoKey     meshproto.DiscoKey
+	Overlay      netip.Addr
+	AllowedIPs   []netip.Prefix
+	Endpoints    []netip.AddrPort
+	DERPHome     string
 }
 
 // SubnetAlias is one real subnet behind this node and the unique prefix the mesh
@@ -55,9 +57,10 @@ type SubnetAlias struct {
 // NetMap is the client-side view of the meshnet: self + the ACL-filtered peers
 // + the relay directory. Built from a meshpb.NetMap via FromNetMap.
 type NetMap struct {
-	Self  Peer
-	Peers []Peer
-	DERP  DERPMap
+	FileTransferSupported bool
+	Self                  Peer
+	Peers                 []Peer
+	DERP                  DERPMap
 	// Filter is what THIS node enforces on inbound traffic, meaningful
 	// only when FilterEnabled — see below.
 	Filter []FilterRule
@@ -219,11 +222,12 @@ func FromNetMap(pb *meshpb.NetMap) (NetMap, error) {
 		return NetMap{}, fmt.Errorf("mesh: self: %w", err)
 	}
 	nm := NetMap{
-		Self:          self,
-		DERP:          derpFromProto(pb.GetDerpMap()),
-		Filter:        filterFromProto(pb.GetPacketFilter()),
-		FilterEnabled: pb.GetFilterEnabled(),
-		RelayGrant:    pb.GetRelayGrant(),
+		FileTransferSupported: pb.GetFileTransferSupported(),
+		Self:                  self,
+		DERP:                  derpFromProto(pb.GetDerpMap()),
+		Filter:                filterFromProto(pb.GetPacketFilter()),
+		FilterEnabled:         pb.GetFilterEnabled(),
+		RelayGrant:            pb.GetRelayGrant(),
 
 		RelayBandwidthKbps:      pb.GetRelayBandwidthKbps(),
 		RelayBandwidthBurstKbps: pb.GetRelayBandwidthBurstKbps(),
@@ -275,6 +279,10 @@ func peerFromProto(pp *meshpb.Peer) (Peer, error) {
 		return Peer{}, fmt.Errorf("node_key: %w", err)
 	}
 	p := Peer{NodeID: pp.GetNodeId(), Name: pp.GetName(), NodeKey: nk, DERPHome: pp.GetDerpHome(), OS: pp.GetOs()}
+	// A malformed optional declaration disables only file transfer, never mesh.
+	if _, err := meshproto.VerifyFileTransfer(nk, pp.GetFileTransfer(), time.Now()); err == nil {
+		p.FileTransfer = cloneFileTransfer(pp.GetFileTransfer())
+	}
 	for _, sv := range pp.GetServices() {
 		if sv.GetName() == "" {
 			continue // a nameless service selects nothing; don't render a blank row

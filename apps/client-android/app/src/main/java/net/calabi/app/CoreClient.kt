@@ -13,8 +13,8 @@ data class ApiResult(val status: Int, val body: String) {
         JSONObject()
     }
 
-    /** The control plane's message for a failure, or a fallback. */
-    fun error(fallback: String): String = json().optString("error").ifBlank { fallback }
+    /** Stable reasons are translated using the app locale, with English fallback. */
+    fun error(fallback: String): String = UserErrors.render(json(), status, fallback)
 }
 
 /**

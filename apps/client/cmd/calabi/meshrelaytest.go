@@ -93,9 +93,9 @@ func runMeshRelayTest(args []string) int {
 		fmt.Print(out)
 		return 0
 	} else if errors.Is(err, errDaemonCannot) {
-		fmt.Fprintf(os.Stderr, "note: %v — dialing it directly instead\n", err)
+		fmt.Fprintf(os.Stderr, "note: %v — dialing it directly instead\n", friendlyCLIError(err))
 	} else if !errors.Is(err, errNoDaemon) {
-		fmt.Fprintf(os.Stderr, "calabi mesh relaytest: %v\n", err)
+		fmt.Fprintf(os.Stderr, "calabi mesh relaytest: %v\n", friendlyCLIError(err))
 		return 1
 	}
 
@@ -105,14 +105,14 @@ func runMeshRelayTest(args []string) int {
 		addr, err := relayAddrFromDaemon()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "calabi mesh relaytest: %v\n"+
-				"  pass one explicitly:  calabi mesh relaytest --relay host:3340\n", err)
+				"  pass one explicitly:  calabi mesh relaytest --relay host:3340\n", friendlyCLIError(err))
 			return 1
 		}
 		cfg.addr = addr
 	}
 	res, err := driveRelayLeg(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "calabi mesh relaytest: %v\n", err)
+		fmt.Fprintf(os.Stderr, "calabi mesh relaytest: %v\n", friendlyCLIError(err))
 		return 1
 	}
 	printRelayTest(cfg, res)

@@ -37,6 +37,14 @@ func main() {
 	}
 
 	switch {
+	case args == "daemon stop", args == "daemon uninstall":
+		fmt.Println("fake service removed")
+	case strings.HasPrefix(args, "firewall -Action "):
+		if os.Getenv("CALABI_FAKE_FIREWALL") == "fail" {
+			fmt.Fprintln(os.Stderr, "firewall policy denied the local exception")
+			os.Exit(1)
+		}
+		fmt.Println("firewall configured")
 	case strings.HasPrefix(args, "daemon install"):
 		switch os.Getenv("CALABI_FAKE_INSTALL") {
 		case "refuse":

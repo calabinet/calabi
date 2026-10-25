@@ -46,6 +46,10 @@ func runMesh(args []string) int {
 		return runMeshDown(args[1:])
 	case "relaytest":
 		return runMeshRelayTest(args[1:])
+	case "filetest":
+		return runMeshFileTest(args[1:])
+	case "files":
+		return runMeshFiles(args[1:])
 	case "help", "-h", "--help":
 		printMeshUsage()
 		return 0
@@ -95,12 +99,12 @@ func runMeshUp(args []string) int {
 	// reason to have created a network device.
 	coordT, err := coordTrust(coordTrustSpec{Mode: *trustMode, Pins: pins, CAFile: *caFile}, *authKey)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "calabi mesh up: %v\n", err)
+		fmt.Fprintf(os.Stderr, "calabi mesh up: %v\n", friendlyCLIError(err))
 		return 2
 	}
 	routes, err := parseCIDRList(*advertise)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "calabi mesh up: --advertise-routes: %v\n", err)
+		fmt.Fprintf(os.Stderr, "calabi mesh up: --advertise-routes: %v\n", friendlyCLIError(err))
 		return 2
 	}
 	if *advertiseExit {
@@ -117,7 +121,7 @@ func runMeshUp(args []string) int {
 
 	priv, err := mesh.LoadOrCreateKey(*keyFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "calabi mesh up: key: %v\n", err)
+		fmt.Fprintf(os.Stderr, "calabi mesh up: key: %v\n", friendlyCLIError(err))
 		return 1
 	}
 	logger.Info("mesh identity", "node_key", priv.Public(), "key_file", *keyFile)
@@ -132,7 +136,7 @@ func runMeshUp(args []string) int {
 	}
 	dp, err := mesh.NewWGDatapath(priv, *relayAddr, *mtu, logger)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "calabi mesh up: datapath: %v\n", err)
+		fmt.Fprintf(os.Stderr, "calabi mesh up: datapath: %v\n", friendlyCLIError(err))
 		return 1
 	}
 	defer dp.Close()
@@ -172,7 +176,7 @@ func runMeshUp(args []string) int {
 
 	conn, err := dialCoord(*coordAddr, coordT)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "calabi mesh up: coordinator dial: %v\n", err)
+		fmt.Fprintf(os.Stderr, "calabi mesh up: coordinator dial: %v\n", friendlyCLIError(err))
 		return 1
 	}
 	defer conn.Close()
@@ -200,7 +204,7 @@ func runMeshUp(args []string) int {
 	logger.Info("mesh up — joining meshnet (Ctrl-C to leave)", "coord", *coordAddr, "relay", *relayAddr)
 
 	if err := ctrl.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-		fmt.Fprintf(os.Stderr, "calabi mesh up: %v\n", err)
+		fmt.Fprintf(os.Stderr, "calabi mesh up: %v\n", friendlyCLIError(err))
 		return 1
 	}
 	return 0
@@ -466,6 +470,7 @@ func dialMeshConsole(path string) (*http.Response, string, error) {
 
 // meshStatusResp mirrors localweb.MeshStatus.
 type meshStatusResp struct {
+	OrgID   int64  `json:"org_id"`
 	Enabled bool   `json:"enabled"`
 	Up      bool   `json:"up"`
 	Coord   string `json:"coord"`
@@ -523,7 +528,7 @@ func runMeshStatus(_ []string) int {
 			"  tried: %s\n"+
 			"  is `calabi daemon` running with a `mesh:` block in its config?\n"+
 			"  if it is listening somewhere else: CALABI_STATUS_ADDR=host:port calabi mesh status\n",
-			err, tried)
+			friendlyCLIError(err), tried)
 		return 1
 	}
 	defer resp.Body.Close()
@@ -533,7 +538,7 @@ func runMeshStatus(_ []string) int {
 	}
 	var st meshStatusResp
 	if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
-		fmt.Fprintf(os.Stderr, "calabi mesh status: bad response: %v\n", err)
+		fmt.Fprintf(os.Stderr, "calabi mesh status: bad response: %v\n", friendlyCLIError(err))
 		return 1
 	}
 	if !st.Enabled {
@@ -719,7 +724,7 @@ func postDaemonMesh(what string) int {
 		tried = base
 		req, rerr := http.NewRequest(http.MethodPost, base+"/v1/mesh/"+what, nil)
 		if rerr != nil {
-			fmt.Fprintf(os.Stderr, "calabi mesh %s: %v\n", what, rerr)
+			fmt.Fprintf(os.Stderr, "calabi mesh %s: %v\n", what, friendlyCLIError(rerr))
 			return 1
 		}
 		req.Header.Set("X-Local-Token", localTokenFor(base))
@@ -728,7 +733,7 @@ func postDaemonMesh(what string) int {
 		}
 	}
 	if err != nil || resp == nil {
-		fmt.Fprintf(os.Stderr, "calabi mesh %s: no daemon answered (last tried %s: %v)\n", what, tried, err)
+		fmt.Fprintf(os.Stderr, "calabi mesh %s: no daemon answered (last tried %s: %v)\n", what, tried, friendlyCLIError(err))
 		return 1
 	}
 	defer resp.Body.Close()
@@ -783,6 +788,12 @@ Usage:
      exit node; --exit-node routes THIS node's default traffic through a peer.
   calabi mesh status
      Show the mesh status of the running local daemon (reads :7400 /v1/mesh).
+  calabi mesh filetest --peer IP [--pin SHA256] [--send FILE | --inbox DIRECTORY] [--kbps 512]
+     Opt-in P0 file-transfer experiment; requires a running current daemon.
+     Exchanges ephemeral fingerprints manually; receive requires local confirmation.
+  calabi mesh files [--console http://127.0.0.1:7400]
+     Windows user file agent: trusted device discovery, multi-file confirmation,
+     private staging and durable resume. --stdio is reserved for the desktop shell.
   calabi mesh down
      Take the running daemon's device off the mesh; its tunnels keep working.
   calabi mesh up

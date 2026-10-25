@@ -109,6 +109,11 @@ func ApprovedRoutesJSON(v string) predicate.MeshNode {
 	return predicate.MeshNode(sql.FieldEQ(FieldApprovedRoutesJSON, v))
 }
 
+// RealRoutesJSON applies equality check predicate on the "real_routes_json" field. It's identical to RealRoutesJSONEQ.
+func RealRoutesJSON(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldRealRoutesJSON, v))
+}
+
 // AliasedRoutesJSON applies equality check predicate on the "aliased_routes_json" field. It's identical to AliasedRoutesJSONEQ.
 func AliasedRoutesJSON(v string) predicate.MeshNode {
 	return predicate.MeshNode(sql.FieldEQ(FieldAliasedRoutesJSON, v))
@@ -817,6 +822,71 @@ func ApprovedRoutesJSONEqualFold(v string) predicate.MeshNode {
 // ApprovedRoutesJSONContainsFold applies the ContainsFold predicate on the "approved_routes_json" field.
 func ApprovedRoutesJSONContainsFold(v string) predicate.MeshNode {
 	return predicate.MeshNode(sql.FieldContainsFold(FieldApprovedRoutesJSON, v))
+}
+
+// RealRoutesJSONEQ applies the EQ predicate on the "real_routes_json" field.
+func RealRoutesJSONEQ(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldRealRoutesJSON, v))
+}
+
+// RealRoutesJSONNEQ applies the NEQ predicate on the "real_routes_json" field.
+func RealRoutesJSONNEQ(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNEQ(FieldRealRoutesJSON, v))
+}
+
+// RealRoutesJSONIn applies the In predicate on the "real_routes_json" field.
+func RealRoutesJSONIn(vs ...string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldIn(FieldRealRoutesJSON, vs...))
+}
+
+// RealRoutesJSONNotIn applies the NotIn predicate on the "real_routes_json" field.
+func RealRoutesJSONNotIn(vs ...string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNotIn(FieldRealRoutesJSON, vs...))
+}
+
+// RealRoutesJSONGT applies the GT predicate on the "real_routes_json" field.
+func RealRoutesJSONGT(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldGT(FieldRealRoutesJSON, v))
+}
+
+// RealRoutesJSONGTE applies the GTE predicate on the "real_routes_json" field.
+func RealRoutesJSONGTE(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldGTE(FieldRealRoutesJSON, v))
+}
+
+// RealRoutesJSONLT applies the LT predicate on the "real_routes_json" field.
+func RealRoutesJSONLT(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldLT(FieldRealRoutesJSON, v))
+}
+
+// RealRoutesJSONLTE applies the LTE predicate on the "real_routes_json" field.
+func RealRoutesJSONLTE(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldLTE(FieldRealRoutesJSON, v))
+}
+
+// RealRoutesJSONContains applies the Contains predicate on the "real_routes_json" field.
+func RealRoutesJSONContains(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldContains(FieldRealRoutesJSON, v))
+}
+
+// RealRoutesJSONHasPrefix applies the HasPrefix predicate on the "real_routes_json" field.
+func RealRoutesJSONHasPrefix(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldHasPrefix(FieldRealRoutesJSON, v))
+}
+
+// RealRoutesJSONHasSuffix applies the HasSuffix predicate on the "real_routes_json" field.
+func RealRoutesJSONHasSuffix(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldHasSuffix(FieldRealRoutesJSON, v))
+}
+
+// RealRoutesJSONEqualFold applies the EqualFold predicate on the "real_routes_json" field.
+func RealRoutesJSONEqualFold(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEqualFold(FieldRealRoutesJSON, v))
+}
+
+// RealRoutesJSONContainsFold applies the ContainsFold predicate on the "real_routes_json" field.
+func RealRoutesJSONContainsFold(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldContainsFold(FieldRealRoutesJSON, v))
 }
 
 // AliasedRoutesJSONEQ applies the EQ predicate on the "aliased_routes_json" field.

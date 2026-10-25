@@ -54,6 +54,9 @@ func (MeshNode) Fields() []ent.Field {
 		field.String("approved_routes_json").
 			Default("[]").
 			Comment("the subset an admin approved; only these are routed to the node"),
+		field.String("real_routes_json").
+			Default("[]").
+			Comment("Admin-selected approved CIDRs also published under their real addresses"),
 		field.String("aliased_routes_json").
 			Default("[]").
 			Comment("JSON array of advertised CIDRs the node ASKS to publish under a unique stand-in prefix (overlapping-LAN case; see mesh-subnet-alias-nat-plan.md)"),

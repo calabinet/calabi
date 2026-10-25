@@ -22,6 +22,9 @@ option go_package = "github.com/calabinet/calabi/pkg/mesh-proto/meshpb;meshpb";
 // API. The coordinator sees METADATA (keys, endpoints, the netmap) but never
 // node<->node payload — that is WireGuard end-to-end encrypted.
 service Coordinator {
+  // Dedicated metadata update: cannot replace service declarations or ACLs.
+  // Absent info withdraws this session's file listener. Never carries file names.
+  rpc UpdateFileTransfer(UpdateFileTransferRequest) returns (UpdateFileTransferResponse);
   // RegisterNode enrolls a node into its meshnet (= org): the coordinator
   // records its public keys, allocates an overlay IP (IPAM), and returns the
   // node's identity within the mesh.
@@ -155,6 +158,22 @@ service Coordinator {
   // console rather than letting a reader assume it is tamper-proof.
   rpc ReportConnections(ReportConnectionsRequest) returns (ReportConnectionsResponse);
 }
+
+// A short-lived declaration signed by the DEDICATED Ed25519 transfer key.
+// The signature binds every field to the authenticated WireGuard node key.
+message FileTransferInfo {
+  uint32 version = 1;
+  uint32 port = 2;
+  bool receiving = 3;
+  bytes certificate = 4;
+  int64 expires_unix = 5;
+  bytes proof = 6;
+}
+message UpdateFileTransferRequest {
+  string session_token = 1;
+  FileTransferInfo info = 2;
+}
+message UpdateFileTransferResponse {}
 
 message RegisterNodeRequest {
   // Base64 (WireGuard-style) public keys. Private keys never leave the node.
@@ -672,6 +691,8 @@ message NetMap {
   // charged against it: it costs the platform nothing.
   uint32 relay_bandwidth_kbps = 12;
   uint32 relay_bandwidth_burst_kbps = 13;
+  // Absent on old coordinators: file transfer must remain unavailable.
+  bool file_transfer_supported = 14;
   // MagicDNS records land here.
 }
 
@@ -702,6 +723,8 @@ message PortRange {
 }
 
 message Peer {
+  // Only present for a current, approved, online device's unexpired declaration.
+  FileTransferInfo file_transfer = 11;
   int64 node_id = 1;
   string node_key = 2;
   string disco_key = 3;

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"os"
 	"strings"
 	"testing"
@@ -119,5 +120,50 @@ func TestAdminPreviewAndCheckACL(t *testing.T) {
 	// An unknown node name is a 404, not a silent "denied".
 	if rr := post("/admin/meshnets/1/acl/check", `{"src":"a","dst":"ghost"}`); rr.Code != http.StatusNotFound {
 		t.Fatalf("unknown node check = %d, want 404", rr.Code)
+	}
+}
+
+func TestAdminRealRoutesUpdateAndValidation(t *testing.T) {
+	ctx := context.Background()
+	c := newContractCoord()
+	c.AliasIPAM = core.NewMemAliasIPAM()
+	lan := netip.MustParsePrefix("192.168.1.0/24")
+	n, err := c.Register(ctx, core.RegisterInput{Meshnet: 1, Name: "router", NodeKey: ckey(1), AdvertisedRoutes: []netip.Prefix{lan}, AliasedRoutes: []netip.Prefix{lan}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := adminhttp.New(c, core.NewNotifier(), slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	for _, tc := range []struct {
+		body string
+		want int
+		real bool
+	}{
+		{`{"approved":["192.168.1.0/24"],"real_routes":["192.168.1.50/32"]}`, 200, true},
+		{`{"approved":["192.168.1.0/24"]}`, 200, true},
+		{`{"approved":["192.168.1.0/24"],"real_routes":["10.0.0.0/24"]}`, 400, true},
+		{`{"approved":["192.168.1.0/24"],"real_routes":["broken"]}`, 400, true},
+		{`{"approved":["192.168.1.0/24"],"real_routes":[]}`, 200, false},
+	} {
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/admin/meshnets/1/nodes/"+itoa(n.ID)+"/routes", strings.NewReader(tc.body)))
+		if rr.Code != tc.want {
+			t.Fatalf("%s status %d: %s", tc.body, rr.Code, rr.Body.String())
+		}
+		stored, err := c.Nodes.Get(ctx, n.ID)
+		if err != nil || (len(stored.RealRoutes) > 0) != tc.real {
+			t.Fatalf("stored %+v err %v", stored, err)
+		}
+		if rr.Code == 200 {
+			var view struct {
+				Real    []string          `json:"real_routes"`
+				Aliases []core.RouteAlias `json:"route_aliases"`
+			}
+			if err := json.Unmarshal(rr.Body.Bytes(), &view); err != nil {
+				t.Fatal(err)
+			}
+			if (len(view.Real) > 0) != tc.real || len(view.Aliases) != 1 {
+				t.Fatalf("view %+v", view)
+			}
+		}
 	}
 }

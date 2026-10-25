@@ -1,0 +1,16 @@
+.file-receipt { height: 100%; box-sizing: border-box; padding: 20px; display: flex; flex-direction: column; background: #0b1224; color: #e2e8f0; }
+.file-receipt header { display: flex; flex-shrink: 0; align-items: center; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid #233256; }
+.file-receipt header strong { display: block; font-size: 17px; }
+.file-receipt header small { display: block; color: #94a3b8; margin-top: 3px; }
+.file-receipt-mark { display: grid; place-items: center; color: #8ba3ff; width: 40px; height: 40px; border-radius: 12px; background: #182345; }
+.file-receipt-list { flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; }
+.file-receipt-list article { padding: 16px 0; border-bottom: 1px solid #233256; }
+.file-receipt-list article:last-child { padding-bottom: 0; border-bottom: 0; }
+.file-receipt-peer { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-receipt-meta { margin-top: 4px; color: #94a3b8; font-size: 12px; }
+.file-receipt-list ul { padding: 0; margin: 12px 0 0; list-style: none; max-height: 90px; overflow-y: auto; }
+.file-receipt-list li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 3px 0; font-size: 13px; }
+.file-receipt-request-heading { display:flex; align-items:center; gap:12px; }
+.file-receipt-sender { flex:1; min-width:0; }
+.file-receipt-actions { display: flex; flex-shrink:0; justify-content: flex-end; gap: 8px; }
+.file-receipt-actions .ant-btn { min-width: 68px; }

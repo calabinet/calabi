@@ -27,7 +27,7 @@ var nodeFieldHandling = map[string]string{
 	"BlockIncoming": "both", "EnrolledBy": "both", "SignedOut": "both",
 	// Admin decisions: set on insert, never by a node's own re-enrolment
 	// (each has its own setter).
-	"Approved": "insert", "TagsPinned": "insert",
+	"Approved": "insert", "TagsPinned": "insert", "RealRoutes": "insert",
 	// Only through its own setter (SetDisabled).
 	"Disabled": "setter",
 	// Not stored on the row: assigned by the database, or computed elsewhere.
@@ -49,6 +49,7 @@ func nodeWith(v byte) *core.Node {
 		DERPHome:          "region-" + string('a'+v),
 		AdvertisedRoutes:  []netip.Prefix{netip.PrefixFrom(netip.AddrFrom4([4]byte{192, 168, v, 0}), 24)},
 		ApprovedRoutes:    []netip.Prefix{netip.PrefixFrom(netip.AddrFrom4([4]byte{192, 168, v, 0}), 24)},
+		RealRoutes:        []netip.Prefix{netip.PrefixFrom(netip.AddrFrom4([4]byte{192, 168, v, 0}), 24)},
 		RoutesReviewed:    b,
 		AliasedRoutes:     []netip.Prefix{netip.PrefixFrom(netip.AddrFrom4([4]byte{192, 168, v, 0}), 24)},
 		RouteAliases:      []core.RouteAlias{{Real: netip.PrefixFrom(netip.AddrFrom4([4]byte{192, 168, v, 0}), 24), Alias: netip.PrefixFrom(netip.AddrFrom4([4]byte{100, 96, v, 0}), 24)}},
@@ -120,5 +121,37 @@ func TestNodeRoundTripEveryField(t *testing.T) {
 	}
 	if got, _ := s.Get(ctx, saved.ID); got.SignedOut {
 		t.Error("SetSignedOut(false) did not persist")
+	}
+}
+
+func TestRealRouteAdminUpdateSurvivesNodeUpsert(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	n, err := s.Upsert(ctx, nodeWith(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	real := []netip.Prefix{netip.MustParsePrefix("10.22.0.0/24")}
+	if err := s.UpdateApprovedRoutes(ctx, n.ID, real, real); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Get(ctx, n.ID)
+	if err != nil || !reflect.DeepEqual(got.RealRoutes, real) {
+		t.Fatalf("persist: %+v %v", got, err)
+	}
+	got.RealRoutes = nil // a re-enrolling device cannot reset the admin decision
+	if _, err := s.Upsert(ctx, got); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.Get(ctx, n.ID)
+	if err != nil || !reflect.DeepEqual(got.RealRoutes, real) {
+		t.Fatalf("upsert: %+v %v", got, err)
+	}
+	if err := s.UpdateApprovedRoutes(ctx, n.ID, real, []netip.Prefix{}); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.Get(ctx, n.ID)
+	if err != nil || len(got.RealRoutes) != 0 {
+		t.Fatalf("disable: %+v %v", got, err)
 	}
 }

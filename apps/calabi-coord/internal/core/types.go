@@ -52,6 +52,10 @@ type Node struct {
 	// allowed_ips. Approving a route hands this node other nodes' traffic for
 	// that CIDR, which is why it is an admin decision and not a node's own.
 	ApprovedRoutes []netip.Prefix
+	// RealRoutes publishes selected IPs/subranges within approved subnets alongside aliases.
+	// Each target is forwarded by this node, and need not run a mesh client.
+	// Only administrators may set this; clients still apply local-network protection.
+	RealRoutes []netip.Prefix
 	// RoutesReviewed records that an admin has managed this node's routes at
 	// least once. Until then the node keeps the pre-approval behaviour (claims
 	// are honoured), so shipping approval doesn't cut every subnet router that
@@ -71,9 +75,8 @@ type Node struct {
 	AliasedRoutes []netip.Prefix
 	// RouteAliases is the allocation: the stand-in prefix this coordinator gave
 	// each aliased route. Assigned when the route is both approved and requested,
-	// released when either stops being true. Consumers are told the ALIAS and
-	// never the real CIDR; the node itself is told both, so it can install the
-	// 1:1 rewrite.
+	// released when either stops being true. Consumers receive the alias, plus
+	// the real CIDR when enabled; the node receives both for the 1:1 rewrite.
 	RouteAliases []RouteAlias
 	// Services are what this node declares it offers. Populated when
 	// a netmap / ACL evaluation is computed (see nodesWithServices) — NOT stored

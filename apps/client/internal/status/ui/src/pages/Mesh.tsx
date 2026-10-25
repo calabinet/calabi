@@ -6,11 +6,12 @@
 // node's overlay IP, coordinator/relay, and each peer's live WireGuard state
 // (handshake age + bytes), the same data `calabi mesh status` prints.
 //
-// Three tabs under one heading, each at its own URL:
+// Four tabs under one heading, each at its own URL:
 //
 //   设备 /mesh          — this machine's state and the peers it can reach
 //   服务 /mesh/services — ports it offers to the mesh (pages/Services.tsx)
-//   路由 /mesh/routing  — subnets / exit device it offers, routes it accepts
+//   文件传送 /mesh/files — ordinary-user file transfer center
+//   网络设置 /mesh/routing — subnets / exit device it offers, subnets it accepts
 //
 // 服务 and 路由 are the same question at two sizes — what this machine offers
 // the mesh, one port or a whole subnet — which is why they sit side by side.
@@ -22,6 +23,10 @@ import {
   Card,
   Col,
   Empty,
+  Dropdown,
+  Drawer,
+  Descriptions,
+  Popover,
   Input,
   message,
   Popconfirm,
@@ -29,7 +34,6 @@ import {
   Space,
   Spin,
   Switch,
-  Statistic,
   Table,
   Tabs,
   Tag,
@@ -38,15 +42,18 @@ import {
 } from "antd";
 import {
   DeleteOutlined,
-  PlayCircleOutlined,
   PlusOutlined,
-  PoweroffOutlined,
   QuestionCircleOutlined,
 } from "@ant-design/icons";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { api, ApiError } from "../api/client";
+import { fileAction, useFileSupport } from "../api/files";
+import { fileTargets } from "../lib/fileTargets";
+import { fileRecords, fileRecordMatches } from "../lib/fileRecords";
+import MeshGlyph, { deviceGlyph } from "../components/MeshGlyph";
+import "../styles/mesh-center.css";
 import {
   exitStanding,
   formatRoute,
@@ -56,8 +63,11 @@ import {
   type RouteStanding,
 } from "../lib/cidr";
 import { relayOwner, relayOwnerKind } from "../lib/relayRegion";
+import { peerAddresses } from "../lib/peerAddresses";
+import { peerPresence } from "../lib/peerPresence";
 import { useLocation, useNavigate } from "react-router-dom";
 import Services from "./Services";
+import Files from "./Files";
 
 import type {
   AccountMe,
@@ -125,6 +135,7 @@ function shortKey(k: string): string {
 }
 
 export default function Mesh() {
+  const fileSupport = useFileSupport();
   const { t } = useTranslation();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -133,32 +144,28 @@ export default function Mesh() {
     ? "services"
     : pathname.startsWith("/mesh/routing")
       ? "routing"
-      : "devices";
+      : pathname.startsWith("/mesh/files")
+        ? "files"
+        : "devices";
   // Peer filter. A fleet of 20 machines turns this table into scrolling, and the
   // thing you arrive knowing is the machine's NAME — so match on that first,
   // then on the address you might have pasted from somewhere, then on the key
   // for the case where you came from `wg show` or a log line.
   const [peerQuery, setPeerQuery] = useState("");
-
-  // Owner labels. Proxied from bff-console, which is the only place that can
-  // turn owner_user_id into a person (coord only ever knew the number). Fails
-  // on a local daemon and for an api-key agent, and that must cost nothing but
-  // the label: retry is off and the error is swallowed, so the peer table never
-  // waits on it or reports it.
-  const { data: orgNodes } = useQuery({
-    queryKey: ["mesh-org-nodes"],
-    queryFn: api.meshOrgNodes,
-    staleTime: 60_000,
-    retry: false,
-    throwOnError: false,
-  });
-  const ownerByOverlay = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const n of orgNodes?.items ?? []) {
-      if (n.overlay && n.owner_email) m.set(n.overlay, n.owner_email);
-    }
-    return m;
-  }, [orgNodes]);
+  const [connectionKey, setConnectionKey] = useState("");
+  const files = useQuery({ queryKey: ["user-files"], queryFn: () => fileAction({ action: "snapshot" }), enabled: fileSupport.data === true, refetchInterval: 1000, retry: false });
+  const [peerDetail, setPeerDetail] = useState<{ key: string; section: "routes" | "services" } | null>(null);
+  const setPeerDetailOpen = (peer: MeshPeer, section: "routes" | "services", open: boolean) => {
+    setPeerDetail((current) => open ? { key: peer.public_key, section } :
+      current?.key === peer.public_key && current.section === section ? null : current);
+  };
+  useEffect(() => {
+    if (!peerDetail) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setPeerDetail(null); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [peerDetail]);
+  useEffect(() => { setPeerDetail(null); setConnectionKey(""); }, [pathname]);
 
   const { data, error, isLoading } = useQuery<MeshStatus>({
     queryKey: ["mesh"],
@@ -169,6 +176,15 @@ export default function Mesh() {
     // the page back to a skeleton/empty state.
     placeholderData: keepPreviousData,
   });
+  useEffect(() => {
+    if (peerDetail && data && (!data.up || !data.peers?.some((peer) => peer.public_key === peerDetail.key))) {
+      setPeerDetail(null);
+    }
+  }, [data, peerDetail]);
+
+  useEffect(() => {
+    if (connectionKey && data && (!data.up || !data.peers?.some(peer => peer.public_key === connectionKey))) setConnectionKey("");
+  }, [connectionKey, data]);
 
   // Both are already cached by the Layout (same query keys), so this costs no
   // extra fetch — it just lets the page name the org instead of an id.
@@ -184,6 +200,32 @@ export default function Mesh() {
     refetchInterval: 5_000,
     retry: false,
   });
+
+  // The node list also carries authoritative presence. Never reuse another
+  // organization's cached presence or infer offline from idle WG traffic.
+  const presenceScope = snap?.active_org_id || orgsResp?.active_org_id || 0;
+  const presenceEnabled = !!data?.up && !(presenceScope && data.org_id && presenceScope !== data.org_id);
+  const nodesQuery = useQuery({
+    queryKey: ["mesh-org-nodes", presenceScope, data?.org_id || 0],
+    queryFn: api.meshOrgNodes,
+    enabled: presenceEnabled,
+    staleTime: 5_000,
+    refetchInterval: 5_000,
+    retry: false,
+    throwOnError: false,
+  });
+  const orgNodes = presenceEnabled ? nodesQuery.data : undefined;
+  const presenceCurrent = presenceEnabled && nodesQuery.isSuccess && Date.now() - nodesQuery.dataUpdatedAt < 15_000;
+  const presenceOf = (peer: MeshPeer) => peerPresence(peer.allowed_ips, presenceCurrent ? orgNodes?.items : undefined);
+  const ownerByOverlay = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const n of orgNodes?.items ?? []) {
+      if (n.overlay && n.owner_email) m.set(n.overlay, n.owner_email);
+    }
+    return m;
+  }, [orgNodes]);
+
+
   // Same query key the 路由 tab's card uses, so it costs no extra fetch. The
   // 设备 tab needs it for one thing: a machine that is refusing every inbound
   // connection looks EXACTLY like a healthy one there — up, addressed, peers
@@ -307,7 +349,7 @@ export default function Mesh() {
         // "which machine has postgres on it" is a real way to arrive here.
         (p.services ?? []).some((sv) => sv.name.toLowerCase().includes(q)) ||
         // So is "one of kenji's machines".
-        (ownerByOverlay.get((p.allowed_ips ?? [])[0]?.replace(/\/\d+$/, "") ?? "") ?? "")
+        (ownerByOverlay.get(peerAddresses(p.allowed_ips).overlay) ?? "")
           .toLowerCase()
           .includes(q),
     );
@@ -335,9 +377,7 @@ export default function Mesh() {
           // is in the tooltip. Nothing renders when unknown — an empty subline
           // is quieter than a placeholder, and "unknown owner" is not a fact
           // worth a row of its own.
-          const owner = ownerByOverlay.get(
-            (p.allowed_ips ?? [])[0]?.replace(/\/\d+$/, "") ?? "",
-          );
+          const owner = ownerByOverlay.get(peerAddresses(p.allowed_ips).overlay);
           const sub = owner ? (
             <Tooltip title={owner}>
               <Text type="secondary" style={{ fontSize: 11 }}>
@@ -368,25 +408,34 @@ export default function Mesh() {
                   )}
                 </Space>
               )}
+
             </Space>
           );
         },
       },
       {
-        // Copyable per prefix: the overlay /32 in here is the address you paste
-        // into ssh or a browser, and selecting it out of a Tag by hand is the
-        // kind of friction that makes people go looking for the console instead.
+        title: t("mesh.peerDetails.overlay"),
+        key: "overlay",
+        width: 150,
+        render: (_: unknown, p: MeshPeer) => {
+          const { overlay } = peerAddresses(p.allowed_ips);
+          return overlay ? <Text copyable={{ text: overlay }} style={{ whiteSpace: "nowrap" }}>{overlay}</Text> : <Text type="secondary">—</Text>;
+        },
+      },
+      {
         title: t("mesh.colAllowed"),
-        dataIndex: "allowed_ips",
         key: "allowed",
-        render: (ips: string[]) =>
-          (ips || []).map((ip) => (
-            <Tag key={ip}>
-              <Text copyable={{ text: ip.replace(/\/\d+$/, "") }} style={{ fontSize: 12 }}>
-                {ip}
-              </Text>
-            </Tag>
-          )),
+        width: 110,
+        render: (_: unknown, p: MeshPeer) => {
+          const { routes, exits } = peerAddresses(p.allowed_ips);
+          const open = peerDetail?.key === p.public_key && peerDetail.section === "routes";
+          return routes.length > 0 || exits.length > 0 ? <PeerDetailsPopover peer={p} section="routes" open={open}
+            onOpenChange={(visible) => setPeerDetailOpen(p, "routes", visible)}>
+            <Button type="link" size="small" aria-expanded={open} aria-haspopup="dialog">
+              {routes.length > 0 ? t("mesh.peerDetails.routes", { count: routes.length }) : t("mesh.peerDetails.exitDevice")}
+            </Button>
+          </PeerDetailsPopover> : <Text type="secondary">—</Text>;
+        },
       },
       {
         // What the machine is FOR. A name tells you which box it is; this tells
@@ -398,26 +447,17 @@ export default function Mesh() {
         // not "waiting for an admin".
         title: t("mesh.colServices"),
         key: "services",
+        width: 100,
         render: (_: unknown, p: MeshPeer) => {
           const svcs = p.services ?? [];
           if (svcs.length === 0) return <Text type="secondary">—</Text>;
-          const host = (p.allowed_ips ?? [])[0]?.replace(/\/\d+$/, "") ?? "";
-          return (
-            <Space size={4} wrap>
-              {svcs.map((sv) => (
-                <Tooltip key={sv.name + sv.port} title={`${sv.proto}/${sv.port}`}>
-                  <Tag style={{ marginInlineEnd: 0 }}>
-                    <Text
-                      copyable={host ? { text: `${host}:${sv.port}` } : false}
-                      style={{ fontSize: 12 }}
-                    >
-                      {sv.name}
-                    </Text>
-                  </Tag>
-                </Tooltip>
-              ))}
-            </Space>
-          );
+          const open = peerDetail?.key === p.public_key && peerDetail.section === "services";
+          return <PeerDetailsPopover peer={p} section="services" open={open}
+            onOpenChange={(visible) => setPeerDetailOpen(p, "services", visible)}>
+            <Button type="link" size="small" aria-expanded={open} aria-haspopup="dialog">
+              {t("mesh.peerDetails.services", { count: svcs.length })}
+            </Button>
+          </PeerDetailsPopover>;
         },
       },
       {
@@ -443,6 +483,7 @@ export default function Mesh() {
         title: t("mesh.colPath"),
         key: "path",
         render: (_: unknown, p: MeshPeer) => {
+          if (presenceOf(p) === "offline") return <Text type="secondary">—</Text>;
           const direct = p.path === "direct";
           const rtt = direct && p.rtt_micros ? fmtRtt(p.rtt_micros) : "";
           // The relay leg, shown ONLY when relayed. Prefixed with "→" and labelled
@@ -535,8 +576,13 @@ export default function Mesh() {
     // pins the columns to the empty map of the first render and the owner
     // sublines never appear — a bug with no error and no warning, found only by
     // looking at the rendered table.
-    [t, ownerByOverlay],
+    [t, ownerByOverlay, standalone, peerDetail, presenceCurrent, orgNodes],
   );
+
+  const receivers = fileTargets(data?.up ? data.peers || [] : [], files.data?.peers || []);
+  const activeFiles = fileRecords(files.data || { jobs: [], received: [] }).filter(row => fileRecordMatches(row, "active"));
+  const pendingFiles = files.data?.received.filter(row => row.transfer.state === "waiting").length || 0;
+  const connectionPeer = data?.up ? data.peers?.find(peer => peer.public_key === connectionKey) : undefined;
 
   const header = (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -550,7 +596,7 @@ export default function Mesh() {
       {unavailable || settling ? null : data?.paused ? (
         <Button
           type="primary"
-          icon={<PlayCircleOutlined />}
+          icon={<MeshGlyph name="play" />}
           loading={start.isPending}
           onClick={() => start.mutate()}
         >
@@ -564,7 +610,7 @@ export default function Mesh() {
             okButtonProps={{ danger: true }}
             onConfirm={() => stop.mutate()}
           >
-            <Button danger icon={<PoweroffOutlined />} loading={stop.isPending}>
+            <Button danger icon={<MeshGlyph name="power" />} loading={stop.isPending}>
               {t("mesh.stop")}
             </Button>
           </Popconfirm>
@@ -624,32 +670,7 @@ export default function Mesh() {
             description={t("mesh.blockedBannerHelp")}
           />
         )}
-        <Row gutter={[12, 12]} align="stretch">
-          <Col xs={24} sm={12} md={6} style={{ display: "flex" }}>
-            <Card size="small" style={{ width: "100%" }}>
-              <Statistic
-                title={t("mesh.state")}
-                value={data.up ? t("mesh.stateUp") : t("mesh.stateDown")}
-                valueStyle={{ color: data.up ? "#52c41a" : "#8c8c8c" }}
-              />
-            </Card>
-          </Col>
-          <Col xs={24} sm={12} md={6} style={{ display: "flex" }}>
-            <Card size="small" style={{ width: "100%" }}>
-              <Statistic title={t("mesh.overlay")} value={data.overlay || "—"} />
-            </Card>
-          </Col>
-          <Col xs={24} sm={12} md={6} style={{ display: "flex" }}>
-            <Card size="small" style={{ width: "100%" }}>
-              <Statistic title={t("mesh.node")} value={data.name || "—"} />
-            </Card>
-          </Col>
-          <Col xs={24} sm={12} md={6} style={{ display: "flex" }}>
-            <Card size="small" style={{ width: "100%" }}>
-              <Statistic title={t("mesh.peers")} value={data.peers?.length ?? 0} />
-            </Card>
-          </Col>
-        </Row>
+        <div className="mesh-info-strip"><span className={`files-ready ${data.up ? "" : "files-not-ready"}`}>{data.up ? t("mesh.stateUp") : t("mesh.stateDown")}</span><span>{t("mesh.node")} <Text>{data.name || "—"}</Text></span><span>{t("mesh.overlay")} <code>{data.overlay || "—"}</code></span><span>{t("files.deviceCount", { count: data.peers?.length || 0 })}</span></div>
 
         {/* A meshnet IS an org, so which org this session enrolled into is part
             of its identity — without it the page looks identical no matter which
@@ -661,7 +682,7 @@ export default function Mesh() {
             message={t("mesh.orgSwitching", { org: meshOrgName })}
           />
         )}
-        <Card size="small">
+        <details className="mesh-local-details"><summary>{t("files.localDetails")}</summary>        <Card size="small">
           <Row gutter={[12, 8]}>
             <Col xs={24} md={8}>
               <Text type="secondary" style={{ fontSize: 12 }}>
@@ -721,41 +742,28 @@ export default function Mesh() {
               </div>
             </Col>
           </Row>
-        </Card>
+        </Card></details>
 
-        <Card
-          title={t("mesh.peers")}
-          size="small"
-          extra={
-            (data.peers || []).length > 5 ? (
-              <Input
-                allowClear
-                size="small"
-                style={{ width: 200 }}
-                placeholder={t("mesh.peerFilter")}
-                value={peerQuery}
-                onChange={(e) => setPeerQuery(e.target.value)}
-              />
-            ) : undefined
-          }
-        >
-          {data.up ? (
-            <Table<MeshPeer>
-              rowKey="public_key"
-              size="small"
-              pagination={false}
-              columns={columns}
-              dataSource={shownPeers}
-              locale={{
-                emptyText:
-                  peerQuery && (data.peers || []).length > 0
-                    ? t("mesh.peerFilterNoMatch")
-                    : t("mesh.noPeers"),
-              }}
-            />
-          ) : (
-            <Empty description={t("mesh.connecting")} />
-          )}
+        <section className="mesh-peer-section">
+          <div className="mesh-peer-heading"><Text>{t("files.peerDevices")}</Text>{(data.peers || []).length > 5 && <Input allowClear size="small" style={{ width: 200 }} placeholder={t("mesh.peerFilter")} value={peerQuery} onChange={event => setPeerQuery(event.target.value)} />}</div>
+          {data.up ? <Table<MeshPeer> size="middle" rowKey="public_key" dataSource={shownPeers} pagination={{ pageSize: 20, showSizeChanger: false }} scroll={{ x: 600 }} locale={{ emptyText: peerQuery && (data.peers || []).length > 0 ? t("mesh.peerFilterNoMatch") : t("mesh.noPeers") }} columns={[
+            { title: t("mesh.colPeer"), key: "device", render: (_, peer) => <div className="mesh-device-name"><span className="files-file-icon"><MeshGlyph name={deviceGlyph(peer.os)} /></span><div><div className="mesh-device-label-row"><Text className="mesh-device-label">{peer.name || shortKey(peer.public_key)}</Text><Tooltip title={t(`mesh.presence.${presenceOf(peer)}Hint`)}><span className={`mesh-peer-presence ${presenceOf(peer)}`}>{t(`mesh.presence.${presenceOf(peer)}`)}</span></Tooltip></div><div className="mesh-device-meta"><span className="files-secondary">{[osLabel(peer.os), ownerByOverlay.get(peerAddresses(peer.allowed_ips).overlay)?.split("@")[0]].filter(Boolean).join(" · ")}</span><span className="mesh-device-capabilities">
+              {peerAddresses(peer.allowed_ips).routes.length > 0 && <Tooltip title={t("mesh.peerHasSubnets")}><Button className="mesh-capability" type="text" size="small" aria-label={t("mesh.peerHasSubnets")} icon={<MeshGlyph name="network" />} onClick={() => setConnectionKey(peer.public_key)} /></Tooltip>}
+              {!!peer.services?.length && <Tooltip title={t("mesh.peerHasServices")}><Button className="mesh-capability" type="text" size="small" aria-label={t("mesh.peerHasServices")} icon={<MeshGlyph name="service" />} onClick={() => setConnectionKey(peer.public_key)} /></Tooltip>}
+            </span></div></div></div> },
+            { title: t("mesh.peerDetails.overlay"), key: "overlay", width: 160, render: (_, peer) => <code>{peerAddresses(peer.allowed_ips).overlay || "—"}</code> },
+            { title: t("files.connection"), key: "connection", width: 170, render: (_, peer) => presenceOf(peer) === "offline" ? <Text type="secondary">—</Text> : <span className={peer.path === "direct" ? "mesh-device-direct" : ""}>{peer.path === "direct" ? t("mesh.pathDirect") : t("mesh.pathRelay")}{peer.path === "direct" && peer.rtt_micros ? ` · ${fmtRtt(peer.rtt_micros)}` : peer.path !== "direct" && peer.relay_rtt_micros ? ` · ${fmtRtt(peer.relay_rtt_micros)}` : ""}</span> },
+            ...columns.filter(column => column.key === "traffic").map(column => ({ ...column, width: 150 })),
+            { key: "actions", width: 48, render: (_, peer) => {
+              const address = peerAddresses(peer.allowed_ips).overlay;
+              const receiver = receivers.find(target => target.key === peer.public_key);
+              const ready = receiver?.status === "ready";
+              return <Dropdown trigger={["click"]} menu={{ items: [
+                ...(fileSupport.data ? [{ key: "send", icon: <MeshGlyph name="send" />, label: <Tooltip trigger={["hover", "focus"]} title={!ready ? t(`files.targetStatus.${receiver?.status || "notReady"}`) : undefined}><span tabIndex={!ready ? 0 : undefined} className="mesh-send-menu-label">{t("files.send")}</span></Tooltip>, disabled: !ready, onClick: () => navigate(`/mesh/files?device=${encodeURIComponent(peer.public_key)}`, { state: { fileTarget: { key: peer.public_key, name: peer.name || "", ip: address } } }) }] : []),
+                { key: "details", icon: <MeshGlyph name="info" />, label: t("files.connectionDetails"), onClick: () => setConnectionKey(peer.public_key) },
+              ] }}><Button type="text" icon={<MeshGlyph name="more" />} aria-label={t("files.deviceActions", { device: peer.name || address })} /></Dropdown>;
+            } },
+          ]} /> : <Empty description={t("mesh.connecting")} />}
           {/* A footnote, not a warning: being unable to reach part of the org is
               the NORMAL outcome of access rules, not a fault. It is here because
               the alternative is silence — the table shows what you can reach and
@@ -768,14 +776,36 @@ export default function Mesh() {
               </Text>
             </div>
           )}
-        </Card>
+        </section>
+        {fileSupport.data && (activeFiles.length > 0 || pendingFiles > 0) && <div className="mesh-transfer-strip"><MeshGlyph name="transfer" /><div><Text>{activeFiles.length > 0 ? t("files.activeCount", { count: activeFiles.length }) : t("files.pendingCount", { count: pendingFiles })}</Text><span className="files-secondary">{activeFiles[0]?.direction === "outgoing" ? activeFiles[0].job.progress.transfer.name : activeFiles[0]?.received.transfer.name}</span></div><Button type="link" onClick={() => navigate("/mesh/files")}>{t("files.viewRecords")}</Button></div>}
       </div>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div className="mesh-center" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {header}
+      {fileSupport.error && tab !== "files" && <Alert type="warning" showIcon message={t("files.bridgeUnavailable")} description={fileSupport.error.message} action={<Button onClick={() => fileSupport.refetch()}>{t("files.retry")}</Button>} />}
+      <Drawer rootClassName="mesh-connection-drawer" open={!!connectionPeer} onClose={() => { setPeerDetail(null); setConnectionKey(""); }} title={t("files.connectionDetails")} width={600}>
+        {connectionPeer && <Space direction="vertical" size={24} style={{ width: "100%" }}>
+          <span className={`mesh-peer-presence ${presenceOf(connectionPeer)}`}>{t(`mesh.presence.${presenceOf(connectionPeer)}`)}</span>
+          <div className="mesh-device-name"><span className="files-file-icon"><MeshGlyph name={deviceGlyph(connectionPeer.os)} /></span><div><Text strong>{connectionPeer.name || shortKey(connectionPeer.public_key)}</Text><span className="files-secondary">{osLabel(connectionPeer.os)}</span></div></div>
+          <Descriptions bordered size="small" column={1} items={[
+            { key: "overlay", label: t("mesh.peerDetails.overlay"), children: <Text copyable>{peerAddresses(connectionPeer.allowed_ips).overlay || "—"}</Text> },
+            { key: "key", label: t("files.deviceKey"), children: <Text copyable className="mesh-key">{connectionPeer.public_key}</Text> },
+            ...columns.filter(column => ["path", "handshake", "traffic"].includes(column.key)).map(column => ({ key: column.key, label: column.title, children: column.render(("dataIndex" in column ? connectionPeer[column.dataIndex as keyof MeshPeer] : undefined) as never, connectionPeer) })),
+          ]} />
+          <section><Title level={5}>{t("mesh.colAllowed")}</Title><Table size="small" pagination={false} rowKey="prefix" dataSource={[...peerAddresses(connectionPeer.allowed_ips).routes, ...peerAddresses(connectionPeer.allowed_ips).exits].map(prefix => ({ prefix }))} columns={[
+            { title: t("mesh.colAllowed"), dataIndex: "prefix", render: prefix => <Text code copyable>{prefix}</Text> },
+            { title: t("files.routeType"), key: "kind", width: 120, render: (_, row) => <Text type="secondary">{row.prefix === "0.0.0.0/0" || row.prefix === "::/0" ? t("mesh.peerDetails.exitDevice") : t("files.subnet")}</Text> },
+          ]} locale={{ emptyText: t("mesh.peerDetails.noSubnets") }} /></section>
+          <section><Title level={5}>{t("mesh.colServices")}</Title><Table size="small" pagination={false} scroll={{ x: 450 }} rowKey={service => `${service.name}/${service.proto}/${service.port}`} dataSource={connectionPeer.services || []} locale={{ emptyText: t("files.noServices") }} columns={[
+            { title: t("mesh.colServices"), dataIndex: "name" },
+            { title: t("mesh.peerDetails.protocol"), dataIndex: "proto", width: 80 },
+            { title: t("mesh.peerDetails.address"), key: "address", render: (_, service) => { const ip = peerAddresses(connectionPeer.allowed_ips).overlay; return ip ? <Text code copyable>{`${ip}:${service.port}`}</Text> : <Text type="secondary">—</Text>; } },
+          ]} /></section>
+        </Space>}
+      </Drawer>
       {/* Panes as Tabs children, not rendered by hand off `tab`: antd keeps a
           visited pane mounted while another is shown. The 路由 card holds its
           edits in local state until Save, and they used to share a page with
@@ -787,11 +817,49 @@ export default function Mesh() {
         items={[
           { key: "devices", label: t("mesh.tabs.devices"), children: body },
           { key: "services", label: t("mesh.tabs.services"), children: <Services /> },
+          ...(fileSupport.data || tab === "files" ? [{ key: "files", label: t("files.title"), children: <Files /> }] : []),
           { key: "routing", label: t("mesh.tabs.routing"), children: <MeshAdvertiseCard /> },
         ]}
       />
     </div>
   );
+}
+
+function PeerDetailsPopover({ peer, section, open, onOpenChange, children }: {
+  peer: MeshPeer; section: "routes" | "services"; open: boolean;
+  onOpenChange: (open: boolean) => void; children: React.ReactElement;
+}) {
+  const { t } = useTranslation();
+  const { overlay, routes, exits } = peerAddresses(peer?.allowed_ips);
+  const name = peer.name || shortKey(peer.public_key);
+  const title = t(section === "routes" ? "mesh.peerDetails.routesTitle" : "mesh.peerDetails.servicesTitle", { device: name });
+  return <Popover open={open} onOpenChange={onOpenChange} trigger="click" placement="bottomLeft" autoAdjustOverflow destroyOnHidden
+    title={<div style={{ width: section === "routes" ? 280 : 420, maxWidth: "calc(100vw - 56px)", overflowWrap: "anywhere" }}>{title}</div>}
+    content={<div role="dialog" aria-label={title} style={{ width: section === "routes" ? 280 : 420,
+      maxWidth: "calc(100vw - 56px)", maxHeight: "min(320px, 50vh)", overflow: "auto" }}>
+    {section === "routes" ? (
+      <Space direction="vertical" size={8} style={{ width: "100%" }}>
+        {routes.length === 0 ? <Text type="secondary">{t("mesh.peerDetails.noSubnets")}</Text> : routes.map((route) => <Text key={route} code copyable={{ text: route }}>{route}</Text>)}
+        {exits.length > 0 && <Space direction="vertical" size={8}>
+          <Text strong>{t("mesh.peerDetails.exitDevice")}</Text>
+          <Space>{exits.map((exit) => <Tag key={exit}>{exit === "::/0" ? "IPv6" : "IPv4"}</Tag>)}</Space>
+        </Space>}
+      </Space>
+    ) : (
+      <Table scroll={{ x: "max-content" }} size="small" pagination={false}
+        rowKey={(service) => `${service.name}/${service.proto}/${service.port}`} dataSource={peer.services || []}
+        columns={[
+          { title: t("mesh.colServices"), dataIndex: "name" },
+          { title: t("mesh.peerDetails.protocol"), dataIndex: "proto" },
+          { title: t("mesh.peerDetails.address"), render: (_: unknown, service: { name: string; proto: string; port: number }) => {
+            const address = overlay ? `${overlay}:${service.port}` : "";
+            return address ? <Text code copyable={{ text: address }}>{address}</Text> : <Text type="secondary">—</Text>;
+          } },
+        ]} />
+    )}
+    </div>}>
+    {children}
+  </Popover>;
 }
 
 // SettingRow is one capability: a title + one-line description on the left, a

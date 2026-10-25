@@ -21,10 +21,14 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,23 +57,30 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.calabi.app.R
+import net.calabi.app.BuildConfig
+import android.net.Uri
 import org.json.JSONObject
 
 private enum class Sheet { Exit, Org, Replace }
 
 /** A screen opened from a tab, drawn in its place with a back button. */
 private sealed interface Route {
+    data object FileTest : Route
     data class TunnelDetail(val tunnel: Tunnel) : Route
     data class TunnelAccess(val tunnel: Tunnel) : Route
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(onConnect: () -> Unit, onDisconnect: () -> Unit, onSignedOut: () -> Unit) {
+fun HomeScreen(onConnect: () -> Unit, onDisconnect: () -> Unit, onSignedOut: () -> Unit, shared: List<Uri> = emptyList(), onShareTaken: () -> Unit = {}, showFiles: Boolean = false, onFilesTaken: () -> Unit = {}) {
     val model = remember { AppModel() }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var sheet by remember { mutableStateOf<Sheet?>(null) }
     var route by remember { mutableStateOf<Route?>(null) }
+    var filePeer by rememberSaveable { mutableStateOf<String?>(null) }
+    var fileReview by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(shared) { if (BuildConfig.FILE_TRANSFER_ENABLED && shared.isNotEmpty()) { tab = 3; route = null; filePeer = "" } }
+    LaunchedEffect(showFiles) { if (BuildConfig.FILE_TRANSFER_ENABLED && showFiles) { tab = 3; route = null; fileReview = true; onFilesTaken() } }
 
     LaunchedEffect(Unit) { model.refreshAccount() }
     // Live state every 2s while the screen is up; the org's device list less often.
@@ -94,6 +105,7 @@ fun HomeScreen(onConnect: () -> Unit, onDisconnect: () -> Unit, onSignedOut: () 
     Scaffold(containerColor = Palette.ground, bottomBar = { if (route == null) BottomNav(tab) { tab = it } }) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             when (val r = route) {
+                Route.FileTest -> FileTransferTestScreen(model, onBack = { route = null })
                 is Route.TunnelDetail -> TunnelDetailScreen(
                     model, r.tunnel, onBack = { route = null }, onAccess = { route = Route.TunnelAccess(r.tunnel) },
                 )
@@ -103,9 +115,21 @@ fun HomeScreen(onConnect: () -> Unit, onDisconnect: () -> Unit, onSignedOut: () 
                         model, onConnect, onDisconnect,
                         onPickExit = { sheet = Sheet.Exit }, onPickOrg = { sheet = Sheet.Org }, onAccount = { tab = 2 },
                         onReplace = { sheet = Sheet.Replace },
+                        onFiles = { filePeer = it; tab = 3 },
                     )
                     1 -> TunnelsTab(model) { route = Route.TunnelDetail(it) }
-                    else -> SettingsTab(model, onSignedOut, onReplace = { sheet = Sheet.Replace })
+                    3 -> if (BuildConfig.FILE_TRANSFER_ENABLED) FileTransfersScreen(
+                        initialPeer = filePeer, shared = shared, onShareTaken = onShareTaken,
+                        onSendOpened = { filePeer = null },
+                        devices = model.devices,
+                        reviewIncoming = fileReview, onReviewOpened = { fileReview = false },
+                    )
+                    else -> SettingsTab(model, onSignedOut = {
+                        // Logout stops the core; also retire the Android VPN
+                        // service, notification and Quick Settings state.
+                        onDisconnect()
+                        onSignedOut()
+                    }, onReplace = { sheet = Sheet.Replace }, onFileTest = { route = Route.FileTest }, onFiles = { tab = 3 })
                 }
             }
         }
@@ -154,6 +178,7 @@ private fun DevicesTab(
     onPickOrg: () -> Unit,
     onAccount: () -> Unit,
     onReplace: () -> Unit,
+    onFiles: (String) -> Unit,
 ) {
     val devices = model.devices
     val inUseExit = model.connection?.exitNode.orEmpty().ifBlank { model.exitNode }
@@ -207,7 +232,7 @@ private fun DevicesTab(
             }
         }
         itemsIndexed(devices, key = { _, d -> d.overlay + d.name }) { i, d ->
-            DeviceRow(d, first = i == 0, last = i == devices.lastIndex, isExit = d.name == inUseExit || d.overlay == inUseExit)
+            DeviceRow(d, first = i == 0, last = i == devices.lastIndex, isExit = d.name == inUseExit || d.overlay == inUseExit, onFiles = { onFiles(d.overlay) })
         }
     }
 }
@@ -398,7 +423,8 @@ private fun Hero(model: AppModel, onConnect: () -> Unit, onDisconnect: () -> Uni
 }
 
 @Composable
-private fun DeviceRow(d: Device, first: Boolean, last: Boolean, isExit: Boolean) {
+private fun DeviceRow(d: Device, first: Boolean, last: Boolean, isExit: Boolean, onFiles: () -> Unit) {
+    var actionsOpen by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val shape = groupRowShape(first, last)
     Column(
@@ -434,10 +460,17 @@ private fun DeviceRow(d: Device, first: Boolean, last: Boolean, isExit: Boolean)
                         )
                     }
                 }
-                val os = osName(d.os)
-                Text(if (os.isBlank()) d.overlay else "${d.overlay} · $os", style = Styles.mono, maxLines = 1)
+                Text(d.overlay, style = Styles.mono, maxLines = 1)
+                if (d.ownerEmail.isNotBlank()) Text(d.ownerEmail, style = Styles.hint, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Trailing(d)
+            if (BuildConfig.FILE_TRANSFER_ENABLED) Box {
+                IconButton(onClick = { actionsOpen = true }, modifier = Modifier.semantics { contentDescription = context.getString(R.string.files_device_actions) }) { Glyph(R.drawable.ic_more, Palette.muted) }
+                DropdownMenu(expanded = actionsOpen, onDismissRequest = { actionsOpen = false }, containerColor = Palette.surface) {
+                    DropdownMenuItem(text = { Text(stringResource(R.string.files_new_send)) }, enabled = d.online, onClick = { actionsOpen = false; onFiles() }, leadingIcon = { Glyph(R.drawable.ic_share) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.files_copy_ip)) }, onClick = { actionsOpen = false; copyToClipboard(context, d.overlay) }, leadingIcon = { Glyph(R.drawable.ic_copy) })
+                }
+            }
         }
         if (!last) RowDivider(start = 68.dp)
     }
@@ -538,7 +571,7 @@ private fun pathDetail(d: Device): String? {
     }
 }
 
-private fun osIcon(os: String): Int = when (os) {
+internal fun osIcon(os: String): Int = when (os) {
     "windows" -> R.drawable.ic_monitor
     "darwin" -> R.drawable.ic_laptop
     "android", "ios" -> R.drawable.ic_phone

@@ -452,7 +452,13 @@ func (s *Server) PullNetMap(req *meshpb.PullNetMapRequest, stream meshpb.Coordin
 	// The netmap stream is the node's live control connection: hold it open =
 	// online, close it (client quit / network drop) = offline. Presence powers the
 	// console's online/offline indicator, distinct from the admin Disabled flag.
-	defer s.coord.Presence.Connected(self.ID)()
+	release := s.coord.Presence.Connected(self.ID)
+	defer func() {
+		release()
+		if s.hasFileTransfer(self.ID) {
+			s.notif.Bump(self.Meshnet)
+		}
+	}()
 
 	sig, unsub := s.notif.Subscribe(self.Meshnet, self.ID)
 	defer unsub()
@@ -495,7 +501,9 @@ func (s *Server) sendNetMap(stream meshpb.Coordinator_PullNetMapServer, nodeID i
 		}
 		return status.Errorf(codes.Internal, "compute netmap: %v", err)
 	}
-	return stream.Send(toProtoNetMap(nm))
+	out := toProtoNetMap(nm)
+	s.addFileTransfers(out)
+	return stream.Send(out)
 }
 
 // ReportServiceHealth records what a node observes about its own services.
@@ -641,4 +649,4 @@ func negotiate(clientVer uint32, clientCaps []string) (uint32, []string) {
 
 // serverCapabilities is what this coordinator does beyond the base protocol.
 // RegisterNodeResponse carries the part the node also asked for.
-var serverCapabilities = meshproto.Capabilities{meshproto.CapNodeReauth}
+var serverCapabilities = meshproto.Capabilities{meshproto.CapNodeReauth, meshproto.CapFileTransfer}

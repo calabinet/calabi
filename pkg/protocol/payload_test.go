@@ -83,3 +83,16 @@ func TestErrorPayloadImplementsError(t *testing.T) {
 		t.Fatalf("code lost")
 	}
 }
+
+func TestErrorPayloadHidesInternalRPCDetails(t *testing.T) {
+	const raw = "rpc error: code = Internal desc = sql: database password=secret"
+	e := NewError(CodeInternal, "calabi.err.internal", raw)
+	if e.MessageEN == raw || e.Code != CodeInternal || e.MessageKey != "calabi.err.internal" {
+		t.Fatalf("unsafe wire error or lost code: %+v", e)
+	}
+	// Older servers may have serialized the raw error without using NewError.
+	legacy := &ErrorPayload{Code: CodeInternal, MessageEN: raw}
+	if legacy.Error() != e.Error() {
+		t.Fatalf("legacy display = %q, want %q", legacy.Error(), e.Error())
+	}
+}

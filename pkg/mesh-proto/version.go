@@ -26,6 +26,10 @@ type Capability string
 // before it forgets an auth key.
 const CapNodeReauth Capability = "node_reauth"
 
+// CapFileTransfer advertises trusted, short-lived file listener declarations.
+// It does not grant permission to receive files or bypass the packet filter.
+const CapFileTransfer Capability = "file_transfer_v1"
+
 // Capabilities is the set a peer advertises. Intersection = the working subset.
 type Capabilities []Capability
 

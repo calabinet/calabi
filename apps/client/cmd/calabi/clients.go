@@ -44,7 +44,7 @@ func runClientsRegister(args []string) int {
 	}
 	cfg, err := creds.Load()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi clients register:", err)
+		fmt.Fprintln(os.Stderr, "calabi clients register:", friendlyCLIError(err))
 		return 1
 	}
 	if cfg == nil || cfg.User.ID == 0 {
@@ -52,7 +52,7 @@ func runClientsRegister(args []string) int {
 		return 1
 	}
 	if err := clientreg.Ensure(cfg, bffURL(), version); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi clients register:", err)
+		fmt.Fprintln(os.Stderr, "calabi clients register:", friendlyCLIError(err))
 		return 1
 	}
 	fmt.Printf("  registered client id=%d on host=%s os=%s/%s\n",
@@ -67,7 +67,7 @@ func runClientsList(args []string) int {
 	}
 	cli, err := authedClient()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi clients list:", err)
+		fmt.Fprintln(os.Stderr, "calabi clients list:", friendlyCLIError(err))
 		return 1
 	}
 	type clientItem struct {
@@ -87,7 +87,7 @@ func runClientsList(args []string) int {
 	defer cancel()
 	var out resp
 	if err := cli.Do(ctx, "GET", "/v1/clients", nil, &out); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi clients list:", err)
+		fmt.Fprintln(os.Stderr, "calabi clients list:", friendlyCLIError(err))
 		return 1
 	}
 	if len(out.Items) == 0 {

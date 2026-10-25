@@ -192,7 +192,7 @@ func runHTTP(args []string) int {
 	}
 	secJSON, secErr := sec.buildConfigJSON()
 	if secErr != nil {
-		fmt.Fprintln(os.Stderr, "calabi http:", secErr)
+		fmt.Fprintln(os.Stderr, "calabi http:", friendlyCLIError(secErr))
 		return 2
 	}
 	if fs.NArg() < 1 {
@@ -207,7 +207,7 @@ func runHTTP(args []string) int {
 	}
 	localAddr := fmt.Sprintf("%s:%d", *host, port)
 	if err := validateLocalUpstream(localAddr); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi http:", err)
+		fmt.Fprintln(os.Stderr, "calabi http:", friendlyCLIError(err))
 		return 1
 	}
 
@@ -236,7 +236,7 @@ func runHTTP(args []string) int {
 	defer cancel()
 
 	if err := cli.Handshake(ctx); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi: handshake:", err)
+		fmt.Fprintln(os.Stderr, "calabi: handshake:", friendlyCLIError(err))
 		return 1
 	}
 	edge.keepFresh(ctx, logger, cli)

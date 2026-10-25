@@ -33,6 +33,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	Coordinator_UpdateFileTransfer_FullMethodName     = "/calabi.mesh.v1.Coordinator/UpdateFileTransfer"
 	Coordinator_RegisterNode_FullMethodName           = "/calabi.mesh.v1.Coordinator/RegisterNode"
 	Coordinator_GetRegisterChallenge_FullMethodName   = "/calabi.mesh.v1.Coordinator/GetRegisterChallenge"
 	Coordinator_SignOut_FullMethodName                = "/calabi.mesh.v1.Coordinator/SignOut"
@@ -58,6 +59,9 @@ const (
 // API. The coordinator sees METADATA (keys, endpoints, the netmap) but never
 // node<->node payload — that is WireGuard end-to-end encrypted.
 type CoordinatorClient interface {
+	// Dedicated metadata update: cannot replace service declarations or ACLs.
+	// Absent info withdraws this session's file listener. Never carries file names.
+	UpdateFileTransfer(ctx context.Context, in *UpdateFileTransferRequest, opts ...grpc.CallOption) (*UpdateFileTransferResponse, error)
 	// RegisterNode enrolls a node into its meshnet (= org): the coordinator
 	// records its public keys, allocates an overlay IP (IPAM), and returns the
 	// node's identity within the mesh.
@@ -185,6 +189,16 @@ type coordinatorClient struct {
 
 func NewCoordinatorClient(cc grpc.ClientConnInterface) CoordinatorClient {
 	return &coordinatorClient{cc}
+}
+
+func (c *coordinatorClient) UpdateFileTransfer(ctx context.Context, in *UpdateFileTransferRequest, opts ...grpc.CallOption) (*UpdateFileTransferResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateFileTransferResponse)
+	err := c.cc.Invoke(ctx, Coordinator_UpdateFileTransfer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *coordinatorClient) RegisterNode(ctx context.Context, in *RegisterNodeRequest, opts ...grpc.CallOption) (*RegisterNodeResponse, error) {
@@ -345,6 +359,9 @@ func (c *coordinatorClient) ReportConnections(ctx context.Context, in *ReportCon
 // API. The coordinator sees METADATA (keys, endpoints, the netmap) but never
 // node<->node payload — that is WireGuard end-to-end encrypted.
 type CoordinatorServer interface {
+	// Dedicated metadata update: cannot replace service declarations or ACLs.
+	// Absent info withdraws this session's file listener. Never carries file names.
+	UpdateFileTransfer(context.Context, *UpdateFileTransferRequest) (*UpdateFileTransferResponse, error)
 	// RegisterNode enrolls a node into its meshnet (= org): the coordinator
 	// records its public keys, allocates an overlay IP (IPAM), and returns the
 	// node's identity within the mesh.
@@ -474,6 +491,9 @@ type CoordinatorServer interface {
 // pointer dereference when methods are called.
 type UnimplementedCoordinatorServer struct{}
 
+func (UnimplementedCoordinatorServer) UpdateFileTransfer(context.Context, *UpdateFileTransferRequest) (*UpdateFileTransferResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateFileTransfer not implemented")
+}
 func (UnimplementedCoordinatorServer) RegisterNode(context.Context, *RegisterNodeRequest) (*RegisterNodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RegisterNode not implemented")
 }
@@ -535,6 +555,24 @@ func RegisterCoordinatorServer(s grpc.ServiceRegistrar, srv CoordinatorServer) {
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&Coordinator_ServiceDesc, srv)
+}
+
+func _Coordinator_UpdateFileTransfer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateFileTransferRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoordinatorServer).UpdateFileTransfer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Coordinator_UpdateFileTransfer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoordinatorServer).UpdateFileTransfer(ctx, req.(*UpdateFileTransferRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Coordinator_RegisterNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -789,6 +827,10 @@ var Coordinator_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "calabi.mesh.v1.Coordinator",
 	HandlerType: (*CoordinatorServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "UpdateFileTransfer",
+			Handler:    _Coordinator_UpdateFileTransfer_Handler,
+		},
 		{
 			MethodName: "RegisterNode",
 			Handler:    _Coordinator_RegisterNode_Handler,

@@ -26,6 +26,9 @@ func (s *MemNodeStore) Upsert(_ context.Context, n *Node) (*Node, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cp := *n
+	if old, ok := s.nodes[cp.ID]; ok {
+		cp.RealRoutes = append([]netip.Prefix(nil), old.RealRoutes...)
+	}
 	if cp.ID == 0 {
 		s.nextID++
 		cp.ID = s.nextID
@@ -70,6 +73,7 @@ func (s *MemNodeStore) ListMeshnet(_ context.Context, t MeshnetID) ([]*Node, err
 	for _, n := range s.nodes {
 		if n.Meshnet == t {
 			cp := *n
+			cp.RealRoutes = append([]netip.Prefix(nil), n.RealRoutes...)
 			out = append(out, &cp)
 		}
 	}
@@ -88,7 +92,7 @@ func (s *MemNodeStore) UpdateEndpoints(_ context.Context, id int64, eps []netip.
 	return nil
 }
 
-func (s *MemNodeStore) UpdateApprovedRoutes(_ context.Context, id int64, routes []netip.Prefix) error {
+func (s *MemNodeStore) UpdateApprovedRoutes(_ context.Context, id int64, routes []netip.Prefix, realRoutes ...[]netip.Prefix) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	n, ok := s.nodes[id]
@@ -96,6 +100,9 @@ func (s *MemNodeStore) UpdateApprovedRoutes(_ context.Context, id int64, routes 
 		return ErrNodeNotFound
 	}
 	n.ApprovedRoutes = append([]netip.Prefix(nil), routes...)
+	if len(realRoutes) > 0 {
+		n.RealRoutes = append([]netip.Prefix(nil), realRoutes[0]...)
+	}
 	n.RoutesReviewed = true
 	return nil
 }

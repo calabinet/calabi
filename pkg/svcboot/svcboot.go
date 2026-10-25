@@ -36,6 +36,7 @@ import (
 	// "every timestamp displays in Beijing time" requirement.
 	_ "time/tzdata"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
@@ -78,6 +79,8 @@ func init() {
 
 // Options configures Run.
 type Options struct {
+	// Collectors adds service-specific business metrics to the admin registry.
+	Collectors []prometheus.Collector
 	// Name is the service short name -- "identity-svc", "tenant-svc", ...
 	Name string
 
@@ -171,6 +174,7 @@ func Run(opts Options) error {
 	// http.Handler with metrics.HTTPMiddleware(rec). Recorder is keyed
 	// to opts.Name so dashboards `sum by (svc)` correctly.
 	rec := metrics.NewRecorder(prov.Registry(), opts.Name)
+	prov.Registry().MustRegister(opts.Collectors...)
 	opts.recorder = rec // exposed via Options for HTTP svcs' Extra hook
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

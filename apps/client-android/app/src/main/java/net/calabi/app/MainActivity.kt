@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.VpnService
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -47,6 +48,8 @@ class MainActivity : ComponentActivity() {
 
     /** A calabi://join invite the app was opened with, until the screens take it. */
     private val inviteLink = mutableStateOf<String?>(null)
+    private val sharedFiles = mutableStateOf<List<Uri>>(emptyList())
+    private val showFiles = mutableStateOf(false)
 
     // The system's "allow this app to set up a VPN" dialog, shown once.
     private val vpnConsent = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -63,11 +66,15 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
         )
         inviteLink.value = inviteIn(intent)
+        sharedFiles.value = shareIn(intent)
+        showFiles.value = BuildConfig.FILE_TRANSFER_ENABLED && intent.getBooleanExtra("open_files", false)
         setContent {
             CalabiTheme {
                 AppRoot(
                     onConnect = ::connect, onDisconnect = { CalabiVpnService.disconnect(this) },
                     invite = inviteLink.value, onInviteTaken = { inviteLink.value = null },
+                    shared = sharedFiles.value, onShareTaken = { sharedFiles.value = emptyList() },
+                    showFiles = showFiles.value, onFilesTaken = { showFiles.value = false },
                 )
             }
         }
@@ -77,6 +84,20 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         inviteIn(intent)?.let { inviteLink.value = it }
+        shareIn(intent).takeIf { it.isNotEmpty() }?.let { sharedFiles.value = it }
+        if (BuildConfig.FILE_TRANSFER_ENABLED && intent.getBooleanExtra("open_files", false)) showFiles.value = true
+    }
+
+    @Suppress("DEPRECATION")
+    private fun shareIn(intent: Intent?): List<Uri> {
+        if (!BuildConfig.FILE_TRANSFER_ENABLED || intent == null) return emptyList()
+        val files = when (intent.action) {
+            Intent.ACTION_SEND -> listOfNotNull(intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))
+            Intent.ACTION_SEND_MULTIPLE -> intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty()
+            else -> emptyList()
+        }
+        if (files.size > 32 || files.any { it.scheme != "content" }) { toast(this, getString(R.string.files_limit)); return emptyList() }
+        return files
     }
 
     private fun inviteIn(intent: Intent?): String? =
@@ -96,7 +117,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun AppRoot(onConnect: () -> Unit, onDisconnect: () -> Unit, invite: String?, onInviteTaken: () -> Unit) {
+private fun AppRoot(onConnect: () -> Unit, onDisconnect: () -> Unit, invite: String?, onInviteTaken: () -> Unit, shared: List<Uri>, onShareTaken: () -> Unit, showFiles: Boolean, onFilesTaken: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var signedIn by remember { mutableStateOf<Boolean?>(null) }
@@ -130,7 +151,7 @@ private fun AppRoot(onConnect: () -> Unit, onDisconnect: () -> Unit, invite: Str
             LoginScreen(onSignedIn = { refresh++ }, onSelfHosted = { selfHosted = true })
         }
         true -> {
-            key(network) { HomeScreen(onConnect = onConnect, onDisconnect = onDisconnect, onSignedOut = { refresh++ }) }
+            key(network) { HomeScreen(onConnect = onConnect, onDisconnect = onDisconnect, onSignedOut = { refresh++ }, shared = shared, onShareTaken = onShareTaken, showFiles = showFiles, onFilesTaken = onFilesTaken) }
             // An invite opened while signed in somewhere: one network at a time, so ask.
             invite?.let { link ->
                 AlertDialog(

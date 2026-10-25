@@ -48,6 +48,7 @@ import (
 	"github.com/calabinet/calabi/apps/client/internal/inspect"
 	"github.com/calabinet/calabi/apps/client/internal/probe"
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/pkg/protocol/usererror"
 )
 
 // Config wires the api server with its external endpoints. Zero value
@@ -368,6 +369,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	// data-plane, not identity — same posture as edge-region/affinity. The
 	// org-wide kill switch is the web console's node-disable.
 	mux.HandleFunc("GET /v1/mesh", s.handleMesh)
+	mux.HandleFunc("GET /v1/mesh/inbound-check", s.handleInboundCheck)
 	mux.HandleFunc("POST /v1/mesh/down", s.requireLocalToken(s.handleMeshDown))
 	mux.HandleFunc("POST /v1/mesh/up", s.requireLocalToken(s.handleMeshUp))
 	mux.HandleFunc("POST /v1/mesh/relaytest", s.requireLocalToken(s.handleMeshRelayProbe))
@@ -700,7 +702,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		// "密码错误" vs "TOTP required" etc.
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(resp.StatusCode)
-		_, _ = w.Write(respBody)
+		_, _ = w.Write(usererror.JSON(resp.StatusCode, respBody))
 		return
 	}
 	var loginResp struct {
@@ -754,7 +756,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	// Echo the upstream body to the SPA.
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(respBody)
+	_, _ = w.Write(usererror.JSON(resp.StatusCode, respBody))
 }
 
 // handleAuthLogout calls bff-console /v1/auth/logout (which revokes
@@ -895,7 +897,7 @@ func (s *Server) handleOrgSwitch(w http.ResponseWriter, r *http.Request) {
 		// 503 (identity down), etc. SPA shows the message in the toast.
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(resp.StatusCode)
-		_, _ = w.Write(respBody)
+		_, _ = w.Write(usererror.JSON(resp.StatusCode, respBody))
 		return
 	}
 	var switchResp struct {
@@ -1461,6 +1463,18 @@ func (s *Server) copyResponse(w http.ResponseWriter, resp *http.Response) {
 		}
 		w.Header()[k] = v
 	}
+	if resp.StatusCode >= 400 {
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		w.Header().Del("Content-Length")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(resp.StatusCode)
+		_, _ = w.Write(usererror.JSON(resp.StatusCode, body))
+		return
+	}
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)
 }
@@ -1983,7 +1997,7 @@ func (s *Server) handleInspectReplay(w http.ResponseWriter, r *http.Request) {
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(usererror.Body(code, v))
 }
 
 // Used by the replay handler to convert the body's int field safely.

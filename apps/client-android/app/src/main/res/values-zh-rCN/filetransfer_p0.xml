@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="filetest_title">文件传送 · P0 实验</string>
+    <string name="filetest_hint">仅供开发验证，需在两端核对指纹并放行 17401 端口。每次发送一个大小已知且可定位读取的文件。清空收件箱前请先另存文件；锁屏和换网尚未验证。</string>
+    <string name="filetest_peer">对方设备的组网 IP</string>
+    <string name="filetest_pin">对方的文件传送证书指纹</string>
+    <string name="filetest_rate">文件传送速度上限（kbps）</string>
+    <string name="filetest_start">配对并开启测试</string>
+    <string name="filetest_send">选择并发送一个文件</string>
+    <string name="filetest_stop">停止传送</string>
+    <string name="filetest_accept">接受</string>
+    <string name="filetest_reject">拒绝</string>
+    <string name="filetest_save">另存已校验文件…</string>
+    <string name="filetest_clear">清空测试收件箱与配对</string>
+    <string name="filetest_clear_hint">结束实验并删除私有收件箱内的全部测试文件，已另存到其他位置的文件保留。</string>
+    <string name="filetest_failed">文件传送测试失败</string>
+    <string name="filetest_saved">文件已保存</string>
+    <string name="filetest_source_unavailable">P0 需要大小已知且可定位读取的文档。</string>
+    <string name="filetest_outgoing">发送 %1$s · 已落盘 %2$d / %3$d 字节</string>
+    <string name="filetest_progress">%1$d / %2$d 字节 · %3$s</string>
+</resources>

@@ -9,6 +9,7 @@ import (
 
 	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
+	"github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
 )
 
 // Node sessions (mesh protocol v2).
@@ -72,9 +73,10 @@ type pendingChallenge struct {
 }
 
 type nodeSession struct {
-	nodeID  int64
-	meshnet core.MeshnetID
-	nodeKey meshproto.NodeKey
+	fileTransfer *meshpb.FileTransferInfo // ephemeral; never stored in the node DB
+	nodeID       int64
+	meshnet      core.MeshnetID
+	nodeKey      meshproto.NodeKey
 }
 
 type nodeSessions struct {

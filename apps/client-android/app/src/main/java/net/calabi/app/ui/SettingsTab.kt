@@ -37,12 +37,13 @@ import androidx.lifecycle.compose.currentStateAsState
 import kotlinx.coroutines.launch
 import net.calabi.app.AppPrefs
 import net.calabi.app.BackgroundRun
+import net.calabi.app.BuildConfig
 import net.calabi.app.CoreClient
 import net.calabi.app.R
 import org.json.JSONObject
 
 @Composable
-fun SettingsTab(model: AppModel, onSignedOut: () -> Unit, onReplace: () -> Unit) {
+fun SettingsTab(model: AppModel, onSignedOut: () -> Unit, onReplace: () -> Unit, onFileTest: () -> Unit = {}, onFiles: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var renaming by remember { mutableStateOf(false) }
@@ -140,6 +141,16 @@ fun SettingsTab(model: AppModel, onSignedOut: () -> Unit, onReplace: () -> Unit)
 
         SectionLabel(stringResource(R.string.settings_support))
         Group {
+            if (BuildConfig.FILE_TRANSFER_ENABLED) {
+                ActionRow(stringResource(R.string.files_title), onClick = onFiles) { Glyph(R.drawable.ic_chevron_right, Palette.muted, 16.dp) }
+                RowDivider()
+            }
+            if (BuildConfig.DEBUG) {
+                ActionRow(stringResource(R.string.filetest_title), onClick = onFileTest) {
+                    Glyph(R.drawable.ic_chevron_right, Palette.muted, 16.dp)
+                }
+                RowDivider()
+            }
             ActionRow(stringResource(R.string.settings_export_logs), icon = R.drawable.ic_share, onClick = {
                 scope.launch {
                     val logs = CoreClient.call("GET", "/v1/logs").body

@@ -373,7 +373,8 @@ fn kill_pid(pid: u32) {
 ///   2. the daemon EMBEDDED in this exe, extracted to `extract_dir`
 ///      (production: the self-contained single-exe path)
 ///   3. sibling next to the current executable (dev: target/release)
-///   4. PATH lookup
+///   4. the macOS pkg installation at /Library/Application Support/Calabi/bin
+///   5. PATH lookup
 ///
 /// The env override is compiled OUT of release builds on purpose. A shipped,
 /// signed calabi-desktop.exe must never let an environment variable decide which
@@ -410,6 +411,13 @@ pub fn resolve_binary(extract_dir: Option<PathBuf>) -> Result<PathBuf, String> {
                 }
             }
         }
+    }
+    // The macOS pkg installs the shared binary outside the app bundle. The
+    // ordinary-user file agent must use that copy before an older CLI on PATH.
+    #[cfg(target_os = "macos")]
+    {
+        let installed = PathBuf::from("/Library/Application Support/Calabi/bin/calabi");
+        if installed.is_file() { return Ok(installed); }
     }
     which("calabi").map_err(|_| {
         // Deliberately does NOT suggest CALABI_DAEMON_PATH: release builds ignore

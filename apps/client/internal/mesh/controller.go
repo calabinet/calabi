@@ -13,6 +13,7 @@ import (
 
 	"github.com/calabinet/calabi/apps/client/internal/hostnet"
 	"github.com/calabinet/calabi/apps/client/internal/wake"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // directTransport is implemented by datapaths that can carry WireGuard over the
@@ -133,8 +134,12 @@ type Controller struct {
 
 	// peersMu guards curPeers, the latest netmap's peers — the set the DISCO prober
 	// re-pings on its periodic tick (between netmap pushes).
-	peersMu  sync.Mutex
-	curPeers []Peer
+	peersMu                sync.Mutex
+	curPeers               []Peer
+	fileTransferNegotiated atomic.Bool
+	fileTransferMap        atomic.Bool
+	fileRelayLimit         atomic.Uint32
+	fileNodeID             atomic.Int64
 
 	// homeMu guards the home-relay selection: the DERP map from the
 	// latest netmap, and the region this node measured as its closest relay. The
@@ -252,6 +257,11 @@ func (c *Controller) Run(ctx context.Context) error {
 		return fmt.Errorf("%w: %w", ErrRegister, err)
 	}
 	c.Reauth.record(reg)
+	c.fileTransferMap.Store(false)
+	defer c.fileTransferMap.Store(false)
+	c.fileNodeID.Store(reg.NodeID)
+	c.fileTransferNegotiated.Store(reg.Capabilities.Supports(meshproto.CapFileTransfer))
+	defer c.fileTransferNegotiated.Store(false)
 	c.registered.Store(true)
 	c.Logger.Info("mesh node registered", "node_id", reg.NodeID, "overlay", reg.Overlay, "by_proof_alone", reg.Reauth)
 
@@ -440,6 +450,8 @@ func (c *Controller) Run(ctx context.Context) error {
 		// Probe peers' endpoints immediately on a fresh netmap (new peers / new
 		// endpoints), in addition to the prober's periodic tick.
 		if prober != nil {
+			c.fileTransferMap.Store(nm.FileTransferSupported)
+			c.fileRelayLimit.Store(nm.RelayBandwidthKbps)
 			c.setPeers(nm.Peers)
 			prober.Probe(nm.Peers)
 		}
@@ -450,6 +462,22 @@ func (c *Controller) setPeers(peers []Peer) {
 	c.peersMu.Lock()
 	c.curPeers = peers
 	c.peersMu.Unlock()
+}
+
+// DeviceKeyForIP resolves the authoritative device address, never an advertised
+// route or the ordering of WireGuard's allowed-IP dump.
+func (c *Controller) DeviceKeyForIP(ip netip.Addr) string {
+	if c == nil || !ip.IsValid() {
+		return ""
+	}
+	c.peersMu.Lock()
+	defer c.peersMu.Unlock()
+	for _, peer := range c.curPeers {
+		if peer.Overlay == ip {
+			return peer.NodeKey.String()
+		}
+	}
+	return ""
 }
 
 // PeerFacts is the netmap's description of a peer that a status surface needs:

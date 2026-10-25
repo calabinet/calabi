@@ -52,17 +52,17 @@ func runCertsUpload(args []string) int {
 	}
 	fullchain, err := os.ReadFile(*fullchainPath)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "read fullchain:", err)
+		fmt.Fprintln(os.Stderr, "read fullchain:", friendlyCLIError(err))
 		return 1
 	}
 	key, err := os.ReadFile(*keyPath)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "read key:", err)
+		fmt.Fprintln(os.Stderr, "read key:", friendlyCLIError(err))
 		return 1
 	}
 	leaf, err := localValidate(fullchain, key)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi certs upload:", err)
+		fmt.Fprintln(os.Stderr, "calabi certs upload:", friendlyCLIError(err))
 		return 1
 	}
 	fmt.Printf("  pre-flight: subject=%q SANs=%v not_after=%s\n",
@@ -70,7 +70,7 @@ func runCertsUpload(args []string) int {
 
 	cli, err := authedClient()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi:", err)
+		fmt.Fprintln(os.Stderr, "calabi:", friendlyCLIError(err))
 		return 1
 	}
 	type uploadReq struct {
@@ -96,7 +96,7 @@ func runCertsUpload(args []string) int {
 		FullchainPEM:  string(fullchain),
 		PrivateKeyPEM: string(key),
 	}, &out); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi certs upload:", err)
+		fmt.Fprintln(os.Stderr, "calabi certs upload:", friendlyCLIError(err))
 		return 1
 	}
 	verb := "uploaded"
@@ -117,7 +117,7 @@ func runCertsList(args []string) int {
 	}
 	cli, err := authedClient()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi:", err)
+		fmt.Fprintln(os.Stderr, "calabi:", friendlyCLIError(err))
 		return 1
 	}
 	type certItem struct {
@@ -133,7 +133,7 @@ func runCertsList(args []string) int {
 	defer cancel()
 	var out resp
 	if err := cli.Do(ctx, "GET", "/v1/certs", nil, &out); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi certs list:", err)
+		fmt.Fprintln(os.Stderr, "calabi certs list:", friendlyCLIError(err))
 		return 1
 	}
 	if len(out.Items) == 0 {
@@ -164,13 +164,13 @@ func runCertsDelete(args []string) int {
 	}
 	cli, err := authedClient()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi:", err)
+		fmt.Fprintln(os.Stderr, "calabi:", friendlyCLIError(err))
 		return 1
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := cli.Do(ctx, "DELETE", fmt.Sprintf("/v1/certs/%d", id), nil, nil); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi certs delete:", err)
+		fmt.Fprintln(os.Stderr, "calabi certs delete:", friendlyCLIError(err))
 		return 1
 	}
 	fmt.Printf("  cert %d deleted\n", id)

@@ -180,7 +180,7 @@ func runLogin(args []string) int {
 	if err := cli.Do(ctx, "POST", "/v1/auth/login", loginReq{
 		Identifier: *email, Password: *password, TotpCode: *totpCode,
 	}, &resp); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi login:", err)
+		fmt.Fprintln(os.Stderr, "calabi login:", friendlyCLIError(err))
 		return 1
 	}
 
@@ -206,7 +206,7 @@ func runLogin(args []string) int {
 		c.Server = envOr("CALABI_SERVER", defaultServer)
 	}
 	if err := creds.Save(c); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi: save creds:", err)
+		fmt.Fprintln(os.Stderr, "calabi: save creds:", friendlyCLIError(err))
 		return 1
 	}
 	fmt.Printf("\n  logged in as %s\n  token saved to creds file (expires in %d sec)\n",
@@ -253,7 +253,7 @@ func runLogin(args []string) int {
 		//
 		if needsRebind(prevUserID, resp.UserID, daemonConnected(dctx, consoleUp)) {
 			if rerr := rebindDaemon(dctx, consoleUp); rerr != nil {
-				fmt.Fprintln(os.Stderr, "  (could not hand this login to the daemon:", rerr, ")")
+				fmt.Fprintln(os.Stderr, "  (could not hand this login to the daemon:", friendlyCLIError(rerr), ")")
 				fmt.Println("  note: it keeps its current session until it reconnects — restart it to switch now")
 			} else {
 				fmt.Println("  handed this login to it — re-dialling the edge and re-joining the meshnet")
@@ -289,7 +289,7 @@ func runLogin(args []string) int {
 	if wantStart {
 		since := time.Now()
 		if err := spawnDetachedDaemon(); err != nil {
-			fmt.Fprintln(os.Stderr, "  (could not auto-start daemon:", err, ")")
+			fmt.Fprintln(os.Stderr, "  (could not auto-start daemon:", friendlyCLIError(err), ")")
 			fmt.Fprintln(os.Stderr, "  start manually with:  calabi daemon")
 		} else {
 			// Wait on what the NEW daemon published, not on the port: if another

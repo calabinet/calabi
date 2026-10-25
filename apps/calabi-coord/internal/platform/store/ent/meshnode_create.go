@@ -158,6 +158,20 @@ func (mnc *MeshNodeCreate) SetNillableApprovedRoutesJSON(s *string) *MeshNodeCre
 	return mnc
 }
 
+// SetRealRoutesJSON sets the "real_routes_json" field.
+func (mnc *MeshNodeCreate) SetRealRoutesJSON(s string) *MeshNodeCreate {
+	mnc.mutation.SetRealRoutesJSON(s)
+	return mnc
+}
+
+// SetNillableRealRoutesJSON sets the "real_routes_json" field if the given value is not nil.
+func (mnc *MeshNodeCreate) SetNillableRealRoutesJSON(s *string) *MeshNodeCreate {
+	if s != nil {
+		mnc.SetRealRoutesJSON(*s)
+	}
+	return mnc
+}
+
 // SetAliasedRoutesJSON sets the "aliased_routes_json" field.
 func (mnc *MeshNodeCreate) SetAliasedRoutesJSON(s string) *MeshNodeCreate {
 	mnc.mutation.SetAliasedRoutesJSON(s)
@@ -439,6 +453,10 @@ func (mnc *MeshNodeCreate) defaults() {
 		v := meshnode.DefaultApprovedRoutesJSON
 		mnc.mutation.SetApprovedRoutesJSON(v)
 	}
+	if _, ok := mnc.mutation.RealRoutesJSON(); !ok {
+		v := meshnode.DefaultRealRoutesJSON
+		mnc.mutation.SetRealRoutesJSON(v)
+	}
 	if _, ok := mnc.mutation.AliasedRoutesJSON(); !ok {
 		v := meshnode.DefaultAliasedRoutesJSON
 		mnc.mutation.SetAliasedRoutesJSON(v)
@@ -536,6 +554,9 @@ func (mnc *MeshNodeCreate) check() error {
 	}
 	if _, ok := mnc.mutation.ApprovedRoutesJSON(); !ok {
 		return &ValidationError{Name: "approved_routes_json", err: errors.New(`ent: missing required field "MeshNode.approved_routes_json"`)}
+	}
+	if _, ok := mnc.mutation.RealRoutesJSON(); !ok {
+		return &ValidationError{Name: "real_routes_json", err: errors.New(`ent: missing required field "MeshNode.real_routes_json"`)}
 	}
 	if _, ok := mnc.mutation.AliasedRoutesJSON(); !ok {
 		return &ValidationError{Name: "aliased_routes_json", err: errors.New(`ent: missing required field "MeshNode.aliased_routes_json"`)}
@@ -648,6 +669,10 @@ func (mnc *MeshNodeCreate) createSpec() (*MeshNode, *sqlgraph.CreateSpec) {
 	if value, ok := mnc.mutation.ApprovedRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldApprovedRoutesJSON, field.TypeString, value)
 		_node.ApprovedRoutesJSON = value
+	}
+	if value, ok := mnc.mutation.RealRoutesJSON(); ok {
+		_spec.SetField(meshnode.FieldRealRoutesJSON, field.TypeString, value)
+		_node.RealRoutesJSON = value
 	}
 	if value, ok := mnc.mutation.AliasedRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldAliasedRoutesJSON, field.TypeString, value)

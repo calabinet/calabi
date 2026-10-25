@@ -158,7 +158,7 @@ func verifyInstallKey(key string) error {
 	default:
 		fmt.Fprintf(os.Stderr,
 			"calabi daemon install: could not verify the API key (%v) — installing anyway; "+
-				"it will be checked when the service connects.\n", err)
+				"it will be checked when the service connects.\n", friendlyCLIError(err))
 		return nil
 	}
 }

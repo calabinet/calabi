@@ -243,7 +243,7 @@ private class JoinMessages(
             "full" -> full
             "no_tls" -> noTLS
             "pin_mismatch" -> pinMismatch.format(groupPin(o.optString("pin")))
-            "unreachable" -> unreachable.format(o.optString("error"))
+            "unreachable" -> unreachable.format(r.error(failed))
             "bad_link" -> notAnInvite
             else -> r.error(failed)
         }

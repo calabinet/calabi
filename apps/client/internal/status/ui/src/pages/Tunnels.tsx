@@ -1,3 +1,4 @@
+import { displayError } from "../api/userError";
 // Tunnels.tsx — full CRUD over the tunnel list. Delete is hard-delete
 // via DELETE /v1/tunnels/{id}. Create launches the wizard modal.
 //
@@ -501,7 +502,7 @@ export default function Tunnels() {
           tip = t("tunnels.unverifiedTip");
         } else if (st === "upstream_down") {
           tip = row.upstream_error
-            ? t("tunnels.upstreamDownReasonTip", { reason: row.upstream_error })
+            ? t("tunnels.upstreamDownReasonTip", { reason: displayError(row.upstream_error, t) })
             : t("tunnels.upstreamDownTip");
         } else if (st === "error") {
           // status_reason is a code, not a sentence — the server keeps the

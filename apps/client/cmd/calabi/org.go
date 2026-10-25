@@ -69,7 +69,7 @@ func runOrgList(args []string) int {
 	c := loadCredsOrDie()
 	rows, err := listOrgsForUser()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi org list:", err)
+		fmt.Fprintln(os.Stderr, "calabi org list:", friendlyCLIError(err))
 		return 1
 	}
 	if len(rows) == 0 {
@@ -105,7 +105,7 @@ func runOrgCurrent(args []string) int {
 	}
 	o, err := getOrg(c.ActiveOrgID)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi org current:", err)
+		fmt.Fprintln(os.Stderr, "calabi org current:", friendlyCLIError(err))
 		return 1
 	}
 	display := o.Name
@@ -135,7 +135,7 @@ func runOrgSwitch(args []string) int {
 	c := loadCredsOrDie()
 	rows, err := listOrgsForUser()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi org switch:", err)
+		fmt.Fprintln(os.Stderr, "calabi org switch:", friendlyCLIError(err))
 		return 1
 	}
 	var targetID int64
@@ -167,7 +167,7 @@ func runOrgSwitch(args []string) int {
 
 	cli, err := authedClient()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi:", err)
+		fmt.Fprintln(os.Stderr, "calabi:", friendlyCLIError(err))
 		return 1
 	}
 	// bff-console expects {"target_org_id": N} and decodes strictly
@@ -186,7 +186,7 @@ func runOrgSwitch(args []string) int {
 	defer cancel()
 	var out switchResp
 	if err := cli.Do(ctx, "POST", "/v1/orgs/switch", switchReq{OrgID: targetID}, &out); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi org switch:", err)
+		fmt.Fprintln(os.Stderr, "calabi org switch:", friendlyCLIError(err))
 		return 1
 	}
 	c.AccessToken = out.AccessToken
@@ -203,7 +203,7 @@ func runOrgSwitch(args []string) int {
 		}
 	}
 	if err := creds.Save(c); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi: save creds:", err)
+		fmt.Fprintln(os.Stderr, "calabi: save creds:", friendlyCLIError(err))
 		return 1
 	}
 	fmt.Printf("  switched to org id=%d\n", c.ActiveOrgID)

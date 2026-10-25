@@ -134,6 +134,7 @@ var (
 		{Name: "endpoints_json", Type: field.TypeString, Default: "[]"},
 		{Name: "advertised_routes_json", Type: field.TypeString, Default: "[]"},
 		{Name: "approved_routes_json", Type: field.TypeString, Default: "[]"},
+		{Name: "real_routes_json", Type: field.TypeString, Default: "[]"},
 		{Name: "aliased_routes_json", Type: field.TypeString, Default: "[]"},
 		{Name: "route_aliases_json", Type: field.TypeString, Default: "[]"},
 		{Name: "routes_reviewed", Type: field.TypeBool, Default: false},

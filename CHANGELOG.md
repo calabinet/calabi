@@ -10,6 +10,43 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## 2.4.0 — 2026-10-25
+
+**Send files to your mesh devices.** File transfers are now available in the
+Windows, macOS and Android clients. Both devices need a client and coordinator
+that support file transfers. Receiving is off until you enable it, and each
+incoming request needs confirmation.
+
+### Mesh
+
+- **Added** — **File transfers over existing direct or relay connections.**
+  Send one file or a batch, accept or reject incoming files, and save verified
+  files to a location you choose. Transfers support pause, resume and cancel;
+  interrupted transfers keep their progress, and cancellation is synchronized
+  when the other device becomes reachable again.
+- **Added** — **A terminal and browser file agent for Linux.** Run it as an
+  ordinary user alongside the daemon. The browser file agent uses a designated
+  directory for file selection and export.
+
+### Local console
+
+- **Added** — **A unified file transfer centre.** Incoming and outgoing files
+  are distinguished, with task filters and a send drawer. Compact tables adapt
+  to smaller windows. The device list shows online status and received/sent
+  traffic; subnet and service icons open device details.
+- **Added** — **Actions in incoming-file reminders.** Windows notifications
+  offer accept and reject. macOS uses a Calabi receipt window with visible
+  buttons, without a duplicate system notification.
+
+### Mobile
+
+- **Added** — **Android file transfers and system sharing.** Share one or more
+  files from another app to Calabi, choose a mesh device, and send. Incoming-file
+  notifications offer accept and reject, and completed files can be saved using
+  the system file picker. Device rows show their owner's name when available.
+- **Fixed** — **The Android quick-settings tile could remain inactive after
+  connecting inside the app.** Its state now follows the connection.
+
 ## 2.3.0 — 2026-10-18
 
 **TLS endpoints, on your own node.** Nothing to configure: no config file

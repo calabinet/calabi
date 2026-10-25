@@ -666,6 +666,7 @@ export interface MeshStatus {
 // (proxied through the daemon). Only the fields the peer table joins on are
 // modelled — the console's own row is much wider.
 export interface MeshOrgNode {
+  online?: boolean; // Coordinator control-session presence; absence is unknown.
   id: number;
   name?: string;
   overlay: string; // the join key: a peer's allowed_ips carries this as a /32

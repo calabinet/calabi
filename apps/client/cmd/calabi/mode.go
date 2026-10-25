@@ -78,7 +78,7 @@ func runMode(args []string) int {
 	}
 	c.Mode = want
 	if err := creds.Save(c); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi mode: save:", err)
+		fmt.Fprintln(os.Stderr, "calabi mode: save:", friendlyCLIError(err))
 		return 1
 	}
 	fmt.Printf("client mode set to %q\n", want)

@@ -27,6 +27,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/calabinet/calabi/pkg/protocol/usererror"
+
 	"github.com/hashicorp/yamux"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
@@ -151,19 +153,20 @@ func TestPersistRefusalOtherPreconditionsAreNotTheBaseline(t *testing.T) {
 		name string
 		code codes.Code
 		msg  string
+		want string
 	}{
 		{"custom domain not registered", codes.FailedPrecondition,
-			"custom domain \"shop.example.com\" is not registered; run `calabi domains create shop.example.com` first"},
+			"custom domain \"shop.example.com\" is not registered; run `calabi domains create shop.example.com` first", "domainNotRegistered"},
 		{"custom domain not verified", codes.FailedPrecondition,
-			"custom domain \"shop.example.com\" is not verified (TXT record not found); run `calabi domains verify shop.example.com`"},
+			"custom domain \"shop.example.com\" is not verified (TXT record not found); run `calabi domains verify shop.example.com`", "domainNeedsVerification"},
 		{"zone check", codes.FailedPrecondition,
-			"cross-edge claim rejected: tunnel.domain \"a.cn-b.calabi.net\" is under managed base \"cn-b.calabi.net\" but the calling edge (id=3) declared base \"cn-a.calabi.net\""},
+			"cross-edge claim rejected: tunnel.domain \"a.cn-b.calabi.net\" is under managed base \"cn-b.calabi.net\" but the calling edge (id=3) declared base \"cn-a.calabi.net\"", "serverDomainMismatch"},
 		// Not FailedPrecondition, but the same kind of answer: these went out as
 		// 3001 "duplicate".
 		{"platform name on an sni tunnel", codes.InvalidArgument,
-			"sni (TLS passthrough) tunnels cannot use a platform domain (\"x.calabi.net\"); use a domain of your own, registered with `calabi domains create`"},
+			"sni (TLS passthrough) tunnels cannot use a platform domain (\"x.calabi.net\"); use a domain of your own, registered with `calabi domains create`", "ownDomainOnly"},
 		{"platform name on a BYOI edge", codes.PermissionDenied,
-			"BYOI edge may only serve custom domains, not platform-managed domains"},
+			"BYOI edge may only serve custom domains, not platform-managed domains", "ownDomainOnly"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -182,8 +185,9 @@ func TestPersistRefusalOtherPreconditionsAreNotTheBaseline(t *testing.T) {
 			if resp.Error.Code == proto.CodeProxyDuplicate {
 				t.Errorf("refusal sent as %d CodeProxyDuplicate", resp.Error.Code)
 			}
-			if resp.Error.MessageEN != tc.msg {
-				t.Errorf("message = %q\nwant tunnel-svc's sentence as written: %q", resp.Error.MessageEN, tc.msg)
+			want, ok := usererror.Format(tc.want, map[string]string{"domain": "shop.example.com"})
+			if !ok || resp.Error.MessageEN != want {
+				t.Errorf("message = %q, want friendly reason %s: %q", resp.Error.MessageEN, tc.want, want)
 			}
 		})
 	}
@@ -211,8 +215,9 @@ func TestPersistRefusalBaselineIsStillThePolicyRefusal(t *testing.T) {
 	if resp.Error == nil || resp.Error.Code != proto.CodeProxyPolicyRequired {
 		t.Fatalf("baseline refusal = %+v, want code %d", resp.Error, proto.CodeProxyPolicyRequired)
 	}
-	if resp.Error.MessageEN != msg {
-		t.Fatalf("message = %q\nwant the baseline's sentence as written: %q", resp.Error.MessageEN, msg)
+	want, ok := usererror.Format("accessProtectionRequired", nil)
+	if !ok || resp.Error.MessageEN != want {
+		t.Fatalf("message = %q, want actionable access protection guidance: %q", resp.Error.MessageEN, want)
 	}
 	if strings.Contains(resp.Error.MessageEN, "rpc error") {
 		t.Fatalf("the gRPC envelope reached the client: %q", resp.Error.MessageEN)

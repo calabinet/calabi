@@ -189,6 +189,20 @@ func (mnu *MeshNodeUpdate) SetNillableApprovedRoutesJSON(s *string) *MeshNodeUpd
 	return mnu
 }
 
+// SetRealRoutesJSON sets the "real_routes_json" field.
+func (mnu *MeshNodeUpdate) SetRealRoutesJSON(s string) *MeshNodeUpdate {
+	mnu.mutation.SetRealRoutesJSON(s)
+	return mnu
+}
+
+// SetNillableRealRoutesJSON sets the "real_routes_json" field if the given value is not nil.
+func (mnu *MeshNodeUpdate) SetNillableRealRoutesJSON(s *string) *MeshNodeUpdate {
+	if s != nil {
+		mnu.SetRealRoutesJSON(*s)
+	}
+	return mnu
+}
+
 // SetAliasedRoutesJSON sets the "aliased_routes_json" field.
 func (mnu *MeshNodeUpdate) SetAliasedRoutesJSON(s string) *MeshNodeUpdate {
 	mnu.mutation.SetAliasedRoutesJSON(s)
@@ -489,6 +503,9 @@ func (mnu *MeshNodeUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := mnu.mutation.ApprovedRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldApprovedRoutesJSON, field.TypeString, value)
 	}
+	if value, ok := mnu.mutation.RealRoutesJSON(); ok {
+		_spec.SetField(meshnode.FieldRealRoutesJSON, field.TypeString, value)
+	}
 	if value, ok := mnu.mutation.AliasedRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldAliasedRoutesJSON, field.TypeString, value)
 	}
@@ -714,6 +731,20 @@ func (mnuo *MeshNodeUpdateOne) SetApprovedRoutesJSON(s string) *MeshNodeUpdateOn
 func (mnuo *MeshNodeUpdateOne) SetNillableApprovedRoutesJSON(s *string) *MeshNodeUpdateOne {
 	if s != nil {
 		mnuo.SetApprovedRoutesJSON(*s)
+	}
+	return mnuo
+}
+
+// SetRealRoutesJSON sets the "real_routes_json" field.
+func (mnuo *MeshNodeUpdateOne) SetRealRoutesJSON(s string) *MeshNodeUpdateOne {
+	mnuo.mutation.SetRealRoutesJSON(s)
+	return mnuo
+}
+
+// SetNillableRealRoutesJSON sets the "real_routes_json" field if the given value is not nil.
+func (mnuo *MeshNodeUpdateOne) SetNillableRealRoutesJSON(s *string) *MeshNodeUpdateOne {
+	if s != nil {
+		mnuo.SetRealRoutesJSON(*s)
 	}
 	return mnuo
 }
@@ -1047,6 +1078,9 @@ func (mnuo *MeshNodeUpdateOne) sqlSave(ctx context.Context) (_node *MeshNode, er
 	}
 	if value, ok := mnuo.mutation.ApprovedRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldApprovedRoutesJSON, field.TypeString, value)
+	}
+	if value, ok := mnuo.mutation.RealRoutesJSON(); ok {
+		_spec.SetField(meshnode.FieldRealRoutesJSON, field.TypeString, value)
 	}
 	if value, ok := mnuo.mutation.AliasedRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldAliasedRoutesJSON, field.TypeString, value)

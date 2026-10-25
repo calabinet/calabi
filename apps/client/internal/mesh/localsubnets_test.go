@@ -144,3 +144,42 @@ func TestPrivateV4Blocks(t *testing.T) {
 		}
 	}
 }
+
+// Real and stand-in prefixes use the same peer; enabling the real address must
+// never override the consumer's LAN protection or its route opt-out.
+func TestDualAddressRoutesKeepLocalNetworkPriority(t *testing.T) {
+	overlay := netip.MustParsePrefix(meshOverlayCIDR)
+	real := netip.MustParsePrefix("192.168.1.222/32")
+	alias := netip.MustParsePrefix("100.96.0.222/32")
+	cfg := WGConfig{Peers: []WGPeer{{PublicKey: meshproto.NodeKey{9}, AllowedIPs: []netip.Prefix{real, alias}}}}
+	for _, tc := range []struct {
+		name     string
+		locals   []netip.Prefix
+		wantReal bool
+	}{
+		{"away from site", []netip.Prefix{netip.MustParsePrefix("10.0.0.0/24")}, true},
+		{"same LAN host", []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24")}, false},
+		{"same host", []netip.Prefix{real}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			keep, dropped := selectSubnetRoutes(cfg.Peers, overlay, tc.locals)
+			// Aliases ride the existing overlay route regardless of LAN collisions.
+			if tc.wantReal {
+				if len(keep) != 1 || keep[0] != real || len(dropped) != 0 {
+					t.Fatalf("keep %v dropped %v", keep, dropped)
+				}
+			} else {
+				if len(keep) != 0 || len(dropped) != 1 || dropped[0].Advertised != real {
+					t.Fatalf("keep %v dropped %v", keep, dropped)
+				}
+			}
+			if len(cfg.Peers[0].AllowedIPs) != 2 {
+				t.Fatal("alias removed")
+			}
+		})
+	}
+	filtered, refused := applyRoutePolicy(cfg, RoutePolicy{Accept: false})
+	if len(refused) != 1 || len(filtered.Peers[0].AllowedIPs) != 1 || filtered.Peers[0].AllowedIPs[0] != alias {
+		t.Fatalf("opt out: %+v refused %+v", filtered, refused)
+	}
+}

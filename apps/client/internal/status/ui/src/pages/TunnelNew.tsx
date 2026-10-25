@@ -222,7 +222,7 @@ function probeMessage(t: TFunction, r: ProbeCheck): string {
   if (r.reason && known.includes(r.reason)) return t(`wizard.reason.${r.reason}`);
   // Unclassified: show what the daemon said rather than inventing a friendlier
   // sentence that might be wrong about the cause.
-  return t("wizard.checkFail", { err: r.error || t("wizard.checkFailUnknown") });
+  return t("wizard.checkFail", { err: r.error ? displayError(r.error, t) : t("wizard.checkFailUnknown") });
 }
 
 // LocalCheckLine renders the reachability answer under the local-service row.
@@ -256,15 +256,13 @@ function LocalCheckLine({ checking, result }: { checking: boolean; result: Probe
       </Text>
       <br />
       <Text type="secondary">{t("wizard.checkFailHint")}</Text>
-      {/* The OS sentence stays available underneath rather than being hidden:
-          the friendly line is for the 95% case, and someone debugging an odd
-          one still needs the real text. */}
+      {/* Detailed OS diagnostics are available on demand, below the explanation. */}
       {result.error && (
         <>
           <br />
-          <Text type="secondary" style={{ fontSize: 11 }}>
-            {result.error}
-          </Text>
+          <details><summary>{t("errorDiagnostics.details")}</summary>
+            <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{result.error}</pre>
+          </details>
         </>
       )}
     </span>
@@ -1554,3 +1552,4 @@ export default function TunnelNew() {
     </Space>
   );
 }
+import { displayError } from "../api/userError";

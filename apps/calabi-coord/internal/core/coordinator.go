@@ -473,6 +473,7 @@ func (c *Coordinator) NetMapFor(ctx context.Context, nodeID int64) (*NetMap, err
 	if err != nil {
 		return nil, err
 	}
+	all = safeRealRoutes(all)
 	// Use the enriched copy of self so its own declared services ride the netmap
 	// (and so an "svc:" rule about self matches the same way it does for peers).
 	for _, n := range all {
@@ -833,7 +834,7 @@ func (c *Coordinator) SetNodeApproved(ctx context.Context, t MeshnetID, nodeID i
 // route to it, and marks the node reviewed (so its claims stop being honoured
 // automatically from then on). Approving a route the node doesn't claim is
 // refused: the list is a decision about claims, not a way to invent them.
-func (c *Coordinator) ApproveRoutes(ctx context.Context, t MeshnetID, nodeID int64, approved []netip.Prefix) (*Node, error) {
+func (c *Coordinator) ApproveRoutes(ctx context.Context, t MeshnetID, nodeID int64, approved []netip.Prefix, realRoutes ...[]netip.Prefix) (*Node, error) {
 	node, err := c.Nodes.Get(ctx, nodeID)
 	if err != nil {
 		return nil, err
@@ -846,10 +847,31 @@ func (c *Coordinator) ApproveRoutes(ctx context.Context, t MeshnetID, nodeID int
 			return nil, fmt.Errorf("%w: %s is not advertised by this node", ErrRouteNotAdvertised, r)
 		}
 	}
-	if err := c.Nodes.UpdateApprovedRoutes(ctx, nodeID, approved); err != nil {
+	real := SelectedRealRoutes(node.RealRoutes, approved)
+	if len(realRoutes) > 0 {
+		for _, r := range realRoutes[0] {
+			if len(SelectedRealRoutes([]netip.Prefix{r}, approved)) == 0 {
+				return nil, fmt.Errorf("%w: real target %s must be inside an approved subnet", ErrRouteNotAdvertised, r)
+			}
+		}
+		real = SelectedRealRoutes(realRoutes[0], approved)
+	}
+	if len(realRoutes) > 0 && len(real) > 0 {
+		peers, err := c.Nodes.ListMeshnet(ctx, t)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range real {
+			if !containsPrefix(node.RealRoutes, r) && realRouteConflict(peers, nodeID, r) {
+				return nil, fmt.Errorf("%w: real route %s overlaps another device's published route", ErrRouteNotAdvertised, r)
+			}
+		}
+	}
+	if err := c.Nodes.UpdateApprovedRoutes(ctx, nodeID, approved, real); err != nil {
 		return nil, fmt.Errorf("core: approve routes: %w", err)
 	}
 	node.ApprovedRoutes = approved
+	node.RealRoutes = real
 	node.RoutesReviewed = true
 	// Withdrawing approval must also take the alias back: it is an address other
 	// nodes hold routes for, and leaving it allocated to a route nobody may use

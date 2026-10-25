@@ -1,0 +1,1350 @@
+{
+  "messages": {
+    "requiredFields": "Complete all required fields before continuing.",
+    "invalidIdentifier": "Select a valid item and try again.",
+    "invalidBody": "The submitted information could not be read. Check the form and submit it again.",
+    "nothingToUpdate": "There are no changes to save.",
+    "ownerRequired": "Only an organization owner can do this. Ask an owner for help.",
+    "adminRequired": "Only an organization owner or administrator can do this. Contact your organization administrator.",
+    "auditorRequired": "Audit records are available to organization owners, administrators and auditors.",
+    "interactiveLogin": "Sign in with your account to do this. An API key cannot perform this action.",
+    "readOnlyKey": "This API key only allows viewing. Use a key with permission to make changes.",
+    "noOrganization": "Select an organization before continuing.",
+    "membershipRequired": "You are not a member of this organization. Ask an administrator to invite you.",
+    "resourceNotFound": "The requested {{resource}} could not be found. Refresh the page and try again.",
+    "resourceDeleted": "This {{resource}} has already been deleted. Refresh the page.",
+    "deviceInUse": "This device is still used by tunnels. Remove or move those tunnels before deleting it.",
+    "accountDisabled": "This account has been disabled. Contact support for help.",
+    "accountLocked": "This account is temporarily locked. Wait a while before trying again.",
+    "totpRequired": "Enter the verification code from your authenticator app to continue.",
+    "totpInvalid": "The verification code is incorrect or has expired. Enter the latest code from your authenticator app.",
+    "totpSetupRequired": "Set up two-step verification before continuing.",
+    "totpAlreadyEnabled": "Two-step verification is already enabled. Use your existing authenticator app.",
+    "passwordIncorrect": "The current password is incorrect. Check it and try again.",
+    "passwordTooShort": "Use a password with at least {{minimum}} characters.",
+    "passwordUnchanged": "Choose a password that is different from your current password.",
+    "resetExpired": "This password reset link is invalid or has expired. Request a new reset email.",
+    "activationExpired": "This email verification link is invalid or has expired. Request a new verification email.",
+    "requestEmailLater": "Please wait a moment before requesting another email. Check your spam folder too.",
+    "invalidSession": "Your session is no longer valid. Sign in again to continue.",
+    "deviceDisabled": "This device has been disabled. Ask your organization administrator to enable it.",
+    "reenroll": "This device needs to join the network again. Use a valid enrollment key to reconnect.",
+    "authKeyDenied": "This access key is invalid, expired, revoked or fully used. Ask your administrator for a new key.",
+    "clientUpgrade": "This client version is no longer supported. Update the client and try again.",
+    "domainInvalid": "Enter a valid domain name, such as app.example.com.",
+    "domainTooLong": "This domain name is too long. Use a domain with no more than 253 characters.",
+    "domainConflict": "Choose either a custom domain or a platform subdomain, not both.",
+    "subdomainType": "A platform subdomain can only be used with HTTP or HTTPS endpoints.",
+    "subdomainInvalid": "Use 1–63 letters, numbers or hyphens for the subdomain. It cannot start or end with a hyphen.",
+    "domainUnverified": "Add and verify this domain in your organization before using it.",
+    "certDomainMismatch": "The selected certificate does not cover this domain. Choose a matching certificate.",
+    "certCannotRevoke": "This certificate cannot be revoked through its issuer. You can delete it to stop using it; it remains valid until it expires.",
+    "activeCert": "This device still has an active certificate. Revoke that certificate before requesting another.",
+    "planUnavailable": "The selected plan is unavailable. Refresh the plan list and choose again.",
+    "subscriptionActiveOnly": "Choose your currently active subscription for renewal or upgrade.",
+    "subscriptionUpgradeOnly": "Choose a plan above your current plan to upgrade.",
+    "orderPaidOnly": "Complete payment for this order before continuing.",
+    "refundState": "This order cannot be refunded in its current state. Only paid or fulfilled orders can be refunded.",
+    "invoiceDuplicate": "An invoice request already exists for this order. Check its status in your invoice list.",
+    "invoiceBalance": "Orders paid with credit or balance cannot be invoiced again. Apply for an invoice for the original top-up order.",
+    "rechargeRefund": "Top-up orders require a manual refund. Contact support to arrange the balance adjustment and refund.",
+    "invoiceRefundBlocked": "This order has an issued invoice and cannot be refunded online. Contact support to arrange the invoice correction.",
+    "refundNewerFirst": "Refund newer subscription orders first, then retry this order.",
+    "paymentMismatch": "The payment amount does not match this order. Check the payment record or contact support.",
+    "paymentCurrency": "This payment method does not support the order currency. Choose a supported payment method.",
+    "minRecharge": "The minimum top-up amount is $1. Enter a larger amount.",
+    "quantityLimit": "You can purchase at most {{limit}} items per order. Reduce the quantity and try again.",
+    "quantityPositive": "Enter a quantity of at least 1.",
+    "quotaDetails": "The {{resource}} limit has been reached: {{current}} in use out of {{limit}} allowed. Free up resources or ask your administrator for more quota.",
+    "noPorts": "No ports are currently available on this server. Choose another server or try again later.",
+    "selfHostedOnlyTLS": "TLS passthrough requires a compatible server owned by your organization. Select a suitable self-hosted server.",
+    "ownDomainOnly": "This self-hosted server requires your own verified domain. Add a custom domain and try again.",
+    "featureUpgrade": "Your current plan does not include this feature. Ask your organization administrator to enable access.",
+    "barePortPolicies": "This security feature only supports HTTP and HTTPS endpoints. Remove it or change the endpoint type.",
+    "ipInvalid": "Enter a valid IP address or network range.",
+    "headerInvalid": "Enter a valid HTTP header name.",
+    "headerProtected": "This HTTP header is managed by the connection and cannot be rewritten. Choose a different header.",
+    "basicUserRequired": "Enter a username for password protection.",
+    "basicPasswordRequired": "Set a password for every password-protected user.",
+    "oauthProvider": "Choose a supported login provider.",
+    "oauthCredentials": "Enter both the client ID and client secret for this login provider.",
+    "rateNegative": "The rate limit cannot be negative. Enter zero or a positive value.",
+    "clientOffline": "The selected device is offline. Start its client and wait for it to connect, then try again.",
+    "selectClient": "Select the device that will run this tunnel.",
+    "deviceRegisterPending": "This device has not finished registering. Wait for it to connect, then try again.",
+    "localConsoleLocked": "Unlock this console before continuing.",
+    "localUnlockFailed": "The console password is incorrect. Check it and try again.",
+    "localUnlockThrottled": "Too many unlock attempts. Wait a moment before trying again.",
+    "localUnlockUnavailable": "Remote console access has not been enabled. Configure it on the device first.",
+    "localTokenExpired": "The local session has changed. Refresh the page and try again.",
+    "serviceModeIdentity": "This client uses an API key managed by its system service. To use a different account, reinstall the service with a different key.",
+    "invalidRoute": "Enter a valid network route and try again.",
+    "invalidPort": "Enter a port number between 1 and 65535.",
+    "invalidServiceProtocol": "Choose TCP or UDP for this service.",
+    "serviceDuplicate": "This service is already declared on this device. Edit the existing service or choose another name.",
+    "invalidPublicAddress": "Enter your server's IP address or verified domain. Platform-managed addresses cannot be used here.",
+    "routeDeviceProtected": "This device provides approved network routes. Ask an organization owner or administrator to remove it.",
+    "localFeatureUnavailable": "This feature is not configured on this client. Check your client settings or ask your administrator.",
+    "ticketReopen": "Only resolved or closed support tickets can be reopened.",
+    "teamCreationUnavailable": "A team cannot be created right now. Try again later or contact support.",
+    "currentSessionLogout": "Use Sign out to end your current session. This list can only revoke other sessions.",
+    "offboardDevices": "The member was not removed because some devices could not be disabled. Fix the issue and retry the removal.",
+    "offboardTunnels": "The member was not removed because some tunnels could not be disabled. Fix the issue and retry the removal.",
+    "offboardKeys": "The member was not removed because some API keys could not be revoked. Fix the issue and retry the removal.",
+    "offboardMember": "The member could not be removed. Check the completed actions below before trying again.",
+    "offboardCompleted": "Already completed: {{devices}} device(s) disabled, {{tunnels}} tunnel(s) disabled and {{keys}} API key(s) revoked. Disabled resources can be enabled again; revoked keys must be replaced.",
+    "invitationExpired": "This invitation is expired, revoked or already used. Ask an administrator for a new invitation.",
+    "invitationEmailMismatch": "Sign in with the email address that received this invitation.",
+    "personalOrgLocked": "Membership in a personal organization cannot be changed. Use a team organization to collaborate.",
+    "lastOwner": "An organization must keep at least one owner. Assign another owner before removing or changing this member.",
+    "accessProtectionRequired": "This organization requires tunnel access protection. Add an IP allowlist, password protection or login authentication. For command-line use, ask an administrator to set a default IP policy.",
+    "barePortProtectionRequired": "This organization requires an IP allowlist for TCP, UDP and TLS passthrough endpoints. Add an allowlist or ask an administrator to set a default IP policy.",
+    "domainInUse": "The domain was not deleted because some dependent resources could not be removed. Check its tunnels and certificates before trying again.",
+    "awaitingApproval": "This tunnel is saved and waiting for organization approval. Ask an owner or administrator to approve it before using it.",
+    "defaultPolicyMissing": "The organization's default IP policy could not be applied. Ask an administrator to select a valid default under tunnel settings.",
+    "invalidRange": "The value is outside the allowed range. Check the field requirements and enter a valid value.",
+    "portInUse": "Port {{port}} is already in use on this server. Choose another port.",
+    "balanceDetails": "Available: {{available}} (credit {{credit}} + balance {{balance}}). Required: {{required}}. Add funds or choose another payment method.",
+    "taggedDeviceProtected": "This tagged device is managed by the organization. Ask an owner or administrator to change it.",
+    "domainNotRegistered": "The domain {{domain}} is not registered with this organization. Add and verify it under Domains before using it.",
+    "selfHostedUnsupported": "This action is not available in self-hosted mode. Check which features your server supports.",
+    "dnsFailure": "The server name could not be resolved. Check the address and DNS settings.",
+    "connectionRefused": "The service refused the connection. Check that it is running and listening on the selected port.",
+    "certificateInvalid": "The server certificate could not be verified. Check its domain, expiry date and trusted issuer.",
+    "hostUnreachable": "The server could not be reached. Check the address, network connection and firewall rules.",
+    "containerIdentity": "This client uses an API key managed by its container. To use a different account, recreate the container with a different CALABI_API_KEY.",
+    "invalidServiceName": "Use 1–63 characters for the service name: a-z, 0-9 and hyphens. It cannot start or end with a hyphen.",
+    "verificationUnavailable": "The verification widget could not load. Check your connection and browser extensions, then refresh the page.",
+    "serverDomainMismatch": "This domain belongs to another server. Connect to the server that assigned the subdomain, or choose a domain for the selected server.",
+    "domainNeedsVerification": "The domain {{domain}} is not verified yet. Check its DNS TXT record, then verify it under Domains before trying again."
+  },
+  "rules": [
+    {
+      "key": "ownDomainOnly",
+      "pattern": "^sni \\(TLS passthrough\\) tunnels cannot use a platform domain.*$"
+    },
+    {
+      "key": "domainNeedsVerification",
+      "pattern": "^custom domain \"([^\"\\r\\n]+)\" is not verified.*$",
+      "args": {
+        "domain": 1
+      }
+    },
+    {
+      "key": "containerIdentity",
+      "pattern": "^this client runs as a service.*recreate the container.*$"
+    },
+    {
+      "key": "invalidServiceName",
+      "pattern": "^service name:.*$"
+    },
+    {
+      "key": "verificationUnavailable",
+      "pattern": "^failed to load Turnstile$"
+    },
+    {
+      "key": "serverDomainMismatch",
+      "pattern": "^cross-edge claim rejected:.*$"
+    },
+    {
+      "key": "hostUnreachable",
+      "pattern": "^.*(?:network is unreachable|no route to host|host is unreachable|cannot reach the server).*$"
+    },
+    {
+      "key": "certificateInvalid",
+      "pattern": "^.*(?:x509:|tls: failed to verify certificate|certificate has expired|certificate is not trusted).*$"
+    },
+    {
+      "key": "connectionRefused",
+      "pattern": "^.*(?:connection refused|actively refused|actively rejected).*$"
+    },
+    {
+      "key": "dnsFailure",
+      "pattern": "^.*(?:no such host|temporary failure in name resolution|server misbehaving).*$"
+    },
+    {
+      "key": "selfHostedUnsupported",
+      "pattern": "^this operation is not supported in self-hosted \\(standalone\\) mode$"
+    },
+    {
+      "key": "domainNotRegistered",
+      "pattern": "^custom domain \"([^\"\\r\\n]+)\" is not registered;.*$",
+      "args": {
+        "domain": 1
+      }
+    },
+    {
+      "key": "taggedDeviceProtected",
+      "pattern": "^this device is tagged, so it is managed as org infrastructure;.*$"
+    },
+    {
+      "key": "domainUnverified",
+      "pattern": "^(?:custom domain .* is not registered;.*|domain must belong to your organization)$"
+    },
+    {
+      "key": "balanceDetails",
+      "pattern": "^赠金与余额不足：当前可用 ([$￥0-9.,]+)（赠金 ([$￥0-9.,]+) \\+ 余额 ([$￥0-9.,]+)），本次需支付 ([$￥0-9.,]+)，请先充值后再支付$",
+      "args": {
+        "available": 1,
+        "credit": 2,
+        "balance": 3,
+        "required": 4
+      }
+    },
+    {
+      "key": "portInUse",
+      "pattern": "^remote port (\\d+) is already in use on this edge$",
+      "args": {
+        "port": 1
+      }
+    },
+    {
+      "key": "invitationExpired",
+      "pattern": "^(?:store: )?invitation (?:expired|revoked|already used)$"
+    },
+    {
+      "key": "invitationEmailMismatch",
+      "pattern": "^store: accepting user.s email does not match invitation$"
+    },
+    {
+      "key": "personalOrgLocked",
+      "pattern": "^store: personal org membership is locked.*$"
+    },
+    {
+      "key": "lastOwner",
+      "pattern": "^store: would remove the last owner.*$"
+    },
+    {
+      "key": "defaultPolicyMissing",
+      "pattern": "^this organization requires every tunnel to have access protection, and its default IP policy .*could not be applied.*$"
+    },
+    {
+      "key": "barePortProtectionRequired",
+      "pattern": "^this organization requires every raw-port tunnel .*IP allow list.*$"
+    },
+    {
+      "key": "barePortProtectionRequired",
+      "pattern": "^this organization requires every tunnel to have access protection before it is published\\. A .*raw byte passthrough.*$"
+    },
+    {
+      "key": "accessProtectionRequired",
+      "pattern": "^this organization requires every tunnel to have access protection before it is published\\..*$"
+    },
+    {
+      "key": "domainInUse",
+      "pattern": "^domain not deleted.*$"
+    },
+    {
+      "key": "awaitingApproval",
+      "pattern": "^(?:store: tunnel awaiting approval|tunnel awaiting approval:.*)$"
+    },
+    {
+      "key": "invalidRange",
+      "pattern": "^(?:.* must be (?:>=|between|a whole number|a non-negative).*|at most \\d+ .*|too many events|.* too long \\(max \\d+\\)|invalid cycle .*)$"
+    },
+    {
+      "key": "ownerRequired",
+      "pattern": "^(?:only (?:the )?org owners? can|only owners? can|owner role required|only an owner of the target team can).*$"
+    },
+    {
+      "key": "adminRequired",
+      "pattern": "^(?:only (?:the )?org owner or an admin can|only org owners or admins can|admin or owner role required|superadmin (?:only|role required)|admin caller required|.* is restricted to superadmin|granting more than .* is restricted to superadmin).*$"
+    },
+    {
+      "key": "auditorRequired",
+      "pattern": "^audit log access requires owner, admin, or auditor role$"
+    },
+    {
+      "key": "interactiveLogin",
+      "pattern": "^(?:this action requires an interactive login, not an API key|reading the connection trail needs a signed-in member;.*|user caller required)$"
+    },
+    {
+      "key": "readOnlyKey",
+      "pattern": "^this API key is read-only.*$"
+    },
+    {
+      "key": "noOrganization",
+      "pattern": "^(?:no active org|principal has no org.*|no principal in context|missing principal)$"
+    },
+    {
+      "key": "membershipRequired",
+      "pattern": "^(?:not a member of this org|user is not a member of the target org|tunnel not in caller org|该节点不属于当前组织，无法重新签发)$"
+    },
+    {
+      "key": "resourceNotFound",
+      "pattern": "^(?:(?:org) not found(?:[ ;(:].*)?|no such (?:org)(?: on client)?|device not found in this meshnet)$",
+      "constants": {
+        "resource": "organization"
+      }
+    },
+    {
+      "key": "resourceNotFound",
+      "pattern": "^(?:(?:client|agent|node|device) not found(?:[ ;(:].*)?|no such (?:client|agent|node|device)(?: on client)?|device not found in this meshnet)$",
+      "constants": {
+        "resource": "device"
+      }
+    },
+    {
+      "key": "resourceNotFound",
+      "pattern": "^(?:(?:tunnel|proxy) not found(?:[ ;(:].*)?|no such (?:tunnel|proxy)(?: on client)?|device not found in this meshnet)$",
+      "constants": {
+        "resource": "tunnel"
+      }
+    },
+    {
+      "key": "resourceNotFound",
+      "pattern": "^(?:(?:order) not found(?:[ ;(:].*)?|no such (?:order)(?: on client)?|device not found in this meshnet)$",
+      "constants": {
+        "resource": "order"
+      }
+    },
+    {
+      "key": "resourceNotFound",
+      "pattern": "^(?:(?:subscription) not found(?:[ ;(:].*)?|no such (?:subscription)(?: on client)?|device not found in this meshnet)$",
+      "constants": {
+        "resource": "subscription"
+      }
+    },
+    {
+      "key": "resourceNotFound",
+      "pattern": "^(?:(?:invoice) not found(?:[ ;(:].*)?|no such (?:invoice)(?: on client)?|device not found in this meshnet)$",
+      "constants": {
+        "resource": "invoice"
+      }
+    },
+    {
+      "key": "resourceNotFound",
+      "pattern": "^(?:(?:cert) not found(?:[ ;(:].*)?|no such (?:cert)(?: on client)?|device not found in this meshnet)$",
+      "constants": {
+        "resource": "certificate"
+      }
+    },
+    {
+      "key": "resourceNotFound",
+      "pattern": "^(?:(?:domain) not found(?:[ ;(:].*)?|no such (?:domain)(?: on client)?|device not found in this meshnet)$",
+      "constants": {
+        "resource": "domain"
+      }
+    },
+    {
+      "key": "resourceNotFound",
+      "pattern": "^(?:(?:task) not found(?:[ ;(:].*)?|no such (?:task)(?: on client)?|device not found in this meshnet)$",
+      "constants": {
+        "resource": "task"
+      }
+    },
+    {
+      "key": "resourceNotFound",
+      "pattern": "^(?:(?:session) not found(?:[ ;(:].*)?|no such (?:session)(?: on client)?|device not found in this meshnet)$",
+      "constants": {
+        "resource": "session"
+      }
+    },
+    {
+      "key": "resourceNotFound",
+      "pattern": "^(?:(?:api key) not found(?:[ ;(:].*)?|no such (?:api key)(?: on client)?|device not found in this meshnet)$",
+      "constants": {
+        "resource": "API key"
+      }
+    },
+    {
+      "key": "resourceNotFound",
+      "pattern": "^(?:(?:ticket) not found(?:[ ;(:].*)?|no such (?:ticket)(?: on client)?|device not found in this meshnet)$",
+      "constants": {
+        "resource": "support ticket"
+      }
+    },
+    {
+      "key": "resourceNotFound",
+      "pattern": "^(?:(?:user|admin) not found(?:[ ;(:].*)?|no such (?:user|admin)(?: on client)?|device not found in this meshnet)$",
+      "constants": {
+        "resource": "account"
+      }
+    },
+    {
+      "key": "resourceNotFound",
+      "pattern": "^(?:(?:plan) not found(?:[ ;(:].*)?|no such (?:plan)(?: on client)?|device not found in this meshnet)$",
+      "constants": {
+        "resource": "plan"
+      }
+    },
+    {
+      "key": "resourceNotFound",
+      "pattern": "^(?:(?:capture) not found(?:[ ;(:].*)?|no such (?:capture)(?: on client)?|device not found in this meshnet)$",
+      "constants": {
+        "resource": "capture"
+      }
+    },
+    {
+      "key": "resourceDeleted",
+      "pattern": "^(?:client|agent) already deleted$",
+      "constants": {
+        "resource": "device"
+      }
+    },
+    {
+      "key": "deviceInUse",
+      "pattern": "^(?:agent|client) still referenced by tunnels.*$"
+    },
+    {
+      "key": "accountDisabled",
+      "pattern": "^account disabled$"
+    },
+    {
+      "key": "accountLocked",
+      "pattern": "^account temporarily locked$"
+    },
+    {
+      "key": "totpRequired",
+      "pattern": "^totp required$"
+    },
+    {
+      "key": "totpInvalid",
+      "pattern": "^(?:invalid totp(?: code)?|code does not match secret)$"
+    },
+    {
+      "key": "totpSetupRequired",
+      "pattern": "^totp not enrolled$"
+    },
+    {
+      "key": "totpAlreadyEnabled",
+      "pattern": "^totp already enrolled.*$"
+    },
+    {
+      "key": "passwordIncorrect",
+      "pattern": "^(?:old password incorrect|password incorrect)$"
+    },
+    {
+      "key": "passwordTooShort",
+      "pattern": "^new password too short \\(min (\\d+) chars\\)$",
+      "args": {
+        "minimum": 1
+      }
+    },
+    {
+      "key": "passwordUnchanged",
+      "pattern": "^new password must differ from old$"
+    },
+    {
+      "key": "resetExpired",
+      "pattern": "^reset link is invalid or has expired$"
+    },
+    {
+      "key": "activationExpired",
+      "pattern": "^activation link is invalid or has expired$"
+    },
+    {
+      "key": "requestEmailLater",
+      "pattern": "^please wait a moment before requesting another email$"
+    },
+    {
+      "key": "invalidSession",
+      "pattern": "^(?:refresh[_ ]token (?:invalid or expired|expired|not recognized)|pending_token invalid or expired|unknown or expired session|unknown session; register again|session no longer matches the node(?:; register again)?|session belongs to a different node|session_unavailable)$"
+    },
+    {
+      "key": "deviceDisabled",
+      "pattern": "^node is disabled$"
+    },
+    {
+      "key": "reenroll",
+      "pattern": "^(?:node signed out.*|node not found; enroll with an auth key|node is not enrolled in this meshnet|what this device enrolled with no longer admits it;.*|(?:registration )?challenge missing, expired or already used;.*|(?:registration )?proof rejected:.*|node_key does not match (?:the node|the session))$"
+    },
+    {
+      "key": "authKeyDenied",
+      "pattern": "^(?:auth key (?:denied|expired, used up or revoked)|token not recognized|grant or proof not accepted:.*)$"
+    },
+    {
+      "key": "clientUpgrade",
+      "pattern": "^(?:mesh protocol v\\d+ is no longer accepted;.*|the calabi daemon already running for this user.*is too old to join a self-hosted server\\.[\\s\\S]*)$"
+    },
+    {
+      "key": "domainInvalid",
+      "pattern": "^(?:bad domain name|invalid domain)$"
+    },
+    {
+      "key": "domainTooLong",
+      "pattern": "^domain too long$"
+    },
+    {
+      "key": "domainConflict",
+      "pattern": "^(?:domain and subdomain are mutually exclusive|自购域名与自选子域名不能同时填写)$"
+    },
+    {
+      "key": "subdomainType",
+      "pattern": "^subdomain only applies to http/https tunnels$"
+    },
+    {
+      "key": "subdomainInvalid",
+      "pattern": "^subdomain must be a single DNS label.*$"
+    },
+    {
+      "key": "domainUnverified",
+      "pattern": "^(?:domain .* is not a verified domain of this organization;.*|domain status is .*; verify before binding a cert|refusing http-01 issuance: domain not verified in this org)$"
+    },
+    {
+      "key": "certDomainMismatch",
+      "pattern": "^cert SAN does not cover domain .*$"
+    },
+    {
+      "key": "certCannotRevoke",
+      "pattern": "^(?:certificate .* cannot revoke.*|CA backend .* does not support revocation)$"
+    },
+    {
+      "key": "activeCert",
+      "pattern": "^this node still has an active certificate; revoke it first$"
+    },
+    {
+      "key": "planUnavailable",
+      "pattern": "^(?:plan not found:.*|(?:current|target) plan code .* not in catalog|signup plan .* is not in the catalog|套餐目录里没有 .* 这个套餐)$"
+    },
+    {
+      "key": "subscriptionActiveOnly",
+      "pattern": "^(?:only active subscriptions can upgrade|无法对历史订阅续费：.*)$"
+    },
+    {
+      "key": "subscriptionUpgradeOnly",
+      "pattern": "^target plan is not an upgrade.*$"
+    },
+    {
+      "key": "orderPaidOnly",
+      "pattern": "^order not paid$"
+    },
+    {
+      "key": "refundState",
+      "pattern": "^order not refundable in status .*$"
+    },
+    {
+      "key": "invoiceDuplicate",
+      "pattern": "^invoice already exists for this order.*$"
+    },
+    {
+      "key": "invoiceBalance",
+      "pattern": "^该订单由赠金/余额抵扣，不支持开具发票.*$"
+    },
+    {
+      "key": "rechargeRefund",
+      "pattern": "^充值订单不支持订单退款.*$"
+    },
+    {
+      "key": "invoiceRefundBlocked",
+      "pattern": "^该订单的发票已开具.*$"
+    },
+    {
+      "key": "refundNewerFirst",
+      "pattern": "^该订单后还有未退款的订阅订单.*$"
+    },
+    {
+      "key": "paymentMismatch",
+      "pattern": "^amount mismatch:.*$"
+    },
+    {
+      "key": "paymentCurrency",
+      "pattern": "^(?:currency usd requires the paddle channel.*|paddle channel is for usd orders only|currency must be .*|channel:.*)$"
+    },
+    {
+      "key": "minRecharge",
+      "pattern": "^amount_cents must be >= 100 \\(\\$1\\)$"
+    },
+    {
+      "key": "quantityLimit",
+      "pattern": "^quantity too large \\(max (\\d+) per order\\)$",
+      "args": {
+        "limit": 1
+      }
+    },
+    {
+      "key": "quantityPositive",
+      "pattern": "^(?:quantity 必须 ≥ 1|quantity required for byoi_edge order)$"
+    },
+    {
+      "key": "quotaDetails",
+      "pattern": "^TCP/UDP tunnel quota exhausted: [^\\r\\n]+ \\(current=(\\d+), limit=(\\d+)\\)$",
+      "args": {
+        "current": 1,
+        "limit": 2
+      },
+      "constants": {
+        "resource": "TCP/UDP tunnels"
+      }
+    },
+    {
+      "key": "quotaDetails",
+      "pattern": "^reserved subdomain quota exhausted: [^\\r\\n]+ \\(current=(\\d+), limit=(\\d+)\\)$",
+      "args": {
+        "current": 1,
+        "limit": 2
+      },
+      "constants": {
+        "resource": "reserved subdomains"
+      }
+    },
+    {
+      "key": "quotaDetails",
+      "pattern": "^quota exhausted: [^\\r\\n]+ \\(current=(\\d+), limit=(\\d+)\\)$",
+      "args": {
+        "current": 1,
+        "limit": 2
+      },
+      "constants": {
+        "resource": "resources"
+      }
+    },
+    {
+      "key": "noPorts",
+      "pattern": "^no free remote port$"
+    },
+    {
+      "key": "selfHostedOnlyTLS",
+      "pattern": "^(?:this node does not accept sni.*|sni proxy requires --domain)$"
+    },
+    {
+      "key": "ownDomainOnly",
+      "pattern": "^BYOI edge may only serve custom domains, not platform-managed domains$"
+    },
+    {
+      "key": "featureUpgrade",
+      "pattern": "^(?:当前套餐不支持自建节点.*|自购域名需要自建节点能力.*|choosing a platform subdomain is a paid feature.*)$"
+    },
+    {
+      "key": "barePortPolicies",
+      "pattern": "^.*只对 HTTP/HTTPS 端点有效：.*$"
+    },
+    {
+      "key": "ipInvalid",
+      "pattern": "^无效的 IP 或 CIDR：.*$"
+    },
+    {
+      "key": "headerInvalid",
+      "pattern": "^无效的请求头名称：.*$"
+    },
+    {
+      "key": "headerProtected",
+      "pattern": "^请求头「.*」不可改写.*$"
+    },
+    {
+      "key": "basicUserRequired",
+      "pattern": "^Basic 认证：用户名不能为空$"
+    },
+    {
+      "key": "basicPasswordRequired",
+      "pattern": "^Basic 认证：用户「.*」需要设置密码$"
+    },
+    {
+      "key": "oauthProvider",
+      "pattern": "^不支持的 OAuth 提供方：.*$"
+    },
+    {
+      "key": "oauthCredentials",
+      "pattern": "^OAuth 登录认证需要 Client ID 和 Client Secret$"
+    },
+    {
+      "key": "rateNegative",
+      "pattern": "^速率上限不能为负数$"
+    },
+    {
+      "key": "clientOffline",
+      "pattern": "^client offline .*$"
+    },
+    {
+      "key": "selectClient",
+      "pattern": "^client_id is required — please select a target client$"
+    },
+    {
+      "key": "deviceRegisterPending",
+      "pattern": "^this client isn.t registered yet.*$"
+    },
+    {
+      "key": "localConsoleLocked",
+      "pattern": "^console_locked$"
+    },
+    {
+      "key": "localUnlockFailed",
+      "pattern": "^console_unlock_failed$"
+    },
+    {
+      "key": "localUnlockThrottled",
+      "pattern": "^console_unlock_throttled$"
+    },
+    {
+      "key": "localUnlockUnavailable",
+      "pattern": "^console_unlock_unavailable$"
+    },
+    {
+      "key": "localTokenExpired",
+      "pattern": "^local-token mismatch.*$"
+    },
+    {
+      "key": "serviceModeIdentity",
+      "pattern": "^this client runs as a service on the API key it was installed with,.*$"
+    },
+    {
+      "key": "invalidRoute",
+      "pattern": "^(?:invalid (?:excluded )?route:.*|(?:advertised_route|aliased_route) .*:.*)$"
+    },
+    {
+      "key": "invalidPort",
+      "pattern": "^service .*: port out of range$"
+    },
+    {
+      "key": "invalidServiceProtocol",
+      "pattern": "^service .*: proto must be tcp or udp$"
+    },
+    {
+      "key": "serviceDuplicate",
+      "pattern": "^service .* declared twice on this machine$"
+    },
+    {
+      "key": "invalidPublicAddress",
+      "pattern": "^(?:edge 公网地址.*|public_addr .* is platform-owned;.*)$"
+    },
+    {
+      "key": "routeDeviceProtected",
+      "pattern": "^this device carries approved routes for the org;.*$"
+    },
+    {
+      "key": "localFeatureUnavailable",
+      "pattern": "^(?:mesh (?:not configured|not available on this daemon)|self-update is not configured on this daemon|this operation is not supported in self-hosted \\(standalone\\) mode)$"
+    },
+    {
+      "key": "ticketReopen",
+      "pattern": "^工单未处于已解决/已关闭状态，无法重新打开$"
+    },
+    {
+      "key": "teamCreationUnavailable",
+      "pattern": "^暂不能创建团队$"
+    },
+    {
+      "key": "currentSessionLogout",
+      "pattern": "^cannot revoke the current session;.*$"
+    },
+    {
+      "key": "offboardDevices",
+      "pattern": "^The member was not removed because (?:their|some) devices could not (?:all )?be (?:disabled|revoked)\\..*$"
+    },
+    {
+      "key": "offboardTunnels",
+      "pattern": "^The member was not removed because (?:their|some) tunnels could not (?:all )?be (?:disabled|revoked)\\..*$"
+    },
+    {
+      "key": "offboardKeys",
+      "pattern": "^The member was not removed because (?:their|some) API keys could not (?:all )?be (?:disabled|revoked)\\..*$"
+    },
+    {
+      "key": "offboardMember",
+      "pattern": "^The member could not be removed\\..*$"
+    },
+    {
+      "key": "requiredFields",
+      "pattern": "^(?:[a-zA-Z0-9_., /+()>=-]+ (?:is |are |all )?required(?: .*)?|missing (?:id|[a-z_]+)|hostnames required.*|require_protection,.*|no quota keys given)$"
+    },
+    {
+      "key": "invalidIdentifier",
+      "pattern": "^(?:(?:invalid|bad) (?:[a-z_]+[ _]id|id)|[a-z_]+_id must be (?:positive|an integer)|user_id must not be negative)$"
+    },
+    {
+      "key": "invalidBody",
+      "pattern": "^(?:(?:invalid|empty) (?:json|JSON body|body)|(?:read|decode) body:.*|(?:plan|flag|rule) decode:.*|config_json 不是合法 JSON：.*|bad_request|invalid body:.*)$"
+    },
+    {
+      "key": "nothingToUpdate",
+      "pattern": "^(?:nothing to update.*|no recognized connection-limit fields in body)$"
+    },
+    {
+      "key": "requiredFields",
+      "pattern": "^Complete all required fields before continuing\\.$"
+    },
+    {
+      "key": "invalidIdentifier",
+      "pattern": "^Select a valid item and try again\\.$"
+    },
+    {
+      "key": "invalidBody",
+      "pattern": "^The submitted information could not be read\\. Check the form and submit it again\\.$"
+    },
+    {
+      "key": "nothingToUpdate",
+      "pattern": "^There are no changes to save\\.$"
+    },
+    {
+      "key": "ownerRequired",
+      "pattern": "^Only an organization owner can do this\\. Ask an owner for help\\.$"
+    },
+    {
+      "key": "adminRequired",
+      "pattern": "^Only an organization owner or administrator can do this\\. Contact your organization administrator\\.$"
+    },
+    {
+      "key": "auditorRequired",
+      "pattern": "^Audit records are available to organization owners, administrators and auditors\\.$"
+    },
+    {
+      "key": "interactiveLogin",
+      "pattern": "^Sign in with your account to do this\\. An API key cannot perform this action\\.$"
+    },
+    {
+      "key": "readOnlyKey",
+      "pattern": "^This API key only allows viewing\\. Use a key with permission to make changes\\.$"
+    },
+    {
+      "key": "noOrganization",
+      "pattern": "^Select an organization before continuing\\.$"
+    },
+    {
+      "key": "membershipRequired",
+      "pattern": "^You are not a member of this organization\\. Ask an administrator to invite you\\.$"
+    },
+    {
+      "key": "resourceNotFound",
+      "pattern": "^The requested (organization|device|tunnel|order|subscription|invoice|certificate|domain|task|session|API key|support ticket|account|plan|capture|TCP/UDP tunnels|reserved subdomains|resources) could not be found\\. Refresh the page and try again\\.$",
+      "args": {
+        "resource": 1
+      }
+    },
+    {
+      "key": "resourceDeleted",
+      "pattern": "^This (organization|device|tunnel|order|subscription|invoice|certificate|domain|task|session|API key|support ticket|account|plan|capture|TCP/UDP tunnels|reserved subdomains|resources) has already been deleted\\. Refresh the page\\.$",
+      "args": {
+        "resource": 1
+      }
+    },
+    {
+      "key": "deviceInUse",
+      "pattern": "^This device is still used by tunnels\\. Remove or move those tunnels before deleting it\\.$"
+    },
+    {
+      "key": "accountDisabled",
+      "pattern": "^This account has been disabled\\. Contact support for help\\.$"
+    },
+    {
+      "key": "accountLocked",
+      "pattern": "^This account is temporarily locked\\. Wait a while before trying again\\.$"
+    },
+    {
+      "key": "totpRequired",
+      "pattern": "^Enter the verification code from your authenticator app to continue\\.$"
+    },
+    {
+      "key": "totpInvalid",
+      "pattern": "^The verification code is incorrect or has expired\\. Enter the latest code from your authenticator app\\.$"
+    },
+    {
+      "key": "totpSetupRequired",
+      "pattern": "^Set up two-step verification before continuing\\.$"
+    },
+    {
+      "key": "totpAlreadyEnabled",
+      "pattern": "^Two-step verification is already enabled\\. Use your existing authenticator app\\.$"
+    },
+    {
+      "key": "passwordIncorrect",
+      "pattern": "^The current password is incorrect\\. Check it and try again\\.$"
+    },
+    {
+      "key": "passwordTooShort",
+      "pattern": "^Use a password with at least ([0-9]+) characters\\.$",
+      "args": {
+        "minimum": 1
+      }
+    },
+    {
+      "key": "passwordUnchanged",
+      "pattern": "^Choose a password that is different from your current password\\.$"
+    },
+    {
+      "key": "resetExpired",
+      "pattern": "^This password reset link is invalid or has expired\\. Request a new reset email\\.$"
+    },
+    {
+      "key": "activationExpired",
+      "pattern": "^This email verification link is invalid or has expired\\. Request a new verification email\\.$"
+    },
+    {
+      "key": "requestEmailLater",
+      "pattern": "^Please wait a moment before requesting another email\\. Check your spam folder too\\.$"
+    },
+    {
+      "key": "invalidSession",
+      "pattern": "^Your session is no longer valid\\. Sign in again to continue\\.$"
+    },
+    {
+      "key": "deviceDisabled",
+      "pattern": "^This device has been disabled\\. Ask your organization administrator to enable it\\.$"
+    },
+    {
+      "key": "reenroll",
+      "pattern": "^This device needs to join the network again\\. Use a valid enrollment key to reconnect\\.$"
+    },
+    {
+      "key": "authKeyDenied",
+      "pattern": "^This enrollment key is invalid, expired, revoked or fully used\\. Ask your administrator for a new key\\.$"
+    },
+    {
+      "key": "clientUpgrade",
+      "pattern": "^This client version is no longer supported\\. Update the client and try again\\.$"
+    },
+    {
+      "key": "domainInvalid",
+      "pattern": "^Enter a valid domain name, such as app\\.example\\.com\\.$"
+    },
+    {
+      "key": "domainTooLong",
+      "pattern": "^This domain name is too long\\. Use a domain with no more than 253 characters\\.$"
+    },
+    {
+      "key": "domainConflict",
+      "pattern": "^Choose either a custom domain or a platform subdomain, not both\\.$"
+    },
+    {
+      "key": "subdomainType",
+      "pattern": "^A platform subdomain can only be used with HTTP or HTTPS endpoints\\.$"
+    },
+    {
+      "key": "subdomainInvalid",
+      "pattern": "^Use 1–63 letters, numbers or hyphens for the subdomain\\. It cannot start or end with a hyphen\\.$"
+    },
+    {
+      "key": "domainUnverified",
+      "pattern": "^Add and verify this domain in your organization before using it\\.$"
+    },
+    {
+      "key": "certDomainMismatch",
+      "pattern": "^The selected certificate does not cover this domain\\. Choose a matching certificate\\.$"
+    },
+    {
+      "key": "certCannotRevoke",
+      "pattern": "^This certificate cannot be revoked through its issuer\\. You can delete it to stop using it; it remains valid until it expires\\.$"
+    },
+    {
+      "key": "activeCert",
+      "pattern": "^This device still has an active certificate\\. Revoke that certificate before requesting another\\.$"
+    },
+    {
+      "key": "planUnavailable",
+      "pattern": "^The selected plan is unavailable\\. Refresh the plan list and choose again\\.$"
+    },
+    {
+      "key": "subscriptionActiveOnly",
+      "pattern": "^Choose your currently active subscription for renewal or upgrade\\.$"
+    },
+    {
+      "key": "subscriptionUpgradeOnly",
+      "pattern": "^Choose a plan above your current plan to upgrade\\.$"
+    },
+    {
+      "key": "orderPaidOnly",
+      "pattern": "^Complete payment for this order before continuing\\.$"
+    },
+    {
+      "key": "refundState",
+      "pattern": "^This order cannot be refunded in its current state\\. Only paid or fulfilled orders can be refunded\\.$"
+    },
+    {
+      "key": "invoiceDuplicate",
+      "pattern": "^An invoice request already exists for this order\\. Check its status in your invoice list\\.$"
+    },
+    {
+      "key": "invoiceBalance",
+      "pattern": "^Orders paid with credit or balance cannot be invoiced again\\. Apply for an invoice for the original top-up order\\.$"
+    },
+    {
+      "key": "rechargeRefund",
+      "pattern": "^Top-up orders require a manual refund\\. Contact support to arrange the balance adjustment and refund\\.$"
+    },
+    {
+      "key": "invoiceRefundBlocked",
+      "pattern": "^This order has an issued invoice and cannot be refunded online\\. Contact support to arrange the invoice correction\\.$"
+    },
+    {
+      "key": "refundNewerFirst",
+      "pattern": "^Refund newer subscription orders first, then retry this order\\.$"
+    },
+    {
+      "key": "paymentMismatch",
+      "pattern": "^The payment amount does not match this order\\. Check the payment record or contact support\\.$"
+    },
+    {
+      "key": "paymentCurrency",
+      "pattern": "^This payment method does not support the order currency\\. Choose a supported payment method\\.$"
+    },
+    {
+      "key": "minRecharge",
+      "pattern": "^The minimum top-up amount is \\$1\\. Enter a larger amount\\.$"
+    },
+    {
+      "key": "quantityLimit",
+      "pattern": "^You can purchase at most ([0-9]+) items per order\\. Reduce the quantity and try again\\.$",
+      "args": {
+        "limit": 1
+      }
+    },
+    {
+      "key": "quantityPositive",
+      "pattern": "^Enter a quantity of at least 1\\.$"
+    },
+    {
+      "key": "quotaDetails",
+      "pattern": "^The (organization|device|tunnel|order|subscription|invoice|certificate|domain|task|session|API key|support ticket|account|plan|capture|TCP/UDP tunnels|reserved subdomains|resources) limit has been reached: ([0-9]+) in use out of ([0-9]+) allowed\\. Free up resources or ask your administrator for more quota\\.$",
+      "args": {
+        "resource": 1,
+        "current": 2,
+        "limit": 3
+      }
+    },
+    {
+      "key": "noPorts",
+      "pattern": "^No ports are currently available on this server\\. Choose another server or try again later\\.$"
+    },
+    {
+      "key": "selfHostedOnlyTLS",
+      "pattern": "^TLS passthrough requires a compatible server owned by your organization\\. Select a suitable self-hosted server\\.$"
+    },
+    {
+      "key": "ownDomainOnly",
+      "pattern": "^This self-hosted server requires your own verified domain\\. Add a custom domain and try again\\.$"
+    },
+    {
+      "key": "featureUpgrade",
+      "pattern": "^Your current plan does not include this feature\\. Ask your organization administrator to enable access\\.$"
+    },
+    {
+      "key": "barePortPolicies",
+      "pattern": "^This security feature only supports HTTP and HTTPS endpoints\\. Remove it or change the endpoint type\\.$"
+    },
+    {
+      "key": "ipInvalid",
+      "pattern": "^Enter a valid IP address or network range\\.$"
+    },
+    {
+      "key": "headerInvalid",
+      "pattern": "^Enter a valid HTTP header name\\.$"
+    },
+    {
+      "key": "headerProtected",
+      "pattern": "^This HTTP header is managed by the connection and cannot be rewritten\\. Choose a different header\\.$"
+    },
+    {
+      "key": "basicUserRequired",
+      "pattern": "^Enter a username for password protection\\.$"
+    },
+    {
+      "key": "basicPasswordRequired",
+      "pattern": "^Set a password for every password-protected user\\.$"
+    },
+    {
+      "key": "oauthProvider",
+      "pattern": "^Choose a supported login provider\\.$"
+    },
+    {
+      "key": "oauthCredentials",
+      "pattern": "^Enter both the client ID and client secret for this login provider\\.$"
+    },
+    {
+      "key": "rateNegative",
+      "pattern": "^The rate limit cannot be negative\\. Enter zero or a positive value\\.$"
+    },
+    {
+      "key": "clientOffline",
+      "pattern": "^The selected device is offline\\. Start its client and wait for it to connect, then try again\\.$"
+    },
+    {
+      "key": "selectClient",
+      "pattern": "^Select the device that will run this tunnel\\.$"
+    },
+    {
+      "key": "deviceRegisterPending",
+      "pattern": "^This device has not finished registering\\. Wait for it to connect, then try again\\.$"
+    },
+    {
+      "key": "localConsoleLocked",
+      "pattern": "^Unlock this console before continuing\\.$"
+    },
+    {
+      "key": "localUnlockFailed",
+      "pattern": "^The console password is incorrect\\. Check it and try again\\.$"
+    },
+    {
+      "key": "localUnlockThrottled",
+      "pattern": "^Too many unlock attempts\\. Wait a moment before trying again\\.$"
+    },
+    {
+      "key": "localUnlockUnavailable",
+      "pattern": "^Remote console access has not been enabled\\. Configure it on the device first\\.$"
+    },
+    {
+      "key": "localTokenExpired",
+      "pattern": "^The local session has changed\\. Refresh the page and try again\\.$"
+    },
+    {
+      "key": "serviceModeIdentity",
+      "pattern": "^This client uses an API key managed by its system service\\. Change the service credentials to use a different account\\.$"
+    },
+    {
+      "key": "invalidRoute",
+      "pattern": "^Enter a valid network route and try again\\.$"
+    },
+    {
+      "key": "invalidPort",
+      "pattern": "^Enter a port number between 1 and 65535\\.$"
+    },
+    {
+      "key": "invalidServiceProtocol",
+      "pattern": "^Choose TCP or UDP for this service\\.$"
+    },
+    {
+      "key": "serviceDuplicate",
+      "pattern": "^This service is already declared on this device\\. Edit the existing service or choose another name\\.$"
+    },
+    {
+      "key": "invalidPublicAddress",
+      "pattern": "^Enter your server's IP address or verified domain\\. Platform-managed addresses cannot be used here\\.$"
+    },
+    {
+      "key": "routeDeviceProtected",
+      "pattern": "^This device provides approved network routes\\. Ask an organization owner or administrator to remove it\\.$"
+    },
+    {
+      "key": "localFeatureUnavailable",
+      "pattern": "^This feature is not configured on this client\\. Check your client settings or ask your administrator\\.$"
+    },
+    {
+      "key": "ticketReopen",
+      "pattern": "^Only resolved or closed support tickets can be reopened\\.$"
+    },
+    {
+      "key": "teamCreationUnavailable",
+      "pattern": "^A team cannot be created right now\\. Try again later or contact support\\.$"
+    },
+    {
+      "key": "currentSessionLogout",
+      "pattern": "^Use Sign out to end your current session\\. This list can only revoke other sessions\\.$"
+    },
+    {
+      "key": "offboardDevices",
+      "pattern": "^The member was not removed because some devices could not be disabled\\. Fix the issue and retry the removal\\.$"
+    },
+    {
+      "key": "offboardTunnels",
+      "pattern": "^The member was not removed because some tunnels could not be disabled\\. Fix the issue and retry the removal\\.$"
+    },
+    {
+      "key": "offboardKeys",
+      "pattern": "^The member was not removed because some API keys could not be revoked\\. Fix the issue and retry the removal\\.$"
+    },
+    {
+      "key": "offboardMember",
+      "pattern": "^The member could not be removed\\. Check the completed actions below before trying again\\.$"
+    },
+    {
+      "key": "offboardCompleted",
+      "pattern": "^Already completed: ([0-9]+) device\\(s\\) disabled, ([0-9]+) tunnel\\(s\\) disabled and ([0-9]+) API key\\(s\\) revoked\\. Disabled resources can be enabled again; revoked keys must be replaced\\.$",
+      "args": {
+        "devices": 1,
+        "tunnels": 2,
+        "keys": 3
+      }
+    },
+    {
+      "key": "invitationExpired",
+      "pattern": "^This invitation is expired, revoked or already used\\. Ask an administrator for a new invitation\\.$"
+    },
+    {
+      "key": "invitationEmailMismatch",
+      "pattern": "^Sign in with the email address that received this invitation\\.$"
+    },
+    {
+      "key": "personalOrgLocked",
+      "pattern": "^Membership in a personal organization cannot be changed\\. Use a team organization to collaborate\\.$"
+    },
+    {
+      "key": "lastOwner",
+      "pattern": "^An organization must keep at least one owner\\. Assign another owner before removing or changing this member\\.$"
+    },
+    {
+      "key": "accessProtectionRequired",
+      "pattern": "^This organization requires tunnel access protection\\. Add an IP allowlist, password protection or login authentication\\. For command-line use, ask an administrator to set a default IP policy\\.$"
+    },
+    {
+      "key": "barePortProtectionRequired",
+      "pattern": "^This organization requires an IP allowlist for TCP, UDP and TLS passthrough endpoints\\. Add an allowlist or ask an administrator to set a default IP policy\\.$"
+    },
+    {
+      "key": "domainInUse",
+      "pattern": "^The domain was not deleted because some dependent resources could not be removed\\. Check its tunnels and certificates before trying again\\.$"
+    },
+    {
+      "key": "awaitingApproval",
+      "pattern": "^This tunnel is saved and waiting for organization approval\\. Ask an owner or administrator to approve it before using it\\.$"
+    },
+    {
+      "key": "defaultPolicyMissing",
+      "pattern": "^The organization's default IP policy could not be applied\\. Ask an administrator to select a valid default under tunnel settings\\.$"
+    },
+    {
+      "key": "invalidRange",
+      "pattern": "^The value is outside the allowed range\\. Check the field requirements and enter a valid value\\.$"
+    },
+    {
+      "key": "portInUse",
+      "pattern": "^Port ([0-9]+) is already in use on this server\\. Choose another port\\.$",
+      "args": {
+        "port": 1
+      }
+    },
+    {
+      "key": "balanceDetails",
+      "pattern": "^Available: ([$￥0-9.,]+) \\(credit ([$￥0-9.,]+) \\+ balance ([$￥0-9.,]+)\\)\\. Required: ([$￥0-9.,]+)\\. Add funds or choose another payment method\\.$",
+      "args": {
+        "available": 1,
+        "credit": 2,
+        "balance": 3,
+        "required": 4
+      }
+    },
+    {
+      "key": "taggedDeviceProtected",
+      "pattern": "^This tagged device is managed by the organization\\. Ask an owner or administrator to change it\\.$"
+    },
+    {
+      "key": "domainNotRegistered",
+      "pattern": "^The domain ([^\\r\\n]+) is not registered with this organization\\. Add and verify it under Domains before using it\\.$",
+      "args": {
+        "domain": 1
+      }
+    },
+    {
+      "key": "selfHostedUnsupported",
+      "pattern": "^This action is not available in self-hosted mode\\. Check which features your server supports\\.$"
+    },
+    {
+      "key": "dnsFailure",
+      "pattern": "^The server name could not be resolved\\. Check the address and DNS settings\\.$"
+    },
+    {
+      "key": "connectionRefused",
+      "pattern": "^The service refused the connection\\. Check that it is running and listening on the selected port\\.$"
+    },
+    {
+      "key": "certificateInvalid",
+      "pattern": "^The server certificate could not be verified\\. Check its domain, expiry date and trusted issuer\\.$"
+    },
+    {
+      "key": "hostUnreachable",
+      "pattern": "^The server could not be reached\\. Check the address, network connection and firewall rules\\.$"
+    },
+    {
+      "key": "serviceModeIdentity",
+      "pattern": "^This client uses an API key managed by its system service\\. To use a different account, reinstall the service with a different key\\.$"
+    },
+    {
+      "key": "containerIdentity",
+      "pattern": "^This client uses an API key managed by its container\\. To use a different account, recreate the container with a different CALABI_API_KEY\\.$"
+    },
+    {
+      "key": "invalidServiceName",
+      "pattern": "^Use 1–63 characters for the service name: a-z, 0-9 and hyphens\\. It cannot start or end with a hyphen\\.$"
+    },
+    {
+      "key": "verificationUnavailable",
+      "pattern": "^The verification widget could not load\\. Check your connection and browser extensions, then refresh the page\\.$"
+    },
+    {
+      "key": "serverDomainMismatch",
+      "pattern": "^This domain belongs to another server\\. Connect to the server that assigned the subdomain, or choose a domain for the selected server\\.$"
+    },
+    {
+      "key": "authKeyDenied",
+      "pattern": "^This access key is invalid, expired, revoked or fully used\\. Ask your administrator for a new key\\.$"
+    },
+    {
+      "key": "domainNeedsVerification",
+      "pattern": "^The\\ domain\\ ([^\\r\\n]+)\\ is\\ not\\ verified\\ yet\\.\\ Check\\ its\\ DNS\\ TXT\\ record,\\ then\\ verify\\ it\\ under\\ Domains\\ before\\ trying\\ again\\.$",
+      "args": {
+        "domain": 1
+      }
+    }
+  ],
+  "codes": {
+    "client_offline": "clientOffline",
+    "config_json_invalid": "invalidBody",
+    "ip_policy_invalid_cidr": "ipInvalid",
+    "basic_auth_user_required": "basicUserRequired",
+    "basic_auth_password_required": "basicPasswordRequired",
+    "rate_limit_invalid": "rateNegative",
+    "header_invalid_name": "headerInvalid",
+    "header_forbidden": "headerProtected",
+    "oauth_invalid_provider": "oauthProvider",
+    "oauth_missing_credentials": "oauthCredentials",
+    "domain_subdomain_exclusive": "domainConflict",
+    "custom_domain_requires_byoi": "featureUpgrade",
+    "subdomain_requires_paid_plan": "featureUpgrade",
+    "protocol_requires_upgrade": "featureUpgrade",
+    "ip_policy_requires_upgrade": "featureUpgrade",
+    "basic_auth_requires_upgrade": "featureUpgrade",
+    "rate_limit_requires_upgrade": "featureUpgrade",
+    "header_rewrite_requires_upgrade": "featureUpgrade",
+    "oauth_requires_upgrade": "featureUpgrade",
+    "basic_auth_not_for_bare_port": "barePortPolicies",
+    "oauth_not_for_bare_port": "barePortPolicies",
+    "header_rewrite_not_for_bare_port": "barePortPolicies"
+  },
+  "arguments": {
+    "minimum": {
+      "pattern": "^[0-9]{1,20}$"
+    },
+    "current": {
+      "pattern": "^[0-9]{1,20}$"
+    },
+    "limit": {
+      "pattern": "^[0-9]{1,20}$"
+    },
+    "devices": {
+      "pattern": "^[0-9]{1,20}$"
+    },
+    "tunnels": {
+      "pattern": "^[0-9]{1,20}$"
+    },
+    "keys": {
+      "pattern": "^[0-9]{1,20}$"
+    },
+    "port": {
+      "pattern": "^[0-9]{1,20}$"
+    },
+    "available": {
+      "pattern": "^[$￥]-?[0-9]+\\.[0-9]{2}$"
+    },
+    "credit": {
+      "pattern": "^[$￥]-?[0-9]+\\.[0-9]{2}$"
+    },
+    "balance": {
+      "pattern": "^[$￥]-?[0-9]+\\.[0-9]{2}$"
+    },
+    "required": {
+      "pattern": "^[$￥]-?[0-9]+\\.[0-9]{2}$"
+    },
+    "domain": {
+      "pattern": "^[\\p{L}\\p{N}_.-]{1,253}$"
+    },
+    "resource": {
+      "values": [
+        "organization",
+        "device",
+        "tunnel",
+        "order",
+        "subscription",
+        "invoice",
+        "certificate",
+        "domain",
+        "task",
+        "session",
+        "API key",
+        "support ticket",
+        "account",
+        "plan",
+        "capture",
+        "TCP/UDP tunnels",
+        "reserved subdomains",
+        "resources"
+      ]
+    }
+  }
+}

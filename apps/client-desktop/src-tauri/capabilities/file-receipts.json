@@ -1,0 +1,8 @@
+{
+  "identifier": "file-receipts",
+  "description": "The incoming-file window may only review and decide waiting requests.",
+  "windows": ["file-requests"],
+  "platforms": ["macOS"],
+  "remote": { "urls": ["http://127.0.0.1:*"] },
+  "permissions": ["allow-file-receipt-action"]
+}

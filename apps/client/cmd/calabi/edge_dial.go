@@ -51,7 +51,7 @@ func openOneShotEdge(logger *slog.Logger, cmd string) (*oneShotEdge, int) {
 	logger.Info("connecting", "server", addr)
 	mux, err := transport.Dial(platformEdgeDialOptions(addr))
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi: dial:", err)
+		fmt.Fprintln(os.Stderr, "calabi: dial:", friendlyCLIError(err))
 		return nil, 1
 	}
 	return &oneShotEdge{addr: addr, mux: mux, token: resolveToken()}, 0
@@ -73,7 +73,7 @@ func openSelfHostedEdge(logger *slog.Logger, cmd string) (*oneShotEdge, int) {
 	path := envOr("CALABI_DAEMON_CONFIG", managedConfigPath())
 	cfg, _, err := loadLocalConfigOrEmpty(path, true)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "calabi %s: %v\n", cmd, err)
+		fmt.Fprintf(os.Stderr, "calabi %s: %v\n", cmd, friendlyCLIError(err))
 		return nil, 1
 	}
 	if cfg.Mesh.Coord == "" {
@@ -101,7 +101,7 @@ func openSelfHostedEdge(logger *slog.Logger, cmd string) (*oneShotEdge, int) {
 	key, err := meshNodeKey(cfg.Mesh)
 	if err != nil {
 		viewer.Drop()
-		fmt.Fprintf(os.Stderr, "calabi %s: device key: %v\n", cmd, err)
+		fmt.Fprintf(os.Stderr, "calabi %s: device key: %v\n", cmd, friendlyCLIError(err))
 		return nil, 1
 	}
 	edge := acc.Edges[0]
@@ -115,7 +115,7 @@ func openSelfHostedEdge(logger *slog.Logger, cmd string) (*oneShotEdge, int) {
 		}
 	}
 	viewer.Drop()
-	fmt.Fprintln(os.Stderr, "calabi: dial:", err)
+	fmt.Fprintln(os.Stderr, "calabi: dial:", friendlyCLIError(err))
 	return nil, 1
 }
 

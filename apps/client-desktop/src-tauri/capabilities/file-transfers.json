@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "file-transfers",
+  "description": "The file centre may call only the user-agent command on supported desktop platforms. Rust also checks the actual supervised daemon origin on every call.",
+  "windows": ["main"],
+  "platforms": ["windows", "macOS"],
+  "remote": { "urls": ["http://127.0.0.1:*"] },
+  "permissions": ["allow-files-action"]
+}

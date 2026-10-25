@@ -3,6 +3,8 @@ package protocol
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/calabinet/calabi/pkg/protocol/usererror"
 )
 
 // Payload types for the Calabi wire protocol.
@@ -56,9 +58,18 @@ func (e *ErrorPayload) Error() string {
 		return ""
 	}
 	if e.MessageEN != "" {
-		return fmt.Sprintf("calabi: code=%d %s", e.Code, e.MessageEN)
+		return fmt.Sprintf("calabi: code=%d %s", e.Code, publicErrorText(e.Code, e.MessageEN))
 	}
 	return fmt.Sprintf("calabi: code=%d %s", e.Code, e.MessageKey)
+}
+
+// UserMessage is the readable text without the transport envelope or numeric
+// diagnostic prefix. Error() and Code remain available for logs and callers.
+func (e *ErrorPayload) UserMessage() string {
+	if e == nil {
+		return ""
+	}
+	return publicErrorText(e.Code, e.MessageEN)
 }
 
 // Canonical Code values; full table in errors.proto.
@@ -109,7 +120,31 @@ const (
 
 // NewError is a convenience constructor used by both client and edge.
 func NewError(code int, key, en string) *ErrorPayload {
-	return &ErrorPayload{Code: code, MessageKey: key, MessageEN: en}
+	return &ErrorPayload{Code: code, MessageKey: key, MessageEN: publicErrorText(code, en)}
+}
+
+func publicErrorText(code int, text string) string {
+	status := 400
+	switch code {
+	case CodeInternal:
+		status = 500
+	case CodeNodeDraining:
+		status = 503
+	case CodeHandshakeTimeout:
+		status = 504
+	case CodeAuthRequired, CodeAuthInvalidToken:
+		status = 401
+	case CodeForbidden:
+		status = 403
+	case CodeQuotaTunnels, CodeQuotaExceeded, CodeRateLimited:
+		status = 429
+	case CodeProxyDuplicate:
+		status = 409
+	case CodeProxyNotFound:
+		status = 404
+	}
+	message, _ := usererror.Message(status, text)
+	return message
 }
 
 // ---- 0x01 HELLO --------------------------------------------------------

@@ -30,6 +30,7 @@ package session
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	proto "github.com/calabinet/calabi/pkg/protocol"
@@ -91,17 +92,16 @@ func TestPersistErrorMessageIsNotWrappedInGRPCNoise(t *testing.T) {
 	if got == raw {
 		t.Fatalf("the gRPC envelope was passed through verbatim:\n  %s", got)
 	}
-	if want := "this organization requires"; got[:len(want)] != want {
-		t.Fatalf("message = %q, want it to start with the sentence written for the user", got)
+	if !strings.Contains(got, "access protection") || !strings.Contains(got, "default IP policy") || strings.Contains(got, "rpc error") {
+		t.Fatalf("message = %q, want protection requirements and a way to fix them", got)
 	}
 }
 
-// An error with no envelope is left exactly as it is — the stripper must not
-// start editing messages it does not recognise.
-func TestPersistErrorControlPlainMessageUntouched(t *testing.T) {
+// A recognized refusal retains the actual port and suggests a remedy.
+func TestPersistErrorPortIsPreserved(t *testing.T) {
 	const plain = "remote port 20001 is already in use on this edge"
-	if got := persistErrorMessage(errors.New(plain)); got != plain {
-		t.Fatalf("a plain message was rewritten: %q -> %q", plain, got)
+	if got := persistErrorMessage(errors.New(plain)); !strings.Contains(got, "20001") || !strings.Contains(got, "Choose another port") {
+		t.Fatalf("the port or remedy was lost: %q", got)
 	}
 }
 
@@ -120,8 +120,8 @@ func TestPersistErrorRefusedCarriesOnlyTheSentence(t *testing.T) {
 	if got := persistErrorCode(err); got != proto.CodeForbidden {
 		t.Fatalf("persistErrorCode = %d, want %d (CodeForbidden)", got, proto.CodeForbidden)
 	}
-	if got := persistErrorMessage(err); got != msg {
-		t.Fatalf("message = %q, want %q", got, msg)
+	if got := persistErrorMessage(err); !strings.Contains(got, "shop.example.com") || !strings.Contains(got, "Add and verify") || strings.Contains(got, "rpc error") {
+		t.Fatalf("message = %q, want the domain and the verification remedy", got)
 	}
 	if got := persistErrorCode(Refused(ErrProxyPolicyRequired, msg)); got != proto.CodeProxyPolicyRequired {
 		t.Fatalf("a baseline refusal = %d, want %d", got, proto.CodeProxyPolicyRequired)

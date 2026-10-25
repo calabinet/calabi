@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="48dp"
+    android:orientation="horizontal" android:gravity="center_vertical">
+    <LinearLayout android:layout_width="0dp" android:layout_weight="1"
+        android:layout_height="wrap_content" android:orientation="vertical">
+        <TextView android:id="@+id/file_request_sender" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:maxLines="1" android:ellipsize="end"
+            android:textAppearance="@android:style/TextAppearance.Material.Notification.Title" />
+        <TextView android:id="@+id/file_request_count" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:maxLines="1" android:ellipsize="end"
+            android:textAppearance="@android:style/TextAppearance.Material.Notification" />
+    </LinearLayout>
+    <TextView android:id="@+id/file_request_accept" android:layout_width="wrap_content"
+        android:layout_height="48dp" android:minWidth="48dp" android:paddingHorizontal="8dp"
+        android:gravity="center" android:text="@string/filetest_accept" android:textStyle="bold"
+        android:textAppearance="@android:style/TextAppearance.Material.Notification.Title" />
+    <TextView android:id="@+id/file_request_reject" android:layout_width="wrap_content"
+        android:layout_height="48dp" android:minWidth="48dp" android:paddingHorizontal="8dp"
+        android:gravity="center" android:text="@string/filetest_reject"
+        android:textAppearance="@android:style/TextAppearance.Material.Notification.Title" />
+</LinearLayout>

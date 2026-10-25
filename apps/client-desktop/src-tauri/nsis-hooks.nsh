@@ -28,6 +28,19 @@
 !ifndef CALABI_UNLOCK_TRIES
   !define CALABI_UNLOCK_TRIES 60 ; x 500ms = 30s
 !endif
+!define CALABI_FIREWALL_SCRIPT "${__FILEDIR__}\..\..\client\internal\filecontrol\filefirewall_windows.ps1"
+!ifndef CALABI_FIREWALL_RUN
+  !define CALABI_FIREWALL_RUN '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\file-firewall.ps1"'
+!endif
+
+; Return status/output. The same script is embedded in the daemon.
+; Keep a machine-protected installed copy for the uninstaller (NSIS cannot
+; extract File payloads from an uninstall section).
+!macro CALABI_FILE_FIREWALL ACTION
+  nsExec::ExecToStack '${CALABI_FIREWALL_RUN} -Action ${ACTION} -Program "$INSTDIR\calabi.exe"'
+  Pop $R0
+  Pop $R1
+!macroend
 
 !macro NSIS_HOOK_PREINSTALL
   Push $R0
@@ -175,6 +188,19 @@
   ; Registered. Clear what an earlier failed attempt left behind.
   Delete "$INSTDIR\service-install-error.log"
 
+  DetailPrint "Configuring Calabi file reception firewall..."
+  File /oname=$INSTDIR\file-firewall.ps1 "${CALABI_FIREWALL_SCRIPT}"
+  !insertmacro CALABI_FILE_FIREWALL Install
+  ${If} $R0 != 0
+    FileOpen $R2 "$INSTDIR\file-firewall-error.log" w
+    FileWrite $R2 "$R0$\r$\n$R1$\r$\n"
+    FileClose $R2
+    MessageBox MB_OK|MB_ICONSTOP "Calabi's file reception firewall rule could not be configured.$\r$\n$\r$\n$R1$\r$\n$\r$\nCheck the computer's firewall policy, then run this installer again." /SD IDOK
+    SetErrorLevel 5
+    Abort
+  ${EndIf}
+  Delete "$INSTDIR\file-firewall-error.log"
+
   nsExec::ExecToStack '"$INSTDIR\calabi.exe" daemon start'
   Pop $R0
   Pop $R1
@@ -195,6 +221,18 @@
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
+  Push $R0
+  Push $R1
+  DetailPrint "Removing Calabi file reception firewall rule..."
+  !insertmacro CALABI_FILE_FIREWALL Remove
+  ${If} $R0 != 0
+    MessageBox MB_OK|MB_ICONSTOP "Calabi's file reception firewall rule could not be removed.$\r$\n$\r$\n$R1$\r$\n$\r$\nCheck the firewall policy, then run this uninstaller again." /SD IDOK
+    SetErrorLevel 5
+    Abort
+  ${EndIf}
+  Pop $R1
+  Pop $R0
+  Delete "$INSTDIR\file-firewall.ps1"
   DetailPrint "Removing Calabi system service..."
   nsExec::ExecToLog '"$INSTDIR\calabi.exe" daemon stop'
   Pop $0

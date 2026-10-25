@@ -29,7 +29,7 @@ func runUDP(args []string) int {
 	}
 	secJSON, secErr := sec.buildConfigJSON()
 	if secErr != nil {
-		fmt.Fprintln(os.Stderr, "calabi udp:", secErr)
+		fmt.Fprintln(os.Stderr, "calabi udp:", friendlyCLIError(secErr))
 		return 2
 	}
 	if fs.NArg() < 1 {
@@ -48,7 +48,7 @@ func runUDP(args []string) int {
 	}
 	localAddr := fmt.Sprintf("%s:%d", *host, localPort)
 	if err := validateLocalUpstream(localAddr); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi udp:", err)
+		fmt.Fprintln(os.Stderr, "calabi udp:", friendlyCLIError(err))
 		return 1
 	}
 
@@ -77,7 +77,7 @@ func runUDP(args []string) int {
 	defer cancel()
 
 	if err := cli.Handshake(ctx); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi: handshake:", err)
+		fmt.Fprintln(os.Stderr, "calabi: handshake:", friendlyCLIError(err))
 		return 1
 	}
 	edge.keepFresh(ctx, logger, cli)

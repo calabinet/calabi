@@ -119,3 +119,22 @@ func TestNetMapSendsPeersTheAliasAndTheRouterBothHalves(t *testing.T) {
 		t.Errorf("subnet_alias = %s -> %s, want %s -> %s", as[0].GetAlias(), as[0].GetReal(), alias, real)
 	}
 }
+
+func TestNetMapPublishesBothAddressesWhenRealRouteEnabled(t *testing.T) {
+	real := netip.MustParsePrefix("192.168.1.222/32")
+	alias := netip.MustParsePrefix("100.96.0.0/24")
+	subnet := netip.MustParsePrefix("192.168.1.0/24")
+	router := core.Node{Overlay: netip.MustParseAddr("100.64.0.4"), ApprovedRoutes: []netip.Prefix{subnet}, RealRoutes: []netip.Prefix{real}, RouteAliases: []core.RouteAlias{{Real: subnet, Alias: alias}}}
+	out := toProtoNetMap(&core.NetMap{Peers: []core.Node{router}})
+	got := map[string]bool{}
+	for _, ip := range out.Peers[0].GetAllowedIps() {
+		got[ip] = true
+	}
+	if len(got) != 3 || !got[real.String()] || !got[alias.String()] || !got["100.64.0.4/32"] {
+		t.Fatalf("allowed IPs %v", got)
+	}
+	own := toProtoNetMap(&core.NetMap{Self: router})
+	if len(own.SubnetAliases) != 1 || own.SubnetAliases[0].GetAlias() != alias.String() {
+		t.Fatalf("alias rewrite changed: %v", own.SubnetAliases)
+	}
+}

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical">
+    <TextView android:id="@+id/file_request_sender" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:maxLines="2" android:ellipsize="end"
+        android:textAppearance="@android:style/TextAppearance.Material.Notification.Title" />
+    <TextView android:id="@+id/file_request_count" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:maxLines="1" android:ellipsize="end"
+        android:textAppearance="@android:style/TextAppearance.Material.Notification" />
+</LinearLayout>

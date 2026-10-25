@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/pkg/protocol/usererror"
 )
 
 // routes is the core's local API: what the app's screens read and change.
@@ -50,6 +51,17 @@ func (c *Core) routes() http.Handler {
 	mux.HandleFunc("GET /v1/settings", c.handleGetSettings)
 	mux.HandleFunc("PUT /v1/settings", c.handlePutSettings)
 	mux.HandleFunc("GET /v1/logs", c.handleLogs)
+	if c.cfg.FileTransferV1 {
+		mux.HandleFunc("GET /v1/files", c.handleFiles)
+		mux.HandleFunc("POST /v1/files/action", c.handleFileAction)
+	}
+	if c.cfg.FileTransferP0 {
+		mux.HandleFunc("GET /v1/filetest", c.handleFileTest)
+		mux.HandleFunc("POST /v1/filetest/start", c.handleFileTestStart)
+		mux.HandleFunc("POST /v1/filetest/decide", c.handleFileTestDecide)
+		mux.HandleFunc("POST /v1/filetest/stop", c.handleFileTestStop)
+		mux.HandleFunc("POST /v1/filetest/clear", c.handleFileTestClear)
+	}
 	return mux
 }
 
@@ -494,7 +506,7 @@ func (c *Core) bff(ctx context.Context, method, path string, body []byte, tok st
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(usererror.Body(status, v))
 }
 
 func writeError(w http.ResponseWriter, status int, msg string) {
@@ -504,5 +516,5 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 func writeRaw(w http.ResponseWriter, status int, body []byte) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_, _ = w.Write(body)
+	_, _ = w.Write(usererror.JSON(status, body))
 }

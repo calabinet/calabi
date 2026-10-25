@@ -47,15 +47,16 @@ interface LoginForm {
 function classifyLoginError(
   raw: string,
   t: (key: string) => string,
+  reason?: string,
 ): { severity: "info" | "error"; message: string } {
   const m = raw.toLowerCase();
-  if (m.includes("totp required")) {
+  if (reason === "business.totpRequired" || m.includes("totp required")) {
     return { severity: "info", message: t("login.totpPrompt") };
   }
-  if (m.includes("invalid totp")) {
+  if (reason === "business.totpInvalid" || m.includes("invalid totp")) {
     return { severity: "error", message: t("login.totpInvalid") };
   }
-  if (m.includes("invalid credentials")) {
+  if (reason === "invalidCredentials" || m.includes("invalid credentials")) {
     return { severity: "error", message: t("login.badCredentials") };
   }
   const desc = raw.replace(/^rpc error:.*desc\s*=\s*/i, "").trim();
@@ -114,7 +115,7 @@ export default function Login() {
     },
     onError: (e: any) => {
       const msg = (e as ApiError)?.message || t("login.failed");
-      if (msg.toLowerCase().includes("totp")) {
+      if (["business.totpRequired", "business.totpInvalid"].includes((e as ApiError).body?.error_key) || msg.toLowerCase().includes("totp")) {
         setNeedsTotp(true);
       }
     },
@@ -134,7 +135,7 @@ export default function Login() {
   }
 
   const errInfo = login.error
-    ? classifyLoginError((login.error as Error).message || "", t)
+    ? classifyLoginError((login.error as Error).message || "", t, (login.error as ApiError).body?.error_key)
     : null;
 
   return (

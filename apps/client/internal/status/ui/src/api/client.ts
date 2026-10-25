@@ -1,3 +1,6 @@
+import i18n from "../i18n";
+import { revokeUserFiles } from "./files";
+import { formatError } from "./userError";
 // client.ts — HTTP wrapper around the daemon's local API surface.
 //
 // Two flavours of endpoint:
@@ -53,16 +56,25 @@ export class ApiError extends Error {
   status: number;
   body: any;
   constructor(message: string, status: number, body: any) {
-    super(message);
+    super(formatError(body ?? message, status, (key, opts) => i18n.t(key, opts)));
     this.status = status;
     this.body = body;
+  }
+}
+
+// Fetch rejects before an HTTP response when the daemon or network is down.
+async function fetchResponse(...args: Parameters<typeof fetch>): Promise<Response> {
+  try {
+    return await fetch(...args);
+  } catch {
+    throw new ApiError("", 0, null);
   }
 }
 
 let cachedLocalToken: string | null = null;
 
 async function fetchLocalToken(): Promise<string> {
-  const r = await fetch("/v1/local-token");
+  const r = await fetchResponse("/v1/local-token");
   if (!r.ok) {
     // Keep the body: a locked console answers {"error":"console_locked"}, and
     // main.tsx has to see that to send the page back to the unlock form.
@@ -72,7 +84,7 @@ async function fetchLocalToken(): Promise<string> {
     } catch {
       body = null;
     }
-    throw new ApiError("could not fetch local-token", r.status, body);
+    throw new ApiError("", r.status, body);
   }
   const j = await r.json();
   cachedLocalToken = j.token as string;
@@ -100,7 +112,7 @@ async function writeRequest(
     headers["Content-Type"] = "application/json";
     payload = JSON.stringify(body);
   }
-  const r = await fetch(path, { method, headers, body: payload });
+  const r = await fetchResponse(path, { method, headers, body: payload });
   if (r.status === 401 && !retried) {
     // Token rotated under us. One retry with a fresh token.
     await fetchLocalToken();
@@ -143,23 +155,23 @@ function viewerTZ(): string {
 
 export const api = {
   healthz: async (): Promise<Healthz> =>
-    jsonOrThrow<Healthz>(await fetch("/healthz")),
+    jsonOrThrow<Healthz>(await fetchResponse("/healthz")),
   snapshot: async (): Promise<Snapshot> =>
-    jsonOrThrow<Snapshot>(await fetch("/tunnels")),
+    jsonOrThrow<Snapshot>(await fetchResponse("/tunnels")),
   me: async (): Promise<AccountMe> =>
-    jsonOrThrow<AccountMe>(await fetch("/v1/me")),
+    jsonOrThrow<AccountMe>(await fetchResponse("/v1/me")),
   // serviceMode tells the SPA whether the daemon is a pinned-identity agent
   // (read-only console) or interactive. Defaults to interactive when the
   // endpoint is missing (older daemon) so the UI degrades gracefully.
   serviceMode: async (): Promise<ServiceMode> => {
     try {
-      return await jsonOrThrow<ServiceMode>(await fetch("/v1/service-mode"));
+      return await jsonOrThrow<ServiceMode>(await fetchResponse("/v1/service-mode"));
     } catch {
       return { mode: "interactive", agent: false, login_enabled: true };
     }
   },
   usage: async (): Promise<CurrentUsage> =>
-    jsonOrThrow<CurrentUsage>(await fetch("/v1/usage/current")),
+    jsonOrThrow<CurrentUsage>(await fetchResponse("/v1/usage/current")),
   // /v1/usage/current?period=today returns an UNCAPPED real-time SUM over
   // [today 00:00, now) in the VIEWER's timezone (tz forwarded below), which is
   // what the Overview's "今日流量" card wants — a live figure that advances every
@@ -168,69 +180,69 @@ export const api = {
   // this endpoint for the real-time number.
   usageToday: async (): Promise<CurrentUsage> =>
     jsonOrThrow<CurrentUsage>(
-      await fetch("/v1/usage/current?period=today&tz=" + encodeURIComponent(viewerTZ())),
+      await fetchResponse("/v1/usage/current?period=today&tz=" + encodeURIComponent(viewerTZ())),
     ),
   // /v1/usage/daily — one bucket per day, most-recent first. With the viewer tz
   // forwarded, buckets are the viewer's calendar days and i=0 = TODAY (for n≤7,
   // served exact from the raw window); defaults to 30 buckets server-side.
   usageDaily: async (n = 30): Promise<UsageHistory> =>
     jsonOrThrow<UsageHistory>(
-      await fetch("/v1/usage/daily?n=" + n + "&tz=" + encodeURIComponent(viewerTZ())),
+      await fetchResponse("/v1/usage/daily?n=" + n + "&tz=" + encodeURIComponent(viewerTZ())),
     ),
 
   // This machine's Connect (mesh) traffic — today / month / last-N-days. Served
   // locally by the daemon (both editions), separate from the tunnel usage above.
   meshUsage: async (days = 7): Promise<MeshUsage> =>
-    jsonOrThrow<MeshUsage>(await fetch("/v1/usage/mesh?days=" + days)),
+    jsonOrThrow<MeshUsage>(await fetchResponse("/v1/usage/mesh?days=" + days)),
   tunnels: async (): Promise<TunnelList> =>
-    jsonOrThrow<TunnelList>(await fetch("/v1/tunnels")),
+    jsonOrThrow<TunnelList>(await fetchResponse("/v1/tunnels")),
   // ONE tunnel, by id. The create flow's last step watches the row it just made
   // until an edge claims it — by id rather than by searching the list, because
   // a list is filtered (this daemon's device), paged and time-ordered, and none
   // of that has anything to do with whether this particular row exists. A 404
   // here is an answer; an absence from the list is not.
   tunnel: async (id: number): Promise<RemoteTunnel> =>
-    jsonOrThrow<RemoteTunnel>(await fetch("/v1/tunnels/" + id)),
+    jsonOrThrow<RemoteTunnel>(await fetchResponse("/v1/tunnels/" + id)),
   // The org's tunnel-security baseline + its named IP policies. Both are
   // best-effort at every call site: a standalone daemon answers 501 (no org
   // exists to hold a baseline) and a control-plane blip must not stop somebody
   // creating a tunnel. tunnel-svc enforces the rule either way, so the worst
   // case of a failed read is the old behaviour — a refusal after submit.
   orgSecurity: async (): Promise<OrgSecurity> =>
-    jsonOrThrow<OrgSecurity>(await fetch("/v1/org/security")),
+    jsonOrThrow<OrgSecurity>(await fetchResponse("/v1/org/security")),
   orgIPPolicies: async (): Promise<{ items: IPPolicy[] }> =>
-    jsonOrThrow<{ items: IPPolicy[] }>(await fetch("/v1/org/ip-policies")),
+    jsonOrThrow<{ items: IPPolicy[] }>(await fetchResponse("/v1/org/ip-policies")),
   // The org's named login policies, offered by the per-tunnel security drawer.
   // Best-effort like the other two: standalone answers 501, and a tunnel that
   // already points at a policy keeps doing so whether or not we can list them.
   orgOAuthPolicies: async (): Promise<{ items: OAuthPolicy[] }> =>
-    jsonOrThrow<{ items: OAuthPolicy[] }>(await fetch("/v1/org/oauth-policies")),
+    jsonOrThrow<{ items: OAuthPolicy[] }>(await fetchResponse("/v1/org/oauth-policies")),
   // The caller's own member quota + current usage, so the create flow can grey
   // the button rather than refuse a filled-in form. Best-effort at the call
   // site: standalone answers 501 and an org with no member quotas returns no
   // row for us.
   memberQuotas: async (orgID: number): Promise<{ items: MemberQuotaRow[] }> =>
     jsonOrThrow<{ items: MemberQuotaRow[] }>(
-      await fetch("/v1/orgs/" + orgID + "/member-quotas"),
+      await fetchResponse("/v1/orgs/" + orgID + "/member-quotas"),
     ),
   clients: async (): Promise<ClientDevicesList> =>
-    jsonOrThrow<ClientDevicesList>(await fetch("/v1/clients")),
+    jsonOrThrow<ClientDevicesList>(await fetchResponse("/v1/clients")),
   // Edge directory — Tunnels page joins this against each row's
   // edge_node_id to render region + healthy state. Server caches at
   // 30s; the SPA polls every 30s so most calls are cache hits.
   edges: async (): Promise<EdgeList> =>
-    jsonOrThrow<EdgeList>(await fetch("/v1/edges")),
+    jsonOrThrow<EdgeList>(await fetchResponse("/v1/edges")),
   // Verified custom domains (BYOI) — the New-tunnel wizard offers these as a
   // dropdown so users pick a ready domain instead of typing an unverified one.
   domains: async (): Promise<DomainList> =>
-    jsonOrThrow<DomainList>(await fetch("/v1/domains")),
+    jsonOrThrow<DomainList>(await fetchResponse("/v1/domains")),
   logsTail: async (n: number): Promise<{ lines: string[]; count: number }> =>
-    jsonOrThrow(await fetch("/logs?tail=" + n)),
+    jsonOrThrow(await fetchResponse("/logs?tail=" + n)),
 
   // Connect (WireGuard mesh) status for the local node. enabled:false when no
   // `mesh:` block is configured; a 404 means the daemon build predates /v1/mesh.
   mesh: async (): Promise<MeshStatus> =>
-    jsonOrThrow<MeshStatus>(await fetch("/v1/mesh")),
+    jsonOrThrow<MeshStatus>(await fetchResponse("/v1/mesh")),
 
   // ---- write endpoints ----------------------------------------------------
 
@@ -249,7 +261,7 @@ export const api = {
 
   // Subnet-router / exit-node role for this node.
   meshAdvertise: async (): Promise<MeshAdvertise> =>
-    jsonOrThrow<MeshAdvertise>(await fetch("/v1/mesh/advertise")),
+    jsonOrThrow<MeshAdvertise>(await fetchResponse("/v1/mesh/advertise")),
 
   // Set the role (routes / exit-node). Local-token gated; restarts the mesh
   // session so the change takes effect.
@@ -270,14 +282,13 @@ export const api = {
 
   // What this machine declares it offers on the mesh.
   meshServices: async (): Promise<{ items: MeshServiceDecl[] }> =>
-    jsonOrThrow<{ items: MeshServiceDecl[] }>(await fetch("/v1/mesh/services")),
+    jsonOrThrow<{ items: MeshServiceDecl[] }>(await fetchResponse("/v1/mesh/services")),
 
-  // The ORG's mesh devices, proxied from bff-console — used only to label peers
-  // with their owner. Absent on a local daemon and 401 for an api-key agent, so
-  // every caller must treat a failure as "no labels" rather than an error worth
-  // showing: the peer list is the page, the owner column is a nicety on top.
+  // Organization devices provide owner labels and coordinator presence.
+  // API-key agents or older daemons may not expose this endpoint; callers
+  // retain their peer list and show unknown presence when it is unavailable.
   meshOrgNodes: async (): Promise<{ items: MeshOrgNode[] }> =>
-    jsonOrThrow<{ items: MeshOrgNode[] }>(await fetch("/v1/mesh/nodes")),
+    jsonOrThrow<{ items: MeshOrgNode[] }>(await fetchResponse("/v1/mesh/nodes")),
 
   // Replace the console-managed declarations. Local-token gated; restarts the
   // mesh session so the new set is re-declared to the coordinator.
@@ -334,7 +345,7 @@ export const api = {
     // but we gate it because the response is the full tunnel list +
     // could include sensitive workspace ids).
     const tok = await getLocalToken();
-    const r = await fetch("/v1/config/export", {
+    const r = await fetchResponse("/v1/config/export", {
       headers: { "X-Local-Token": tok },
     });
     if (r.status === 401) {
@@ -360,10 +371,10 @@ export const api = {
   // ---- probe + inspect ----------------------------------------------
 
   probePorts: async (): Promise<{ items: ProbePort[] }> =>
-    jsonOrThrow(await fetch("/v1/probe/ports")),
+    jsonOrThrow(await fetchResponse("/v1/probe/ports")),
 
   probeHealth: async (): Promise<{ items: ProbeHealth[]; enabled: boolean }> =>
-    jsonOrThrow(await fetch("/v1/probe/health")),
+    jsonOrThrow(await fetchResponse("/v1/probe/health")),
 
   // One-shot check behind the new-tunnel wizard's 「检测」 button. The daemon
   // validates the address before dialling, so a public host comes back as
@@ -374,10 +385,10 @@ export const api = {
     ),
 
   inspectConnections: async (proxyID: string): Promise<{ items: ConnectionRow[] }> =>
-    jsonOrThrow(await fetch("/v1/inspect/connections?proxy_id=" + encodeURIComponent(proxyID))),
+    jsonOrThrow(await fetchResponse("/v1/inspect/connections?proxy_id=" + encodeURIComponent(proxyID))),
 
   inspectCaptures: async (proxyID: string): Promise<{ items: HTTPCaptureRow[] }> =>
-    jsonOrThrow(await fetch("/v1/inspect/captures?proxy_id=" + encodeURIComponent(proxyID))),
+    jsonOrThrow(await fetchResponse("/v1/inspect/captures?proxy_id=" + encodeURIComponent(proxyID))),
 
   replay: async (proxyID: string, captureID: number): Promise<ReplayResponse> =>
     jsonOrThrow(
@@ -393,7 +404,7 @@ export const api = {
   // directly to /v1/auth/login; the daemon proxies to bff-console and
   // persists the returned tokens to creds.
   login: async (body: { email: string; password: string; totp_code?: string }) => {
-    const r = await fetch("/v1/auth/login", {
+    const r = await fetchResponse("/v1/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -411,32 +422,38 @@ export const api = {
     }>(r);
   },
 
-  logout: async (): Promise<{ status: string }> =>
-    jsonOrThrow(await writeRequest("POST", "/v1/auth/logout", {})),
+  logout: async (): Promise<{ status: string }> => {
+    await revokeUserFiles();
+    return jsonOrThrow(await writeRequest("POST", "/v1/auth/logout", {}));
+  },
 
   // ---- a self-hosted server ----
   // Both daemons answer: the calabi.net one says whether it can switch
   // (mode "platform"), the local one what it is connected to. A 404 is a daemon
   // from before this, which cannot switch at all.
   selfHosted: async (): Promise<SelfHostedStatus> =>
-    jsonOrThrow<SelfHostedStatus>(await fetch("/v1/selfhosted")),
+    jsonOrThrow<SelfHostedStatus>(await fetchResponse("/v1/selfhosted")),
   // Connect to a coordinator, an edge, or both. The daemon then starts again in
   // the other mode ({switching: true}); failures carry {code, part, pin?}.
-  joinSelfHosted: async (body: SelfHostedJoin): Promise<{ switching: boolean }> =>
-    jsonOrThrow(await writeRequest("POST", "/v1/selfhosted/join", body)),
+  joinSelfHosted: async (body: SelfHostedJoin): Promise<{ switching: boolean }> => {
+    await revokeUserFiles();
+    return jsonOrThrow(await writeRequest("POST", "/v1/selfhosted/join", body));
+  },
   // The person compared the certificate a server presents now with what the
   // server prints; the pin must be the one presented at this moment.
   trustSelfHosted: async (pin: string): Promise<unknown> =>
     jsonOrThrow(await writeRequest("POST", "/v1/selfhosted/trust", { part: "mesh", pin })),
-  leaveSelfHosted: async (): Promise<{ switching: boolean }> =>
-    jsonOrThrow(await writeRequest("POST", "/v1/selfhosted/leave", {})),
+  leaveSelfHosted: async (): Promise<{ switching: boolean }> => {
+    await revokeUserFiles();
+    return jsonOrThrow(await writeRequest("POST", "/v1/selfhosted/leave", {}));
+  },
   // Every tunnel the meshnet's daemons reported, and its traffic, in the
   // viewer's time zone — from the coordinator, connected or not.
   selfHostedTunnels: async (): Promise<{ items: SelfHostedTunnel[] }> =>
-    jsonOrThrow(await fetch("/v1/selfhosted/tunnels")),
+    jsonOrThrow(await fetchResponse("/v1/selfhosted/tunnels")),
   selfHostedUsage: async (days = 7): Promise<SelfHostedUsage> =>
     jsonOrThrow<SelfHostedUsage>(
-      await fetch("/v1/selfhosted/usage?days=" + days + "&tz=" + encodeURIComponent(viewerTZ())),
+      await fetchResponse("/v1/selfhosted/usage?days=" + days + "&tz=" + encodeURIComponent(viewerTZ())),
     ),
 
   // ---- multi-Org ----------------------------------------------------
@@ -445,7 +462,7 @@ export const api = {
   // currently-active one. Daemon proxies straight to bff-console
   // /v1/orgs — same shape, no extra enrichment.
   listOrgs: async (): Promise<OrgListResponse> =>
-    jsonOrThrow<OrgListResponse>(await fetch("/v1/orgs")),
+    jsonOrThrow<OrgListResponse>(await fetchResponse("/v1/orgs")),
 
   // switchOrg mints a fresh JWT pair anchored to target_org_id on the
   // server, persists the new tokens to creds via the daemon, then kicks
@@ -457,12 +474,14 @@ export const api = {
   // bff-console calls with the stored bearer, so the SPA never needs to
   // see it. Mirrors web/console's pattern except web/console must hold
   // the bearer in localStorage (no daemon middleman).
-  switchOrg: async (targetOrgID: number): Promise<OrgSwitchResponse> =>
-    jsonOrThrow<OrgSwitchResponse>(
+  switchOrg: async (targetOrgID: number): Promise<OrgSwitchResponse> => {
+    await revokeUserFiles();
+    return jsonOrThrow<OrgSwitchResponse>(
       await writeRequest("POST", "/v1/orgs/switch", {
         target_org_id: targetOrgID,
       }),
-    ),
+    );
+  },
 
   // ---- manual region switch -----------------------------------------------
 
@@ -479,7 +498,7 @@ export const api = {
 
   // getEdgeAffinity reads the daemon's data-egress preference (own | platform).
   getEdgeAffinity: async (): Promise<EdgeAffinity> =>
-    jsonOrThrow<EdgeAffinity>(await fetch("/v1/edge-affinity")),
+    jsonOrThrow<EdgeAffinity>(await fetchResponse("/v1/edge-affinity")),
 
   // setEdgeAffinity flips between the org's own BYOI edge and the platform
   // data plane. The daemon clears its edge anchor + re-anchors the session,
@@ -495,7 +514,7 @@ export const api = {
   // updates disabled, or any client older than the endpoint (all 404). Callers
   // render nothing rather than an error — "we don't know" is not a failure.
   updateInfo: async (): Promise<UpdateInfo | null> => {
-    const r = await fetch("/v1/update");
+    const r = await fetchResponse("/v1/update");
     if (r.status === 404) return null;
     return jsonOrThrow<UpdateInfo>(r);
   },
@@ -527,13 +546,13 @@ export const api = {
   // so it works while locked. A daemon older than 1.9.0 has no such route (404);
   // callers treat any error as "not locked".
   consoleState: async (): Promise<ConsoleState> =>
-    jsonOrThrow<ConsoleState>(await fetch("/v1/console/state")),
+    jsonOrThrow<ConsoleState>(await fetchResponse("/v1/console/state")),
 
   // consoleUnlock trades the unlock secret for a session cookie the page never
   // sees (HttpOnly). No local token: a locked visitor cannot have one yet.
   consoleUnlock: async (secret: string): Promise<{ ok: boolean }> =>
     jsonOrThrow<{ ok: boolean }>(
-      await fetch("/v1/console/unlock", {
+      await fetchResponse("/v1/console/unlock", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ secret }),
@@ -554,5 +573,6 @@ export interface ConsoleState {
 // isConsoleLocked: the daemon's answer to a visitor from another machine whose
 // unlock is missing or has lapsed. Not an account problem — see AuthGate.
 export function isConsoleLocked(e: unknown): boolean {
-  return e instanceof ApiError && e.status === 401 && e.body?.error === "console_locked";
+  return e instanceof ApiError && e.status === 401 &&
+    (e.body?.error === "console_locked" || e.body?.error_key === "business.localConsoleLocked");
 }

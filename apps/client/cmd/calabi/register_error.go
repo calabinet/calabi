@@ -48,8 +48,8 @@ func registerRefusal(err error) (string, bool) {
 		// sentence for that rule and contradicted the other one, which is about
 		// raw-port tunnels only. The code still decides that this is a policy
 		// answer; only the words come from the edge.
-		if msg := strings.TrimSpace(pe.MessageEN); msg != "" {
-			return msg, false
+		if strings.TrimSpace(pe.MessageEN) != "" {
+			return pe.UserMessage(), false
 		}
 		return "this organization requires access protection on this tunnel; " +
 			"ask an owner or admin of the organization what its rule is.", false
@@ -57,11 +57,11 @@ func registerRefusal(err error) (string, bool) {
 	return "", false
 }
 
-// printRegisterError writes the refusal a person can act on, or the raw error.
+// printRegisterError writes a refusal without its transport or diagnostic prefix.
 func printRegisterError(w interface{ Write([]byte) (int, error) }, err error) {
 	if msg, _ := registerRefusal(err); msg != "" {
 		fmt.Fprintln(w, "calabi:", msg)
 		return
 	}
-	fmt.Fprintln(w, "calabi: register tunnel:", err)
+	fmt.Fprintln(w, "calabi: register tunnel:", friendlyCLIError(err))
 }

@@ -3494,6 +3494,7 @@ type MeshNodeMutation struct {
 	endpoints_json         *string
 	advertised_routes_json *string
 	approved_routes_json   *string
+	real_routes_json       *string
 	aliased_routes_json    *string
 	route_aliases_json     *string
 	routes_reviewed        *bool
@@ -4028,6 +4029,42 @@ func (m *MeshNodeMutation) OldApprovedRoutesJSON(ctx context.Context) (v string,
 // ResetApprovedRoutesJSON resets all changes to the "approved_routes_json" field.
 func (m *MeshNodeMutation) ResetApprovedRoutesJSON() {
 	m.approved_routes_json = nil
+}
+
+// SetRealRoutesJSON sets the "real_routes_json" field.
+func (m *MeshNodeMutation) SetRealRoutesJSON(s string) {
+	m.real_routes_json = &s
+}
+
+// RealRoutesJSON returns the value of the "real_routes_json" field in the mutation.
+func (m *MeshNodeMutation) RealRoutesJSON() (r string, exists bool) {
+	v := m.real_routes_json
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRealRoutesJSON returns the old "real_routes_json" field's value of the MeshNode entity.
+// If the MeshNode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshNodeMutation) OldRealRoutesJSON(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRealRoutesJSON is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRealRoutesJSON requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRealRoutesJSON: %w", err)
+	}
+	return oldValue.RealRoutesJSON, nil
+}
+
+// ResetRealRoutesJSON resets all changes to the "real_routes_json" field.
+func (m *MeshNodeMutation) ResetRealRoutesJSON() {
+	m.real_routes_json = nil
 }
 
 // SetAliasedRoutesJSON sets the "aliased_routes_json" field.
@@ -4637,7 +4674,7 @@ func (m *MeshNodeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *MeshNodeMutation) Fields() []string {
-	fields := make([]string, 0, 26)
+	fields := make([]string, 0, 27)
 	if m.meshnet_id != nil {
 		fields = append(fields, meshnode.FieldMeshnetID)
 	}
@@ -4670,6 +4707,9 @@ func (m *MeshNodeMutation) Fields() []string {
 	}
 	if m.approved_routes_json != nil {
 		fields = append(fields, meshnode.FieldApprovedRoutesJSON)
+	}
+	if m.real_routes_json != nil {
+		fields = append(fields, meshnode.FieldRealRoutesJSON)
 	}
 	if m.aliased_routes_json != nil {
 		fields = append(fields, meshnode.FieldAliasedRoutesJSON)
@@ -4746,6 +4786,8 @@ func (m *MeshNodeMutation) Field(name string) (ent.Value, bool) {
 		return m.AdvertisedRoutesJSON()
 	case meshnode.FieldApprovedRoutesJSON:
 		return m.ApprovedRoutesJSON()
+	case meshnode.FieldRealRoutesJSON:
+		return m.RealRoutesJSON()
 	case meshnode.FieldAliasedRoutesJSON:
 		return m.AliasedRoutesJSON()
 	case meshnode.FieldRouteAliasesJSON:
@@ -4807,6 +4849,8 @@ func (m *MeshNodeMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldAdvertisedRoutesJSON(ctx)
 	case meshnode.FieldApprovedRoutesJSON:
 		return m.OldApprovedRoutesJSON(ctx)
+	case meshnode.FieldRealRoutesJSON:
+		return m.OldRealRoutesJSON(ctx)
 	case meshnode.FieldAliasedRoutesJSON:
 		return m.OldAliasedRoutesJSON(ctx)
 	case meshnode.FieldRouteAliasesJSON:
@@ -4922,6 +4966,13 @@ func (m *MeshNodeMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetApprovedRoutesJSON(v)
+		return nil
+	case meshnode.FieldRealRoutesJSON:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRealRoutesJSON(v)
 		return nil
 	case meshnode.FieldAliasedRoutesJSON:
 		v, ok := value.(string)
@@ -5145,6 +5196,9 @@ func (m *MeshNodeMutation) ResetField(name string) error {
 		return nil
 	case meshnode.FieldApprovedRoutesJSON:
 		m.ResetApprovedRoutesJSON()
+		return nil
+	case meshnode.FieldRealRoutesJSON:
+		m.ResetRealRoutesJSON()
 		return nil
 	case meshnode.FieldAliasedRoutesJSON:
 		m.ResetAliasedRoutesJSON()

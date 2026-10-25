@@ -30,8 +30,8 @@ func TestRegisterErrorDomainRefusalIsNotCalledAProtectionRule(t *testing.T) {
 	if strings.Contains(got, "access protection") {
 		t.Fatalf("a domain refusal was printed as the protection rule:\n  %s", got)
 	}
-	if !strings.Contains(got, msg) {
-		t.Fatalf("the domain sentence is missing:\n  %s", got)
+	if !strings.Contains(got, "shop.example.com") || !strings.Contains(got, "Add and verify") || !strings.Contains(got, "not registered") {
+		t.Fatalf("the domain and verification remedy are missing:\n  %s", got)
 	}
 }
 
@@ -39,16 +39,22 @@ func TestRegisterErrorDomainRefusalIsNotCalledAProtectionRule(t *testing.T) {
 // "requires every tunnel to have access protection" in front of it doubled the
 // sentence for the broad rule and contradicted the narrow one, which is about
 // raw-port tunnels only.
-func TestRegisterErrorBaselineSentenceIsPrintedAsWritten(t *testing.T) {
-	for _, msg := range []string{
+func TestRegisterErrorBaselineKeepsTheApplicableProtection(t *testing.T) {
+	for index, msg := range []string{
 		"this organization requires every tunnel to have access protection before it is published. " +
 			"Add an IP allowlist, HTTP Basic auth, or an OAuth login to this tunnel in the console.",
 		"this organization requires every raw-port tunnel (tcp, udp, sni) to carry an IP allow list " +
 			"before it is published. Add an allow list to this tunnel in the console, or pass --ip-allow.",
 	} {
 		got := printed(&proto.ErrorPayload{Code: proto.CodeProxyPolicyRequired, MessageEN: msg})
-		if want := "calabi: " + msg; got != want {
-			t.Fatalf("printed:\n  %s\nwant:\n  %s", got, want)
+		if !strings.HasPrefix(got, "calabi: ") || strings.Contains(got, "rpc error") {
+			t.Fatalf("bad refusal: %s", got)
+		}
+		if index == 0 && !strings.Contains(got, "password protection") {
+			t.Fatalf("HTTP protection options lost: %s", got)
+		}
+		if index == 1 && (!strings.Contains(got, "IP allowlist") || strings.Contains(got, "password protection")) {
+			t.Fatalf("raw ports were offered HTTP protection: %s", got)
 		}
 	}
 }

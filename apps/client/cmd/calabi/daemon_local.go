@@ -212,7 +212,7 @@ func runLocalDaemon(args []string) int {
 	}
 	statusWarning, saErr := applyStatusAddr(*statusAddr)
 	if saErr != nil {
-		fmt.Fprintln(os.Stderr, "calabi daemon --local:", saErr)
+		fmt.Fprintln(os.Stderr, "calabi daemon --local:", friendlyCLIError(saErr))
 		return 2
 	}
 	// No --config: the console's own file
@@ -234,7 +234,7 @@ func runLocalDaemon(args []string) int {
 
 	cfg, dropped, err := loadLocalConfigOrEmpty(*configPath, managed)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi daemon --local:", err)
+		fmt.Fprintln(os.Stderr, "calabi daemon --local:", friendlyCLIError(err))
 		return 1
 	}
 	// Zero tunnels is allowed: the daemon still establishes the control session
@@ -258,7 +258,7 @@ func runLocalDaemon(args []string) int {
 	// for the same device id / port claims).
 	lock, err := cruntime.AcquireDaemonLock()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi daemon --local:", err)
+		fmt.Fprintln(os.Stderr, "calabi daemon --local:", friendlyCLIError(err))
 		fmt.Fprintln(os.Stderr, "  stop the other instance first, or use `calabi daemon stop`.")
 		return 3
 	}
@@ -329,6 +329,8 @@ func runLocalDaemon(args []string) int {
 		mux.HandleFunc("/v1/usage/mesh", meshMeter.handleMeshUsage)
 		sh.register(mux)
 	})
+	stopFiles := startFileControl(ctx, logger, meshL, console)
+	defer stopFiles()
 	// Registered after cancel's defer, so it runs first: cancel, then wait for
 	// the listener to go (daemon_restart.go).
 	defer func() {

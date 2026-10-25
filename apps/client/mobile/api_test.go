@@ -30,12 +30,12 @@ func TestLoginKeepsTheSession(t *testing.T) {
 }
 
 // The app tells "wrong password" from "two-step code required" by the control
-// plane's own answer, so a failed login passes it through untouched.
+// plane's stable reason, even when its message is made friendly.
 func TestLoginFailureIsTheControlPlanesAnswer(t *testing.T) {
 	c := newTestCore(t, &fakeBFF{}, &fakePlatform{})
 	code, body := call(t, c, "POST", "/v1/auth/login", `{"email":"ada@example.com","password":"nope"}`)
-	if code != http.StatusUnauthorized || body["error"] != "invalid credentials" {
-		t.Fatalf("login = %d %v, want the upstream 401 and its message", code, body)
+	if code != http.StatusUnauthorized || body["error_key"] != "invalidCredentials" || body["error"] != "invalid credentials" || !strings.Contains(body["message"].(string), "password is incorrect") {
+		t.Fatalf("login = %d %v, want 401 with a stable credentials reason and friendly text", code, body)
 	}
 	if code, _ := call(t, c, "POST", "/v1/auth/login", `{"email":"ada@example.com"}`); code != http.StatusBadRequest {
 		t.Fatalf("login without a password = %d, want 400", code)

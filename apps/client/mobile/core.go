@@ -30,6 +30,7 @@ import (
 	"github.com/calabinet/calabi/apps/client/internal/creds"
 	"github.com/calabinet/calabi/apps/client/internal/hostnet"
 	"github.com/calabinet/calabi/apps/client/internal/selfhosted"
+	"github.com/calabinet/calabi/pkg/protocol/usererror"
 )
 
 // Platform is what the app implements for the core.
@@ -64,6 +65,9 @@ type config struct {
 	// CoordPlaintext dials the coordinator without TLS: a development stack
 	// only, never a release build.
 	CoordPlaintext bool `json:"coord_plaintext"`
+	// FileTransferP0 exposes the manual-pairing development experiment only.
+	FileTransferP0 bool `json:"file_transfer_p0"`
+	FileTransferV1 bool `json:"file_transfer_v1"`
 }
 
 // Core is one phone client. Create it once per process with New.
@@ -78,7 +82,10 @@ type Core struct {
 	mu     sync.Mutex
 	engine *engine
 
-	selfMu sync.Mutex // guards self.json (self.go)
+	selfMu   sync.Mutex // guards self.json (self.go)
+	fileMu   sync.Mutex
+	fileTest *mobileFileTest
+	files    *mobileFiles
 
 	// A read-only session with a self-hosted server, for its lists while the
 	// phone is not connected (selfhosted_view.go).
@@ -161,11 +168,16 @@ func (c *Core) Connect() error {
 		}
 	}
 	c.engine = startEngine(c)
+	if c.cfg.FileTransferV1 {
+		go c.filesLoop(c.engine)
+	}
 	return nil
 }
 
 // Disconnect leaves the meshnet and waits until the datapath is torn down.
 func (c *Core) Disconnect() {
+	c.stopFiles(true)
+	c.stopFileTest()
 	c.mu.Lock()
 	e := c.engine
 	c.engine = nil
@@ -191,6 +203,8 @@ func (c *Core) NetworkChanged() {
 // reconnect restarts a running session so it picks up changed settings or a
 // changed identity. A no-op when not connected.
 func (c *Core) reconnect() {
+	c.stopFiles(true)
+	c.stopFileTest()
 	c.mu.Lock()
 	e := c.engine
 	if e == nil {
@@ -204,6 +218,9 @@ func (c *Core) reconnect() {
 	defer c.mu.Unlock()
 	if c.engine == nil {
 		c.engine = startEngine(c)
+		if c.cfg.FileTransferV1 {
+			go c.filesLoop(c.engine)
+		}
 	}
 }
 
@@ -261,7 +278,7 @@ func (r *recorder) Write(b []byte) (int, error) {
 }
 
 func jsonResponse(status int, v any) *Response {
-	b, _ := json.Marshal(v)
+	b, _ := json.Marshal(usererror.Body(status, v))
 	return &Response{Status: int32(status), Body: b}
 }
 

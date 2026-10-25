@@ -39,7 +39,7 @@ func runUpdate(args []string) int {
 
 	snap, base, err := daemonUpdateStatus(!*checkOnly)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "calabi update: %v\n", err)
+		fmt.Fprintf(os.Stderr, "calabi update: %v\n", friendlyCLIError(err))
 		return 1
 	}
 	if *jsonOut {

@@ -54,7 +54,7 @@ $newHash = (Get-FileHash $newExe).Hash
 $dirSpace = Join-Path $work 'Calabi Test'
 $dirPlain = Join-Path $work 'CalabiTest'
 
-function Build($name, $instdir, $tries, $replacement = $newExe, [switch]$Post) {
+function Build($name, $instdir, $tries, $replacement = $newExe, [switch]$Post, [switch]$Uninstall) {
     $out = Join-Path $work "$name.exe"
     $args = @(
         '/V2',
@@ -68,6 +68,7 @@ function Build($name, $instdir, $tries, $replacement = $newExe, [switch]$Post) {
         "/DCALABI_UNLOCK_TRIES=$tries"
     )
     if ($Post) { $args += '/DTEST_POST=1' }
+    if ($Uninstall) { $args += '/DTEST_UNINSTALL=1' }
     $args += $harness
     & $makensis @args | Out-Null
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $out)) { throw "makensis failed for $name" }
@@ -95,6 +96,29 @@ try {
     $env:GOWORK = $prevWork
 }
 $instPost = Build 'inst-post' $dirPost 4 $fakeExe -Post
+$instUninstall = Build 'inst-uninstall' $dirPost 4 $fakeExe -Uninstall
+
+function UninstallScenario([bool]$fail) {
+    New-Item -ItemType Directory -Force -Path $dirPost | Out-Null
+    Copy-Item -LiteralPath $fakeExe -Destination (Join-Path $dirPost 'calabi.exe') -Force
+    Remove-Item -LiteralPath (Join-Path $dirPost 'after-uninstall.txt') -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $fakeLog -ErrorAction SilentlyContinue
+    $savedProgramData = $env:ProgramData
+    $env:ProgramData = Join-Path $work 'fake-programdata'
+    $fakeData = Join-Path $env:ProgramData 'Calabi'
+    New-Item -ItemType Directory -Path $fakeData -Force | Out-Null
+    $env:CALABI_FAKE_FIREWALL = if ($fail) {'fail'} else {'ok'}
+    $env:CALABI_FAKE_LOG = $fakeLog
+    try { $p = Start-Process -FilePath $instUninstall -ArgumentList '/S' -Wait -PassThru }
+    finally { $env:ProgramData = $savedProgramData }
+    $calls = @(Get-Content -LiteralPath $fakeLog)
+    if ($fail) {
+        if ($p.ExitCode -ne 5 -or $calls.Count -ne 1 -or -not (Test-Path -LiteralPath $fakeData)) { throw 'Failed firewall cleanup must stop uninstall before service/data removal.' }
+    } else {
+        if ($p.ExitCode -ne 0 -or $calls.Count -ne 3 -or $calls[0] -notlike 'firewall -Action Remove *' -or $calls[1] -ne 'daemon stop' -or $calls[2] -ne 'daemon uninstall' -or (Test-Path -LiteralPath $fakeData)) { throw 'Uninstall must remove firewall, service, then machine data.' }
+    }
+    "PASS  uninstall firewall failure=$fail"
+}
 
 function Set-ImagePath($value) {
     if (Test-Path $regParent) { Remove-Item $regParent -Recurse -Force }
@@ -153,7 +177,7 @@ function Scenario {
 # registered, did the installer say so truthfully (exit code), and what did the
 # hook actually run.
 function PostScenario {
-    param($name, $installMode, $startMode, [bool]$preRegistered, [bool]$expectOk, $expectInErrorLog = '')
+    param($name, $installMode, $startMode, [bool]$preRegistered, [bool]$expectOk, $expectInErrorLog = '', $firewallMode = 'ok')
 
     if (Test-Path $dirPost) { [System.IO.Directory]::Delete($dirPost, $true) }
     New-Item -ItemType Directory -Force -Path $dirPost | Out-Null
@@ -165,6 +189,7 @@ function PostScenario {
     $env:CALABI_FAKE_START = $startMode
     $env:CALABI_FAKE_REGKEY = $fakeKey
     $env:CALABI_FAKE_LOG = $fakeLog
+    $env:CALABI_FAKE_FIREWALL = $firewallMode
 
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $p = Start-Process -FilePath $instPost -ArgumentList '/S' -Wait -PassThru
@@ -175,6 +200,7 @@ function PostScenario {
     $calls = @()
     if (Test-Path $fakeLog) { $calls = @(Get-Content $fakeLog) }
     $errLogPath = Join-Path $dirPost 'service-install-error.log'
+    if ($firewallMode -eq 'fail') { $errLogPath = Join-Path $dirPost 'file-firewall-error.log' }
     $errLog = ''
     if (Test-Path $errLogPath) { $errLog = [System.IO.File]::ReadAllText($errLogPath) }
 
@@ -188,7 +214,7 @@ function PostScenario {
         if (-not $afterPost) { $problems += 'hook aborted' }
         if ($p.ExitCode -ne 0) { $problems += "installer exited $($p.ExitCode)" }
         if (-not $registered) { $problems += 'service is NOT registered' }
-        if ($calls.Count -ne 2 -or $calls[1] -ne 'daemon start') { $problems += "ran [$($calls -join ' | ')], want install then start" }
+        if ($calls.Count -ne 3 -or $calls[1] -ne "firewall -Action Install -Program $dirPost\calabi.exe" -or $calls[2] -ne 'daemon start') { $problems += "ran [$($calls -join ' | ')], want install then firewall then start" }
         if ($errLog) { $problems += 'left a service-install-error.log behind' }
     } else {
         if ($afterPost) { $problems += 'hook did NOT abort' }
@@ -198,6 +224,7 @@ function PostScenario {
         if (-not $errLog) { $problems += 'no service-install-error.log - a silent run leaves no reason anywhere' }
         elseif ($expectInErrorLog -and $errLog -notlike "*$expectInErrorLog*") { $problems += "error log does not carry the daemon's reason ('$expectInErrorLog')" }
         if ($installMode -eq 'refuse' -and ($calls -contains 'daemon start')) { $problems += 'tried to START a service that was never registered' }
+        if ($firewallMode -eq 'fail' -and ($calls -contains 'daemon start')) { $problems += 'started service despite firewall setup failure' }
     }
 
     $verdict = if ($problems.Count -eq 0) { 'PASS' } else { 'FAIL' }
@@ -231,10 +258,13 @@ try {
     # The field failure: refused, nothing registered, and the installer said "Completed".
     PostScenario 'install refused: nothing registered'             'refuse' 'ok'   $false $false 'standalone mode'
     PostScenario 'registered, but the service will not start'      'ok'     'fail' $false $false 'did not respond'
+    PostScenario 'firewall refused: install must report failure'   'ok'     'ok'   $false $false 'firewall policy denied' 'fail'
+    UninstallScenario $false
+    UninstallScenario $true
 }
 finally {
     Set-ImagePath $null
-    foreach ($v in 'CALABI_FAKE_INSTALL', 'CALABI_FAKE_START', 'CALABI_FAKE_REGKEY', 'CALABI_FAKE_LOG') {
+    foreach ($v in 'CALABI_FAKE_INSTALL', 'CALABI_FAKE_START', 'CALABI_FAKE_REGKEY', 'CALABI_FAKE_LOG', 'CALABI_FAKE_FIREWALL') {
         Remove-Item "Env:$v" -ErrorAction SilentlyContinue
     }
 }

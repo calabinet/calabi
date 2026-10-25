@@ -1,3 +1,4 @@
+import { displayError } from "../api/userError";
 // UpdateNotice.tsx — what the console says about this client's version, and the
 // machine's setting for what to do about it.
 //
@@ -119,7 +120,7 @@ export function UpdatePanel() {
     mutationFn: api.updateCheck,
     onSuccess: (info) => {
       qc.setQueryData(["update"], info);
-      if (info.error) message.error(info.error);
+      if (info.error) message.error(displayError(info.error, t));
       else if (info.available) message.success(t("update.newVersion", { version: info.latest }));
       else message.success(t("update.upToDate"));
     },
@@ -215,7 +216,7 @@ export function UpdatePanel() {
       )}
       {data.error && (
         <Text type="danger" style={{ fontSize: 12 }}>
-          {t("update.checkFailed")}: {data.error}
+          {t("update.checkFailed")}: {displayError(data.error, t)}
         </Text>
       )}
 

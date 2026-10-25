@@ -45,6 +45,10 @@ func (s *Store) Upsert(ctx context.Context, n *core.Node) (*core.Node, error) {
 	if err != nil {
 		return nil, err
 	}
+	realRoutes, err := marshalStrings(prefixesToStrings(n.RealRoutes))
+	if err != nil {
+		return nil, err
+	}
 	approved, err := marshalStrings(prefixesToStrings(n.ApprovedRoutes))
 	if err != nil {
 		return nil, err
@@ -79,6 +83,7 @@ func (s *Store) Upsert(ctx context.Context, n *core.Node) (*core.Node, error) {
 			SetEndpointsJSON(eps).
 			SetAdvertisedRoutesJSON(routes).
 			SetApprovedRoutesJSON(approved).
+			SetRealRoutesJSON(realRoutes).
 			SetAliasedRoutesJSON(aliasReq).
 			SetRouteAliasesJSON(aliases).
 			SetRoutesReviewed(n.RoutesReviewed).
@@ -524,15 +529,20 @@ func (s *Store) SetSettings(ctx context.Context, t core.MeshnetID, in core.Meshn
 
 // UpdateApprovedRoutes records the admin's route decision and marks the node
 // reviewed, so its later claims no longer route automatically.
-func (s *Store) UpdateApprovedRoutes(ctx context.Context, id int64, routes []netip.Prefix) error {
+func (s *Store) UpdateApprovedRoutes(ctx context.Context, id int64, routes []netip.Prefix, realRoutes ...[]netip.Prefix) error {
 	blob, err := marshalStrings(prefixesToStrings(routes))
 	if err != nil {
 		return err
 	}
-	err = s.client.MeshNode.UpdateOneID(int(id)).
-		SetApprovedRoutesJSON(blob).
-		SetRoutesReviewed(true).
-		Exec(ctx)
+	update := s.client.MeshNode.UpdateOneID(int(id)).SetApprovedRoutesJSON(blob).SetRoutesReviewed(true)
+	if len(realRoutes) > 0 {
+		real, err := marshalStrings(prefixesToStrings(realRoutes[0]))
+		if err != nil {
+			return err
+		}
+		update.SetRealRoutesJSON(real)
+	}
+	err = update.Exec(ctx)
 	if ent.IsNotFound(err) {
 		return core.ErrNodeNotFound
 	}
@@ -612,6 +622,9 @@ func toNode(m *ent.MeshNode) (*core.Node, error) {
 	}
 	if n.RouteAliases, err = parseRouteAliases(m.RouteAliasesJSON); err != nil {
 		return nil, err
+	}
+	if n.RealRoutes, err = parsePrefixes(m.RealRoutesJSON); err != nil {
+		return nil, fmt.Errorf("coord store: real_routes: %w", err)
 	}
 	if n.ApprovedRoutes, err = parsePrefixes(m.ApprovedRoutesJSON); err != nil {
 		return nil, fmt.Errorf("coord store: approved_routes: %w", err)

@@ -66,14 +66,14 @@ func runDomainsCreate(args []string) int {
 	domain := fs.Arg(0)
 	cli, err := authedClient()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi domains create:", err)
+		fmt.Fprintln(os.Stderr, "calabi domains create:", friendlyCLIError(err))
 		return 1
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	var d domainItem
 	if err := cli.Do(ctx, "POST", "/v1/domains", map[string]string{"name": domain}, &d); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi domains create:", err)
+		fmt.Fprintln(os.Stderr, "calabi domains create:", friendlyCLIError(err))
 		return 1
 	}
 	fmt.Printf("  domain %q registered\n", d.Name)
@@ -98,7 +98,7 @@ func runDomainsVerify(args []string) int {
 	domain := fs.Arg(0)
 	cli, err := authedClient()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi domains verify:", err)
+		fmt.Fprintln(os.Stderr, "calabi domains verify:", friendlyCLIError(err))
 		return 1
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -106,7 +106,7 @@ func runDomainsVerify(args []string) int {
 	var d domainItem
 	path := fmt.Sprintf("/v1/domains/%s/verify", url.PathEscape(domain))
 	if err := cli.Do(ctx, "POST", path, nil, &d); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi domains verify:", err)
+		fmt.Fprintln(os.Stderr, "calabi domains verify:", friendlyCLIError(err))
 		return 1
 	}
 	if !d.Verified {
@@ -141,7 +141,7 @@ func runDomainsBindCert(args []string) int {
 	domain, certName := fs.Arg(0), fs.Arg(1)
 	cli, err := authedClient()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi domains bind-cert:", err)
+		fmt.Fprintln(os.Stderr, "calabi domains bind-cert:", friendlyCLIError(err))
 		return 1
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -149,7 +149,7 @@ func runDomainsBindCert(args []string) int {
 	var d domainItem
 	path := fmt.Sprintf("/v1/domains/%s/bind-cert", url.PathEscape(domain))
 	if err := cli.Do(ctx, "POST", path, map[string]string{"cert_name": certName}, &d); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi domains bind-cert:", err)
+		fmt.Fprintln(os.Stderr, "calabi domains bind-cert:", friendlyCLIError(err))
 		return 1
 	}
 	fmt.Printf("  domain %q now bound to cert %q (id=%d)\n", d.Name, d.CertName, d.CertID)
@@ -164,7 +164,7 @@ func runDomainsList(args []string) int {
 	}
 	cli, err := authedClient()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi domains list:", err)
+		fmt.Fprintln(os.Stderr, "calabi domains list:", friendlyCLIError(err))
 		return 1
 	}
 	type resp struct {
@@ -174,7 +174,7 @@ func runDomainsList(args []string) int {
 	defer cancel()
 	var out resp
 	if err := cli.Do(ctx, "GET", "/v1/domains", nil, &out); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi domains list:", err)
+		fmt.Fprintln(os.Stderr, "calabi domains list:", friendlyCLIError(err))
 		return 1
 	}
 	if len(out.Items) == 0 {
@@ -205,14 +205,14 @@ func runDomainsDelete(args []string) int {
 	domain := fs.Arg(0)
 	cli, err := authedClient()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "calabi domains delete:", err)
+		fmt.Fprintln(os.Stderr, "calabi domains delete:", friendlyCLIError(err))
 		return 1
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	path := fmt.Sprintf("/v1/domains/%s", url.PathEscape(domain))
 	if err := cli.Do(ctx, "DELETE", path, nil, nil); err != nil {
-		fmt.Fprintln(os.Stderr, "calabi domains delete:", err)
+		fmt.Fprintln(os.Stderr, "calabi domains delete:", friendlyCLIError(err))
 		return 1
 	}
 	fmt.Printf("  domain %q deleted\n", domain)

@@ -96,13 +96,14 @@ fun LoginScreen(onSignedIn: () -> Unit, onSelfHosted: () -> Unit) {
                 onSignedIn()
                 return@launch
             }
-            // The identity service's sentinels; the web console reads the same ones.
+            // Stable reasons survive translated messages; retain legacy server support.
             val msg = r.json().optString("error")
+            val errorKey = r.json().optString("error_key")
             when {
-                msg.contains("email not verified", ignoreCase = true) -> { step = 1; error = notVerified }
-                msg.contains("invalid totp", ignoreCase = true) -> { code = ""; error = badCode }
-                msg.contains("totp required", ignoreCase = true) -> { step = 2; code = "" }
-                msg.contains("invalid credentials", ignoreCase = true) -> error = badCredentials
+                errorKey == "emailNotVerified" || msg.contains("email not verified", ignoreCase = true) -> { step = 1; error = notVerified }
+                errorKey == "business.totpInvalid" || msg.contains("invalid totp", ignoreCase = true) -> { code = ""; error = badCode }
+                errorKey == "business.totpRequired" || msg.contains("totp required", ignoreCase = true) -> { step = 2; code = "" }
+                errorKey == "invalidCredentials" || msg.contains("invalid credentials", ignoreCase = true) -> error = badCredentials
                 else -> error = r.error(failed)
             }
         }

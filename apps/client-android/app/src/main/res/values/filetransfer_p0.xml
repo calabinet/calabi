@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="filetest_title">File transfer · P0 experiment</string>
+    <string name="filetest_hint">Development test only. Verify fingerprints on both devices. Port 17401 must be allowed. One seekable file at a time; save received files before clearing the inbox. Lock screen and network changes are unverified.</string>
+    <string name="filetest_peer">Other device’s mesh IP</string>
+    <string name="filetest_pin">Other device’s transfer fingerprint</string>
+    <string name="filetest_rate">File rate ceiling (kbps)</string>
+    <string name="filetest_start">Pair and enable test</string>
+    <string name="filetest_send">Select and send one file</string>
+    <string name="filetest_stop">Stop transfer</string>
+    <string name="filetest_accept">Accept</string>
+    <string name="filetest_reject">Decline</string>
+    <string name="filetest_save">Save verified file…</string>
+    <string name="filetest_clear">Clear test inbox and pairing</string>
+    <string name="filetest_clear_hint">Stops the experiment and deletes all received test files in the private inbox. Files already saved elsewhere remain available.</string>
+    <string name="filetest_failed">File test failed</string>
+    <string name="filetest_saved">File saved</string>
+    <string name="filetest_source_unavailable">P0 requires a seekable document with a known size.</string>
+    <string name="filetest_outgoing">Sending %1$s · %2$d / %3$d B persisted</string>
+    <string name="filetest_progress">%1$d / %2$d B · %3$s</string>
+</resources>

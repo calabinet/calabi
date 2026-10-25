@@ -1,0 +1,44 @@
+.mesh-center { color:#e1e6f0; }
+.mesh-center > .ant-tabs > .ant-tabs-nav { margin-bottom:20px; }
+.mesh-info-strip { display:flex; flex-wrap:wrap; gap:12px 22px; padding:0 0 18px; border-bottom:1px solid #202b44; color:#94a0b6; font-size:12px; align-items:center; }
+.mesh-info-strip .files-ready { font-size:12px; }
+.mesh-info-strip code { font-size:12px; }
+.mesh-info-strip .ant-typography { font-size:12px; }
+.mesh-local-details { margin:0 0 10px; }
+.mesh-local-details > summary { cursor:pointer; width:fit-content; color:#94a0b6; font-size:12px; padding:4px 0; }
+.mesh-local-details[open] > summary { margin-bottom:10px; }
+.mesh-local-details .ant-card { background:#0c1325; border-color:#202b44; }
+.mesh-peer-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:11px; }
+.mesh-peer-heading > .ant-typography { color:#9dacc6; font-size:12px; }
+.mesh-device-name { display:flex; align-items:center; gap:11px; min-width:0; }
+.mesh-device-name > div { min-width:0; }
+.mesh-device-label { color:#e1e6f0; font-size:13px; font-weight:500; overflow-wrap:anywhere; }
+.mesh-device-name .files-secondary { font-size:11px; }
+.mesh-device-direct { color:#8ae0b2; }
+.mesh-transfer-strip { display:flex; align-items:center; gap:12px; padding:15px; background:#0e172b; border-radius:8px; margin-top:12px; }
+.mesh-transfer-strip > .mesh-glyph { color:#a5b6db; }
+.mesh-transfer-strip > div { flex:1; min-width:0; }
+.mesh-transfer-strip .ant-typography { font-size:12px; }
+.mesh-transfer-strip .ant-btn-link { color:#78d3e2; font-size:12px; }
+
+.mesh-send-menu-label { display:block; pointer-events:auto; }
+.mesh-connection-drawer .ant-descriptions-item-label { width:150px; }
+.mesh-connection-drawer .mesh-key { overflow-wrap:anywhere; word-break:break-all; font-family:ui-monospace,Consolas,monospace; }
+.mesh-connection-drawer section { width:100%; min-width:0; }
+
+.mesh-connection-drawer section .ant-typography { margin-top:0; }
+
+.mesh-device-meta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:4px; min-height:22px; }
+.mesh-device-meta .files-secondary { margin-top:0; }
+.mesh-device-capabilities { display:inline-flex; align-items:center; gap:4px; }
+.mesh-device-capabilities:empty { display:none; }
+.mesh-device-capabilities .mesh-capability { display:inline-flex; align-items:center; justify-content:center; padding:2px; width:22px; height:22px; color:#9eafd2; border:1px solid #293550; border-radius:5px; }
+.mesh-device-capabilities .mesh-capability:hover { color:#c1ceef; background:#17223b; border-color:#526b9e; }
+.mesh-device-capabilities .mesh-capability:focus-visible { outline:2px solid #819aff; outline-offset:2px; }
+
+.mesh-device-label-row { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+.mesh-peer-presence { display:inline-flex; align-items:center; gap:5px; font-size:11px; line-height:18px; white-space:nowrap; color:#94a0b6; }
+.mesh-peer-presence::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+.mesh-peer-presence.online { color:#8ae0b2; }
+.mesh-peer-presence.offline { color:#94a0b6; }
+.mesh-peer-presence.unknown { color:#9aabc9; }

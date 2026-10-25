@@ -48,11 +48,13 @@ android {
         applicationId = "net.calabi.app"
         minSdk = 26
         targetSdk = 35
+        testInstrumentationRunner = "net.calabi.app.FileRequestNotificationsTest"
         versionCode = versionParts[0] * 1_000_000 + versionParts[1] * 1_000 + versionParts[2]
         versionName = repoVersion
         buildConfigField("String", "BFF_URL", "\"$bffUrl\"")
         buildConfigField("String", "CONSOLE_URL", "\"$consoleUrl\"")
         buildConfigField("boolean", "COORD_PLAINTEXT", "$coordPlaintext")
+        buildConfigField("boolean", "FILE_TRANSFER_ENABLED", "true")
         ndk {
             // What scripts/mobile/build-core-android.ps1 builds by default.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")

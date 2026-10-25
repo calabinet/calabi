@@ -15,6 +15,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod daemon;
+mod files;
+mod file_requests;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -46,6 +48,9 @@ fn main() {
     }
     let _ = builder.try_init();
     log::info!("=== calabi-desktop boot; logfile {}", log_path.display());
+    log::info!("desktop runtime: exe={:?}, os={}, file_transfers={}",
+        std::env::current_exe().ok(), std::env::consts::OS,
+        files::supported());
 
     // GUI subsystem + Tauri's plugin-init code-path swallows panic output.
     // Install a hook that writes the panic message + backtrace to the
@@ -72,6 +77,7 @@ fn main() {
     // sections so we can bisect plugin-init crashes from the logfile.
     log::info!("builder: creating");
     let app = tauri::Builder::default();
+    let app = app.invoke_handler(tauri::generate_handler![files::files_action, files::file_receipt_action]);
     log::info!("builder: +single_instance");
     let app = app.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
         log::info!("single_instance: second launch detected, focusing existing");
@@ -111,6 +117,7 @@ fn main() {
             let bin = daemon::resolve_binary(daemon_dir.clone()).ok();
             let supervisor: Option<Arc<Supervisor>> = Some(Supervisor::new(bin, daemon_dir));
             app.manage(supervisor.clone());
+            files::install(app);
             // Create the main window here (not in tauri.conf.json) so its
             // User-Agent can reflect the real OS. A config userAgent is a
             // single static string — it used to claim "Windows NT 10.0" on

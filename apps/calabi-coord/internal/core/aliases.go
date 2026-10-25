@@ -265,11 +265,7 @@ func aliasFor(aliases []RouteAlias, real netip.Prefix) (netip.Prefix, bool) {
 // PublishedRoutes is what a node's PEERS are told to route here: the alias where
 // one exists, the real CIDR otherwise.
 //
-// Deliberately all-or-nothing per route rather than "the colliding consumers get
-// the alias, the rest get the real CIDR". Telling them apart would mean every
-// consumer reporting its local subnets to the coordinator — more moving parts,
-// and a map of everyone's home networks held centrally, to save some consumers a
-// change of address. The alias works for consumers that do not collide too.
+// Administrators can additionally publish a real CIDR; aliases remain stable.
 func PublishedRoutes(node *Node) []netip.Prefix {
 	out := make([]netip.Prefix, 0, len(node.ApprovedRoutes))
 	for _, r := range node.ApprovedRoutes {
@@ -278,6 +274,33 @@ func PublishedRoutes(node *Node) []netip.Prefix {
 			continue
 		}
 		out = append(out, r)
+	}
+	for _, r := range SelectedRealRoutes(node.RealRoutes, node.ApprovedRoutes) {
+		if !containsPrefix(out, r) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// SelectedRealRoutes keeps addresses/subranges contained in an approved subnet.
+// Targets are reached through the advertising router; they need no mesh client.
+// Default routes never authorize additional real-IP targets.
+func SelectedRealRoutes(targets, approved []netip.Prefix) []netip.Prefix {
+	var out []netip.Prefix
+	for _, target := range targets {
+		if !target.IsValid() || isExitRoute(target) {
+			continue
+		}
+		target = target.Masked()
+		for _, parent := range approved {
+			if parent.IsValid() && !isExitRoute(parent) && parent.Bits() <= target.Bits() && parent.Contains(target.Addr()) {
+				if !containsPrefix(out, target) {
+					out = append(out, target)
+				}
+				break
+			}
+		}
 	}
 	return out
 }
@@ -313,6 +336,40 @@ func unaliasedRoutes(node *Node) []netip.Prefix {
 		if !got[real] {
 			out = append(out, real)
 		}
+	}
+	return out
+}
+
+// realRouteConflict checks actual non-default routes, including opted-in real
+// routes. Two aliased sites can share a real subnet until both expose it.
+func realRouteConflict(nodes []*Node, selfID int64, route netip.Prefix) bool {
+	for _, n := range nodes {
+		if n.ID == selfID || n.Disabled || !n.Approved {
+			continue
+		}
+		for _, other := range PublishedRoutes(n) {
+			if !isExitRoute(other) && route.Overlaps(other) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// safeRealRoutes works on copies and considers the whole mesh before ACL
+// filtering. Recheck every map: another site's routes may have changed since
+// approval. Ambiguous opt-in real routes are suppressed; aliases remain usable.
+func safeRealRoutes(nodes []*Node) []*Node {
+	out := make([]*Node, 0, len(nodes))
+	for _, n := range nodes {
+		cp := *n
+		cp.RealRoutes = nil
+		for _, r := range SelectedRealRoutes(n.RealRoutes, n.ApprovedRoutes) {
+			if !realRouteConflict(nodes, n.ID, r) {
+				cp.RealRoutes = append(cp.RealRoutes, r)
+			}
+		}
+		out = append(out, &cp)
 	}
 	return out
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/calabinet/calabi/apps/client/internal/creds"
 	"github.com/calabinet/calabi/apps/client/internal/inspect"
 	"github.com/calabinet/calabi/apps/client/internal/probe"
+	"github.com/calabinet/calabi/pkg/protocol/usererror"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -295,9 +296,10 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/v1/probe/health", s.handleProbeHealth)
 	mux.HandleFunc("/v1/probe/ports", s.handleProbePorts)
 	mux.HandleFunc("/v1/probe/check", s.handleProbeCheck)
-	mux.HandleFunc("/v1/mesh", s.handleMesh)                     // GET status
-	mux.HandleFunc("/v1/mesh/down", s.handleMeshDown)            // POST stop (local-token)
-	mux.HandleFunc("/v1/mesh/relaytest", s.handleMeshRelayProbe) // POST measure one relay leg
+	mux.HandleFunc("/v1/mesh", s.handleMesh)                       // GET status
+	mux.HandleFunc("/v1/mesh/inbound-check", s.handleInboundCheck) // GET current TCP rule decision
+	mux.HandleFunc("/v1/mesh/down", s.handleMeshDown)              // POST stop (local-token)
+	mux.HandleFunc("/v1/mesh/relaytest", s.handleMeshRelayProbe)   // POST measure one relay leg
 	mux.HandleFunc("/v1/inspect/connections", s.handleInspectConnections)
 	mux.HandleFunc("/v1/inspect/captures", s.handleInspectCaptures)
 	mux.HandleFunc("/v1/inspect/replay", notSupported)
@@ -1053,7 +1055,7 @@ func writeNotSupported(w http.ResponseWriter) {
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(usererror.Body(code, v))
 }
 
 func writeError(w http.ResponseWriter, code int, msg string) {

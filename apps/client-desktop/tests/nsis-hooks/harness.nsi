@@ -25,10 +25,17 @@ OutFile "${TEST_OUT}"
 InstallDir "${TEST_INSTDIR}"
 
 !include "LogicLib.nsh"
+; Exercise hook ordering/failure handling without changing the real firewall.
+!define CALABI_FIREWALL_RUN '"$INSTDIR\calabi.exe" firewall'
 !include "${HOOKS}"
 
 Section
   SetOutPath $INSTDIR
+  !ifdef TEST_UNINSTALL
+    !insertmacro NSIS_HOOK_PREUNINSTALL
+    FileOpen $0 "$INSTDIR\after-uninstall.txt" w
+    FileClose $0
+  !else
   !insertmacro NSIS_HOOK_PREINSTALL
 
   ; Reached only if the hook did not Abort.
@@ -50,4 +57,11 @@ Section
     FileOpen $0 "$INSTDIR\after-post.txt" w
     FileClose $0
   !endif
+  !endif
+SectionEnd
+
+; Compile in the real uninstall context too, where installer-only instructions
+; such as File are forbidden. The test runner does not execute this section.
+Section "Uninstall"
+  !insertmacro NSIS_HOOK_PREUNINSTALL
 SectionEnd

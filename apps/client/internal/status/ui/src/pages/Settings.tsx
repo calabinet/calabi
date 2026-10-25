@@ -1,3 +1,4 @@
+import { displayError } from "../api/userError";
 // Settings.tsx — account info, service controls, config import/export.
 //
 // We can't directly install/uninstall the Windows Service from the
@@ -300,7 +301,7 @@ export default function Settings() {
                           {t("settings.alreadyExists")}
                         </span>
                       )}
-                      {it.error && <span style={{ color: "#ff4d4f" }}>{it.error}</span>}
+                      {it.error && <span style={{ color: "#ff4d4f" }}>{displayError(it.error, t)}</span>}
                     </div>
                   ))}
                 </div>

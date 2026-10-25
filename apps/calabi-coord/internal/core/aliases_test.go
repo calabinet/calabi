@@ -468,3 +468,234 @@ func TestAliasSpend(t *testing.T) {
 		t.Errorf("nothing = %d, want 0", got)
 	}
 }
+
+func TestRealRouteAccessKeepsAliasesAndAdminDecision(t *testing.T) {
+	ctx := context.Background()
+	c := newTestCoord()
+	c.AliasIPAM = NewMemAliasIPAM()
+	lan := pfx(t, "192.168.1.0/24")
+	in := RegisterInput{Meshnet: 1, Name: "router", NodeKey: key(1), AdvertisedRoutes: []netip.Prefix{lan}, AliasedRoutes: []netip.Prefix{lan}}
+	n, err := c.Register(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err = c.ApproveRoutes(ctx, 1, n.ID, []netip.Prefix{lan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	alias := n.RouteAliases[0].Alias
+	if routes := PublishedRoutes(n); len(routes) != 1 || routes[0] != alias {
+		t.Fatalf("default routes %v", routes)
+	}
+	n, err = c.ApproveRoutes(ctx, 1, n.ID, []netip.Prefix{lan}, []netip.Prefix{lan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	consumer, err := c.Register(ctx, RegisterInput{Meshnet: 1, Name: "consumer", NodeKey: key(2)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	nm, err := c.NetMapFor(ctx, consumer.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nm.Peers) != 1 {
+		t.Fatalf("peers %v", nm.Peers)
+	}
+	pub := PublishedRoutes(&nm.Peers[0])
+	if len(pub) != 2 || !containsPrefix(pub, lan) || !containsPrefix(pub, alias) {
+		t.Fatalf("dual routes %v", pub)
+	}
+	// Both source selectors are needed after conntrack ages out.
+	cidrs := sourceCIDRs([]string{n.Name}, []*Node{n}, nil, nil)
+	found := map[string]bool{}
+	for _, r := range cidrs {
+		found[r] = true
+	}
+	if !found[lan.String()] || !found[alias.String()] {
+		t.Fatalf("ACL selectors %v", cidrs)
+	}
+	n, err = c.Register(ctx, in)
+	if err != nil || !containsPrefix(n.RealRoutes, lan) {
+		t.Fatalf("re-register lost decision: %+v %v", n, err)
+	}
+	// Older callers omit the new field, preserving the administrator's choice.
+	n, err = c.ApproveRoutes(ctx, 1, n.ID, []netip.Prefix{lan})
+	if err != nil || !containsPrefix(n.RealRoutes, lan) {
+		t.Fatalf("old caller reset selection: %+v %v", n, err)
+	}
+	n, err = c.ApproveRoutes(ctx, 1, n.ID, []netip.Prefix{lan}, []netip.Prefix{})
+	if err != nil || len(n.RealRoutes) != 0 || len(n.RouteAliases) != 1 || n.RouteAliases[0].Alias != alias {
+		t.Fatalf("disable: %+v %v", n, err)
+	}
+	n, err = c.ApproveRoutes(ctx, 1, n.ID, []netip.Prefix{lan}, []netip.Prefix{lan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err = c.ApproveRoutes(ctx, 1, n.ID, nil)
+	if err != nil || len(n.RealRoutes) != 0 || len(PublishedRoutes(n)) != 0 {
+		t.Fatalf("revocation: %+v %v", n, err)
+	}
+	if _, err = c.ApproveRoutes(ctx, 2, n.ID, []netip.Prefix{lan}, []netip.Prefix{lan}); !errors.Is(err, ErrNodeNotFound) {
+		t.Fatalf("cross org: %v", err)
+	}
+	if _, err = c.ApproveRoutes(ctx, 1, n.ID, nil, []netip.Prefix{lan}); !errors.Is(err, ErrRouteNotAdvertised) {
+		t.Fatalf("unapproved real route: %v", err)
+	}
+}
+
+func TestRealRoutesRejectAmbiguityAndRecheckNetmaps(t *testing.T) {
+	ctx := context.Background()
+	c := newTestCoord()
+	c.AliasIPAM = NewMemAliasIPAM()
+	c.Settings = NewMemSettingsStore()
+	if err := c.Settings.SetSettings(ctx, 1, MeshnetSettings{AliasAddrBudget: 512}); err != nil {
+		t.Fatal(err)
+	}
+	lan := pfx(t, "192.168.1.0/24")
+	var nodes []*Node
+	for i := byte(1); i <= 2; i++ {
+		n, err := c.Register(ctx, RegisterInput{Meshnet: 1, Name: string('a' + i), NodeKey: key(i), AdvertisedRoutes: []netip.Prefix{lan}, AliasedRoutes: []netip.Prefix{lan}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		n, err = c.ApproveRoutes(ctx, 1, n.ID, []netip.Prefix{lan})
+		if err != nil {
+			t.Fatal(err)
+		}
+		nodes = append(nodes, n)
+	}
+	if _, err := c.ApproveRoutes(ctx, 1, nodes[0].ID, []netip.Prefix{lan}, []netip.Prefix{lan}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.ApproveRoutes(ctx, 1, nodes[1].ID, []netip.Prefix{lan}, []netip.Prefix{lan}); !errors.Is(err, ErrRouteNotAdvertised) {
+		t.Fatalf("ambiguous address accepted: %v", err)
+	}
+	// Simulate another legacy router later losing alias support. The configured
+	// opt-in must stop advertising its real range, while keeping its alias.
+	other := *nodes[1]
+	other.RouteAliases = nil
+	if _, err := c.Nodes.Upsert(ctx, &other); err != nil {
+		t.Fatal(err)
+	}
+	consumer, err := c.Register(ctx, RegisterInput{Meshnet: 1, Name: "consumer", NodeKey: key(3)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	nm, err := c.NetMapFor(ctx, consumer.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, peer := range nm.Peers {
+		if peer.ID == nodes[0].ID {
+			pub := PublishedRoutes(&peer)
+			if containsPrefix(pub, lan) || !containsPrefix(pub, nodes[0].RouteAliases[0].Alias) {
+				t.Fatalf("unsafe map routes %v", pub)
+			}
+		}
+	}
+	// A conflict must not prevent retaining or later reducing an existing grant.
+	if _, err := c.ApproveRoutes(ctx, 1, nodes[0].ID, []netip.Prefix{lan}, []netip.Prefix{lan}); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := c.Nodes.Get(ctx, nodes[0].ID)
+	if err != nil || !containsPrefix(stored.RealRoutes, lan) {
+		t.Fatalf("map computation modified stored decision: %+v %v", stored, err)
+	}
+}
+
+func TestRealTargetsBehindRouterNeedNoClient(t *testing.T) {
+	ctx := context.Background()
+	c := newTestCoord()
+	c.AliasIPAM = NewMemAliasIPAM()
+	subnet := pfx(t, "192.168.1.0/24")
+	target := pfx(t, "192.168.1.50/32")
+	other := pfx(t, "192.168.1.80/32")
+	router, err := c.Register(ctx, RegisterInput{Meshnet: 1, Name: "site-router", NodeKey: key(1), AdvertisedRoutes: []netip.Prefix{subnet}, AliasedRoutes: []netip.Prefix{subnet}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	router, err = c.ApproveRoutes(ctx, 1, router.ID, []netip.Prefix{subnet}, []netip.Prefix{target})
+	if err != nil {
+		t.Fatal(err)
+	}
+	alias := router.RouteAliases[0].Alias
+	consumer, err := c.Register(ctx, RegisterInput{Meshnet: 1, Name: "visitor", NodeKey: key(2)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Only the router and visitor are enrolled. The NAS at .50 has no mesh
+	// identity, key, process, or device record of its own.
+	nodes, err := c.Nodes.ListMeshnet(ctx, 1)
+	if err != nil || len(nodes) != 2 {
+		t.Fatalf("unexpected enrolled devices: %v %v", nodes, err)
+	}
+	nm, err := c.NetMapFor(ctx, consumer.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nm.Peers) != 1 || nm.Peers[0].ID != router.ID {
+		t.Fatalf("target must route through publisher: %+v", nm.Peers)
+	}
+	routes := PublishedRoutes(&nm.Peers[0])
+	if len(routes) != 2 || !containsPrefix(routes, alias) || !containsPrefix(routes, target) || containsPrefix(routes, subnet) || containsPrefix(routes, other) {
+		t.Fatalf("target selection leaked: %v", routes)
+	}
+	cidrs := sourceCIDRs([]string{router.Name}, []*Node{router}, nil, nil)
+	found := map[string]bool{}
+	for _, cidr := range cidrs {
+		found[cidr] = true
+	}
+	if !found[target.String()] || !found[alias.String()] || found[subnet.String()] || found[other.String()] {
+		t.Fatalf("return-packet ACL %v", cidrs)
+	}
+	// Re-saving approvals from an older caller must preserve a selected host
+	// inside the /24, not require it to have been advertised separately.
+	router, err = c.ApproveRoutes(ctx, 1, router.ID, []netip.Prefix{subnet})
+	if err != nil || !containsPrefix(router.RealRoutes, target) {
+		t.Fatalf("lost host selection: %+v %v", router, err)
+	}
+	for _, invalid := range []netip.Prefix{pfx(t, "192.168.2.50/32"), pfx(t, "192.168.0.0/16"), pfx(t, "0.0.0.0/0"), pfx(t, "fd00::50/128")} {
+		if _, err := c.ApproveRoutes(ctx, 1, router.ID, []netip.Prefix{subnet}, []netip.Prefix{invalid}); !errors.Is(err, ErrRouteNotAdvertised) {
+			t.Fatalf("accepted target outside approved subnet %s: %v", invalid, err)
+		}
+	}
+	router, err = c.ApproveRoutes(ctx, 1, router.ID, nil)
+	if err != nil || len(router.RealRoutes) != 0 || len(PublishedRoutes(router)) != 0 {
+		t.Fatalf("revocation did not remove child hosts: %+v %v", router, err)
+	}
+	if targets := SelectedRealRoutes([]netip.Prefix{target}, prefixes(t, "0.0.0.0/0")); len(targets) != 0 {
+		t.Fatalf("exit route authorized targets: %v", targets)
+	}
+}
+
+func TestSeparateSitesMayExposeDifferentHostsFromSameSubnet(t *testing.T) {
+	ctx := context.Background()
+	c := newTestCoord()
+	c.AliasIPAM = NewMemAliasIPAM()
+	c.Settings = NewMemSettingsStore()
+	if err := c.Settings.SetSettings(ctx, 1, MeshnetSettings{AliasAddrBudget: 512}); err != nil {
+		t.Fatal(err)
+	}
+	subnet := pfx(t, "192.168.1.0/24")
+	var routers []*Node
+	for i, target := range prefixes(t, "192.168.1.50/32", "192.168.1.80/32") {
+		n, err := c.Register(ctx, RegisterInput{Meshnet: 1, Name: string('a' + rune(i)), NodeKey: key(byte(i + 1)), AdvertisedRoutes: []netip.Prefix{subnet}, AliasedRoutes: []netip.Prefix{subnet}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		n, err = c.ApproveRoutes(ctx, 1, n.ID, []netip.Prefix{subnet}, []netip.Prefix{target})
+		if err != nil {
+			t.Fatalf("different targets should coexist: %v", err)
+		}
+		routers = append(routers, n)
+	}
+	if _, err := c.ApproveRoutes(ctx, 1, routers[1].ID, []netip.Prefix{subnet}, prefixes(t, "192.168.1.50/32")); !errors.Is(err, ErrRouteNotAdvertised) {
+		t.Fatalf("same target claimed by two routers: %v", err)
+	}
+	for _, router := range safeRealRoutes(routers) {
+		if len(router.RealRoutes) != 1 || len(PublishedRoutes(router)) != 2 {
+			t.Fatalf("nonconflicting target suppressed: %+v", router)
+		}
+	}
+}

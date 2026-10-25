@@ -309,17 +309,21 @@ func sourceCIDRs(sels []string, peers []*Node, groups map[string][]string, admit
 			add(hostCIDR(peer.Overlay))
 		}
 		for _, r := range peer.AdvertisedRoutes {
-			// An ALIASED route never appears on the wire under its real CIDR: the
-			// consumer's route, this peer's allowed-ips and the address conntrack
-			// un-NATs a reply to are all the alias. Emitting the real CIDR here
-			// would put a selector in the filter that nothing can ever match —
-			// and leave the one that CAN out of it, so a long-lived flow whose
-			// tracked entry has aged out gets dropped by its own ACL.
+			// Default routes advertise an exit, not source ownership. Expanding
+			// one here would make a grant to that device admit every other peer.
+			// Replies to outbound exit traffic use established-flow tracking.
+			if isExitRoute(r) {
+				continue
+			}
+			// Replies may use the alias or an explicitly enabled real CIDR.
 			if alias, ok := aliasFor(peer.RouteAliases, r); ok {
 				add(alias.String())
 				continue
 			}
 			add(r.String())
+		}
+		for _, target := range SelectedRealRoutes(peer.RealRoutes, peer.ApprovedRoutes) {
+			add(target.String())
 		}
 	}
 	sort.Strings(out)

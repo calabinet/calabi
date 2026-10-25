@@ -35,6 +35,8 @@ const (
 	FieldAdvertisedRoutesJSON = "advertised_routes_json"
 	// FieldApprovedRoutesJSON holds the string denoting the approved_routes_json field in the database.
 	FieldApprovedRoutesJSON = "approved_routes_json"
+	// FieldRealRoutesJSON holds the string denoting the real_routes_json field in the database.
+	FieldRealRoutesJSON = "real_routes_json"
 	// FieldAliasedRoutesJSON holds the string denoting the aliased_routes_json field in the database.
 	FieldAliasedRoutesJSON = "aliased_routes_json"
 	// FieldRouteAliasesJSON holds the string denoting the route_aliases_json field in the database.
@@ -83,6 +85,7 @@ var Columns = []string{
 	FieldEndpointsJSON,
 	FieldAdvertisedRoutesJSON,
 	FieldApprovedRoutesJSON,
+	FieldRealRoutesJSON,
 	FieldAliasedRoutesJSON,
 	FieldRouteAliasesJSON,
 	FieldRoutesReviewed,
@@ -131,6 +134,8 @@ var (
 	DefaultAdvertisedRoutesJSON string
 	// DefaultApprovedRoutesJSON holds the default value on creation for the "approved_routes_json" field.
 	DefaultApprovedRoutesJSON string
+	// DefaultRealRoutesJSON holds the default value on creation for the "real_routes_json" field.
+	DefaultRealRoutesJSON string
 	// DefaultAliasedRoutesJSON holds the default value on creation for the "aliased_routes_json" field.
 	DefaultAliasedRoutesJSON string
 	// DefaultRouteAliasesJSON holds the default value on creation for the "route_aliases_json" field.
@@ -224,6 +229,11 @@ func ByAdvertisedRoutesJSON(opts ...sql.OrderTermOption) OrderOption {
 // ByApprovedRoutesJSON orders the results by the approved_routes_json field.
 func ByApprovedRoutesJSON(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldApprovedRoutesJSON, opts...).ToFunc()
+}
+
+// ByRealRoutesJSON orders the results by the real_routes_json field.
+func ByRealRoutesJSON(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRealRoutesJSON, opts...).ToFunc()
 }
 
 // ByAliasedRoutesJSON orders the results by the aliased_routes_json field.

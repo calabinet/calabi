@@ -168,6 +168,7 @@ type nodeView struct {
 	// false means nobody has managed them yet, and claims are being honoured.
 	AdvertisedRoutes []string `json:"advertised_routes"`
 	ApprovedRoutes   []string `json:"approved_routes"`
+	RealRoutes       []string `json:"real_routes,omitempty"`
 	RoutesReviewed   bool     `json:"routes_reviewed"`
 	// RouteAliases is the stand-in prefix each approved route is actually
 	// PUBLISHED as. Peers reach the subnet there and not at its real address, so
@@ -745,7 +746,8 @@ func (h *handler) approveRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Approved []string `json:"approved"`
+		Approved   []string  `json:"approved"`
+		RealRoutes *[]string `json:"real_routes,omitempty"`
 	}
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32*1024))
 	dec.DisallowUnknownFields()
@@ -762,7 +764,19 @@ func (h *handler) approveRoutes(w http.ResponseWriter, r *http.Request) {
 		}
 		routes = append(routes, pfx)
 	}
-	node, err := h.coord.ApproveRoutes(r.Context(), core.MeshnetID(meshnet), nodeID, routes)
+	var real [][]netip.Prefix
+	if body.RealRoutes != nil {
+		real = append(real, []netip.Prefix{})
+		for _, raw := range *body.RealRoutes {
+			p, err := netip.ParsePrefix(raw)
+			if err != nil {
+				http.Error(w, "invalid real route: "+raw, http.StatusBadRequest)
+				return
+			}
+			real[0] = append(real[0], p.Masked())
+		}
+	}
+	node, err := h.coord.ApproveRoutes(r.Context(), core.MeshnetID(meshnet), nodeID, routes, real...)
 	switch {
 	case errors.Is(err, core.ErrNodeNotFound):
 		http.Error(w, "node not found in this meshnet", http.StatusNotFound)
@@ -920,6 +934,9 @@ func toView(n *core.Node, online bool) nodeView {
 	}
 	for _, rt := range n.AdvertisedRoutes {
 		v.AdvertisedRoutes = append(v.AdvertisedRoutes, rt.String())
+	}
+	for _, rt := range core.SelectedRealRoutes(n.RealRoutes, n.ApprovedRoutes) {
+		v.RealRoutes = append(v.RealRoutes, rt.String())
 	}
 	for _, rt := range n.ApprovedRoutes {
 		v.ApprovedRoutes = append(v.ApprovedRoutes, rt.String())
