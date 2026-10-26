@@ -197,6 +197,10 @@ func (c *Core) handleJoin(w http.ResponseWriter, r *http.Request) {
 		c.signOutSelfHosted(r.Context(), old)
 	}
 
+	if err := c.clearFileReception(); err != nil {
+		writeError(w, 500, "save reception preference: "+err.Error())
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 

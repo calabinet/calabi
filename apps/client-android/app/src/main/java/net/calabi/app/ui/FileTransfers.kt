@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -55,11 +56,11 @@ fun FileTransfersScreen(initialPeer: String?, shared: List<Uri>, onShareTaken: (
     var sendSheet by rememberSaveable { mutableStateOf(false) }
     var settingsSheet by rememberSaveable { mutableStateOf(false) }
     var choosingPeer by rememberSaveable { mutableStateOf(false) }
-    var category by rememberSaveable { mutableIntStateOf(0) }
+    var search by rememberSaveable { mutableStateOf("") }
     var direction by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(reviewIncoming) {
         if (reviewIncoming) {
-            category = 1
+            search = ""
             direction = 1
             sendSheet = false
             settingsSheet = false
@@ -137,13 +138,12 @@ fun FileTransfersScreen(initialPeer: String?, shared: List<Uri>, onShareTaken: (
     }
     val available = snapshot.optBoolean("available")
     val peers = snapshot.objects("peers").sortedWith(compareBy({ it.optString("name") }, { it.optString("ip") }))
-    val staged = snapshot.objects("sources").sortedWith(compareBy({ it.optString("name") }, { it.optString("id") }))
-    val received = snapshot.objects("received").sortedWith(compareBy(
+    val staged = snapshot.objects("sources").sortedWith(compareByDescending<JSONObject> { it.optLong("created_unix_ms") }.thenBy { it.optString("id") })
+    val received = snapshot.objects("received").sortedWith(compareByDescending<JSONObject> { it.optJSONObject("transfer")?.optLong("created_unix_ms") ?: 0L }.then(compareBy(
         { it.optString("device_key") }, { it.optJSONObject("transfer")?.optString("batch").orEmpty() },
         { it.optJSONObject("transfer")?.optString("name").orEmpty() }, { it.optJSONObject("transfer")?.optString("id").orEmpty() },
-    ))
-    val jobs = snapshot.objects("jobs").sortedBy { it.optString("id") }
-    val waitingCount = received.count { it.optJSONObject("transfer")?.optString("state") == "waiting" }
+    )))
+    val jobs = snapshot.objects("jobs").sortedWith(compareByDescending<JSONObject> { it.optLong("created_unix_ms") }.thenBy { it.optString("id") })
     val incomingGroups = received.groupBy { it.optString("device_key") + "/" + it.optJSONObject("transfer")?.optString("batch") }
     fun deviceName(ip: String) = peers.firstOrNull { it.optString("ip") == ip }?.optString("name")?.takeIf { it.isNotBlank() }
         ?: devices.firstOrNull { it.overlay == ip }?.name?.takeIf { it.isNotBlank() } ?: ip
@@ -151,8 +151,12 @@ fun FileTransfersScreen(initialPeer: String?, shared: List<Uri>, onShareTaken: (
     val snapshotError = snapshot.optString("error").let {
         if (it == "Reconnect to send or receive files. Local records and completed files remain available.") stringResource(R.string.files_reconnect) else fileErrorText(context, it)
     }
-    val visibleGroups = incomingGroups.filterValues { group -> direction != 2 && group.any { matchesFileCategory(it.optJSONObject("transfer")?.optString("state").orEmpty(), category) } }
-    val visibleJobs = jobs.filter { direction != 1 && matchesFileCategory(it.optString("state"), category) }
+    fun fileMatches(file: JSONObject, ip: String): Boolean = matchesListSearch(search, file.optString("name"), ip, deviceName(ip))
+    val visibleGroups = if (direction == 2) emptyMap() else incomingGroups.filterValues { group -> group.any { fileMatches(it.optJSONObject("transfer") ?: JSONObject(), it.optString("ip")) } }
+    val visibleJobs = if (direction == 1) emptyList() else jobs.filter { job ->
+        fileMatches(job.optJSONObject("progress")?.optJSONObject("transfer") ?: JSONObject(), job.optString("peer_ip")) ||
+            staged.any { source -> job.optJSONArray("sources")?.let { ids -> (0 until ids.length()).any { ids.optString(it) == source.optString("id") } } == true && fileMatches(source, job.optString("peer_ip")) }
+    }
 
     LazyColumn(
         Modifier.fillMaxSize(), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -170,7 +174,7 @@ fun FileTransfersScreen(initialPeer: String?, shared: List<Uri>, onShareTaken: (
                         Text(stringResource(R.string.files_receiving), style = Styles.rowTitle)
                         Text(stringResource(R.string.files_receive_hint), style = Styles.hint)
                     }
-                    Switch(checked = snapshot.optBoolean("receiving"), enabled = available && !busy, colors = calabiSwitchColors(), onCheckedChange = { enabled -> scope.launch { action(JSONObject().put("action", "receiving").put("enabled", enabled)) } })
+                    Switch(checked = snapshot.optBoolean("receiving_requested", snapshot.optBoolean("receiving")), enabled = (available || snapshot.optBoolean("receiving_requested")) && !busy, colors = calabiSwitchColors(), onCheckedChange = { enabled -> scope.launch { action(JSONObject().put("action", "receiving").put("enabled", enabled)) } })
                 }
             }
         }
@@ -190,23 +194,18 @@ fun FileTransfersScreen(initialPeer: String?, shared: List<Uri>, onShareTaken: (
             }
         }
         item("tabs") {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(R.string.files_all_directions, R.string.files_incoming, R.string.files_outgoing).forEachIndexed { index, label ->
-                    FilterChip(selected = direction == index, onClick = { direction = index }, label = { Text(stringResource(label)) })
-                }
-            }
-            TabRow(selectedTabIndex = category, containerColor = Palette.ground, contentColor = Palette.ink) {
-                listOf(R.string.files_active, R.string.files_pending, R.string.files_history).forEachIndexed { index, label ->
-                    Tab(selected = category == index, onClick = { category = index }, text = {
-                        Text(if (index == 1 && direction != 2 && waitingCount > 0) "${stringResource(label)} ($waitingCount)" else stringResource(label), maxLines = 1)
-                    })
+            ListSearchToolbar(search, { search = it }, stringResource(R.string.list_search_files)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf(R.string.files_all_directions, R.string.files_incoming, R.string.files_outgoing).forEachIndexed { index, label ->
+                        FilterChip(selected = direction == index, onClick = { direction = index }, label = { Text(stringResource(label)) })
+                    }
                 }
             }
         }
         if (visibleGroups.isEmpty() && visibleJobs.isEmpty()) item("empty") {
             Column(Modifier.fillMaxWidth().padding(vertical = 36.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Glyph(R.drawable.ic_transfer, Palette.muted, 28.dp)
-                Text(stringResource(when (category) { 1 -> R.string.files_empty_pending; 2 -> R.string.files_empty_history; else -> R.string.files_empty_active }), style = Styles.hint)
+                Text(stringResource(if (search.isNotBlank()) R.string.list_search_no_matches else R.string.files_empty_records), style = Styles.hint)
             }
         }
         visibleGroups.forEach { (batchKey, group) ->
@@ -216,21 +215,19 @@ fun FileTransfersScreen(initialPeer: String?, shared: List<Uri>, onShareTaken: (
                     TransferHeading(false, stringResource(R.string.files_from, deviceName(group.first().optString("ip"))))
                     group.forEach { row -> row.optJSONObject("transfer")?.let { transfer ->
                         val state = transfer.optString("state")
-                        if (matchesFileCategory(state, category)) {
-                            val id = transfer.optString("id")
-                            RowDivider()
-                            TransferRecord(transfer, state, transfer.optString("error")) {
-                                if (state == "completed") TextButton(enabled = !busy, onClick = { exportId = id; save.launch(transfer.optString("name")) }) { Text(stringResource(R.string.filetest_save)) }
-                                if (state in listOf("receiving", "accepted", "waiting_sender")) {
-                                    TextButton(enabled = !busy && transfer.optBoolean("pause_supported"), onClick = { runAction("pause_receive", id) }) { Text(stringResource(R.string.files_pause)) }
-                                }
-                                if (state == "paused") TextButton(enabled = !busy && available, onClick = { runAction("resume_receive", id) }) { Text(stringResource(R.string.files_resume)) }
-                                if (state in listOf("receiving", "accepted", "waiting_sender", "paused")) TextButton(onClick = { runAction("cancel_receive", id) }) { Text(stringResource(R.string.filetest_stop)) }
-                                if (state in terminalFileStates) TextButton(onClick = { removing = JSONObject().put("action", "forget_receive").put("id", id) }) { Text(stringResource(R.string.files_remove)) }
+                        val id = transfer.optString("id")
+                        RowDivider()
+                        TransferRecord(transfer, state, transfer.optString("error")) {
+                            if (state == "completed") TextButton(enabled = !busy, onClick = { exportId = id; save.launch(transfer.optString("name")) }) { Text(stringResource(R.string.filetest_save)) }
+                            if (state in listOf("receiving", "accepted", "waiting_sender")) {
+                                TextButton(enabled = !busy && transfer.optBoolean("pause_supported"), onClick = { runAction("pause_receive", id) }) { Text(stringResource(R.string.files_pause)) }
                             }
+                            if (state == "paused") TextButton(enabled = !busy && available, onClick = { runAction("resume_receive", id) }) { Text(stringResource(R.string.files_resume)) }
+                            if (state in listOf("receiving", "accepted", "waiting_sender", "paused")) TextButton(onClick = { runAction("cancel_receive", id) }) { Text(stringResource(R.string.filetest_stop)) }
+                            if (state in terminalFileStates) TextButton(onClick = { removing = JSONObject().put("action", "forget_receive").put("id", id) }) { Text(stringResource(R.string.files_remove)) }
                         }
                     } }
-                    if (category == 1 && waiting.isNotEmpty()) {
+                    if (waiting.isNotEmpty()) {
                         val completeOffer = group.size >= waiting.first().optInt("batch_count", 1)
                         if (!completeOffer) Text(stringResource(R.string.files_offer_loading), style = Styles.hint, modifier = Modifier.padding(horizontal = 16.dp))
                         FlowRow(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.End) {
@@ -275,7 +272,7 @@ fun FileTransfersScreen(initialPeer: String?, shared: List<Uri>, onShareTaken: (
                         Column(Modifier.weight(1f)) {
                             Text(deviceName(peer), style = Styles.rowTitle)
                             Text(peer, style = Styles.mono)
-                            if (target?.optBoolean("receiving") != true) Text(stringResource(R.string.files_peer_disabled), style = Styles.hint)
+                            if (target?.optBoolean("receiving") != true) PeerReceptionStatus(false)
                         }
                         TextButton(onClick = { choosingPeer = true }) { Text(stringResource(R.string.files_change_device)) }
                     }
@@ -291,7 +288,7 @@ fun FileTransfersScreen(initialPeer: String?, shared: List<Uri>, onShareTaken: (
                             Column(Modifier.weight(1f)) {
                                 Text(p.optString("name").ifBlank { p.optString("ip") }, style = Styles.rowTitle)
                                 Text(p.optString("ip"), style = Styles.mono)
-                                Text(stringResource(if (p.optBoolean("receiving")) R.string.files_peer_ready else R.string.files_peer_disabled), style = Styles.hint)
+                                PeerReceptionStatus(p.optBoolean("receiving"))
                             }
                             if (p.optBoolean("receiving")) Glyph(R.drawable.ic_chevron_right, Palette.muted)
                         }
@@ -333,7 +330,7 @@ fun FileTransfersScreen(initialPeer: String?, shared: List<Uri>, onShareTaken: (
                     busy = true
                     try {
                         if (action(JSONObject().put("action", "send").put("peer", peer).put("ids", JSONArray(selected.sorted())))) {
-                            selected = emptySet(); sendSheet = false; category = 0; direction = 2
+                            selected = emptySet(); sendSheet = false; search = ""; direction = 2
                         }
                     } finally { busy = false }
                 } },
@@ -364,6 +361,18 @@ fun FileTransfersScreen(initialPeer: String?, shared: List<Uri>, onShareTaken: (
 }
 
 private fun fileBytes(n: Long): String = when { n >= 1L shl 30 -> "%.2f GiB".format(n.toDouble() / (1L shl 30)); n >= 1L shl 20 -> "%.1f MiB".format(n.toDouble() / (1L shl 20)); n >= 1024 -> "%.1f KiB".format(n / 1024.0); else -> "$n B" }
+@Composable
+private fun PeerReceptionStatus(receiving: Boolean) {
+    if (receiving) {
+        Text(stringResource(R.string.files_peer_ready), style = Styles.hint)
+    } else {
+        Text(stringResource(R.string.files_peer_disabled), color = Palette.danger,
+            style = Styles.hint.copy(fontWeight = FontWeight.Medium),
+            modifier = Modifier.padding(top = 4.dp).background(Palette.dangerSoft, RoundedCornerShape(6.dp))
+                .padding(horizontal = 7.dp, vertical = 3.dp))
+    }
+}
+
 @Composable private fun fileState(state: String): String = stringResource(when (state) { "waiting" -> R.string.files_waiting; "verifying", "committing" -> R.string.files_verifying; "accepted" -> R.string.files_accepted_waiting; "hashing" -> R.string.files_hashing; "connecting" -> R.string.files_connecting; "receiving", "sending" -> R.string.files_transferring; "completed" -> R.string.files_completed; "paused" -> R.string.files_paused; "receiver_paused" -> R.string.files_receiver_paused; "waiting_sender" -> R.string.files_waiting_sender; "interrupted" -> R.string.files_interrupted; "receiver_cancelled" -> R.string.files_receiver_cancelled; "receiver_rejected" -> R.string.files_receiver_rejected; "receiver_failed" -> R.string.files_receiver_failed; "sender_cancelled" -> R.string.files_sender_cancelled; "cancel_pending" -> R.string.files_cancel_pending; "cancelled" -> R.string.files_cancelled; "failed" -> R.string.files_failed; else -> R.string.files_preparing })
 
 private val terminalFileStates = setOf("completed", "cancelled", "failed")
@@ -377,12 +386,6 @@ private fun TransferHeading(outgoing: Boolean, peer: String) {
         Text(peer, style = Styles.hint, modifier = Modifier.weight(1f))
     }
 }
-private fun matchesFileCategory(state: String, category: Int): Boolean = when (category) {
-    1 -> state == "waiting"
-    2 -> state in terminalFileStates
-    else -> state != "waiting" && state !in terminalFileStates
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TransferRecord(file: JSONObject, state: String, error: String, metrics: JSONObject = file, actions: @Composable RowScope.() -> Unit) {

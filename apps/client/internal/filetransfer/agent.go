@@ -440,7 +440,7 @@ func (a *Agent) List() []Received {
 		}
 	}
 	slices.SortFunc(out, func(a, b Received) int {
-		return cmp.Or(cmp.Compare(a.DeviceKey, b.DeviceKey), compareTransferOrder(a.Transfer, b.Transfer))
+		return cmp.Or(cmp.Compare(b.Transfer.CreatedUnixMs, a.Transfer.CreatedUnixMs), cmp.Compare(a.DeviceKey, b.DeviceKey), compareTransferOrder(a.Transfer, b.Transfer))
 	})
 	return out
 }

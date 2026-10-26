@@ -391,8 +391,8 @@ func (s *Server) Register(mux *http.ServeMux) {
 	// column then needs no field on the wire Peer, no identity-hooks change, and
 	// no deploy ordering — and bff-console applies its own RBAC to the forwarded
 	// call, so this shows exactly what the same person sees in the web console.
-	// It 401s for an api-key agent and is absent on the local daemon; the page
-	// treats a failure as "no owner labels" and renders the peers regardless.
+	// API-key agents get presence and associated owner labels from the BFF.
+	// Older servers may refuse it; the page still renders peers with unknown presence.
 	mux.HandleFunc("GET /v1/mesh/nodes", s.proxyGET("/v1/mesh/nodes"))
 	mux.HandleFunc("GET /v1/mesh/services", s.handleMeshServicesGet)
 	mux.HandleFunc("POST /v1/mesh/services", s.requireLocalToken(s.handleMeshServicesSet))
@@ -727,6 +727,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		cfg = &creds.Config{}
 	}
 	cfg.AccessToken = loginResp.AccessToken
+	cfg.FileReceiveEpoch = time.Now().UnixNano()
 	cfg.RefreshToken = loginResp.RefreshToken
 	cfg.User.ID = loginResp.UserID
 	cfg.User.Email = loginResp.Email
@@ -737,9 +738,9 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	// hook re-reads creds and pushes this into the snapshot.
 	cfg.ActiveOrgID = loginResp.ActiveOrgID
 	if err := creds.Save(cfg); err != nil {
-		// Surface but don't fail the login — the SPA can use the token
-		// in-memory; restart will lose it but that's not the end of the world.
-		s.logger.Warn("save creds after SPA login", "err", err)
+		// Auth boundaries must survive a restart before reception can be restored.
+		writeError(w, http.StatusInternalServerError, "save sign-in state: "+err.Error())
+		return
 	}
 	// Wipe the read cache — the bearer just changed so any previously
 	// cached entries are stamped against the wrong user.
@@ -773,6 +774,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 // as the Org-switch fix — the control loop blocks on a raw TCP
 // read that doesn't honour ctx; only closing the mux unblocks it).
 func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
+	var persistErr error
 	// Fire-and-forget upstream — if the call fails (offline, identity-
 	// svc down), still clear local creds. Better to log the user out
 	// locally than refuse because we couldn't reach the server.
@@ -792,6 +794,7 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		cfg.RefreshToken = ""
 		cfg.APIKey = ""
 		cfg.ActiveOrgID = 0
+		cfg.FileReceiveEpoch = time.Now().UnixNano()
 		// The exit device belongs to the organization signed out of; the next
 		// sign-in may be another account's.
 		cfg.MeshExitNode = ""
@@ -799,7 +802,7 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		// next register cycle reuses the same device row + the login
 		// form pre-fills the email. DeviceID gets refreshed on the
 		// next RegisterClient after re-login anyway.
-		_ = creds.Save(cfg)
+		persistErr = creds.Save(cfg)
 	}
 	// Drop cached responses tied to the old token.
 	s.cache.invalidateAll()
@@ -811,6 +814,10 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	// teardown.
 	if s.cfg.OnLogout != nil {
 		s.cfg.OnLogout()
+	}
+	if persistErr != nil {
+		writeError(w, http.StatusInternalServerError, "save sign-out state: "+persistErr.Error())
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
 }
@@ -923,6 +930,7 @@ func (s *Server) handleOrgSwitch(w http.ResponseWriter, r *http.Request) {
 	// else's machine. OnOrgSwitched carries this into the running mesh.
 	if req.TargetOrgID != cfg.ActiveOrgID {
 		cfg.MeshExitNode = ""
+		cfg.FileReceiveEpoch = time.Now().UnixNano()
 	}
 	cfg.AccessToken = switchResp.AccessToken
 	cfg.RefreshToken = switchResp.RefreshToken

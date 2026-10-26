@@ -10,6 +10,12 @@ import (
 // metadata poller's publication. Close the workspace before taking its identity
 // use lock, and never automatically turn reception back on after maintenance.
 func (d *desktopFileAgent) maintainIdentity(operation string) error {
+	if d.managed != nil {
+		d.managed.settings.Receiving = false
+		if err := d.saveServiceSettings(); err != nil {
+			return err
+		}
+	}
 	d.cancelPreparation()
 	d.wMu.RLock()
 	w := d.w

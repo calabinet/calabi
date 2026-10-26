@@ -25,13 +25,24 @@ OutFile "${TEST_OUT}"
 InstallDir "${TEST_INSTDIR}"
 
 !include "LogicLib.nsh"
-; Exercise hook ordering/failure handling without changing the real firewall.
-!define CALABI_FIREWALL_RUN '"$INSTDIR\calabi.exe" firewall'
+; The stand-in daemon handles the same installer command as the real binary.
 !include "${HOOKS}"
+; Variables supplied by the real Tauri template, not by the hooks.
+Var DeleteAppDataCheckboxState
+Var UpdateMode
+Var ReinstallPageCheck
+!define PRODUCTNAME "Calabi test"
+!define VERSION "test"
+!define UNINSTKEY "Software\CalabiNsisHookTest"
+!addplugindir "${TEST_PLUGIN_DIR}"
+LoadLanguageFile "${NSISDIR}\Contrib\Language files\English.nlf"
+!include "${TEST_LANGUAGE_FILE}"
 
 Section
   SetOutPath $INSTDIR
   !ifdef TEST_UNINSTALL
+    ReadEnvStr $DeleteAppDataCheckboxState "CALABI_FAKE_DELETE_DATA"
+    ReadEnvStr $UpdateMode "CALABI_FAKE_UPDATE_MODE"
     !insertmacro NSIS_HOOK_PREUNINSTALL
     FileOpen $0 "$INSTDIR\after-uninstall.txt" w
     FileClose $0

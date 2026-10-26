@@ -1,14 +1,12 @@
 .mesh-center { color:#e1e6f0; }
 .mesh-center > .ant-tabs > .ant-tabs-nav { margin-bottom:20px; }
-.mesh-info-strip { display:flex; flex-wrap:wrap; gap:12px 22px; padding:0 0 18px; border-bottom:1px solid #202b44; color:#94a0b6; font-size:12px; align-items:center; }
-.mesh-info-strip .files-ready { font-size:12px; }
-.mesh-info-strip code { font-size:12px; }
-.mesh-info-strip .ant-typography { font-size:12px; }
-.mesh-local-details { margin:0 0 10px; }
-.mesh-local-details > summary { cursor:pointer; width:fit-content; color:#94a0b6; font-size:12px; padding:4px 0; }
-.mesh-local-details[open] > summary { margin-bottom:10px; }
-.mesh-local-details .ant-card { background:#0c1325; border-color:#202b44; }
-.mesh-peer-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:11px; }
+.mesh-status-cards > .ant-col { display:flex; min-width:0; }
+.mesh-status-cards .ant-card { width:100%; }
+.mesh-status-cards .ant-statistic-content { font-size:26px; font-weight:600; line-height:1.4; overflow-wrap:anywhere; }
+.mesh-status-cards .mesh-status-identity .ant-statistic-content { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:20px; }
+.mesh-status-cards .mesh-status-up .ant-statistic-content { color:#34d3a4; }
+.mesh-status-cards .mesh-status-down .ant-statistic-content { color:#94a0b6; }
+.mesh-peer-heading { margin-bottom:11px; }
 .mesh-peer-heading > .ant-typography { color:#9dacc6; font-size:12px; }
 .mesh-device-name { display:flex; align-items:center; gap:11px; min-width:0; }
 .mesh-device-name > div { min-width:0; }

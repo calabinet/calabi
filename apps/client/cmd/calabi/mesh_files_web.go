@@ -31,6 +31,7 @@ type fileBrowser struct {
 	root                      *os.Root
 	directory, authority, key string
 	action                    func(fileAction) (any, error)
+	managed                   bool
 }
 
 func browserAddress(addr, overlay string) error {
@@ -146,12 +147,19 @@ func (b *fileBrowser) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
-	if r.Host != b.authority {
+	if b.managed {
+		w.Header().Set("Content-Security-Policy", strings.Replace(w.Header().Get("Content-Security-Policy"), "base-uri 'none'", "base-uri 'self'", 1))
+	}
+	if !b.managed && r.Host != b.authority {
 		browserError(w, 403, "invalid browser host")
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/file-web/") {
-		if r.Method == "POST" && r.Header.Get("Origin") != "http://"+b.authority {
+		authority := b.authority
+		if b.managed {
+			authority = r.Host
+		}
+		if r.Method == "POST" && r.Header.Get("Origin") != "http://"+authority && (!b.managed || r.Header.Get("Origin") != "https://"+authority) {
 			browserError(w, 403, "invalid browser origin")
 			return
 		}
@@ -164,7 +172,11 @@ func (b *fileBrowser) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				browserError(w, 401, "invalid browser access key")
 				return
 			}
-			http.SetCookie(w, &http.Cookie{Name: "calabi_file_browser", Value: b.key, HttpOnly: true, SameSite: http.SameSiteStrictMode, Path: "/file-web/"})
+			cookiePath := "/file-web/"
+			if b.managed {
+				cookiePath = "/file-service/file-web/"
+			}
+			http.SetCookie(w, &http.Cookie{Name: "calabi_file_browser", Value: b.key, HttpOnly: true, SameSite: http.SameSiteStrictMode, Path: cookiePath})
 			browserJSON(w, 200, map[string]bool{"ok": true})
 			return
 		}
@@ -182,7 +194,11 @@ func (b *fileBrowser) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/file-web-config.js" {
 		w.Header().Set("Content-Type", "application/javascript")
-		_, _ = io.WriteString(w, "window.__CALABI_FILE_WEB__=true;")
+		config := "window.__CALABI_FILE_WEB__=true;"
+		if b.managed {
+			config += "window.__CALABI_FILE_WEB_BASE__='/file-service';"
+		}
+		_, _ = io.WriteString(w, config)
 		return
 	}
 	ui, err := status.UIFileSystem()
@@ -197,7 +213,11 @@ func (b *fileBrowser) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = io.WriteString(w, strings.Replace(string(body), "<head>", "<head><script src=\"/file-web-config.js\"></script>", 1))
+		head := "<head><script src=\"/file-web-config.js\"></script>"
+		if b.managed {
+			head = "<head><base href=\"/file-service/\"><script src=\"/file-service/file-web-config.js\"></script>"
+		}
+		_, _ = io.WriteString(w, strings.Replace(string(body), "<head>", head, 1))
 		return
 	}
 	if !strings.HasPrefix(r.URL.Path, "/assets/") {
@@ -237,11 +257,16 @@ func (b *fileBrowser) api(w http.ResponseWriter, r *http.Request) {
 			if entry.Type().IsRegular() {
 				info, e := entry.Info()
 				if e == nil {
-					files = append(files, map[string]any{"name": entry.Name(), "size": info.Size()})
+					files = append(files, map[string]any{"name": entry.Name(), "size": info.Size(), "created_unix_ms": info.ModTime().UnixMilli()})
 				}
 			}
 		}
-		sort.Slice(files, func(i, j int) bool { return files[i]["name"].(string) < files[j]["name"].(string) })
+		sort.Slice(files, func(i, j int) bool {
+			if files[i]["created_unix_ms"] != files[j]["created_unix_ms"] {
+				return files[i]["created_unix_ms"].(int64) > files[j]["created_unix_ms"].(int64)
+			}
+			return files[i]["name"].(string) < files[j]["name"].(string)
+		})
 		browserJSON(w, 200, map[string]any{"directory": b.directory, "files": files})
 		return
 	case r.Method == "GET" && r.URL.Path == "/file-web/mesh":
@@ -264,7 +289,11 @@ func (b *fileBrowser) api(w http.ResponseWriter, r *http.Request) {
 		browserJSON(w, 200, map[string]any{"up": v.Ready, "overlay": v.Overlay, "peers": peers})
 		return
 	case r.Method == "POST" && r.URL.Path == "/file-web/logout":
-		http.SetCookie(w, &http.Cookie{Name: "calabi_file_browser", Value: "", Path: "/file-web/", HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1})
+		cookiePath := "/file-web/"
+		if b.managed {
+			cookiePath = "/file-service/file-web/"
+		}
+		http.SetCookie(w, &http.Cookie{Name: "calabi_file_browser", Value: "", Path: cookiePath, HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1})
 		browserJSON(w, 200, map[string]bool{"ok": true})
 		return
 	case r.Method == "POST" && r.URL.Path == "/file-web/action":
@@ -354,7 +383,7 @@ func (b *fileBrowser) api(w http.ResponseWriter, r *http.Request) {
 			if err == nil {
 				result, err = b.action(fileAction{Action: "snapshot"})
 			}
-		case "snapshot", "receiving", "send", "decide", "pause", "resume", "cancel", "pause_receive", "resume_receive", "cancel_receive", "forget_job", "forget_receive", "forget_source", "cancel_preparing", "identity_status":
+		case "snapshot", "receiving", "service_settings", "send", "decide", "pause", "resume", "cancel", "pause_receive", "resume_receive", "cancel_receive", "forget_job", "forget_receive", "forget_source", "cancel_preparing", "identity_status", "revoke":
 			result, err = b.action(a.fileAction)
 		default:
 			err = errors.New("unsupported browser file action")

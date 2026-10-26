@@ -36,6 +36,7 @@ type Offer struct {
 }
 
 type Transfer struct {
+	CreatedUnixMs    int64  `json:"created_unix_ms,omitempty"`
 	PauseSupported   bool   `json:"pause_supported,omitempty"`
 	StopReason       string `json:"stop_reason,omitempty"`
 	RateBps          int64  `json:"rate_bps,omitempty"`
@@ -333,6 +334,7 @@ func (r *Receiver) offer(w http.ResponseWriter, req *http.Request) {
 	}
 	s := &receiveSession{Transfer: Transfer{BatchCount: o.BatchCount, ClientID: o.ClientID, Batch: o.Batch, ID: randomID(), Name: o.Name, Size: o.Size, SHA256: o.SHA256, State: "waiting", Kbps: kbps, MaxBlock: max(paceChunk, min(BlockSize, kbps*128))}, token: randomID(), created: time.Now(), ctx: ctx, cancel: cancel}
 	s.PauseSupported = r.cfg.Durable && req.Header.Get("X-Calabi-File-Control") == "pause-v1"
+	s.CreatedUnixMs = s.created.UnixMilli()
 	if err := r.persist(s); err != nil {
 		cancel()
 		fail(w, 500, "cannot persist offer")
@@ -398,7 +400,7 @@ func (r *Receiver) List() []Transfer {
 // Keep batches together and files in a fixed order, independent of live state.
 // The ID tie-breaker also makes duplicate filenames deterministic.
 func compareTransferOrder(a, b Transfer) int {
-	return cmp.Or(cmp.Compare(a.Batch, b.Batch), cmp.Compare(a.Name, b.Name), cmp.Compare(a.ID, b.ID))
+	return cmp.Or(cmp.Compare(b.CreatedUnixMs, a.CreatedUnixMs), cmp.Compare(a.Batch, b.Batch), cmp.Compare(a.Name, b.Name), cmp.Compare(a.ID, b.ID))
 }
 
 func (r *Receiver) Decide(id string, accept bool) error {

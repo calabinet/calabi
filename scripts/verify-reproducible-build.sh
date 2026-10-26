@@ -39,6 +39,10 @@
 #     --tree   verify against an existing checkout instead of cloning
 #     --keep   leave the work tree in place for inspection
 set -uo pipefail
+# Windows builds share the preflight/lease; other hosts keep their native paths.
+if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]]; then
+  source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dev/build-guard.sh" || exit $?
+fi
 
 MANIFEST="${1:?usage: verify-reproducible-build.sh <build-manifest.json> [--tree <dir>] [--keep]}"
 shift

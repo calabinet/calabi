@@ -431,11 +431,20 @@ func runDaemonService(args []string) int {
 			fmt.Fprintln(os.Stderr, "install:", explainInstallErr(err))
 			return 1
 		}
-		// The service is now the canonical daemon — retire the login-spawned
-		// one so it doesn't keep :7400 and this account's tunnel claims when the
-		// service starts. Default service only (see above).
+		// Free the default console before starting the installed service; doing
+		// this afterwards could make it bind a different port than its companion.
 		if isDefault {
 			stopTransientDaemon()
+		}
+		if runtime.GOOS == "linux" && os.Geteuid() == 0 {
+			if err := svc.Start(); err != nil {
+				fmt.Fprintln(os.Stderr, "start installed daemon:", err)
+				return 1
+			}
+			if err := installCompanionFiles(args[1:]); err != nil {
+				fmt.Fprintln(os.Stderr, "daemon installed; file service setup failed:", err)
+				return 1
+			}
 		}
 		startCmd := "calabi daemon start" + nameFlag
 		if hasBoolFlag(args[1:], "system") && runtime.GOOS != "windows" {
@@ -443,7 +452,11 @@ func runDaemonService(args []string) int {
 			// as root — mirror that in the hint so start/stop hit the same domain.
 			startCmd = "sudo " + startCmd
 		}
-		fmt.Printf("  installed (service %q). start with:  %s\n", name, startCmd)
+		if runtime.GOOS == "linux" && os.Geteuid() == 0 {
+			fmt.Printf("  installed and started (service %q).\n", name)
+		} else {
+			fmt.Printf("  installed (service %q). start with:  %s\n", name, startCmd)
+		}
 		fmt.Printf("  console: %s  (shifts to the next free port if busy — see the service log for the actual one)\n",
 			installStatusURL(args[1:]))
 		// Last, so it is the thing still on screen: the unit is written and looks
@@ -452,6 +465,10 @@ func runDaemonService(args []string) int {
 		warnIfServiceCannotExec()
 		return 0
 	case "uninstall":
+		if err := uninstallCompanionFiles(args[1:]); err != nil {
+			fmt.Fprintln(os.Stderr, "uninstall file service:", err)
+			return 1
+		}
 		// Try to stop first — uninstall on a running service fails on
 		// systemd ("unit is loaded") and Windows ("MarkedForDeletion").
 		_ = svc.Stop()
@@ -483,6 +500,10 @@ func runDaemonService(args []string) int {
 			return 1
 		}
 		fmt.Println("  start requested.")
+		if err := installCompanionFiles(args[1:]); err != nil {
+			fmt.Fprintln(os.Stderr, "file service setup:", err)
+			return 1
+		}
 		printConsoleHint(startedAt)
 		return 0
 	case "stop":
@@ -503,6 +524,10 @@ func runDaemonService(args []string) int {
 			return 1
 		}
 		fmt.Println("  restart requested.")
+		if err := installCompanionFiles(args[1:]); err != nil {
+			fmt.Fprintln(os.Stderr, "file service setup:", err)
+			return 1
+		}
 		printConsoleHint(startedAt)
 		return 0
 	case "status":

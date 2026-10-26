@@ -18,6 +18,53 @@ impl Request {
     }
 }
 
+// Display-only cache. Decisions still revalidate the immutable request against
+// the live agent; the receipt webview never waits behind that agent's RPC queue.
+#[derive(Default)]
+pub struct Receipts {
+    pub console: String,
+    pub requests: Vec<Request>,
+    claimed: std::collections::HashSet<String>,
+    present: bool,
+    pub error: String,
+}
+
+impl Receipts {
+    pub fn update(&mut self, console: String, requests: Vec<Request>, present: bool) {
+        if self.console != console { *self = Self::default(); }
+        self.console = console;
+        self.claimed.retain(|stamp| requests.iter().any(|r| r.stamp() == *stamp));
+        self.requests = requests;
+        self.present |= present;
+        if self.visible().is_empty() { self.present = false; }
+    }
+
+    pub fn visible(&self) -> Vec<&Request> {
+        self.requests.iter().filter(|r| !self.claimed.contains(&r.stamp())).collect()
+    }
+
+    pub fn claim(&mut self, stamp: &str) -> Option<Request> {
+        let request = self.visible().into_iter().find(|r| r.stamp() == stamp)?.clone();
+        self.claimed.insert(stamp.to_owned());
+        self.error.clear();
+        if self.visible().is_empty() { self.present = false; }
+        Some(request)
+    }
+
+    pub fn ready(&mut self, stamps: &[String]) -> bool {
+        let visible: Vec<_> = self.visible().iter().map(|r| r.stamp()).collect();
+        if !self.present || visible.is_empty() || visible != stamps { return false; }
+        self.present = false;
+        true
+    }
+
+    pub fn failed(&mut self, stamp: &str, error: String) {
+        self.claimed.remove(stamp);
+        self.error = error;
+        self.present = !self.visible().is_empty();
+    }
+}
+
 pub fn pending(snapshot: &Value) -> Vec<Request> {
     if snapshot["available"] != true { return vec![]; }
     let Some(fingerprint) = snapshot["identity"]["fingerprint"].as_str().filter(|s| !s.is_empty()) else { return vec![]; };
@@ -70,6 +117,45 @@ mod tests {
     }
     #[test] fn duplicate_ids_do_not_become_an_actionable_batch() {
         assert!(pending(&snapshot(vec![row("a","alice","waiting"),row("a","alice","waiting")])).is_empty());
+    }
+    #[test] fn receipt_requires_current_rendered_requests_before_presentation() {
+        let requests = pending(&snapshot(vec![row("a","alice","waiting"),row("b","alice","waiting")]));
+        let stamps: Vec<_> = requests.iter().map(Request::stamp).collect();
+        let mut cache = Receipts::default();
+        cache.update("console-a".into(), requests.clone(), true);
+        assert!(!cache.ready(&[]));
+        assert!(cache.ready(&stamps));
+        assert!(!cache.ready(&stamps)); // A background refresh must not reopen a dismissed receipt.
+        cache.update("console-a".into(), requests, false);
+        assert!(!cache.ready(&stamps));
+    }
+    #[test] fn admitted_decision_stays_hidden_during_old_poll_and_rejects_duplicate_clicks() {
+        let requests = pending(&snapshot(vec![row("a","alice","waiting"),row("b","alice","waiting")]));
+        let stamp = requests[0].stamp();
+        let mut cache = Receipts::default();
+        cache.update("console-a".into(), requests.clone(), true);
+        assert!(cache.claim(&stamp).is_some());
+        assert!(cache.claim(&stamp).is_none());
+        cache.update("console-a".into(), requests.clone(), false);
+        assert!(cache.visible().is_empty());
+        assert!(!cache.ready(&[stamp.clone()]));
+        cache.failed(&stamp, "File request changed".into());
+        assert_eq!(cache.visible().len(), 1);
+        assert!(cache.ready(&[stamp]));
+        cache.update("console-b".into(), vec![], false);
+        assert!(cache.visible().is_empty());
+        assert!(cache.error.is_empty());
+    }
+    #[test] fn failed_obsolete_request_cannot_be_recreated() {
+        let requests = pending(&snapshot(vec![row("a","alice","waiting"),row("b","alice","waiting")]));
+        let stamp = requests[0].stamp();
+        let mut cache = Receipts::default();
+        cache.update("console-a".into(), requests, true);
+        cache.claim(&stamp).unwrap();
+        cache.update("console-a".into(), vec![], false);
+        cache.failed(&stamp, "File request changed".into());
+        assert!(cache.visible().is_empty());
+        assert!(!cache.ready(&[stamp]));
     }
     #[cfg(windows)]
     #[test]

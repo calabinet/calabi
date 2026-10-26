@@ -58,6 +58,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.calabi.app.R
 import net.calabi.app.BuildConfig
+import net.calabi.app.CoreClient
 import android.net.Uri
 import org.json.JSONObject
 
@@ -180,7 +181,26 @@ private fun DevicesTab(
     onReplace: () -> Unit,
     onFiles: (String) -> Unit,
 ) {
+    var search by rememberSaveable { mutableStateOf("") }
+    var receivingPeers by remember(model.connected, model.activeOrgId, model.mode, model.server) { mutableStateOf(emptySet<String>()) }
+    LaunchedEffect(model.connected, model.activeOrgId, model.mode, model.server) {
+        if (BuildConfig.FILE_TRANSFER_ENABLED && model.connected) {
+            while (true) {
+                val result = CoreClient.call("GET", "/v1/files")
+                val snapshot = result.json()
+                val peers = if (result.ok && snapshot.optBoolean("available")) snapshot.optJSONArray("peers") else null
+                receivingPeers = buildSet {
+                    if (peers != null) for (i in 0 until peers.length()) {
+                        val p = peers.optJSONObject(i) ?: continue
+                        if (p.optBoolean("receiving") && p.optString("ip").isNotBlank()) add(p.optString("ip"))
+                    }
+                }
+                delay(2000)
+            }
+        }
+    }
     val devices = model.devices
+    val visibleDevices = devices.filter { matchesListSearch(search, it.name, it.overlay, it.ownerEmail) }
     val inUseExit = model.connection?.exitNode.orEmpty().ifBlank { model.exitNode }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 20.dp)) {
         item { Header(model, onPickOrg, onAccount) }
@@ -192,18 +212,14 @@ private fun DevicesTab(
         item { ShieldsPrompt(model) }
         item { UnreachablePrompt(model) }
         item { TilePrompt(model) }
-        if (model.nodes != null || model.nodesError != null) {
-            item {
-                Row(
-                    Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 6.dp, bottom = 10.dp),
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    Text(stringResource(R.string.devices_title), style = Styles.section, modifier = Modifier.weight(1f))
+        item("device-search") {
+            ListSearchToolbar(search, { search = it }, stringResource(R.string.list_search_devices),
+                Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                if (model.nodes != null || model.nodesError != null) {
+                    Text(stringResource(R.string.devices_title), style = Styles.section, modifier = Modifier.weight(1f).padding(start = 6.dp))
                     if (devices.isNotEmpty()) {
-                        Text(
-                            stringResource(R.string.devices_online, devices.count { it.online }, devices.size),
-                            fontSize = 13.sp, color = Palette.muted,
-                        )
+                        Text(stringResource(R.string.devices_online, devices.count { it.online }, devices.size),
+                            fontSize = 13.sp, color = Palette.muted)
                     }
                 }
             }
@@ -221,18 +237,19 @@ private fun DevicesTab(
         model.nodesError?.let { err ->
             item { Text(err, color = Palette.danger, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp)) }
         }
-        if (model.nodes != null && devices.isEmpty()) {
+        if (model.nodes != null && visibleDevices.isEmpty()) {
             item {
                 Group(Modifier.padding(horizontal = 16.dp)) {
                     Text(
-                        stringResource(R.string.devices_empty), style = Styles.hint.copy(fontSize = 14.sp),
+                        stringResource(if (search.isNotBlank()) R.string.list_search_no_matches else R.string.devices_empty), style = Styles.hint.copy(fontSize = 14.sp),
                         textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(24.dp),
                     )
                 }
             }
         }
-        itemsIndexed(devices, key = { _, d -> d.overlay + d.name }) { i, d ->
-            DeviceRow(d, first = i == 0, last = i == devices.lastIndex, isExit = d.name == inUseExit || d.overlay == inUseExit, onFiles = { onFiles(d.overlay) })
+        itemsIndexed(visibleDevices, key = { _, d -> d.overlay + d.name }) { i, d ->
+            DeviceRow(d, first = i == 0, last = i == visibleDevices.lastIndex, isExit = d.name == inUseExit || d.overlay == inUseExit,
+                canSendFiles = model.connected && d.online && d.overlay in receivingPeers, onFiles = { onFiles(d.overlay) })
         }
     }
 }
@@ -423,7 +440,7 @@ private fun Hero(model: AppModel, onConnect: () -> Unit, onDisconnect: () -> Uni
 }
 
 @Composable
-private fun DeviceRow(d: Device, first: Boolean, last: Boolean, isExit: Boolean, onFiles: () -> Unit) {
+private fun DeviceRow(d: Device, first: Boolean, last: Boolean, isExit: Boolean, canSendFiles: Boolean, onFiles: () -> Unit) {
     var actionsOpen by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val shape = groupRowShape(first, last)
@@ -467,8 +484,9 @@ private fun DeviceRow(d: Device, first: Boolean, last: Boolean, isExit: Boolean,
             if (BuildConfig.FILE_TRANSFER_ENABLED) Box {
                 IconButton(onClick = { actionsOpen = true }, modifier = Modifier.semantics { contentDescription = context.getString(R.string.files_device_actions) }) { Glyph(R.drawable.ic_more, Palette.muted) }
                 DropdownMenu(expanded = actionsOpen, onDismissRequest = { actionsOpen = false }, containerColor = Palette.surface) {
-                    DropdownMenuItem(text = { Text(stringResource(R.string.files_new_send)) }, enabled = d.online, onClick = { actionsOpen = false; onFiles() }, leadingIcon = { Glyph(R.drawable.ic_share) })
-                    DropdownMenuItem(text = { Text(stringResource(R.string.files_copy_ip)) }, onClick = { actionsOpen = false; copyToClipboard(context, d.overlay) }, leadingIcon = { Glyph(R.drawable.ic_copy) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.files_new_send)) }, enabled = canSendFiles,
+                        onClick = { actionsOpen = false; if (canSendFiles) onFiles() },
+                        leadingIcon = { Glyph(R.drawable.ic_share, if (canSendFiles) Palette.ink else Palette.radioLine) })
                 }
             }
         }

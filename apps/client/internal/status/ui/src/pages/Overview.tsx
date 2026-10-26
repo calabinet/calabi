@@ -55,22 +55,6 @@ function fmtBytes(n: number): string {
   return `${v.toFixed(i === 0 ? 0 : 2)} ${units[i]}`;
 }
 
-// fmtUptime turns a raw seconds count into the most human-y form:
-//   <60s          → "刚刚启动"
-//   <1h           → "Nm"
-//   <24h          → "Nh Mm"
-//   >=24h         → "Nd Mh"
-// Keeping it Chinese-locale because the rest of the Overview labels are.
-function fmtUptime(sec: number | undefined, justStarted: string): string {
-  if (!sec || sec < 60) return justStarted;
-  const d = Math.floor(sec / 86_400);
-  const h = Math.floor((sec % 86_400) / 3_600);
-  const m = Math.floor((sec % 3_600) / 60);
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-}
-
 // The pill under the tunnel count. A named constant rather than an inline
 // literal so a second pill, if one is ever added, shares it instead of being a
 // copy that quietly drifts.
@@ -155,6 +139,16 @@ export default function Overview() {
   // page shows it (in the chart slot, or as one line) — see the layout note
   // above the return. Asks nothing of a calabi.net daemon.
   const networkUsage = useSelfHostedUsage(standalone);
+  // Count the organization's registered mesh devices, including offline ones.
+  // Never substitute this machine's reachable peer count for the org total.
+  const deviceScope = snap?.active_org_id || me?.org?.id || 0;
+  const { data: devices, isSuccess: devicesAvailable } = useQuery({
+    queryKey: ["overview-org-devices", deviceScope],
+    queryFn: api.meshOrgNodes,
+    enabled: deviceScope > 0 && !standalone,
+    refetchInterval: 8_000,
+    retry: false,
+  });
 
   const { data: usage } = useQuery<CurrentUsage>({
     queryKey: ["usage"],
@@ -332,7 +326,7 @@ export default function Overview() {
   // have, so they are what "实时吞吐" is built from. The Overview top cards used
   // to surface them raw as "会话流量" + "累计连接", but those reset on every
   // daemon restart and meant little to the end user; they were replaced with
-  // 在线时长 + 今日流量 (see UI below).
+  // 组织设备 + 今日流量 (see UI below).
   // 实时吞吐 = tunnel sessions + this machine's mesh peers, so a mesh-only
   // machine doesn't show a flat 0 B/s during an active transfer.
   //
@@ -386,7 +380,7 @@ export default function Overview() {
   // org default keeps the org view too — that is what exempt means.
   const memberCapBinds =
     mq.loaded && !mq.exempt && myLimit >= 0 && (planMax <= 0 || myLimit < planMax);
-  const uptimeSec = snap?.uptime_seconds ?? health?.uptime_seconds;
+
 
   const quotaPct = usage?.percent_of_limit ?? 0;
   const quotaWarn = quotaPct >= 80 && quotaPct < 100;
@@ -462,6 +456,14 @@ export default function Overview() {
         <Col xs={24} sm={12} md={6} style={{ display: "flex" }}>
           <Card size="small" style={{ width: "100%" }}>
             <Statistic
+              title={t("overview.orgDevices")}
+              value={devicesAvailable ? devices?.items.length ?? 0 : "—"}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6} style={{ display: "flex" }}>
+          <Card size="small" style={{ width: "100%" }}>
+            <Statistic
               title={memberCapBinds ? t("overview.myTunnels") : t("overview.activeTunnels")}
               value={memberCapBinds ? myUsed : activeTunnels}
               suffix={
@@ -498,14 +500,6 @@ export default function Overview() {
                 {t("overview.onThisMachine", { count: myTunnels })}
               </div>
             )}
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6} style={{ display: "flex" }}>
-          <Card size="small" style={{ width: "100%" }}>
-            <Statistic
-              title={t("overview.uptime")}
-              value={fmtUptime(uptimeSec, t("overview.justStarted"))}
-            />
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6} style={{ display: "flex" }}>

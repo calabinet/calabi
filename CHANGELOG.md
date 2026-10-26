@@ -10,6 +10,55 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## 2.5.0 — 2026-10-26
+
+**Keep file transfers ready across restarts.** Linux installations can manage
+file transfers as a background service. Windows, macOS, Linux and Android
+remember whether you enabled receiving; new installations still start with
+receiving off, and incoming files still require confirmation.
+
+### Mesh
+
+- **Added** — **A managed Linux file service.** System service installation
+  also installs an ordinary-user file service with startup and status controls.
+  Manage files in the daemon console, choose a transfer directory, and optionally
+  save completed, verified files there. Reception can stay off while the
+  management page remains available.
+- **Changed** — **Reception preferences survive restarts.** Turning receiving
+  on or off is remembered across normal restarts and upgrades. Signing out,
+  changing organizations or replacing the file identity does not carry an old
+  permission into the new context.
+
+### Local console
+
+- **Added** — **Search for endpoints, devices and file transfers.** The file
+  list offers All, Receive and Send filters, keeps records in creation-time
+  order, and shows every file in an outgoing batch.
+- **Changed** — **Clearer device and transfer views.** Mesh status cards and
+  organization device counts return, dialogs follow the client's theme, and
+  unavailable receiving devices have shorter status labels.
+- **Fixed** — **Saving received files, including replacing an existing file.**
+  Save errors no longer incorrectly claim that the original source was moved.
+  Removing a source used by a task explains which transfer record to remove,
+  and file-agent failures are available in the client's diagnostic log.
+- **Fixed** — **macOS incoming-file windows could appear before their contents
+  or take time to close after a decision.** The window waits until its contents
+  are ready and responds immediately to accept or reject; failed decisions are
+  reported without bypassing live authorization checks.
+- **Fixed** — **Windows upgrades could lose login information and device
+  identity.** Upgrade while retaining data is now the default. Installation
+  messages follow the selected language and the installer closes the installed
+  desktop and file helper before replacing files. Firewall setup is embedded
+  in the client instead of leaving a separate script in the install directory.
+
+### Mobile
+
+- **Changed** — **Compact, expandable search on Android.** Endpoint, device
+  and file lists use the same search control sized for small screens.
+- **Fixed** — **Android file actions now reflect the receiving device's
+  availability.** Sending is disabled when the receiver is unavailable, its
+  status is more visible, and duplicate IP-copy actions have been removed.
+
 ## 2.4.0 — 2026-10-25
 
 **Send files to your mesh devices.** File transfers are now available in the

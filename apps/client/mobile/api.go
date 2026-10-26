@@ -167,6 +167,10 @@ func (c *Core) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if cfg == nil {
 		cfg = &creds.Config{}
 	}
+	if err := c.clearFileReception(); err != nil {
+		writeError(w, 500, "save reception preference: "+err.Error())
+		return
+	}
 	cfg.AccessToken, cfg.RefreshToken = out.AccessToken, out.RefreshToken
 	cfg.User.ID, cfg.User.Email = out.UserID, out.Email
 	cfg.ActiveOrgID = out.ActiveOrgID
@@ -183,6 +187,12 @@ func (c *Core) handleLogin(w http.ResponseWriter, r *http.Request) {
 // handleLogout leaves the meshnet, revokes the session and forgets it. The
 // revoke is best-effort: being offline must not keep the user signed in.
 func (c *Core) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if err := c.clearFileReception(); err != nil {
+		// Local reception is already stopped. Forget the account even if its
+		// file preference cannot be written; the next sign-in must clear it
+		// successfully before accepting a new authenticated context.
+		c.logger.Warn("could not save reception preference during sign-out", "err", err)
+	}
 	if p := c.selfHosted(); p != nil {
 		// The mesh key stays, as below: joining the same server again is the
 		// same device.
@@ -247,6 +257,10 @@ func (c *Core) handleOrgSwitch(w http.ResponseWriter, r *http.Request) {
 	// name: the new one's device of that name — if it has one — is someone
 	// else's machine. Joining a self-hosted server forgets it the same way.
 	if req.TargetOrgID != cfg.ActiveOrgID {
+		if err := c.clearFileReception(); err != nil {
+			writeError(w, 500, "save reception preference: "+err.Error())
+			return
+		}
 		cfg.MeshExitNode = ""
 	}
 	cfg.AccessToken, cfg.RefreshToken = out.AccessToken, out.RefreshToken

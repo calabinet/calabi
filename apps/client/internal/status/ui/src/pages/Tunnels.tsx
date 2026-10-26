@@ -55,12 +55,14 @@ import type {
   TunnelList,
 } from "../api/types";
 import { SelfHostedTunnelsCard } from "../components/SelfHosted";
+import ListSearch from "../components/ListSearch";
 import InspectorDrawer from "../components/InspectorDrawer";
 import { notify } from "../hooks/use-notifications";
 import { useServiceMode } from "../hooks/use-service-mode";
 import { useMemberQuota } from "../lib/memberQuota";
 import { effectiveState, type EffectiveState } from "../lib/tunnelState";
 import { isBarePortType, typeLabel } from "../lib/tunnelType";
+import { matchesListSearch } from "../lib/listSearch";
 import { securityErrorText } from "../lib/securityError";
 import {
   CopyableAddr,
@@ -151,6 +153,7 @@ export default function Tunnels() {
   const { agentMode, canManage } = useServiceMode();
   const readOnlyAgent = agentMode && !canManage;
   const [drawerProxy, setDrawerProxy] = useState<{ id: string; name?: string } | null>(null);
+  const [search, setSearch] = useState("");
   const [secRow, setSecRow] = useState<RemoteTunnel | null>(null);
   const [editRow, setEditRow] = useState<RemoteTunnel | null>(null);
   const [takeoverRow, setTakeoverRow] = useState<RemoteTunnel | null>(null);
@@ -347,8 +350,9 @@ export default function Tunnels() {
     if (!e || !e.region) return true; // edge not in directory → degrade open
     return e.region === currentRegion;
   };
-  const visibleRows = rows.filter(inCurrentRegion);
-  const hiddenByRegion = rows.length - visibleRows.length;
+  const regionRows = rows.filter(inCurrentRegion);
+  const visibleRows = regionRows.filter(row => matchesListSearch(search, row.name, row.type, row.domain, row.local_addr, row.remote_port || "", edgeById.get(row.edge_node_id || 0)?.public_addr, row.remote_port ? `${portTunnelHost(snap)}:${row.remote_port}` : "", row.id));
+  const hiddenByRegion = rows.length - regionRows.length;
 
   const columns: ColumnsType<Row> = [
     {
@@ -830,6 +834,7 @@ export default function Tunnels() {
         />
       )}
 
+      <div className="list-toolbar"><ListSearch placeholder={t("listSearch.endpoints")} value={search} onChange={setSearch} /></div>
       <Table<Row>
         rowKey="id"
         size="middle"
@@ -837,12 +842,12 @@ export default function Tunnels() {
         dataSource={visibleRows}
         columns={columns}
         pagination={{ pageSize: 20, showSizeChanger: false }}
-        locale={{ emptyText: t("tunnels.emptyText") }}
+        locale={{ emptyText: t(search.trim() ? "listSearch.noMatches" : "tunnels.emptyText") }}
       />
 
       {/* Self-hosted: every tunnel the network's daemons report to the
           coordinator, this machine's and the other devices'. */}
-      {standalone && <SelfHostedTunnelsCard />}
+      {standalone && <SelfHostedTunnelsCard search={search} />}
 
       <InspectorDrawer
         open={!!drawerProxy}

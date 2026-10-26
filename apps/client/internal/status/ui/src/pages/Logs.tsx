@@ -3,9 +3,12 @@
 // updates. Filters happen client-side (the daemon's ring buffer is
 // already small).
 import { DownloadOutlined, PauseCircleOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Input, Select, Space, Tag, Typography, message } from "antd";
+import { Button, Select, Space, Tag, Typography, message } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
+import ListSearch from "../components/ListSearch";
 import { api } from "../api/client";
+import { fileAction, hasBrowserFiles, hasNativeFiles } from "../api/files";
+import { mergeFileDiagnostics, type FileDiagnostic } from "../lib/fileDiagnostics";
 import { useTranslation } from "react-i18next";
 
 const { Title, Text } = Typography;
@@ -22,6 +25,8 @@ function levelOf(line: string): "debug" | "info" | "warn" | "error" {
 export default function Logs() {
   const { t } = useTranslation();
   const [lines, setLines] = useState<string[]>([]);
+  const [fileDiagnostics, setFileDiagnostics] = useState<FileDiagnostic[]>([]);
+  const allLines = useMemo(() => mergeFileDiagnostics(lines, fileDiagnostics), [lines, fileDiagnostics]);
   const [paused, setPaused] = useState(false);
   const [filter, setFilter] = useState("");
   const [lvl, setLvl] = useState<"all" | "debug" | "info" | "warn" | "error">("all");
@@ -69,24 +74,42 @@ export default function Logs() {
     };
   }, [paused]);
 
+  useEffect(() => {
+    if (paused || !hasNativeFiles() || hasBrowserFiles()) return;
+    let active = true, unavailable = false, pending = false;
+    const refresh = async () => {
+      if (!active || unavailable || pending) return;
+      pending = true;
+      try {
+        const result = await fileAction<{ entries: FileDiagnostic[] }>({ action: "diagnostics" });
+        if (active && Array.isArray(result.entries)) setFileDiagnostics(old => JSON.stringify(old) === JSON.stringify(result.entries) ? old : result.entries);
+      } catch {
+        unavailable = true; // Older desktop shells have no private diagnostics API.
+      } finally { pending = false; }
+    };
+    void refresh();
+    const timer = window.setInterval(refresh, 3000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [paused]);
+
   // Auto-scroll to bottom unless the user scrolled up.
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !autoScrollRef.current) return;
     el.scrollTop = el.scrollHeight;
-  }, [lines]);
+  }, [allLines]);
 
   const filtered = useMemo(() => {
     const f = filter.toLowerCase();
-    return lines.filter((ln) => {
+    return allLines.filter((ln) => {
       if (lvl !== "all" && levelOf(ln) !== lvl) return false;
       if (!f) return true;
       return ln.toLowerCase().includes(f);
     });
-  }, [lines, filter, lvl]);
+  }, [allLines, filter, lvl]);
 
   function download() {
-    const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+    const blob = new Blob([allLines.join("\n")], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -131,28 +154,8 @@ export default function Logs() {
         <Space>
           <Tag color={paused ? "default" : "processing"}>
             {paused ? t("logs.paused") : t("logs.live")} ·{" "}
-            {t("logs.lineCount", { filtered: filtered.length, total: lines.length })}
+            {t("logs.lineCount", { filtered: filtered.length, total: allLines.length })}
           </Tag>
-          <Select
-            size="middle"
-            value={lvl}
-            onChange={setLvl}
-            style={{ width: 110 }}
-            options={[
-              { value: "all", label: t("logs.levelAll") },
-              { value: "debug", label: "DEBUG" },
-              { value: "info", label: "INFO" },
-              { value: "warn", label: "WARN" },
-              { value: "error", label: "ERROR" },
-            ]}
-          />
-          <Input.Search
-            placeholder={t("logs.filterPlaceholder")}
-            allowClear
-            style={{ width: 200 }}
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-          />
           <Button
             icon={paused ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
             onClick={() => setPaused((p) => !p)}
@@ -167,6 +170,23 @@ export default function Logs() {
             {t("common.download")}
           </Button>
         </Space>
+      </div>
+
+      <div className="list-toolbar">
+          <Select
+            size="middle"
+            value={lvl}
+            onChange={setLvl}
+            style={{ width: 110 }}
+            options={[
+              { value: "all", label: t("logs.levelAll") },
+              { value: "debug", label: "DEBUG" },
+              { value: "info", label: "INFO" },
+              { value: "warn", label: "WARN" },
+              { value: "error", label: "ERROR" },
+            ]}
+          />
+        <ListSearch placeholder={t("logs.filterPlaceholder")} value={filter} onChange={setFilter} />
       </div>
 
       <div ref={containerRef} className="log-viewer" onScroll={onScroll}>

@@ -285,8 +285,8 @@ export const api = {
     jsonOrThrow<{ items: MeshServiceDecl[] }>(await fetchResponse("/v1/mesh/services")),
 
   // Organization devices provide owner labels and coordinator presence.
-  // API-key agents or older daemons may not expose this endpoint; callers
-  // retain their peer list and show unknown presence when it is unavailable.
+  // API-key agents receive presence and associated owner labels. Older
+  // servers may refuse it; unavailable data retains unknown presence.
   meshOrgNodes: async (): Promise<{ items: MeshOrgNode[] }> =>
     jsonOrThrow<{ items: MeshOrgNode[] }>(await fetchResponse("/v1/mesh/nodes")),
 

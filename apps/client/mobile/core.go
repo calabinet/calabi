@@ -82,10 +82,11 @@ type Core struct {
 	mu     sync.Mutex
 	engine *engine
 
-	selfMu   sync.Mutex // guards self.json (self.go)
-	fileMu   sync.Mutex
-	fileTest *mobileFileTest
-	files    *mobileFiles
+	selfMu               sync.Mutex // guards self.json (self.go)
+	fileMu               sync.Mutex
+	fileReceptionPending *fileReceptionPreference
+	fileTest             *mobileFileTest
+	files                *mobileFiles
 
 	// A read-only session with a self-hosted server, for its lists while the
 	// phone is not connected (selfhosted_view.go).
@@ -176,7 +177,7 @@ func (c *Core) Connect() error {
 
 // Disconnect leaves the meshnet and waits until the datapath is torn down.
 func (c *Core) Disconnect() {
-	c.stopFiles(true)
+	c.stopFiles(false)
 	c.stopFileTest()
 	c.mu.Lock()
 	e := c.engine
@@ -203,7 +204,7 @@ func (c *Core) NetworkChanged() {
 // reconnect restarts a running session so it picks up changed settings or a
 // changed identity. A no-op when not connected.
 func (c *Core) reconnect() {
-	c.stopFiles(true)
+	c.stopFiles(false)
 	c.stopFileTest()
 	c.mu.Lock()
 	e := c.engine

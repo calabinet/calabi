@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+ <string name="list_search_endpoints">Search name or address</string>
+ <string name="list_search_devices">Search device, IP or user</string>
+ <string name="list_search_files">Search file name or device</string>
+ <string name="list_search_no_matches">No matching results</string>
+ <string name="list_search_clear">Clear search</string>
+ <string name="list_search_close">Close search</string>
  <string name="files_verifying">Verifying and saving file…</string>
  <string name="files_rate_eta">%1$s/s · about %2$d s remaining</string>
  <string name="files_request">New file request. Open to review.</string>
@@ -51,6 +57,7 @@
  <string name="files_active">Ongoing</string>
  <string name="files_pending">Pending</string>
  <string name="files_history">History</string>
+ <string name="files_empty_records">No transfer records</string>
  <string name="files_empty_active">No transfers in progress</string>
  <string name="files_empty_pending">No files awaiting confirmation</string>
  <string name="files_empty_history">No transfer history</string>

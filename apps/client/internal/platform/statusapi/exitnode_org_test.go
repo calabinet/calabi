@@ -67,7 +67,7 @@ func TestTheExitDeviceStaysWithItsOrganization(t *testing.T) {
 	}
 	signedInWithExit := func() {
 		t.Helper()
-		if err := creds.Save(&creds.Config{AccessToken: "jwt", RefreshToken: "rt", ActiveOrgID: 7, MeshExitNode: "home-server"}); err != nil {
+		if err := creds.Save(&creds.Config{AccessToken: "jwt", RefreshToken: "rt", ActiveOrgID: 7, MeshExitNode: "home-server", FileReceiveEpoch: 42}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -85,8 +85,14 @@ func TestTheExitDeviceStaysWithItsOrganization(t *testing.T) {
 	if got := exit(); got != "home-server" {
 		t.Fatalf("after a refused switch, exit = %q; want it kept", got)
 	}
+	if cfg, _ := creds.Load(); cfg.FileReceiveEpoch != 42 {
+		t.Fatal("same/refused organization switch revoked reception")
+	}
 	if code := post("/v1/orgs/switch", `{"target_org_id":9}`); code != http.StatusOK {
 		t.Fatalf("switch = %d", code)
+	}
+	if cfg, _ := creds.Load(); cfg.FileReceiveEpoch == 42 || cfg.FileReceiveEpoch == 0 {
+		t.Fatal("organization switch did not revoke persisted reception")
 	}
 	if got := exit(); got != "" {
 		t.Fatalf("after switching organization, exit = %q; want none", got)

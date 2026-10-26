@@ -1,3 +1,4 @@
+import { matchesListSearch } from "../lib/listSearch";
 import { displayError } from "../api/userError";
 // SelfHosted.tsx — this console connected to a self-hosted server instead of
 // calabi.net:
@@ -343,7 +344,7 @@ function readFailureText(t: (k: string) => string, e: unknown): string {
 
 // SelfHostedTunnelsCard is every tunnel the network's daemons reported to the
 // coordinator — this machine's and every other device's.
-export function SelfHostedTunnelsCard() {
+export function SelfHostedTunnelsCard({ search = "" }: { search?: string }) {
   const { t } = useTranslation();
   const { data: st } = useSelfHosted();
   const hasMesh = st?.mode === "self_hosted" && !!st.mesh;
@@ -364,9 +365,9 @@ export function SelfHostedTunnelsCard() {
           rowKey="id"
           size="small"
           loading={isLoading}
-          dataSource={data?.items ?? []}
+          dataSource={(data?.items ?? []).filter(row => matchesListSearch(search, row.name, row.type, row.node_name, row.public_addr))}
           pagination={false}
-          locale={{ emptyText: t("selfHosted.noTunnels") }}
+          locale={{ emptyText: t(search.trim() ? "listSearch.noMatches" : "selfHosted.noTunnels") }}
           columns={[
             {
               title: t("tunnels.colName"),

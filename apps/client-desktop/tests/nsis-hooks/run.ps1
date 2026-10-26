@@ -36,6 +36,7 @@ $makensis = @(
 if (-not $makensis) { throw "makensis not found under %LOCALAPPDATA%\tauri\NSIS — run cargo tauri build once." }
 
 $work = Join-Path $env:TEMP 'calabi-nsis-hooks-test'
+if ((Split-Path -Parent ([IO.Path]::GetFullPath($work))) -ne [IO.Path]::GetFullPath($env:TEMP).TrimEnd('\')) { throw 'Unexpected test directory.' }
 $regParent = 'HKCU:\Software\CalabiNsisHookTest'
 $regKey = "$regParent\svc"
 $svcName = 'calabi-nsis-hook-test-does-not-exist'
@@ -59,6 +60,8 @@ function Build($name, $instdir, $tries, $replacement = $newExe, [switch]$Post, [
     $args = @(
         '/V2',
         "/DHOOKS=$hooks",
+        "/DTEST_LANGUAGE_FILE=$(Join-Path (Split-Path -Parent $hooks) 'nsis-languages/English.nsh')",
+        "/DTEST_PLUGIN_DIR=$(Join-Path $env:LOCALAPPDATA 'tauri/NSIS/Plugins/x86-unicode/additional')",
         "/DTEST_OUT=$out",
         "/DTEST_INSTDIR=$instdir",
         "/DTEST_REPLACEMENT=$replacement",
@@ -90,7 +93,7 @@ if (-not (Get-Command go -ErrorAction SilentlyContinue)) { throw "go not found -
 $prevWork = $env:GOWORK
 $env:GOWORK = 'off'
 try {
-    & go build -o $fakeExe (Join-Path $here 'fakedaemon\main.go')
+    & pwsh -NoProfile -File (Join-Path $here '..\..\..\..\scripts\dev\build.ps1') go build -o $fakeExe (Join-Path $here 'fakedaemon\main.go')
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $fakeExe)) { throw "go build of the stand-in daemon failed" }
 } finally {
     $env:GOWORK = $prevWork
@@ -98,15 +101,21 @@ try {
 $instPost = Build 'inst-post' $dirPost 4 $fakeExe -Post
 $instUninstall = Build 'inst-uninstall' $dirPost 4 $fakeExe -Uninstall
 
-function UninstallScenario([bool]$fail) {
+function UninstallScenario([bool]$fail, [bool]$deleteData = $false, [bool]$update = $false) {
     New-Item -ItemType Directory -Force -Path $dirPost | Out-Null
     Copy-Item -LiteralPath $fakeExe -Destination (Join-Path $dirPost 'calabi.exe') -Force
+    $legacyScript = Join-Path $dirPost 'file-firewall.ps1'
+    Set-Content -LiteralPath $legacyScript -Value 'legacy-script-fixture'
     Remove-Item -LiteralPath (Join-Path $dirPost 'after-uninstall.txt') -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $fakeLog -ErrorAction SilentlyContinue
     $savedProgramData = $env:ProgramData
     $env:ProgramData = Join-Path $work 'fake-programdata'
     $fakeData = Join-Path $env:ProgramData 'Calabi'
     New-Item -ItemType Directory -Path $fakeData -Force | Out-Null
+    $fixtures = @('credentials.json', 'mesh.key', 'config.json')
+    foreach ($name in $fixtures) { Set-Content -LiteralPath (Join-Path $fakeData $name) -Value "fixture-$name" }
+    $env:CALABI_FAKE_DELETE_DATA = if ($deleteData) {'1'} else {'0'}
+    $env:CALABI_FAKE_UPDATE_MODE = if ($update) {'1'} else {'0'}
     $env:CALABI_FAKE_FIREWALL = if ($fail) {'fail'} else {'ok'}
     $env:CALABI_FAKE_LOG = $fakeLog
     try { $p = Start-Process -FilePath $instUninstall -ArgumentList '/S' -Wait -PassThru }
@@ -115,9 +124,17 @@ function UninstallScenario([bool]$fail) {
     if ($fail) {
         if ($p.ExitCode -ne 5 -or $calls.Count -ne 1 -or -not (Test-Path -LiteralPath $fakeData)) { throw 'Failed firewall cleanup must stop uninstall before service/data removal.' }
     } else {
-        if ($p.ExitCode -ne 0 -or $calls.Count -ne 3 -or $calls[0] -notlike 'firewall -Action Remove *' -or $calls[1] -ne 'daemon stop' -or $calls[2] -ne 'daemon uninstall' -or (Test-Path -LiteralPath $fakeData)) { throw 'Uninstall must remove firewall, service, then machine data.' }
+        if ($p.ExitCode -ne 0 -or $calls.Count -ne 3 -or $calls[0] -ne 'mesh files firewall remove' -or $calls[1] -ne 'daemon stop' -or $calls[2] -ne 'daemon uninstall') { throw 'Uninstall must remove firewall and service.' }
     }
-    "PASS  uninstall firewall failure=$fail"
+    $shouldKeep = $fail -or -not $deleteData -or $update
+    if ((Test-Path -LiteralPath $legacyScript) -ne $fail) { throw 'Legacy script cleanup must follow successful embedded firewall removal.' }
+    if ((Test-Path -LiteralPath $fakeData) -ne $shouldKeep) { throw 'Machine data deletion did not match checkbox/update mode.' }
+    if ($shouldKeep) {
+        foreach ($name in $fixtures) {
+            if ((Get-Content -LiteralPath (Join-Path $fakeData $name) -Raw).Trim() -ne "fixture-$name") { throw "Changed retained file: $name" }
+        }
+    }
+    "PASS  uninstall firewall failure=$fail deleteData=$deleteData update=$update"
 }
 
 function Set-ImagePath($value) {
@@ -177,10 +194,12 @@ function Scenario {
 # registered, did the installer say so truthfully (exit code), and what did the
 # hook actually run.
 function PostScenario {
-    param($name, $installMode, $startMode, [bool]$preRegistered, [bool]$expectOk, $expectInErrorLog = '', $firewallMode = 'ok')
+    param($name, $installMode, $startMode, [bool]$preRegistered, [bool]$expectOk, $expectInErrorLog = '', $firewallMode = 'ok', [bool]$legacyFixture = $true)
 
     if (Test-Path $dirPost) { [System.IO.Directory]::Delete($dirPost, $true) }
     New-Item -ItemType Directory -Force -Path $dirPost | Out-Null
+    $legacyScript = Join-Path $dirPost 'file-firewall.ps1'
+    if ($legacyFixture) { Set-Content -LiteralPath $legacyScript -Value 'legacy-script-fixture' }
     if (Test-Path $fakeLog) { Remove-Item $fakeLog -Force }
     # An upgrade finds the service already there, pointing at this install.
     if ($preRegistered) { Set-ImagePath "`"$dirPost\calabi.exe`" daemon" } else { Set-ImagePath $null }
@@ -214,7 +233,7 @@ function PostScenario {
         if (-not $afterPost) { $problems += 'hook aborted' }
         if ($p.ExitCode -ne 0) { $problems += "installer exited $($p.ExitCode)" }
         if (-not $registered) { $problems += 'service is NOT registered' }
-        if ($calls.Count -ne 3 -or $calls[1] -ne "firewall -Action Install -Program $dirPost\calabi.exe" -or $calls[2] -ne 'daemon start') { $problems += "ran [$($calls -join ' | ')], want install then firewall then start" }
+        if ($calls.Count -ne 3 -or $calls[1] -ne 'mesh files firewall install' -or $calls[2] -ne 'daemon start') { $problems += "ran [$($calls -join ' | ')], want install then firewall then start" }
         if ($errLog) { $problems += 'left a service-install-error.log behind' }
     } else {
         if ($afterPost) { $problems += 'hook did NOT abort' }
@@ -227,6 +246,8 @@ function PostScenario {
         if ($firewallMode -eq 'fail' -and ($calls -contains 'daemon start')) { $problems += 'started service despite firewall setup failure' }
     }
 
+    $enrolled = $installMode -ne 'refuse' -and $firewallMode -ne 'fail'
+    if ((Test-Path -LiteralPath $legacyScript) -ne ($legacyFixture -and -not $enrolled)) { $problems += 'legacy script cleanup did not match embedded enrollment outcome' }
     $verdict = if ($problems.Count -eq 0) { 'PASS' } else { 'FAIL' }
     if ($problems.Count -gt 0) { $script:failures++ }
     "{0}  {1,-52} {2,5:N1}s  exit={3}  {4}" -f $verdict, $name, $sw.Elapsed.TotalSeconds, $p.ExitCode, ($problems -join '; ')
@@ -253,6 +274,7 @@ try {
     ''
     '--- step 3: registering the service ---'
     PostScenario 'fresh install: registered and started'           'ok'     'ok'   $false $true
+    PostScenario 'fresh install: no external firewall script'       'ok'     'ok'   $false $true '' 'ok' $false
     # install fails with "already exists" on every upgrade; that is not a failure.
     PostScenario 'upgrade: already registered, install says so'    'exists' 'ok'   $true  $true
     # The field failure: refused, nothing registered, and the installer said "Completed".
@@ -261,10 +283,13 @@ try {
     PostScenario 'firewall refused: install must report failure'   'ok'     'ok'   $false $false 'firewall policy denied' 'fail'
     UninstallScenario $false
     UninstallScenario $true
+    UninstallScenario $false $true $false
+    UninstallScenario $false $true $true
+    UninstallScenario $false $false $true
 }
 finally {
     Set-ImagePath $null
-    foreach ($v in 'CALABI_FAKE_INSTALL', 'CALABI_FAKE_START', 'CALABI_FAKE_REGKEY', 'CALABI_FAKE_LOG', 'CALABI_FAKE_FIREWALL') {
+    foreach ($v in 'CALABI_FAKE_INSTALL', 'CALABI_FAKE_START', 'CALABI_FAKE_REGKEY', 'CALABI_FAKE_LOG', 'CALABI_FAKE_FIREWALL', 'CALABI_FAKE_DELETE_DATA', 'CALABI_FAKE_UPDATE_MODE') {
         Remove-Item "Env:$v" -ErrorAction SilentlyContinue
     }
 }

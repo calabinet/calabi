@@ -15,11 +15,13 @@ import (
 )
 
 type StagedFile struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Size int64  `json:"size"`
+	CreatedUnixMs int64  `json:"created_unix_ms,omitempty"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Size          int64  `json:"size"`
 }
 type Job struct {
+	CreatedUnixMs    int64         `json:"created_unix_ms,omitempty"`
 	StopReason       string        `json:"stop_reason,omitempty"`
 	CancelPending    bool          `json:"cancel_pending,omitempty"`
 	RateBps          int64         `json:"rate_bps,omitempty"`
@@ -192,6 +194,13 @@ func NewWorkspace(cfg AgentConfig) (*Workspace, error) {
 				return nil, err
 			}
 			s := record.StagedFile
+			legacyCreated := s.CreatedUnixMs == 0
+			if legacyCreated {
+				if st, err := root.Stat(name); err == nil {
+					s.CreatedUnixMs = st.ModTime().UnixMilli()
+
+				}
+			}
 			valid := s.ID == id && validName(s.Name) && s.Size >= 0 && s.Size <= cfg.MaxBytes-total && len(w.sources) < MaxBatchFiles
 			if record.Local != nil {
 				// Missing/changed originals must not prevent opening the file centre.
@@ -204,6 +213,13 @@ func NewWorkspace(cfg AgentConfig) (*Workspace, error) {
 			if !valid {
 				w.Close()
 				return nil, errors.New("invalid staged source or source quota exceeded")
+			}
+			if legacyCreated {
+				record.StagedFile = s
+				if err := writeRecord(root, name, record); err != nil {
+					w.Close()
+					return nil, err
+				}
 			}
 			total += s.Size
 			w.sources[id] = s
@@ -225,6 +241,12 @@ func NewWorkspace(cfg AgentConfig) (*Workspace, error) {
 		if err := readRecord(root, name, &r); err != nil {
 			w.Close()
 			return nil, err
+		}
+		legacyCreated := r.Job.CreatedUnixMs == 0
+		if legacyCreated {
+			if st, err := root.Stat(name); err == nil {
+				r.Job.CreatedUnixMs = st.ModTime().UnixMilli()
+			}
 		}
 		if r.Job.ID != id || len(w.jobs) >= maxOutgoingRecords || (!r.Hidden && (w.visibleJobs() >= MaxBatchFiles || len(r.Job.Sources) < 1)) || len(r.Job.Sources) > MaxBatchFiles || (r.Hidden && (r.Job.State != "cancelled" || len(r.Job.Sources) != 0)) || (r.Ticket.ID != "" && (r.Ticket.Scope != cfg.Scope || !validID(r.Ticket.ID))) {
 			w.Close()
@@ -264,6 +286,12 @@ func NewWorkspace(cfg AgentConfig) (*Workspace, error) {
 		default:
 			w.Close()
 			return nil, errors.New("invalid outgoing state")
+		}
+		if legacyCreated {
+			if err := writeRecord(root, name, r); err != nil {
+				w.Close()
+				return nil, err
+			}
 		}
 		w.jobs[id] = &outgoingJob{record: r}
 		w.jobs[id].record.Job.RateBps = 0
@@ -367,7 +395,7 @@ func (w *Workspace) Stage(ctx context.Context, src io.Reader, name string, size 
 	if err := f.Close(); err != nil {
 		return zero, err
 	}
-	s := StagedFile{ID: id, Name: name, Size: n}
+	s := StagedFile{ID: id, Name: name, Size: n, CreatedUnixMs: time.Now().UnixMilli()}
 	if err := writeRecord(w.root, "source-"+id+".json", s); err != nil {
 		return zero, err
 	}
@@ -386,7 +414,7 @@ func (w *Workspace) Staged() []StagedFile {
 		out = append(out, s)
 	}
 	slices.SortFunc(out, func(a, b StagedFile) int {
-		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.ID, b.ID))
+		return cmp.Or(cmp.Compare(b.CreatedUnixMs, a.CreatedUnixMs), cmp.Compare(a.Name, b.Name), cmp.Compare(a.ID, b.ID))
 	})
 	return out
 }
@@ -406,8 +434,10 @@ func (w *Workspace) Jobs() []Job {
 		job.Sources = append([]string(nil), job.Sources...)
 		out = append(out, job)
 	}
-	// IDs are immutable; progress/state updates must not move a task on refresh.
-	slices.SortFunc(out, func(a, b Job) int { return cmp.Compare(a.ID, b.ID) })
+	// Creation time is immutable; progress/state updates do not move rows.
+	slices.SortFunc(out, func(a, b Job) int {
+		return cmp.Or(cmp.Compare(b.CreatedUnixMs, a.CreatedUnixMs), cmp.Compare(a.ID, b.ID))
+	})
 	return out
 }
 
@@ -434,7 +464,7 @@ func (w *Workspace) Send(ip netip.Addr, ids []string, resume string) (string, er
 			return "", errors.New("batch or task limit exceeded")
 		}
 		id := randomID()
-		j = &outgoingJob{record: outgoingRecord{Job: Job{ID: id, PeerIP: ip.String(), Sources: append([]string(nil), ids...), State: "paused"}}}
+		j = &outgoingJob{record: outgoingRecord{Job: Job{ID: id, PeerIP: ip.String(), Sources: append([]string(nil), ids...), State: "paused", CreatedUnixMs: time.Now().UnixMilli()}}}
 	}
 	var sources []Source
 	var opened []io.Closer

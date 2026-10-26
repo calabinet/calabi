@@ -11,11 +11,14 @@
 .files-center .ant-switch-checked { background:#26472e; }
 .files-center .ant-switch-checked .ant-switch-handle::before { background:#91d0a6; }
 .files-secondary { display:block; font-size:12px; margin-top:3px; color:#94a0b6; overflow-wrap:anywhere; }
-.files-filter-count { margin-inline-start:4px; opacity:.6; font-size:11px; font-variant-numeric:tabular-nums; }
 .files-task-file { display:flex; align-items:flex-start; gap:11px; min-width:0; }
 .files-file-icon { display:grid; place-items:center; width:33px; height:33px; flex:0 0 33px; color:#a5b6db; background:#15203a; border:1px solid #293550; border-radius:8px; }
 .files-file-icon .mesh-glyph { width:16px; height:16px; }
 .files-task-description { min-width:0; }
+.files-batch-list { display:flex; flex-direction:column; gap:9px; }
+.files-batch-file { display:flex; align-items:flex-start; gap:7px; min-width:0; }
+.files-batch-file > .mesh-glyph { color:#a5b6db; margin-top:2px; }
+.files-batch-file > div { min-width:0; }
 .files-task-context { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-top:7px; min-width:0; }
 .files-task-context .files-direction { padding:2px 5px; font-size:11px; }
 .files-task-context .files-direction .mesh-glyph { width:12px; height:12px; }

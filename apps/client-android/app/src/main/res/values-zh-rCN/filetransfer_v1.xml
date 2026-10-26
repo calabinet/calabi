@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+ <string name="list_search_endpoints">搜索名称或地址</string>
+ <string name="list_search_devices">搜索设备、IP 或用户</string>
+ <string name="list_search_files">搜索文件名或设备</string>
+ <string name="list_search_no_matches">没有匹配的结果</string>
+ <string name="list_search_clear">清空搜索</string>
+ <string name="list_search_close">关闭搜索</string>
  <string name="files_verifying">正在校验并保存文件…</string>
  <string name="files_rate_eta">%1$s/秒 · 预计剩余 %2$d 秒</string>
  <string name="files_request">有新的文件请求，点击查看并确认。</string>
@@ -51,6 +57,7 @@
  <string name="files_active">进行中</string>
  <string name="files_pending">待确认</string>
  <string name="files_history">已结束</string>
+ <string name="files_empty_records">暂无传送记录</string>
  <string name="files_empty_active">暂无进行中的传送</string>
  <string name="files_empty_pending">暂无待确认文件</string>
  <string name="files_empty_history">暂无已结束的传送</string>

@@ -695,6 +695,7 @@ func setClientMode(mode string) error {
 		c = &creds.Config{}
 	}
 	c.Mode = mode
+	c.FileReceiveEpoch = time.Now().UnixNano()
 	return creds.Save(c)
 }
 

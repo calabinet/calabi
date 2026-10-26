@@ -158,10 +158,12 @@ fun TunnelsTab(model: AppModel, onOpen: (Tunnel) -> Unit) {
             delay(15_000)
         }
     }
+    var search by rememberSaveable { mutableStateOf("") }
     val tunnels = model.tunnels
+    val visibleTunnels = tunnels.orEmpty().filter { matchesListSearch(search, it.name, it.address, it.localAddr, it.type, it.creatorEmail, it.deviceName) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 20.dp)) {
         item {
-            Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp), verticalAlignment = Alignment.Bottom) {
+            ListSearchToolbar(search, { search = it }, stringResource(R.string.list_search_endpoints), Modifier.padding(start = 6.dp, end = 6.dp)) {
                 Text(stringResource(R.string.tunnels_title), style = Styles.screenTitle, modifier = Modifier.weight(1f))
                 if (!tunnels.isNullOrEmpty()) {
                     Text(
@@ -193,18 +195,18 @@ fun TunnelsTab(model: AppModel, onOpen: (Tunnel) -> Unit) {
                 }
             }
             tunnels == null && model.tunnelsError == null -> item { Loading() }
-            tunnels != null && tunnels.isEmpty() -> item {
+            tunnels != null && visibleTunnels.isEmpty() -> item {
                 Group {
                     Text(
-                        stringResource(if (model.selfHosted) R.string.tunnels_empty_self_hosted else R.string.tunnels_empty),
+                        stringResource(if (search.isNotBlank()) R.string.list_search_no_matches else if (model.selfHosted) R.string.tunnels_empty_self_hosted else R.string.tunnels_empty),
                         style = Styles.hint.copy(fontSize = 14.sp),
                         textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(24.dp),
                     )
                 }
             }
         }
-        itemsIndexed(tunnels.orEmpty(), key = { _, t -> t.id }) { i, t ->
-            TunnelRow(t, first = i == 0, last = i == tunnels!!.lastIndex) { onOpen(t) }
+        itemsIndexed(visibleTunnels, key = { _, t -> t.id }) { i, t ->
+            TunnelRow(t, first = i == 0, last = i == visibleTunnels.lastIndex) { onOpen(t) }
         }
     }
 }

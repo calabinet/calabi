@@ -100,6 +100,7 @@
     "quotaExceededMsg": "이번 달 트래픽이 한도를 초과했습니다 ({{pct}}%)",
     "quotaExceededDesc": "초과 후에도 기존 엔드포인트는 모두 계속 작동하지만 새로 추가할 수 없습니다. 요금제를 업그레이드하거나 다음 달 초기화를 기다리세요.",
     "quotaExceededDescNoUpgrade": "초과 후에도 기존 엔드포인트는 모두 계속 작동하지만 새로 추가할 수 없습니다. 다음 달에 자동으로 초기화됩니다.",
+    "orgDevices": "조직 기기",
     "activeTunnels": "조직 엔드포인트",
     "myTunnels": "내 엔드포인트",
     "uptime": "가동 시간",

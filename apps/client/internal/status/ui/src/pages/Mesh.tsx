@@ -33,6 +33,7 @@ import {
   Row,
   Space,
   Spin,
+  Statistic,
   Switch,
   Table,
   Tabs,
@@ -43,15 +44,15 @@ import {
 import {
   DeleteOutlined,
   PlusOutlined,
-  QuestionCircleOutlined,
 } from "@ant-design/icons";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { api, ApiError } from "../api/client";
-import { fileAction, useFileSupport } from "../api/files";
+import { hasNativeFiles, fileAction, useFileSupport } from "../api/files";
 import { fileTargets } from "../lib/fileTargets";
 import { fileRecords, fileRecordMatches } from "../lib/fileRecords";
+import ListSearch from "../components/ListSearch";
 import MeshGlyph, { deviceGlyph } from "../components/MeshGlyph";
 import "../styles/mesh-center.css";
 import {
@@ -62,6 +63,7 @@ import {
   type RouteReport,
   type RouteStanding,
 } from "../lib/cidr";
+import { matchesListSearch } from "../lib/listSearch";
 import { relayOwner, relayOwnerKind } from "../lib/relayRegion";
 import { peerAddresses } from "../lib/peerAddresses";
 import { peerPresence } from "../lib/peerPresence";
@@ -153,7 +155,7 @@ export default function Mesh() {
   // for the case where you came from `wg show` or a log line.
   const [peerQuery, setPeerQuery] = useState("");
   const [connectionKey, setConnectionKey] = useState("");
-  const files = useQuery({ queryKey: ["user-files"], queryFn: () => fileAction({ action: "snapshot" }), enabled: fileSupport.data === true, refetchInterval: 1000, retry: false });
+  const files = useQuery({ queryKey: ["user-files"], queryFn: () => fileAction({ action: "snapshot" }), enabled: fileSupport.data === true && hasNativeFiles(), refetchInterval: 1000, retry: false });
   const [peerDetail, setPeerDetail] = useState<{ key: string; section: "routes" | "services" } | null>(null);
   const setPeerDetailOpen = (peer: MeshPeer, section: "routes" | "services", open: boolean) => {
     setPeerDetail((current) => open ? { key: peer.public_key, section } :
@@ -285,8 +287,6 @@ export default function Mesh() {
     retry: false,
   });
   const standalone = me?.plan?.code === "standalone";
-  const homeOwner = relayOwner(data?.derp_home);
-  const homeKind = relayOwnerKind(homeOwner, standalone);
   const orgMismatch = meshOrgID > 0 && activeOrgID > 0 && meshOrgID !== activeOrgID;
 
   const stop = useMutation({
@@ -339,20 +339,9 @@ export default function Mesh() {
   // table this narrow.
   const shownPeers = useMemo(() => {
     const all = data?.peers ?? [];
-    const q = peerQuery.trim().toLowerCase();
-    if (!q) return all;
-    return all.filter(
-      (p) =>
-        (p.name ?? "").toLowerCase().includes(q) ||
-        p.public_key.toLowerCase().includes(q) ||
-        (p.allowed_ips ?? []).some((ip) => ip.toLowerCase().includes(q)) ||
-        // "which machine has postgres on it" is a real way to arrive here.
-        (p.services ?? []).some((sv) => sv.name.toLowerCase().includes(q)) ||
-        // So is "one of kenji's machines".
-        (ownerByOverlay.get(peerAddresses(p.allowed_ips).overlay) ?? "")
-          .toLowerCase()
-          .includes(q),
-    );
+    return all.filter(p => matchesListSearch(peerQuery, p.name, p.public_key,
+      ...(p.allowed_ips || []), ...(p.services || []).map(service => service.name),
+      ownerByOverlay.get(peerAddresses(p.allowed_ips).overlay)));
   }, [data?.peers, peerQuery, ownerByOverlay]);
 
   const columns = useMemo(
@@ -670,7 +659,32 @@ export default function Mesh() {
             description={t("mesh.blockedBannerHelp")}
           />
         )}
-        <div className="mesh-info-strip"><span className={`files-ready ${data.up ? "" : "files-not-ready"}`}>{data.up ? t("mesh.stateUp") : t("mesh.stateDown")}</span><span>{t("mesh.node")} <Text>{data.name || "—"}</Text></span><span>{t("mesh.overlay")} <code>{data.overlay || "—"}</code></span><span>{t("files.deviceCount", { count: data.peers?.length || 0 })}</span></div>
+        <Row className="mesh-status-cards" gutter={[12, 12]}>
+          <Col xs={12} md={6}>
+            <Card size="small">
+              <Statistic
+                title={t("mesh.state")}
+                value={data.up ? t("mesh.stateUp") : t("mesh.stateDown")}
+                className={data.up ? "mesh-status-up" : "mesh-status-down"}
+              />
+            </Card>
+          </Col>
+          <Col xs={12} md={6}>
+            <Card size="small">
+              <Statistic title={t("mesh.overlay")} value={data.overlay || "—"} className="mesh-status-identity" />
+            </Card>
+          </Col>
+          <Col xs={12} md={6}>
+            <Card size="small">
+              <Statistic title={t("mesh.node")} value={data.name || "—"} className="mesh-status-identity" />
+            </Card>
+          </Col>
+          <Col xs={12} md={6}>
+            <Card size="small">
+              <Statistic title={t("mesh.peers")} value={data.peers?.length || 0} />
+            </Card>
+          </Col>
+        </Row>
 
         {/* A meshnet IS an org, so which org this session enrolled into is part
             of its identity — without it the page looks identical no matter which
@@ -682,70 +696,8 @@ export default function Mesh() {
             message={t("mesh.orgSwitching", { org: meshOrgName })}
           />
         )}
-        <details className="mesh-local-details"><summary>{t("files.localDetails")}</summary>        <Card size="small">
-          <Row gutter={[12, 8]}>
-            <Col xs={24} md={8}>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {t("mesh.org")}
-              </Text>
-              <div>
-                <Text style={{ fontSize: 12 }}>{meshOrgName}</Text>
-              </div>
-            </Col>
-            <Col xs={24} md={8}>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {t("mesh.coord")}
-              </Text>
-              <div>
-                <code style={{ fontSize: 12 }}>{data.coord || "—"}</code>
-              </div>
-            </Col>
-            {/* THIS device's home relay: where others send to reach it. It is one
-                of three relay-ish things on this page — the edge its tunnels use
-                (top right), this, and the relay each peer below is reached
-                through — and it used to be a bare address under the word "relay",
-                next to a region picker it does not follow. So it names itself,
-                says whose it is, and shows how far away it is: a home 190ms out
-                while the org's own relay answers in 5 is the whole explanation of
-                a slow inbound path, and neither number was here. */}
-            <Col xs={24} md={8}>
-              <Space size={4}>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {t("mesh.homeRelay")}
-                </Text>
-                <Tooltip title={t(standalone ? "mesh.homeRelayTipSelfHosted" : "mesh.homeRelayTip")}>
-                  <QuestionCircleOutlined
-                    aria-label={t(standalone ? "mesh.homeRelayTipSelfHosted" : "mesh.homeRelayTip")}
-                    style={{ fontSize: 12, color: "#94a3b8", cursor: "help" }}
-                  />
-                </Tooltip>
-              </Space>
-              <div>
-                {data.relay ? (
-                  <Space size={6} wrap>
-                    {homeKind && (
-                      <Tag color={homeKind === "self" ? "green" : "blue"} style={{ marginInlineEnd: 0 }}>
-                        {t(homeKind === "self" ? "topbar.egressOwn" : "topbar.egressPlatform")}
-                      </Tag>
-                    )}
-                    {homeOwner && <Text style={{ fontSize: 12 }}>{homeOwner.label}</Text>}
-                    <code style={{ fontSize: 12 }}>{data.relay}</code>
-                    {data.relay_rtt_micros ? (
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {fmtRtt(data.relay_rtt_micros)}
-                      </Text>
-                    ) : null}
-                  </Space>
-                ) : (
-                  <code style={{ fontSize: 12 }}>—</code>
-                )}
-              </div>
-            </Col>
-          </Row>
-        </Card></details>
-
         <section className="mesh-peer-section">
-          <div className="mesh-peer-heading"><Text>{t("files.peerDevices")}</Text>{(data.peers || []).length > 5 && <Input allowClear size="small" style={{ width: 200 }} placeholder={t("mesh.peerFilter")} value={peerQuery} onChange={event => setPeerQuery(event.target.value)} />}</div>
+          <div className="mesh-peer-heading list-toolbar"><Text>{t("files.peerDevices")}</Text><ListSearch placeholder={t("listSearch.devices")} value={peerQuery} onChange={setPeerQuery} /></div>
           {data.up ? <Table<MeshPeer> size="middle" rowKey="public_key" dataSource={shownPeers} pagination={{ pageSize: 20, showSizeChanger: false }} scroll={{ x: 600 }} locale={{ emptyText: peerQuery && (data.peers || []).length > 0 ? t("mesh.peerFilterNoMatch") : t("mesh.noPeers") }} columns={[
             { title: t("mesh.colPeer"), key: "device", render: (_, peer) => <div className="mesh-device-name"><span className="files-file-icon"><MeshGlyph name={deviceGlyph(peer.os)} /></span><div><div className="mesh-device-label-row"><Text className="mesh-device-label">{peer.name || shortKey(peer.public_key)}</Text><Tooltip title={t(`mesh.presence.${presenceOf(peer)}Hint`)}><span className={`mesh-peer-presence ${presenceOf(peer)}`}>{t(`mesh.presence.${presenceOf(peer)}`)}</span></Tooltip></div><div className="mesh-device-meta"><span className="files-secondary">{[osLabel(peer.os), ownerByOverlay.get(peerAddresses(peer.allowed_ips).overlay)?.split("@")[0]].filter(Boolean).join(" · ")}</span><span className="mesh-device-capabilities">
               {peerAddresses(peer.allowed_ips).routes.length > 0 && <Tooltip title={t("mesh.peerHasSubnets")}><Button className="mesh-capability" type="text" size="small" aria-label={t("mesh.peerHasSubnets")} icon={<MeshGlyph name="network" />} onClick={() => setConnectionKey(peer.public_key)} /></Tooltip>}

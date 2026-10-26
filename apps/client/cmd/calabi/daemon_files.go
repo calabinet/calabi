@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/calabinet/calabi/apps/client/internal/creds"
 	"github.com/calabinet/calabi/apps/client/internal/filecontrol"
 	"github.com/calabinet/calabi/apps/client/internal/filetransfer"
 	"github.com/calabinet/calabi/apps/client/internal/mesh"
@@ -69,6 +70,9 @@ func startFileControl(ctx context.Context, logger *slog.Logger, source any, cons
 			return nil, filecontrol.Snapshot{}, errors.New("coordinator does not support file transfer or mesh is not ready")
 		}
 		view := filecontrol.Snapshot{Ready: true, Scope: fmt.Sprintf("%s/%d/%d/%s", r.cfg.Coord, org, ctrl.FileNodeID(), ctrl.Params.NodeKey.String()), NodeKey: ctrl.Params.NodeKey.String(), Overlay: st.Overlay, RelayKbps: ctrl.FileRelayLimit(), Peers: []filecontrol.Peer{}}
+		if cfg, err := creds.Load(); err == nil && cfg != nil {
+			view.ReceiveEpoch = cfg.FileReceiveEpoch
+		}
 		for _, p := range ctrl.FilePeers() {
 			_, pin, ok := ctrl.FilePeer(p.Overlay)
 			if !ok {

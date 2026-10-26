@@ -194,6 +194,7 @@ func runLogin(args []string) int {
 	// true together and still mean the daemon is serving somebody else.
 	prevUserID := c.User.ID
 	c.AccessToken = resp.AccessToken
+	c.FileReceiveEpoch = time.Now().UnixNano()
 	c.RefreshToken = resp.RefreshToken
 	c.User.ID = resp.UserID
 	c.User.Email = resp.Email
@@ -591,7 +592,11 @@ func logout(ctx context.Context, stdout, stderr io.Writer, daemonUp bool, others
 		cfg.RefreshToken = ""
 		cfg.APIKey = ""
 		cfg.ActiveOrgID = 0
-		_ = creds.Save(cfg)
+		cfg.FileReceiveEpoch = time.Now().UnixNano()
+		if err := creds.Save(cfg); err != nil {
+			fmt.Fprintln(stderr, "could not persist sign-out:", err)
+			return 1
+		}
 		if agent {
 			fmt.Fprintln(stdout, "  cleared the sign-in saved for this client")
 		} else {

@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 func main() {
@@ -37,9 +38,11 @@ func main() {
 	}
 
 	switch {
+	case args == "desktop-idle", args == "daemon-idle", args == "mesh files --stdio":
+		time.Sleep(2 * time.Minute)
 	case args == "daemon stop", args == "daemon uninstall":
 		fmt.Println("fake service removed")
-	case strings.HasPrefix(args, "firewall -Action "):
+	case args == "mesh files firewall install", args == "mesh files firewall remove":
 		if os.Getenv("CALABI_FAKE_FIREWALL") == "fail" {
 			fmt.Fprintln(os.Stderr, "firewall policy denied the local exception")
 			os.Exit(1)

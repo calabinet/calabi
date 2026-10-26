@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Drawer, Input, Modal, Progress, Segmented, Select, Space, Spin, Switch, Table, Tooltip, Typography, message } from "antd";
+import ListSearch from "../components/ListSearch";
+import { matchesListSearch } from "../lib/listSearch";
 import MeshGlyph, { deviceGlyph, fileGlyph } from "../components/MeshGlyph";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { fileAction, fileWebRequest, hasBrowserFiles, useFileSupport, type FileSource } from "../api/files";
+import { fileAction, fileWebRequest, hasBrowserFiles, hasNativeFiles, useFileSupport, type FileSource } from "../api/files";
 import { api } from "../api/client";
 import { fileTargets } from "../lib/fileTargets";
-import { fileRecords, fileRecordMatches, fileRequests, fileJobState, type FileFilter, type FileRecord } from "../lib/fileRecords";
+import { fileRecords, fileRecordMatches, fileRequests, fileJobState, fileJobSummary, fileRecordTime, type FileRecord } from "../lib/fileRecords";
 import { fileErrorKey, fileJobErrorKey } from "../lib/fileErrors";
 import "../styles/files.css";
 
@@ -15,6 +17,17 @@ const bytes = (n: number) => n >= 2 ** 30 ? `${(n / 2 ** 30).toFixed(2)} GiB` : 
 const percent = (offset: number, size: number) => size > 0 ? Math.min(100, Math.floor(offset * 100 / size)) : 100;
 
 export default function Files() {
+  if (!hasNativeFiles()) return <FileServiceEntry />;
+  return <FileTransfers />;
+}
+
+function FileServiceEntry() {
+  const { t } = useTranslation();
+  const support = useFileSupport();
+  return <Space direction="vertical" size="middle"><Typography.Paragraph>{t("files.service.entryHint")}</Typography.Paragraph><Button type="primary" href={`/file-service/${window.location.hash}`} disabled={support.data !== true}>{t("files.service.open")}</Button>{support.data === false && <Alert type="warning" message={t("files.service.unavailable")} />}</Space>;
+}
+
+function FileTransfers() {
   const { t } = useTranslation();
   const errorText = (error: string) => t(`files.errors.${fileErrorKey(error)}`);
   const qc = useQueryClient();
@@ -28,7 +41,7 @@ export default function Files() {
   const [selected, setSelected] = useState<string[]>([]);
   const [composing, setComposing] = useState(!!deviceKey);
   const [settings, setSettings] = useState(false);
-  const [filter, setFilter] = useState<FileFilter>("all");
+  const [search, setSearch] = useState("");
   const [direction, setDirection] = useState("all");
   const [catalog, setCatalog] = useState<{directory: string; files: {name: string; size: number}[]} | null>(null);
   const [serverSelection, setServerSelection] = useState<string[]>([]);
@@ -45,7 +58,7 @@ export default function Files() {
     return () => observer.disconnect();
   }, []);
   const reviewRequest = params.get("review");
-  useEffect(() => { if (reviewRequest === "1") { setFilter("waiting"); setDirection("incoming"); } }, [reviewRequest]);
+  useEffect(() => { if (reviewRequest === "1") { setSearch(""); setDirection("incoming"); } }, [reviewRequest, location.key]);
   const pickBefore = useRef<Set<string> | null>(null);
   const mesh = useQuery({ queryKey: ["mesh"], queryFn: () => hasBrowserFiles() ? fileWebRequest<Awaited<ReturnType<typeof api.mesh>>>("mesh") : api.mesh(), enabled: support.data === true, refetchInterval: 3000, retry: false });
   const query = useQuery({ queryKey: ["user-files"], queryFn: () => fileAction({ action: "snapshot" }), enabled: support.data === true, refetchInterval: 1000, retry: false });
@@ -54,21 +67,28 @@ export default function Files() {
   const busy = mutation.isPending;
   const run = (action: string, args: Record<string, unknown> = {}) => mutation.mutate({ action, ...args });
   const state = (s: string) => t(`files.states.${s}`, { defaultValue: s });
-  const remove = (action: string, id: string) => Modal.confirm({ title: t("files.remove"), content: t("files.removeConfirm"), onOk: () => mutation.mutateAsync({ action, id }).then(() => undefined) });
+  const remove = (action: string, id: string) => {
+    if (action === "forget_source" && (data?.jobs || []).some(job => job.sources?.includes(id))) {
+      const name = data?.sources?.find(source => source.id === id)?.name || "";
+      Modal.info({ title: t("files.sourceInUseTitle"), content: t("files.errors.sourceInUse"), closable: true, okText: t("files.viewSourceRecords"), onOk: () => { setComposing(false); setDirection("outgoing"); setSearch(name); } });
+      return;
+    }
+    return Modal.confirm({ title: t("files.remove"), content: t(action === "forget_source" ? "files.removeSourceConfirm" : "files.removeConfirm"), onOk: () => mutation.mutateAsync({ action, id }).then(() => undefined) });
+  };
   const maintain = (operation: "renew" | "reset") => Modal.confirm({ title: t(`files.identity${operation === "renew" ? "Renew" : "Reset"}`), content: t("files.identityConfirm"), onOk: () => mutation.mutateAsync({ action: `identity_${operation}`, confirmed: true }).then(() => undefined) });
   const targets = fileTargets(mesh.data?.up ? mesh.data.peers || [] : [], data?.peers || []);
   const target = targets.find(p => p.key === (deviceKey || peer));
   const targetLabel = target || (hint?.key === deviceKey ? hint : undefined);
   const targetDevice = mesh.data?.peers?.find(p => p.public_key === (deviceKey || peer));
   const targetStatus = target?.status || "notReady";
-  const requests = fileRequests(data?.received || []);
+  const peerName = (ip: string, key?: string) => targets.find(target => key ? target.key === key : target.ip === ip)?.name || ip;
+  const receivedMatches = (row: NonNullable<typeof data>["received"][number]) => matchesListSearch(search, row.transfer.name, row.ip, peerName(row.ip, row.device_key));
+  const requests = fileRequests(data?.received || []).filter(request => request.waiting.some(receivedMatches));
   const records = fileRecords(data || { jobs: [], received: [] });
-  const directionRecords = records.filter(row => direction === "all" || row.direction === direction);
-  const visible = directionRecords.filter(row => fileRecordMatches(row, filter));
+  const visible = records.filter(row => (direction === "all" || row.direction === direction) && (row.direction === "incoming" ? receivedMatches(row.received) : matchesListSearch(search, row.job.progress.transfer?.name, row.job.peer_ip, peerName(row.job.peer_ip), ...(row.job.sources || []).map(id => data?.sources.find(source => source.id === id)?.name))));
   const directionBadge = (outgoing: boolean) => <span className={`files-direction ${outgoing ? "outgoing" : "incoming"}`}><MeshGlyph name={outgoing ? "upload" : "inbox"} />{t(outgoing ? "files.outgoing" : "files.incoming")}</span>;
   const selectedFiles = (data?.sources || []).filter(source => selected.includes(source.id));
   const selectedBytes = selectedFiles.reduce((sum, source) => sum + source.size, 0);
-  const peerName = (ip: string, key?: string) => targets.find(target => key ? target.key === key : target.ip === ip)?.name || ip;
 
   useEffect(() => {
     if (location.pathname !== "/mesh/files") { setComposing(false); setSettings(false); }
@@ -105,7 +125,7 @@ export default function Files() {
   const send = async () => {
     if (!data?.available || !target || target.status !== "ready" || !selectedFiles.length || data.preparing) return;
     const sent = await mutation.mutateAsync({ action: "send", peer: target.ip, ids: selectedFiles.map(source => source.id) }).catch(() => null);
-    if (sent) { setSelected([]); setDirection("outgoing"); setFilter("active"); closeComposer(); }
+    if (sent) { setSelected([]); setSearch(""); setDirection("outgoing"); closeComposer(); }
   };
 
   const task = (row: FileRecord) => {
@@ -119,22 +139,25 @@ export default function Files() {
     const ip = job?.peer_ip || incoming!.ip;
     const label = peerName(ip, incoming?.device_key);
     const name = transfer.name || (job && data?.sources.find(source => source.id === job.sources?.[0])?.name) || t("files.unnamed");
+    const summary = job ? fileJobSummary(job, data?.sources || []) : undefined;
+    const batchFiles = summary && summary.files.length > 1 ? summary.files : undefined;
     const count = job?.progress.count || transfer.batch_count || 1;
     const active = fileRecordMatches(row, "active");
     const rate = job ? status === "sending" ? job.rate_bps : 0 : status === "receiving" ? transfer.rate_bps : 0;
     const remaining = job?.remaining_seconds || transfer.remaining_seconds || 0;
-    const progress = preparation?.phase === "hashing" ? percent(preparation.bytes, preparation.size) : percent(transfer.offset, transfer.size);
+    const progress = preparation?.phase === "hashing" ? percent(preparation.bytes, preparation.size) : percent(summary?.offset ?? transfer.offset, summary?.size ?? transfer.size);
     const showProgress = !!preparation && preparation.phase === "hashing" || active && job?.state !== "cancelled" && status !== "connecting" && status !== "waiting";
-    return { key: row.key, direction: directionBadge(outgoing), file: <div className="files-task-file">
-      <span className="files-file-icon"><MeshGlyph name={fileGlyph(name)} /></span><div className="files-task-description">
-        <Typography.Text className="files-task-name">{name}</Typography.Text>
+    return { key: row.key, created: fileRecordTime(row), direction: directionBadge(outgoing), file: <div className="files-task-file">
+      <span className="files-file-icon"><MeshGlyph name={batchFiles ? "transfer" : fileGlyph(name)} /></span><div className="files-task-description">
+        {batchFiles ? <div className="files-batch-list">{batchFiles.map((file, index) => <div className="files-batch-file" key={`${index}/${file.id}`}><MeshGlyph name={fileGlyph(file.name)} /><div><Typography.Text className="files-task-name">{file.name || t("files.unnamed")}</Typography.Text><Typography.Text type="secondary" className="files-secondary">{bytes(file.size)}</Typography.Text></div></div>)}</div> : <Typography.Text className="files-task-name">{name}</Typography.Text>}
         <div className="files-task-context">{directionBadge(outgoing)}<span className="files-task-peer">{t(outgoing ? "files.toPeer" : "files.fromPeer", { device: label })}</span>{label !== ip && <span className="files-peer-ip">{ip}</span>}</div>
-        {count > 1 && <Typography.Text type="secondary" className="files-secondary">{job ? t("files.batchPosition", { index: Math.min(job.progress.index + 1, count), count }) : t("files.batchCount", { count })}</Typography.Text>}
+        {count > 1 && <Typography.Text type="secondary" className="files-secondary">{job && job.state !== "completed" ? t("files.batchPosition", { index: Math.min(job.progress.index + 1, count), count }) : t("files.batchCount", { count })}</Typography.Text>}
       </div></div>, progress: <div className="files-task-progress">
         <div className="files-progress-meta"><Typography.Text type={taskError || status === "failed" ? "warning" : "secondary"}>{state(status)}</Typography.Text>{showProgress && <span>{progress}%</span>}</div>
         {showProgress && <Progress size="small" strokeWidth={4} showInfo={false} percent={progress} />}
         {preparation?.phase === "hashing" && <Typography.Text type="secondary" className="files-secondary">{t("files.hashProgress", { name: preparation.name, current: bytes(preparation.bytes), total: bytes(preparation.size), index: preparation.index + 1, count: preparation.count })}</Typography.Text>}
-        <Typography.Text type="secondary" className="files-secondary">{job && preparation ? t("files.transferred") : ""} {bytes(transfer.offset || 0)} / {bytes(transfer.size || 0)}</Typography.Text>
+        <Typography.Text type="secondary" className="files-secondary">{job && preparation ? t("files.transferred") : ""} {bytes(summary?.offset ?? transfer.offset ?? 0)} / {bytes(summary?.size ?? transfer.size ?? 0)}</Typography.Text>
+        {batchFiles && active && <Typography.Text type="secondary" className="files-secondary">{preparation?.name || name}</Typography.Text>}
         {(status === "sending" || status === "receiving") && <Typography.Text type="secondary" className="files-secondary">{rate ? t("files.rateEta", { rate: bytes(rate), seconds: remaining }) : t("files.measuringRate")}</Typography.Text>}
         {taskError && <Typography.Text type="danger" className="files-task-error">{t(`files.errors.${taskError}`)}</Typography.Text>}
         {job?.cancel_pending && job.stop_reason && <Typography.Text type="secondary" className="files-secondary">{state("cancelPending")}</Typography.Text>}
@@ -158,6 +181,7 @@ export default function Files() {
     const total = request.waiting.reduce((sum, row) => sum + row.transfer.size, 0);
     return {
       key: `request/${request.key}`,
+      created: Math.max(...request.rows.map(row => row.transfer.created_unix_ms || 0)),
       file: <div className="files-task-file"><span className="files-file-icon"><MeshGlyph name="inbox" /></span><div className="files-task-description">
         {request.waiting.map(row => <Typography.Text key={row.transfer.id} className="files-task-name">{row.transfer.name}</Typography.Text>)}
         <div className="files-task-context">{directionBadge(false)}<span className="files-task-peer">{t("files.fromPeer", { device: peerName(first.ip, first.device_key) })}</span>{peerName(first.ip, first.device_key) !== first.ip && <span className="files-peer-ip">{first.ip}</span>}</div>
@@ -166,7 +190,7 @@ export default function Files() {
       actions: <Space wrap className="files-task-actions"><Button size="small" type="text" disabled={busy} onClick={() => run("decide", { ids: request.waiting.map(row => row.transfer.id), accept: false })}>{t("files.decline")}</Button><Button size="small" type="primary" disabled={busy || !request.complete} onClick={() => Modal.confirm({ title: t("files.accept"), content: <ul>{request.waiting.map(row => <li key={row.transfer.id}>{row.transfer.name} · {bytes(row.transfer.size)}</li>)}</ul>, onOk: () => mutation.mutateAsync({ action: "decide", ids: request.waiting.map(row => row.transfer.id), accept: true }).then(() => undefined) })}>{t("files.acceptShort")}</Button></Space>,
     };
   });
-  const rows = [...(direction !== "outgoing" && (filter === "all" || filter === "waiting") ? waitingRows.map(row => ({ ...row, direction: directionBadge(false) })) : []), ...(filter === "waiting" ? [] : visible.map(task))];
+  const rows = [...(direction !== "outgoing" ? waitingRows.map(row => ({ ...row, direction: directionBadge(false) })) : []), ...visible.map(task)];
 
   return <div ref={center} className={`files-center${compact ? " files-center-compact" : ""}`}>
     <Modal title={t("files.web.choose")} open={!!catalog} onCancel={() => setCatalog(null)} okText={t("files.choose")} confirmLoading={busy} okButtonProps={{ disabled: !serverSelection.length }} onOk={async () => { const previous=new Set(data?.sources.map(s=>s.id)||[]); const snapshot=await mutation.mutateAsync({action:"web_stage",names:serverSelection}).catch(()=>null); if(snapshot){setSelected(old=>[...new Set([...old,...snapshot.sources.filter(s=>!previous.has(s.id)).map(s=>s.id)])]);setCatalog(null);} }}>
@@ -178,22 +202,24 @@ export default function Files() {
       <Typography.Paragraph>{t("files.web.saveHint")}</Typography.Paragraph>
       <Input aria-label={t("files.web.filename")} value={serverSave?.name||""} onChange={e=>setServerSave(old=>old?{...old,name:e.target.value}:null)} />
     </Modal>
-    <div className="files-toolbar"><Segmented aria-label={t("files.direction")} value={direction} onChange={value => setDirection(String(value))} options={[{ value: "all", label: t("files.filters.all") }, { value: "incoming", label: t("files.incoming"), icon: <MeshGlyph name="inbox" /> }, { value: "outgoing", label: t("files.outgoing"), icon: <MeshGlyph name="upload" /> }]} /><Space wrap size="middle">
-      <Space size={7}><Switch size="small" aria-label={t("files.receiving")} checked={data?.receiving || false} disabled={!data?.available || busy} loading={busy} onChange={enabled => run("receiving", { enabled })} /><Typography.Text type="secondary">{t("files.receivingShort")}</Typography.Text></Space>
-      <Tooltip title={t("files.settings")}><Button type="text" icon={<MeshGlyph name="settings" />} aria-label={t("files.settings")} onClick={() => setSettings(true)} /></Tooltip>
+    <div className="files-toolbar">
+      <Space size={7}><Switch size="small" aria-label={t("files.receiving")} checked={data?.service?.receiving_requested ?? data?.receiving ?? false} disabled={(!data?.available && (!data?.service || !data.service.receiving_requested)) || busy} loading={busy} onChange={enabled => run("receiving", { enabled })} /><Typography.Text type="secondary">{t("files.receivingShort")}</Typography.Text></Space>
+      <Space wrap size="middle"><Tooltip title={t("files.settings")}><Button type="text" icon={<MeshGlyph name="settings" />} aria-label={t("files.settings")} onClick={() => setSettings(true)} /></Tooltip>
       <Button type="primary" icon={<MeshGlyph name="plus" />} disabled={!data?.available} onClick={() => setComposing(true)}>{t("files.send")}</Button>
     </Space></div>
+    {data?.service?.receiving_requested && !data.receiving && !data.unavailable_reason && <Alert type="info" message={t("files.service.waiting")} />}
+    {data?.service?.error && !data.unavailable_reason && <Alert type="warning" message={t(data.service.managed ? "files.service.issue" : "files.receivingRestoreError")} />}
     {support.isPending && <Spin />}
     {support.data === false && <Alert type="info" message={t("files.unavailable")} />}
     {support.error && <Alert type="warning" message={t("files.bridgeUnavailable")} description={errorText(support.error.message)} action={<Button onClick={() => support.refetch()}>{t("files.retry")}</Button>} />}
     {query.isPending && support.data === true && <Spin />}
     {query.error && <Alert type="error" message={errorText(query.error.message)} action={<Button onClick={() => query.refetch()}>{t("files.retry")}</Button>} />}
-    {data?.unavailable_reason && <Alert type="warning" message={errorText(data.unavailable_reason)} />}
-    {mesh.error && <Alert type="warning" message={t("files.devicesError")} action={<Button onClick={() => mesh.refetch()}>{t("files.retry")}</Button>} />}
+    {data?.unavailable_reason && <Alert type="warning" message={data.service?.managed ? t("files.service.offline") : errorText(data.unavailable_reason)} />}
+    {mesh.error && !data?.unavailable_reason && <Alert type="warning" message={t("files.devicesError")} action={<Button onClick={() => mesh.refetch()}>{t("files.retry")}</Button>} />}
     {(data?.identity?.error || data?.identity?.needs_renewal) && <Alert type="warning" message={data.identity.error ? errorText(data.identity.error) : t("files.identityDue")} action={<Button onClick={() => setSettings(true)}>{t("files.settings")}</Button>} />}
     {data && <>
-      <Segmented aria-label={t("files.filterLabel")} value={filter} onChange={value => setFilter(value as FileFilter)} options={(["all", "active", "waiting", "completed"] as FileFilter[]).map(value => ({ value, label: <span>{t(`files.filters.${value}`)} <span className="files-filter-count">{value === "waiting" ? (direction === "outgoing" ? 0 : requests.length) : directionRecords.filter(row => fileRecordMatches(row, value)).length + (value === "all" && direction !== "outgoing" ? requests.length : 0)}</span></span> }))} />
-      <Table className="files-records" tableLayout="fixed" size="middle" rowKey="key" dataSource={rows} pagination={{ pageSize: 20, showSizeChanger: false }} locale={{ emptyText: filter === "waiting" ? t("files.emptyRequests") : t("files.emptyRecords") }} columns={[
+      <div className="list-toolbar"><Segmented aria-label={t("files.direction")} value={direction} onChange={value => setDirection(String(value))} options={[{ value: "all", label: t("files.filters.all") }, { value: "incoming", label: t("files.incoming"), icon: <MeshGlyph name="inbox" /> }, { value: "outgoing", label: t("files.outgoing"), icon: <MeshGlyph name="upload" /> }]} /><ListSearch placeholder={t("listSearch.files")} value={search} onChange={setSearch} /></div>
+      <Table className="files-records" tableLayout="fixed" size="middle" rowKey="key" dataSource={[...rows].sort((a, b) => (b.created || 0) - (a.created || 0) || a.key.localeCompare(b.key))} pagination={{ pageSize: 20, showSizeChanger: false }} locale={{ emptyText: t(search.trim() ? "listSearch.noMatches" : "files.emptyRecords") }} columns={[
         { title: t("files.fileAndDevice"), dataIndex: "file", key: "file", className: "files-record-file" },
         { title: t("files.transferProgress"), dataIndex: "progress", key: "progress", width: "35%", className: "files-record-progress" },
         { title: t("files.actions"), dataIndex: "actions", key: "actions", width: 160, className: "files-record-actions", align: "right" },
@@ -216,6 +242,11 @@ export default function Files() {
       </Space>
     </Drawer>
     <Drawer title={t("files.settings")} open={settings} onClose={() => setSettings(false)} width={400}>
+      {data?.service?.managed && <Space direction="vertical" size="middle" style={{width:"100%",marginBottom:24}}>
+        <Typography.Text strong>{t("files.service.directory")}</Typography.Text><Typography.Text copyable>{data.service.directory}</Typography.Text>
+        <Space><Switch checked={data.service.auto_save} disabled={busy} onChange={auto_save => run("service_settings", {auto_save})} /><Typography.Text>{t("files.service.autoSave")}</Typography.Text></Space>
+        <Typography.Text type="secondary">{t("files.service.autoSaveHint")}</Typography.Text>
+      </Space>}
       <Typography.Paragraph type="secondary">{t("files.hint")}</Typography.Paragraph>
       <Typography.Title level={5}>{t("files.identity")}</Typography.Title>
       {data?.identity ? <Space direction="vertical" size="middle">

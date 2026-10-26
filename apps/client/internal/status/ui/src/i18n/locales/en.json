@@ -1,5 +1,22 @@
 {
+  "listSearch": {"endpoints": "Search name or address", "devices": "Search device, IP or user", "files": "Search file name or device", "noMatches": "No matching results"},
   "files": {
+    "viewSourceRecords": "View related sent records",
+    "sourceInUseTitle": "File is still used by a task",
+    "removeSourceConfirm": "Remove this file from the files to send? Your original file will be kept.",
+    "receivingRestoreError": "Reception could not be restored. Check the diagnostic log and try again.",
+    "service": {
+      "entryHint": "File transfers run as a separate ordinary-user service. Open its private management page; the daemon console login does not grant file access.",
+      "open": "Open file transfers",
+      "unavailable": "The file service is unavailable. Check its status from the server terminal.",
+      "waiting": "Receiving is enabled; waiting for the connection and file service to be ready.",
+      "offline": "The mesh or file interface is not ready. Waiting for reconnection; you can still turn reception off or change automatic saving.",
+      "directory": "Server file directory",
+      "autoSave": "Automatically save verified files",
+      "autoSaveHint": "Save completed files to this directory without overwriting existing files. Received originals are retained until their records are removed.",
+      "issue": "The file service needs attention. Check the server logs.",
+      "keyHint": "Run calabi mesh files service web-url on the server as root or the file-service user to obtain your private access link."
+    },
     "measuringRate": "Measuring speed…",
     "web": {
       "title": "Linux file transfers",
@@ -16,13 +33,13 @@
       "filename": "File name",
       "saved": "Saved on Linux"
     },
-    "errors": {"authorization": "File transfer is not currently authorized. Check that both devices are connected and reception is enabled.", "identity": "The file transfer identity changed or its certificate is unavailable. Check the certificate in settings.", "source": "The original file was moved, deleted or changed. Choose it again.", "integrity": "File verification failed. Please send the file again.", "storage": "Not enough storage space. Free up space and retry.", "storageWrite": "Could not save the file or task record. Check the storage location and retry.", "agent": "The file transfer service is not ready. Reopen the app and retry.", "connection": "Could not reach the other device. Check that it is online and accepting files, then retry.", "limit": "The file or task limit has been reached. Clear old records and retry.", "restarted": "The app restarted. Resume the transfer to continue.", "stale": "This record is no longer available. Refresh the list and retry.", "interrupted": "The transfer was interrupted. You can retry.", "generic": "The operation could not be completed. Retry, or check diagnostic logs if the problem continues."},
+    "errors": {"sourceInUse": "This file is still used by a sending task. Remove its associated sent record in File transfers first. Pause or cancel the task first if it is still running.", "authorization": "File transfer is not currently authorized. Check that both devices are connected and reception is enabled.", "identity": "The file transfer identity changed or its certificate is unavailable. Check the certificate in settings.", "source": "The original file was moved, deleted or changed. Choose it again.", "integrity": "File verification failed. Please send the file again.", "storage": "Not enough storage space. Free up space and retry.", "storageWrite": "Could not save the file or task record. Check the storage location and retry.", "agent": "The file transfer service is not ready. Reopen the app and retry.", "connection": "Could not reach the other device. Check that it is online and accepting files, then retry.", "limit": "The file or task limit has been reached. Clear old records and retry.", "restarted": "The app restarted. Resume the transfer to continue.", "stale": "This record is no longer available. Refresh the list and retry.", "interrupted": "The transfer was interrupted. You can retry.", "generic": "The operation could not be completed. Retry, or check file-transfer entries on the Logs page."},
     "fileAndDevice": "File and device", "acceptShort": "Accept",
     "updateSender": "Update the sending client to pause reception",
     "peer": "Device", "transferProgress": "Status and progress",
     "noServices": "No registered services",
     "routeType": "Type", "subnet": "Subnet",
-    "targetLabel": "Send to", "direction": "Direction", "recordsFoot": "Incoming files need confirmation · Completed files can be saved elsewhere", "selectAll": "Select all", "selectFile": "Select {{name}}", "removeFile": "Remove {{name}}", "deviceCount": "{{count}} devices", "localDetails": "This device’s connection details", "peerDevices": "Peer devices", "connection": "Connection", "actions": "Actions", "connectionDetails": "Connection details", "deviceKey": "Device public key", "activeCount": "{{count}} transfers in progress", "pendingCount": "{{count}} files awaiting confirmation", "viewRecords": "View transfers",
+    "targetLabel": "Send to", "direction": "Direction", "recordsFoot": "Incoming files need confirmation · Completed files can be saved elsewhere", "selectAll": "Select all", "selectFile": "Select {{name}}", "removeFile": "Remove {{name}}", "deviceCount": "{{count}} devices", "peerDevices": "Peer devices", "connection": "Connection", "actions": "Actions", "connectionDetails": "Connection details", "deviceKey": "Device public key", "activeCount": "{{count}} transfers in progress", "pendingCount": "{{count}} files awaiting confirmation", "viewRecords": "View transfers",
     "batchCount": "Batch of {{count}} files", "records": "File transfers and history", "receivingShort": "Allow incoming files", "settings": "File transfer settings", "deviceActions": "More actions for {{device}}", "peerReady": "Ready to receive", "toPeer": "To {{device}}", "fromPeer": "From {{device}}", "unnamed": "File transfer", "batchPosition": "{{count}} files · current file {{index}}", "requestTitle": "{{device}} wants to send {{count}} files", "waitingBatch": "Waiting for the remaining files in this batch…", "filterLabel": "Filter file transfers", "filters": { "all": "All", "active": "In progress", "waiting": "Pending", "completed": "Completed" }, "emptyRecords": "No matching transfers", "emptyRequests": "No pending file requests", "selectionTotal": "{{count}} files selected · {{size}}", "selectHint": "Choose files to send", "maxBatch": "Up to 32 files per batch", "confirmHint": "The recipient needs to confirm before receiving.", "cancelPreparation": "Cancel preparation", "identityUnavailable": "File identity information is currently unavailable.",
     "bridgeUnavailable": "The desktop file interface is not ready. Quit the old desktop app and open the updated preview app.",
     "sendTo": "Send to: {{device}}", "backToDevices": "Back to devices", "noDevices": "No devices in the current mesh", "devicesError": "Could not load devices. Please retry.",
@@ -137,6 +154,7 @@
     "quotaExceededMsg": "Monthly traffic over limit ({{pct}}%)",
     "quotaExceededDesc": "Once exceeded, all existing endpoints keep working but no new ones can be added. Upgrade your plan or wait for next month's reset.",
     "quotaExceededDescNoUpgrade": "Once exceeded, all existing endpoints keep working but no new ones can be added. Resets at the start of next month.",
+    "orgDevices": "Org devices",
     "activeTunnels": "Org endpoints",
     "myTunnels": "My endpoints",
     "uptime": "Uptime",

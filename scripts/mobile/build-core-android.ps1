@@ -29,6 +29,12 @@ param(
     [string]$AndroidHome = $(if ($env:ANDROID_HOME) { $env:ANDROID_HOME } else { "D:\Android\Sdk" })
 )
 $ErrorActionPreference = 'Stop'
+# Re-enter once through the shared cache lease; nested build scripts reuse it.
+. (Join-Path $PSScriptRoot '../dev/build-cache.ps1')
+if (-not (Test-CalabiBuildLease)) {
+    & (Join-Path $PSScriptRoot '../dev/build.ps1') __script $PSCommandPath $PSBoundParameters
+    exit $LASTEXITCODE
+}
 
 # Runs a native command and returns its exit code. Windows PowerShell 5.1 turns
 # anything a native command writes to stderr into a terminating error under

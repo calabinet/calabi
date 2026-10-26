@@ -34,6 +34,8 @@ type MeshServiceDecl struct {
 
 // Config is the on-disk credential store.
 type Config struct {
+	// Changes only at explicit auth/organization boundaries, not token refresh.
+	FileReceiveEpoch int64 `json:"file_receive_epoch,omitempty"`
 	// Server is the default calabi-edge control endpoint.
 	Server string `json:"server,omitempty"`
 	// AccessToken is the most recent login session token. Format

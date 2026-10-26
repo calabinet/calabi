@@ -1,6 +1,6 @@
 //! Ordinary-user file agent. Its private stdin/stdout pipes carry the UI API;
 //! file metadata/body are never exposed through the machine daemon's HTTP API.
-use std::{collections::HashSet, sync::{Arc, atomic::{AtomicBool, Ordering}}};
+use std::{collections::{HashSet, VecDeque}, sync::{Arc, atomic::{AtomicBool, Ordering}}, time::{SystemTime, UNIX_EPOCH}};
 use serde_json::{json, Value};
 use tauri::{Manager, State, WebviewWindow};
 use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader}, process::{Child, ChildStdin, ChildStdout, Command}, sync::Mutex};
@@ -8,14 +8,40 @@ use tauri_plugin_notification::NotificationExt;
 use crate::daemon::{self, Supervisor};
 
 struct Rpc { child: Child, input: ChildStdin, output: BufReader<ChildStdout>, notified: HashSet<String>, console: String }
-pub struct FileAgent { rpc: Mutex<Option<Rpc>>, supervisor: Option<Arc<Supervisor>>, zh: AtomicBool }
+pub struct FileAgent { rpc: Mutex<Option<Rpc>>, supervisor: Option<Arc<Supervisor>>, zh: AtomicBool, diagnostics: std::sync::Mutex<VecDeque<Value>>, receipts: std::sync::Mutex<crate::file_requests::Receipts> }
 
 pub fn supported() -> bool { cfg!(any(windows, target_os = "macos")) }
 
+fn file_call_error(result: &Result<Value, String>) -> Option<&str> {
+    match result {
+        Err(error) => Some(error.as_str()),
+        Ok(value) => value["error"].as_str().filter(|error| !error.is_empty()),
+    }
+}
+
 impl FileAgent {
     pub async fn call(&self, action: Value) -> Result<Value, String> {
+        let operation: String = action["action"].as_str().unwrap_or("unknown").chars().take(40).collect();
         let mut guard = self.rpc.lock().await;
-        self.call_locked(&mut guard, action).await
+        let result = self.call_locked(&mut guard, action).await;
+        drop(guard);
+        if let Some(error) = file_call_error(&result) {
+            self.record_error(&operation, error);
+        }
+        result
+    }
+
+    fn record_error(&self, operation: &str, error: &str) {
+        // Keep these private to the desktop user; never forward file paths
+        // or ordinary-user agent errors to the machine daemon's log API.
+        let error: String = error.chars().take(1024).collect();
+        let mut entries = self.diagnostics.lock().unwrap_or_else(|e| e.into_inner());
+        if entries.back().map(|row| row["action"] != operation || row["error"] != error).unwrap_or(true) {
+            log::warn!("file transfer action failed: action={operation:?} error={error:?}");
+            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+            entries.push_back(json!({"time_unix_ms":now,"action":operation,"error":error}));
+            while entries.len() > 64 { entries.pop_front(); }
+        }
     }
 
     async fn call_locked(&self, guard: &mut Option<Rpc>, action: Value) -> Result<Value, String> {
@@ -51,8 +77,8 @@ impl FileAgent {
     }
 
     pub async fn poll_notifications(self: &Arc<Self>, app: &tauri::AppHandle) {
-        // Poll only an already-opened ordinary-user agent; reception remains opt-in.
-        if self.rpc.lock().await.is_none() { return; }
+        // Start the ordinary-user agent after desktop startup so its saved
+        // reception choice can recover without opening the transfer tab.
         let Ok(snapshot) = self.call(json!({"action":"snapshot"})).await else { return; };
         let requests = crate::file_requests::pending(&snapshot);
         let live: HashSet<_> = requests.iter().map(|r| r.stamp()).collect();
@@ -61,8 +87,11 @@ impl FileAgent {
             let mut guard = self.rpc.lock().await;
             let Some(rpc) = guard.as_mut() else { return; };
             rpc.notified.retain(|stamp| live.contains(stamp));
-            for request in requests {
-                if rpc.notified.insert(request.stamp()) { to_show.push((request, rpc.console.clone())); }
+            for request in &requests {
+                if rpc.notified.insert(request.stamp()) { to_show.push((request.clone(), rpc.console.clone())); }
+            }
+            if cfg!(target_os = "macos") {
+                self.receipts.lock().unwrap_or_else(|e| e.into_inner()).update(rpc.console.clone(), requests, !to_show.is_empty());
             }
         }
         if cfg!(target_os = "macos") {
@@ -71,6 +100,7 @@ impl FileAgent {
             } else if !to_show.is_empty() {
                 show_receipt_window(app);
             }
+            wake_receipt_window(app);
             // The receipt window is the macOS file-request reminder. Do not
             // also send a system notification for the same pending batch.
             return;
@@ -141,7 +171,7 @@ impl FileAgent {
 // This window has a separate, narrowly scoped IPC capability. It cannot pick
 // files, enable reception, or submit arbitrary agent actions.
 #[tauri::command]
-pub async fn file_receipt_action(window: WebviewWindow, supervisor: State<'_, Option<Arc<Supervisor>>>, agent: State<'_, Arc<FileAgent>>, action: String, stamp: Option<String>, accept: Option<bool>, height: Option<f64>, viewport_height: Option<f64>) -> Result<Value, String> {
+pub async fn file_receipt_action(window: WebviewWindow, supervisor: State<'_, Option<Arc<Supervisor>>>, agent: State<'_, Arc<FileAgent>>, action: String, stamp: Option<String>, stamps: Option<Vec<String>>, accept: Option<bool>, height: Option<f64>, viewport_height: Option<f64>) -> Result<Value, String> {
     if !cfg!(target_os = "macos") { return Err("Receipt window unavailable".into()); }
     let console = supervisor.inner().as_ref().ok_or("Daemon unavailable")?.url();
     let expected = reqwest::Url::parse(&console).map_err(|e| e.to_string())?;
@@ -149,7 +179,7 @@ pub async fn file_receipt_action(window: WebviewWindow, supervisor: State<'_, Op
     if window.label() != "file-requests" || current.origin() != expected.origin()
         || current.fragment() != Some("/file-requests") { return Err("Untrusted receipt UI".into()); }
     if action == "dismiss" { window.hide().map_err(|e| e.to_string())?; return Ok(json!({"ok":true})); }
-    if action == "resize" {
+    if action == "resize" || action == "ready" {
         let height = height.filter(|h| h.is_finite() && *h > 0.0).ok_or("Invalid receipt height")?;
         let maximum = window.current_monitor().ok().flatten().map(|m|
             (m.work_area().size.height as f64 / m.scale_factor() - 80.0).clamp(120.0, 560.0)
@@ -163,19 +193,55 @@ pub async fn file_receipt_action(window: WebviewWindow, supervisor: State<'_, Op
         };
         let height = (height + inset).clamp(120.0, maximum);
         window.set_size(tauri::LogicalSize::new(420.0, height)).map_err(|e| e.to_string())?;
+        if action == "ready" {
+            let mut receipts = agent.receipts.lock().unwrap_or_else(|e| e.into_inner());
+            if receipts.console == console && receipts.ready(&stamps.unwrap_or_default()) {
+                window.show().map_err(|e| e.to_string())?;
+            }
+        }
         return Ok(json!({"height":height}));
     }
     if action != "snapshot" && action != "decide" { return Err("Unsupported receipt action".into()); }
-    // Never start a new agent from the receipt window.
-    if agent.rpc.lock().await.as_ref().map(|r| r.console.as_str()) != Some(console.as_str()) { return Err("File agent changed".into()); }
-    let snapshot = agent.call(json!({"action":"snapshot"})).await?;
-    let requests = crate::file_requests::pending(&snapshot);
+    // This is display metadata already collected by the notification poll.
+    // Do not block rendering on a new RPC or start an agent from this window.
+    let mut receipts = agent.receipts.lock().unwrap_or_else(|e| e.into_inner());
+    if receipts.console != console { return Err("File agent changed".into()); }
     if action == "decide" {
-        let request = requests.iter().find(|r| Some(r.stamp()).as_ref() == stamp.as_ref()).ok_or("File request changed")?;
-        agent.decide_notification(request, &console, accept.ok_or("Missing decision")?).await?;
-        return Ok(json!({"ok":true}));
+        let accept = accept.ok_or("Missing decision")?;
+        let request = receipts.claim(stamp.as_deref().ok_or("Missing request")?).ok_or("File request changed")?;
+        let empty = receipts.visible().is_empty();
+        drop(receipts);
+        if empty {
+            if let Err(error) = window.hide() { log::warn!("cannot hide file receipt window: {error}"); }
+        }
+        let agent = agent.inner().clone();
+        let app = window.app_handle().clone();
+        tauri::async_runtime::spawn(async move {
+            // Only intent admission is immediate. Authorization and immutable
+            // batch validation still happen against the live file agent.
+            if let Err(error) = agent.decide_notification(&request, &console, accept).await {
+                agent.record_error("receipt_decide", &error);
+                let has_requests = {
+                    let mut receipts = agent.receipts.lock().unwrap_or_else(|e| e.into_inner());
+                    if receipts.console != console { return; }
+                    receipts.failed(&request.stamp(), error);
+                    !receipts.visible().is_empty()
+                };
+                if has_requests { show_receipt_window(&app); }
+                else { open_requests(&app); }
+            }
+            wake_receipt_window(&app);
+        });
+        return Ok(json!({"queued":true}));
     }
-    Ok(json!({"requests":requests.iter().map(|r| json!({"stamp":r.stamp(),"peer":r.peer,"names":r.names,"bytes":r.bytes})).collect::<Vec<_>>()}))
+    Ok(json!({"requests":receipts.visible().iter().map(|r| json!({"stamp":r.stamp(),"peer":r.peer,"names":r.names,"bytes":r.bytes})).collect::<Vec<_>>(),"error":receipts.error}))
+}
+
+fn wake_receipt_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("file-requests") {
+        // Static wake-up only; private names/IDs never become script source.
+        let _ = window.eval("window.dispatchEvent(new Event('calabi:file-receipts-changed'))");
+    }
 }
 
 fn show_receipt_window(app: &tauri::AppHandle) {
@@ -187,7 +253,7 @@ fn show_receipt_window(app: &tauri::AppHandle) {
         if let Some(window) = handle.get_webview_window("file-requests") {
             // A restarted daemon can choose a new console port.
             if window.url().ok().as_ref() != Some(&url) { let _ = window.navigate(url); }
-            let _ = window.show();
+            wake_receipt_window(&handle);
             return;
         }
         let origin = url.origin();
@@ -203,7 +269,9 @@ fn show_receipt_window(app: &tauri::AppHandle) {
                 area.position.y as f64 / scale + 24.0);
         }
         match builder.build() {
-            Ok(window) => { let _ = window.show(); }
+            // The renderer sizes the window and signals readiness after its
+            // first populated DOM commit. Never expose an empty WebView.
+            Ok(_) => {}
             Err(error) => log::warn!("cannot open file receipt window: {error}"),
         }
     });
@@ -218,6 +286,10 @@ pub async fn files_action(window: WebviewWindow, supervisor: State<'_, Option<Ar
     if window.label() != "main" || current.origin() != expected.origin() { return Err("Untrusted file UI origin".into()); }
     if let Some(locale) = action["locale"].as_str() { agent.zh.store(locale.starts_with("zh"), Ordering::Relaxed); }
     if action["action"] == "supported" { return Ok(json!({"supported":true})); }
+    if action["action"] == "diagnostics" {
+        let entries = agent.diagnostics.lock().unwrap_or_else(|e| e.into_inner());
+        return Ok(json!({"entries":entries.iter().cloned().collect::<Vec<_>>()}));
+    }
     if action["action"] == "revoke" && agent.rpc.lock().await.is_none() { return Ok(json!({"ok":true})); }
     let mut action = action;
     if let Some(object) = action.as_object_mut() { object.remove("locale"); }
@@ -231,7 +303,7 @@ pub async fn files_action(window: WebviewWindow, supervisor: State<'_, Option<Ar
 
 pub fn install(app: &tauri::App) {
     let supervisor = app.state::<Option<Arc<Supervisor>>>().inner().clone();
-    let agent = Arc::new(FileAgent { rpc: Mutex::new(None), supervisor, zh: AtomicBool::new(false) });
+    let agent = Arc::new(FileAgent { rpc: Mutex::new(None), supervisor, zh: AtomicBool::new(false), diagnostics: std::sync::Mutex::new(VecDeque::new()), receipts: std::sync::Mutex::new(Default::default()) });
     app.manage(agent.clone());
     if supported() {
         let handle = app.handle().clone();
@@ -252,4 +324,20 @@ fn open_requests(app: &tauri::AppHandle) {
         }
     }
     let _ = window.show(); let _ = window.unminimize(); let _ = window.set_focus();
+}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::file_call_error;
+    use serde_json::json;
+
+    #[test]
+    fn file_call_error_includes_agent_reply_errors_and_transport_errors() {
+        let reply = Ok(json!({"error":"source is referenced by a task; remove its record first"}));
+        assert_eq!(file_call_error(&reply), Some("source is referenced by a task; remove its record first"));
+        let transport = Err("File agent stopped".to_owned());
+        assert_eq!(file_call_error(&transport), Some("File agent stopped"));
+        assert_eq!(file_call_error(&Ok(json!({"available":true}))), None);
+        assert_eq!(file_call_error(&Ok(json!({"error":""}))), None);
+    }
 }

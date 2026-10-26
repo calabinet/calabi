@@ -100,6 +100,7 @@
     "quotaExceededMsg": "Monatlicher Traffic über dem Limit ({{pct}}%)",
     "quotaExceededDesc": "Nach Überschreitung funktionieren alle bestehenden Endpunkte weiter, es können jedoch keine neuen hinzugefügt werden. Aktualisiere deinen Tarif oder warte auf die Zurücksetzung im nächsten Monat.",
     "quotaExceededDescNoUpgrade": "Nach Überschreitung funktionieren alle bestehenden Endpunkte weiter, es können jedoch keine neuen hinzugefügt werden. Wird im nächsten Monat zurückgesetzt.",
+    "orgDevices": "Organisationsgeräte",
     "activeTunnels": "Org-Endpunkte",
     "myTunnels": "Meine Endpunkte",
     "uptime": "Laufzeit",

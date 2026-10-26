@@ -26,14 +26,15 @@ type Peer struct {
 	ExpiresUnix int64              `json:"expires_unix"`
 }
 type Snapshot struct {
-	OwnsLease bool     `json:"owns_lease"`
-	Members   []Member `json:"members"`
-	Ready     bool     `json:"ready"`
-	Scope     string   `json:"scope"`
-	NodeKey   string   `json:"node_key"`
-	Overlay   string   `json:"overlay"`
-	RelayKbps uint32   `json:"relay_kbps"`
-	Peers     []Peer   `json:"peers"`
+	ReceiveEpoch int64    `json:"receive_epoch,omitempty"`
+	OwnsLease    bool     `json:"owns_lease"`
+	Members      []Member `json:"members"`
+	Ready        bool     `json:"ready"`
+	Scope        string   `json:"scope"`
+	NodeKey      string   `json:"node_key"`
+	Overlay      string   `json:"overlay"`
+	RelayKbps    uint32   `json:"relay_kbps"`
+	Peers        []Peer   `json:"peers"`
 }
 type Source struct {
 	View    func() (Snapshot, error)

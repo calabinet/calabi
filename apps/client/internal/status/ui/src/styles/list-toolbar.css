@@ -1,0 +1,8 @@
+.list-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; }
+.list-toolbar > .list-search { flex:0 1 280px; min-width:112px; max-width:280px; margin-inline-start:auto; }
+.list-toolbar > .ant-segmented { flex-shrink:0; }
+@media (max-width:480px) {
+  .list-toolbar { gap:8px; }
+  .list-toolbar > .list-search { min-width:96px; }
+  .list-toolbar .ant-segmented-item-label { padding-inline:7px; }
+}

@@ -1,9 +1,53 @@
 package filetransfer
 
 import (
+	"bytes"
+	"context"
 	"reflect"
 	"testing"
 )
+
+func TestSourceCreationTimePersistsAcrossWorkspaceRestart(t *testing.T) {
+	cfg := localReferenceConfig(t)
+	w, err := NewWorkspace(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := w.Stage(context.Background(), bytes.NewReader([]byte("test")), "test.bin", 4)
+	if err != nil {
+		w.Close()
+		t.Fatal(err)
+	}
+	if s.CreatedUnixMs <= 0 {
+		t.Fatal("new source has no creation time")
+	}
+	if err = w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	w, err = NewWorkspace(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+	if got := w.Staged(); len(got) != 1 || got[0].CreatedUnixMs != s.CreatedUnixMs {
+		t.Fatalf("creation time changed: %#v", got)
+	}
+}
+
+func TestNewerFilesSortFirstRegardlessOfIdentifierOrState(t *testing.T) {
+	w := &Workspace{sources: map[string]StagedFile{"a": {ID: "a", CreatedUnixMs: 1}, "z": {ID: "z", CreatedUnixMs: 2}}, jobs: map[string]*outgoingJob{"a": {record: outgoingRecord{Job: Job{ID: "a", CreatedUnixMs: 1}}}, "z": {record: outgoingRecord{Job: Job{ID: "z", CreatedUnixMs: 2}}}}}
+	if w.Staged()[0].ID != "z" || w.Jobs()[0].ID != "z" {
+		t.Fatal("random identifier won over creation time")
+	}
+	w.jobs["a"].record.Job.State = "sending"
+	w.jobs["a"].record.Job.Progress.Transfer.Offset = 100
+	if w.Jobs()[0].ID != "z" {
+		t.Fatal("progress changed chronological order")
+	}
+	if compareTransferOrder(Transfer{ID: "z", CreatedUnixMs: 2}, Transfer{ID: "a", CreatedUnixMs: 1}) >= 0 {
+		t.Fatal("received files not newest first")
+	}
+}
 
 func TestWorkspaceListsKeepOrderAcrossProgressUpdates(t *testing.T) {
 	w := &Workspace{

@@ -37,3 +37,27 @@ func TestFileFirewallCommandQuotesProgramPath(t *testing.T) {
 		t.Fatalf("path was not passed as literal data: %s", output)
 	}
 }
+
+func TestInstallationFirewallCommandsUseEmbeddedParser(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"USERPROFILE", "HOME", "APPDATA", "LOCALAPPDATA"} {
+		t.Setenv(name, dir)
+	}
+	// Substitute only the policy body. Exercise the real encoded command and
+	// PowerShell parameter parser without consulting the host firewall.
+	saved := fileFirewallScript
+	fileFirewallScript = "param($Action, $Program, $Receiving)\n[Console]::Write($Action + '|' + $Receiving + '|' + $Program)"
+	defer func() { fileFirewallScript = saved }()
+	program := filepath.Join(dir, "user's calabi.exe")
+	for _, action := range []string{"Install", "Remove"} {
+		t.Run(action, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			ps := filepath.Join(os.Getenv("SystemRoot"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+			output, err := exec.CommandContext(ctx, ps, "-NoProfile", "-NonInteractive", "-EncodedCommand", fileFirewallActionCommand(program, action, "off")).CombinedOutput()
+			if err != nil || string(output) != action+"|off|"+program {
+				t.Fatalf("incorrect embedded invocation: %v: %s", err, output)
+			}
+		})
+	}
+}

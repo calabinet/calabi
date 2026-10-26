@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 // Source records are private user metadata. Never expose Local through Staged()
@@ -78,7 +79,7 @@ func (w *Workspace) referenceLocal(ctx context.Context, path string, selected os
 	if err != nil {
 		return zero, err
 	}
-	s := StagedFile{ID: randomID(), Name: name, Size: st.Size()}
+	s := StagedFile{ID: randomID(), Name: name, Size: st.Size(), CreatedUnixMs: time.Now().UnixMilli()}
 	if !validName(s.Name) || s.Size < 0 {
 		return zero, errLocalSource
 	}

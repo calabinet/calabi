@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,18 +36,25 @@ import androidx.compose.material3.SwitchColors
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -381,4 +389,94 @@ fun copyToClipboard(context: Context, text: String) {
 
 fun toast(context: Context, text: String) {
     Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+}
+
+
+fun matchesListSearch(query: String, vararg values: String): Boolean =
+    query.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.all { term -> values.any { it.contains(term, ignoreCase = true) } }
+
+@Composable
+fun ListSearchToolbar(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit = {},
+) {
+    var expanded by rememberSaveable { mutableStateOf(value.isNotEmpty()) }
+    var requestFocus by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val closeSearch = {
+        focusManager.clearFocus()
+        keyboard?.hide()
+        onValueChange("")
+        requestFocus = false
+        expanded = false
+    }
+    BackHandler(enabled = expanded, onBack = closeSearch)
+    Row(modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (expanded) {
+            androidx.compose.material3.IconButton(onClick = closeSearch, modifier = Modifier.size(48.dp)) {
+                androidx.compose.material3.Icon(
+                    painterResource(R.drawable.ic_chevron_left),
+                    contentDescription = stringResource(R.string.list_search_close), tint = Palette.ink,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            ListSearchField(value, onValueChange, placeholder, requestFocus, { requestFocus = false }, Modifier.weight(1f))
+        } else {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, content = content)
+            androidx.compose.material3.IconButton(onClick = { requestFocus = true; expanded = true }, modifier = Modifier.size(48.dp)) {
+                androidx.compose.material3.Icon(
+                    painterResource(R.drawable.ic_search), contentDescription = placeholder,
+                    tint = Palette.muted, modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ListSearchField(value: String, onValueChange: (String) -> Unit, placeholder: String,
+    requestFocus: Boolean, onFocusRequested: () -> Unit, modifier: Modifier = Modifier) {
+    var focused by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val requester = remember { FocusRequester() }
+    LaunchedEffect(requestFocus) {
+        if (requestFocus) {
+            requester.requestFocus()
+            keyboard?.show()
+            onFocusRequested()
+        }
+    }
+    val shape = RoundedCornerShape(8.dp)
+    val fieldHeight = maxOf(32.dp, with(LocalDensity.current) { 22.sp.toDp() + 8.dp })
+    val clearLabel = stringResource(R.string.list_search_clear)
+    BasicTextField(
+        value = value, onValueChange = onValueChange, singleLine = true,
+        textStyle = TextStyle(fontFamily = Fonts.display, fontSize = 15.sp, color = Palette.ink),
+        cursorBrush = SolidColor(Palette.accent),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus(); keyboard?.hide() }),
+        modifier = modifier.fillMaxWidth().focusRequester(requester).onFocusChanged { focused = it.isFocused }.semantics { contentDescription = placeholder },
+        decorationBox = { inner ->
+            Box(Modifier.fillMaxWidth().heightIn(min = maxOf(48.dp, fieldHeight)), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxWidth().height(fieldHeight).clip(shape).background(Palette.offRing)
+                    .then(if (focused) Modifier.border(1.dp, Palette.accent, shape) else Modifier))
+                Row(Modifier.fillMaxWidth().padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Glyph(R.drawable.ic_search, Palette.muted, 16.dp)
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                        if (value.isEmpty()) Text(placeholder, color = Palette.muted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        inner()
+                    }
+                    if (value.isNotEmpty()) androidx.compose.material3.IconButton(onClick = { onValueChange(""); requester.requestFocus(); keyboard?.show() }, modifier = Modifier.size(48.dp).semantics { contentDescription = clearLabel }) {
+                        Glyph(R.drawable.ic_close, Palette.muted, 16.dp)
+                    }
+                }
+            }
+        },
+    )
 }

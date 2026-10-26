@@ -7,7 +7,15 @@
     "windows": {
       "nsis": {
         "installMode": "perMachine",
-        "installerHooks": "nsis-hooks.nsh"
+        "installerHooks": "nsis-hooks.nsh",
+        "languages": [
+          "English",
+          "SimpChinese"
+        ],
+        "customLanguageFiles": {
+          "English": "nsis-languages/English.nsh",
+          "SimpChinese": "nsis-languages/SimpChinese.nsh"
+        }
       }
     }
   }

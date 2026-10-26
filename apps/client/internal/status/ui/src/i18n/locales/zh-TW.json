@@ -100,6 +100,7 @@
     "quotaExceededMsg": "本月流量已超出限額 ({{pct}}%)",
     "quotaExceededDesc": "超出後所有現有端點繼續運作,但無法新增。升級套餐或等下個月重置。",
     "quotaExceededDescNoUpgrade": "超出後所有現有端點繼續運作,但無法新增。下個自然月自動重置。",
+    "orgDevices": "組織裝置",
     "activeTunnels": "組織端點",
     "myTunnels": "我的端點",
     "uptime": "線上時間",

@@ -667,10 +667,10 @@ export interface MeshStatus {
 // modelled — the console's own row is much wider.
 export interface MeshOrgNode {
   online?: boolean; // Coordinator control-session presence; absence is unknown.
-  id: number;
+  id?: number; // API-key clients receive only overlay + online.
   name?: string;
   overlay: string; // the join key: a peer's allowed_ips carries this as a /32
-  owner_user_id: number;
+  owner_user_id?: number;
   owner_email?: string; // resolved by bff-console; absent for unattributed
   // Needed to tell "the rules do not let you reach it" apart from "nobody can
   // reach it". A parked or not-yet-approved device is in nobody's netmap, so

@@ -65,13 +65,10 @@ func (c *Core) ensureFiles() (*mobileFiles, error) {
 			paths[p.PublicKey] = p.Path
 		}
 		f.paths.Store(paths)
+		if err := c.restoreFileReception(f); err != nil {
+			return nil, err
+		}
 		return f, nil
-	}
-	previousReceiving := false
-	previousScope := ""
-	if c.files != nil && c.files.e == e {
-		previousReceiving = c.files.w.Agent.Receiving()
-		previousScope = c.files.scope
 	}
 	if c.files != nil {
 		c.closeFilesLocked(false)
@@ -91,8 +88,9 @@ func (c *Core) ensureFiles() (*mobileFiles, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
+	contextKey := c.fileContext()
 	current := func() bool {
-		if c.currentEngine() != e {
+		if c.currentEngine() != e || c.fileContext() != contextKey {
 			return false
 		}
 		e.mu.Lock()
@@ -135,15 +133,17 @@ func (c *Core) ensureFiles() (*mobileFiles, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	f := &mobileFiles{w: w, e: e, ctrl: ctrl, id: id, cancel: cancel, done: make(chan struct{})}
 	f.scope = scope
-	f.contextKey = c.fileContext()
+	f.contextKey = contextKey
 	f.paths = paths
 	if err := c.rememberFiles(f, local.String()); err != nil {
 		cancel()
 		w.Close()
 		return nil, err
 	}
-	if previousReceiving && previousScope == scope {
-		_ = w.Agent.SetReceiving(true)
+	if err := c.restoreFileReception(f); err != nil {
+		cancel()
+		w.Close()
+		return nil, err
 	}
 	c.files = f
 	go func() {
@@ -264,7 +264,7 @@ func (c *Core) handleFiles(w http.ResponseWriter, _ *http.Request) {
 	if !live {
 		lastError = "Reconnect to send or receive files. Local records and completed files remain available."
 	}
-	writeJSON(w, 200, map[string]any{"available": live, "preparing": f.w.Preparing(), "receiving": live && f.w.Agent.Receiving(), "peers": peers, "received": f.w.Agent.List(), "jobs": f.w.Jobs(), "sources": f.w.Staged(), "error": lastError, "identity": filetransfer.ReadIdentityStatus(filepath.Join(c.cfg.StateDir, "files-v1"))})
+	writeJSON(w, 200, map[string]any{"available": live, "preparing": f.w.Preparing(), "receiving": live && f.w.Agent.Receiving(), "receiving_requested": c.fileReceptionRequested(f), "peers": peers, "received": f.w.Agent.List(), "jobs": f.w.Jobs(), "sources": f.w.Staged(), "error": lastError, "identity": filetransfer.ReadIdentityStatus(filepath.Join(c.cfg.StateDir, "files-v1"))})
 }
 func (c *Core) handleFileAction(w http.ResponseWriter, r *http.Request) {
 	var in struct {
@@ -292,6 +292,10 @@ func (c *Core) handleFileAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		c.closeFilesLocked(true)
+		if err := c.saveFileReception(fileReceptionPreference{}); err != nil {
+			writeError(w, 409, err.Error())
+			return
+		}
 		_, err := filetransfer.MaintainIdentity(filepath.Join(c.cfg.StateDir, "files-v1"), strings.TrimPrefix(in.Action, "identity_"))
 		if err != nil {
 			writeError(w, 409, err.Error())
@@ -299,6 +303,20 @@ func (c *Core) handleFileAction(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, 200, map[string]bool{"ok": true})
 		return
+	}
+	if in.Action == "receiving" && !in.Enabled {
+		if c.files != nil {
+			_ = c.files.w.Agent.SetReceiving(false)
+		}
+		if err := c.saveFileReception(fileReceptionPreference{}); err != nil {
+			writeError(w, 409, err.Error())
+			return
+		}
+		// Continue through the live action to withdraw the declaration immediately.
+		if c.files == nil || !c.filesLive(c.files) {
+			writeJSON(w, 200, map[string]bool{"ok": true})
+			return
+		}
 	}
 	f, err := c.ensureFiles()
 	if err != nil {
@@ -312,6 +330,10 @@ func (c *Core) handleFileAction(w http.ResponseWriter, r *http.Request) {
 	}
 	switch in.Action {
 	case "receiving":
+		err = c.saveFileReception(fileReceptionPreference{Context: f.contextKey, Scope: f.scope, Enabled: in.Enabled})
+		if err != nil {
+			break
+		}
 		err = f.w.Agent.SetReceiving(in.Enabled)
 		if err == nil {
 			info, e := f.id.Declaration(f.ctrl.Params.NodeKey, 17401, in.Enabled)

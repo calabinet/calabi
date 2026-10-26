@@ -100,6 +100,7 @@
     "quotaExceededMsg": "今月のトラフィックが上限を超過 ({{pct}}%)",
     "quotaExceededDesc": "超過後も既存のエンドポイントは動作し続けますが、新規追加はできません。プランをアップグレードするか、来月のリセットをお待ちください。",
     "quotaExceededDescNoUpgrade": "超過後も既存のエンドポイントは動作し続けますが、新規追加はできません。翌月に自動的にリセットされます。",
+    "orgDevices": "組織のデバイス",
     "activeTunnels": "組織のエンドポイント",
     "myTunnels": "自分のエンドポイント",
     "uptime": "稼働時間",

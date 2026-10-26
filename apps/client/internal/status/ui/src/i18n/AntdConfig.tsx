@@ -6,7 +6,8 @@
 // strings (pagination, date pickers, empty states) AND the dayjs global
 // locale. The brand theme tokens that used to live in main.tsx live here.
 import { useTranslation } from "react-i18next";
-import { ConfigProvider, theme } from "antd";
+import { ConfigProvider, theme, type ThemeConfig } from "antd";
+import { useLayoutEffect } from "react";
 import deDE from "antd/locale/de_DE";
 import enUS from "antd/locale/en_US";
 import esES from "antd/locale/es_ES";
@@ -56,9 +57,50 @@ const dayjsLocales: Record<LangCode, string> = {
   "zh-TW": "zh-tw",
 };
 
+const clientTheme: ThemeConfig = {
+  // Dark "tech" theme matching the marketing site (web/www): near-black
+  // deep-space navy surface, electric indigo primary, cyan link accent.
+  algorithm: theme.darkAlgorithm,
+  token: {
+    // Brand indigo (brand-500, brighter than the #2742f0 wordmark so it
+    // pops on dark) drives buttons / active states; cyan is the link /
+    // accent half of the indigo→cyan gradient language.
+    colorPrimary: "#3a5cff",
+    colorInfo: "#3a5cff",
+    colorLink: "#22d3ee",
+    colorLinkHover: "#67e8f9",
+    // Navy-tinted neutral base — derives all the dark greys with a blue
+    // cast so cards/inputs read as the same "ink" family as the site.
+    colorBgBase: "#05070f",
+    borderRadius: 8,
+    fontFamily:
+      '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif',
+  },
+  components: {
+    Modal: { contentBg: "#0b1022", headerBg: "#0b1022", footerBg: "#0b1022" },
+    Layout: {
+      bodyBg: "#05070f",
+      headerBg: "#0b1022",
+      siderBg: "#0b1022",
+    },
+    Menu: {
+      itemBg: "transparent",
+      itemSelectedBg: "rgba(58,92,255,0.16)",
+      itemSelectedColor: "#8eaaff",
+    },
+  },
+};
+
 export default function AntdConfig({ children }: { children: React.ReactNode }) {
   const { i18n } = useTranslation();
   const lng: LangCode = resolveLang(i18n.language);
+
+  // Static modals/messages create their own React roots and cannot inherit
+  // this provider. Reuse the same theme and locale for their holder as well.
+  useLayoutEffect(() => {
+    ConfigProvider.config({ holderRender: node => <ConfigProvider locale={antdLocales[lng]} theme={clientTheme}>{node}</ConfigProvider> });
+    return () => { ConfigProvider.config({ holderRender: undefined }); };
+  }, [lng]);
 
   // dayjs is a global singleton — set it on every render where lng changed.
   dayjs.locale(dayjsLocales[lng]);
@@ -66,38 +108,7 @@ export default function AntdConfig({ children }: { children: React.ReactNode }) 
   return (
     <ConfigProvider
       locale={antdLocales[lng]}
-      theme={{
-        // Dark "tech" theme matching the marketing site (web/www): near-black
-        // deep-space navy surface, electric indigo primary, cyan link accent.
-        algorithm: theme.darkAlgorithm,
-        token: {
-          // Brand indigo (brand-500, brighter than the #2742f0 wordmark so it
-          // pops on dark) drives buttons / active states; cyan is the link /
-          // accent half of the indigo→cyan gradient language.
-          colorPrimary: "#3a5cff",
-          colorInfo: "#3a5cff",
-          colorLink: "#22d3ee",
-          colorLinkHover: "#67e8f9",
-          // Navy-tinted neutral base — derives all the dark greys with a blue
-          // cast so cards/inputs read as the same "ink" family as the site.
-          colorBgBase: "#05070f",
-          borderRadius: 8,
-          fontFamily:
-            '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif',
-        },
-        components: {
-          Layout: {
-            bodyBg: "#05070f",
-            headerBg: "#0b1022",
-            siderBg: "#0b1022",
-          },
-          Menu: {
-            itemBg: "transparent",
-            itemSelectedBg: "rgba(58,92,255,0.16)",
-            itemSelectedColor: "#8eaaff",
-          },
-        },
-      }}
+      theme={clientTheme}
     >
       {children}
     </ConfigProvider>

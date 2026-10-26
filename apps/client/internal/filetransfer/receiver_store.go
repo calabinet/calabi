@@ -110,6 +110,7 @@ func (r *Receiver) restore() error {
 		}
 		// Original rate/limits are never a way to escape today's budget.
 		t.Kbps = r.cfg.Kbps
+		t.CreatedUnixMs = record.Created.UnixMilli()
 		t.MaxBlock = max(paceChunk, min(BlockSize, r.cfg.Kbps*128))
 		ctx, cancel := context.WithDeadline(r.ctx, record.Created.Add(24*time.Hour))
 		s := &receiveSession{Transfer: t, token: record.Token, created: record.Created, ctx: ctx, cancel: cancel}

@@ -100,6 +100,7 @@
     "quotaExceededMsg": "Traffico mensile oltre il limite ({{pct}}%)",
     "quotaExceededDesc": "Una volta superato, tutti gli endpoint esistenti continuano a funzionare ma non se ne possono aggiungere di nuovi. Aggiorna il piano o attendi il reset del mese prossimo.",
     "quotaExceededDescNoUpgrade": "Una volta superato, tutti gli endpoint esistenti continuano a funzionare ma non se ne possono aggiungere di nuovi. Si azzera il mese prossimo.",
+    "orgDevices": "Dispositivi dell’organizzazione",
     "activeTunnels": "Endpoint dell'org",
     "myTunnels": "I miei endpoint",
     "uptime": "Tempo di attività",

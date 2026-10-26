@@ -895,6 +895,9 @@ func originAllowed(origin, host string) bool {
 // nil -- we never want the status page to take down the tunnel itself.
 func (s *Server) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
+	if s.apiRegister != nil {
+		fileServiceRoutes(mux)
+	}
 	// SPA at /ui/, root index at /. The SPA bundle (Vite
 	// build with base="./") references its JS + CSS under /assets/*
 	// when loaded from the root path. Without a /assets/ mount these

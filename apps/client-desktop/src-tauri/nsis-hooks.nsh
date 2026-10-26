@@ -14,6 +14,12 @@
 ; POSTINSTALL against a fake service key and stand-in exes. It never touches a
 ; real service.
 
+; The function is included by our language files after Tauri declares its
+; maintenance-page variables. MUI calls it once, when the installer opens.
+!define MUI_CUSTOMFUNCTION_GUIINIT CalabiMaintenanceDefault
+!define CALABI_MAINTENANCE_FILE "${__FILEDIR__}\nsis-maintenance.nsh"
+!include "${__FILEDIR__}\nsis-layout.nsh"
+
 ; Overridable ONLY so the test harness can point PREINSTALL at a fake service.
 ; The installer build defines none of these.
 !ifndef CALABI_SVC_ROOT
@@ -28,16 +34,12 @@
 !ifndef CALABI_UNLOCK_TRIES
   !define CALABI_UNLOCK_TRIES 60 ; x 500ms = 30s
 !endif
-!define CALABI_FIREWALL_SCRIPT "${__FILEDIR__}\..\..\client\internal\filecontrol\filefirewall_windows.ps1"
-!ifndef CALABI_FIREWALL_RUN
-  !define CALABI_FIREWALL_RUN '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\file-firewall.ps1"'
-!endif
+!define CALABI_CLOSE_DESKTOP_SCRIPT "${__FILEDIR__}\close-desktop.ps1"
 
-; Return status/output. The same script is embedded in the daemon.
-; Keep a machine-protected installed copy for the uninstaller (NSIS cannot
-; extract File payloads from an uninstall section).
+; Enrollment/removal uses the same embedded implementation as runtime toggles.
+; Return status/output; no installed PowerShell copy is required.
 !macro CALABI_FILE_FIREWALL ACTION
-  nsExec::ExecToStack '${CALABI_FIREWALL_RUN} -Action ${ACTION} -Program "$INSTDIR\calabi.exe"'
+  nsExec::ExecToStack '"$INSTDIR\calabi.exe" mesh files firewall ${ACTION}'
   Pop $R0
   Pop $R1
 !macroend
@@ -81,8 +83,8 @@
       ${EndIf}
     ${EndIf}
     ${If} $R4 == "foreign"
-      DetailPrint "A Calabi service from another install already exists: $R0"
-      MessageBox MB_OK|MB_ICONSTOP "Calabi is already installed on this computer another way (for example with scoop), and its service runs:$\r$\n$\r$\n$R0$\r$\n$\r$\nRemove that service first with:  calabi daemon uninstall$\r$\nthen run this installer again." /SD IDOK
+      DetailPrint "$(calabiForeignService)"
+      MessageBox MB_OK|MB_ICONSTOP "$(calabiForeignServiceError)" /SD IDOK
       Abort
     ${EndIf}
   ${EndIf}
@@ -104,9 +106,21 @@
   ; survivable by design: apply_windows.go starts the installer DETACHED and
   ; broken away from any job, so it outlives its parent.
   ${If} ${FileExists} "$INSTDIR\calabi.exe"
-    DetailPrint "Stopping the Calabi service before replacing calabi.exe..."
-    nsExec::ExecToLog 'sc.exe stop ${CALABI_SVC_NAME}'
+    InitPluginsDir
+    File /oname=$PLUGINSDIR\calabi-close-desktop.ps1 "${CALABI_CLOSE_DESKTOP_SCRIPT}"
+    DetailPrint "$(calabiClosingDesktop)"
+    nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\calabi-close-desktop.ps1" -InstallDir "$INSTDIR"'
     Pop $R0
+    Pop $R1
+    ${If} $R0 != 0
+      MessageBox MB_OK|MB_ICONSTOP "$(calabiCloseDesktopFailed)" /SD IDOK
+      SetErrorLevel 6
+      Abort
+    ${EndIf}
+    DetailPrint "$(calabiStoppingService)"
+    nsExec::ExecToStack 'sc.exe stop ${CALABI_SVC_NAME}'
+    Pop $R0
+    Pop $R1
     StrCpy $R1 0
     ${Do}
       ClearErrors
@@ -120,10 +134,11 @@
         ; Refuse rather than "succeed": a skipped calabi.exe is the exact silent
         ; failure this hook exists to end. Put back what we stopped, so a machine
         ; is never left without its daemon by an update that did not happen.
-        DetailPrint "calabi.exe is still in use after stopping the service — not installing."
-        nsExec::ExecToLog 'sc.exe start ${CALABI_SVC_NAME}'
+        DetailPrint "$(calabiFileBusy)"
+        nsExec::ExecToStack 'sc.exe start ${CALABI_SVC_NAME}'
         Pop $R0
-        MessageBox MB_OK|MB_ICONSTOP "calabi.exe is still in use, so it cannot be replaced.$\r$\n$\r$\nClose any program running Calabi and run this installer again." /SD IDOK
+        Pop $R1
+        MessageBox MB_OK|MB_ICONSTOP "$(calabiFileBusyError)" /SD IDOK
         Abort
       ${EndIf}
       Sleep 500
@@ -169,48 +184,49 @@
   Push $R1
   Push $R2
 
-  DetailPrint "Registering Calabi system service..."
+  DetailPrint "$(calabiRegisteringService)"
   nsExec::ExecToStack '"$INSTDIR\calabi.exe" daemon install --system --platform'
   Pop $R0 ; exit code (or "error" / "timeout")
   Pop $R1 ; everything it printed
-  DetailPrint "calabi daemon install --system exited: $R0"
+  DetailPrint "$(calabiServiceInstallResult)"
 
   ReadRegStr $R2 ${CALABI_SVC_ROOT} "${CALABI_SVC_KEY}" "ImagePath"
   ${If} $R2 == ""
-    DetailPrint "The Calabi service is not registered."
+    DetailPrint "$(calabiServiceNotRegistered)"
     FileOpen $R2 "$INSTDIR\service-install-error.log" w
     FileWrite $R2 "calabi daemon install --system --platform exited: $R0$\r$\n$R1$\r$\n"
     FileClose $R2
-    MessageBox MB_OK|MB_ICONSTOP "Calabi's files are installed, but its background service could not be registered. The app would start and find nothing to talk to.$\r$\n$\r$\nWhat the service installer said:$\r$\n$\r$\n$R1$\r$\n$\r$\nFix that, then run this installer again." /SD IDOK
+    MessageBox MB_OK|MB_ICONSTOP "$(calabiServiceInstallFailed)" /SD IDOK
     SetErrorLevel 3
     Abort
   ${EndIf}
   ; Registered. Clear what an earlier failed attempt left behind.
   Delete "$INSTDIR\service-install-error.log"
 
-  DetailPrint "Configuring Calabi file reception firewall..."
-  File /oname=$INSTDIR\file-firewall.ps1 "${CALABI_FIREWALL_SCRIPT}"
-  !insertmacro CALABI_FILE_FIREWALL Install
+  DetailPrint "$(calabiConfiguringFirewall)"
+  !insertmacro CALABI_FILE_FIREWALL install
   ${If} $R0 != 0
     FileOpen $R2 "$INSTDIR\file-firewall-error.log" w
     FileWrite $R2 "$R0$\r$\n$R1$\r$\n"
     FileClose $R2
-    MessageBox MB_OK|MB_ICONSTOP "Calabi's file reception firewall rule could not be configured.$\r$\n$\r$\n$R1$\r$\n$\r$\nCheck the computer's firewall policy, then run this installer again." /SD IDOK
+    MessageBox MB_OK|MB_ICONSTOP "$(calabiFirewallFailed)" /SD IDOK
     SetErrorLevel 5
     Abort
   ${EndIf}
   Delete "$INSTDIR\file-firewall-error.log"
+  ; Migrate older installs only after the embedded enrollment succeeded.
+  Delete "$INSTDIR\file-firewall.ps1"
 
   nsExec::ExecToStack '"$INSTDIR\calabi.exe" daemon start'
   Pop $R0
   Pop $R1
-  DetailPrint "calabi daemon start exited: $R0"
+  DetailPrint "$(calabiServiceStartResult)"
   ${If} $R0 != 0
-    DetailPrint "The Calabi service did not start."
+    DetailPrint "$(calabiServiceNotStarted)"
     FileOpen $R2 "$INSTDIR\service-install-error.log" w
     FileWrite $R2 "calabi daemon start exited: $R0$\r$\n$R1$\r$\n"
     FileClose $R2
-    MessageBox MB_OK|MB_ICONSTOP "Calabi is installed and its background service is registered, but the service did not start. The app would start and find nothing to talk to.$\r$\n$\r$\nWhat it said:$\r$\n$\r$\n$R1$\r$\n$\r$\nStart the Calabi service from Services, or run this installer again." /SD IDOK
+    MessageBox MB_OK|MB_ICONSTOP "$(calabiServiceStartFailed)" /SD IDOK
     SetErrorLevel 4
     Abort
   ${EndIf}
@@ -223,23 +239,29 @@
 !macro NSIS_HOOK_PREUNINSTALL
   Push $R0
   Push $R1
-  DetailPrint "Removing Calabi file reception firewall rule..."
-  !insertmacro CALABI_FILE_FIREWALL Remove
+  DetailPrint "$(calabiRemovingFirewall)"
+  !insertmacro CALABI_FILE_FIREWALL remove
   ${If} $R0 != 0
-    MessageBox MB_OK|MB_ICONSTOP "Calabi's file reception firewall rule could not be removed.$\r$\n$\r$\n$R1$\r$\n$\r$\nCheck the firewall policy, then run this uninstaller again." /SD IDOK
+    MessageBox MB_OK|MB_ICONSTOP "$(calabiRemoveFirewallFailed)" /SD IDOK
     SetErrorLevel 5
     Abort
   ${EndIf}
   Pop $R1
   Pop $R0
   Delete "$INSTDIR\file-firewall.ps1"
-  DetailPrint "Removing Calabi system service..."
-  nsExec::ExecToLog '"$INSTDIR\calabi.exe" daemon stop'
+  DetailPrint "$(calabiRemovingService)"
+  nsExec::ExecToStack '"$INSTDIR\calabi.exe" daemon stop'
   Pop $0
-  nsExec::ExecToLog '"$INSTDIR\calabi.exe" daemon uninstall'
+  Pop $1
+  nsExec::ExecToStack '"$INSTDIR\calabi.exe" daemon uninstall'
   Pop $0
-  ; Clean uninstall: remove the machine-wide data dir (login/config/logs). A
-  ; fresh install re-enrolls via the console. $1 avoids clobbering $0 (Pop above).
-  ReadEnvStr $1 "ProgramData"
-  RMDir /r "$1\Calabi"
+  Pop $1
+  ; Match Tauri's data deletion choice, including its update-mode safeguard.
+  ; This directory holds the service login AND mesh identity: deleting it on
+  ; an ordinary upgrade silently enrolls the same computer as a new device.
+  ${If} $DeleteAppDataCheckboxState = 1
+  ${AndIf} $UpdateMode <> 1
+    ReadEnvStr $1 "ProgramData"
+    RMDir /r "$1\Calabi"
+  ${EndIf}
 !macroend

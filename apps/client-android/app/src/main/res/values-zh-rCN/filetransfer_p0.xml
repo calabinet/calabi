@@ -10,7 +10,7 @@
     <string name="filetest_stop">停止传送</string>
     <string name="filetest_accept">接受</string>
     <string name="filetest_reject">拒绝</string>
-    <string name="filetest_save">另存已校验文件…</string>
+    <string name="filetest_save">另存</string>
     <string name="filetest_clear">清空测试收件箱与配对</string>
     <string name="filetest_clear_hint">结束实验并删除私有收件箱内的全部测试文件，已另存到其他位置的文件保留。</string>
     <string name="filetest_failed">文件传送测试失败</string>

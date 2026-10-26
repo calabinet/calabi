@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Alert, Button, Empty, Spin } from "antd";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -7,6 +7,7 @@ import { fileErrorKey } from "../lib/fileErrors";
 import "../styles/file-receipt.css";
 
 type Request = { stamp: string; peer: string; names: string[]; bytes: number };
+type Snapshot = { requests: Request[]; error?: string };
 type Bridge = Window & { __TAURI_INTERNALS__?: { invoke<T>(command: string, args: unknown): Promise<T> } };
 async function receipt<T>(action: string, args = {}): Promise<T> {
   const native = (window as Bridge).__TAURI_INTERNALS__;
@@ -24,11 +25,16 @@ export default function FileReceipt() {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const query = useQuery({ queryKey: ["file-receipts"], queryFn: () => receipt<{ requests: Request[] }>("snapshot"), refetchInterval: 1000, retry: false });
+  const query = useQuery({ queryKey: ["file-receipts"], queryFn: () => receipt<Snapshot>("snapshot"), refetchInterval: 1000, refetchIntervalInBackground: true, retry: false });
   const panel = useRef<HTMLElement>(null);
   const header = useRef<HTMLElement>(null);
   const content = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    const refresh = () => { void qc.invalidateQueries({ queryKey: ["file-receipts"] }); };
+    window.addEventListener("calabi:file-receipts-changed", refresh);
+    return () => window.removeEventListener("calabi:file-receipts-changed", refresh);
+  }, [qc]);
+  useLayoutEffect(() => {
     if (query.isPending || !header.current || !content.current) return;
     let lastHeight = 0;
     const resize = () => {
@@ -38,21 +44,23 @@ export default function FileReceipt() {
       const height = Math.ceil(header.current!.getBoundingClientRect().height + content.current!.getBoundingClientRect().height + parseFloat(padding.paddingTop) + parseFloat(padding.paddingBottom)) + 2;
       if (height === lastHeight) return;
       lastHeight = height;
-      void receipt("resize", { height, viewportHeight: window.innerHeight }).catch(() => { /* Older shells keep their fixed size. */ });
+      // A hidden WKWebView may throttle animation frames. Its committed DOM
+      // and natural dimensions are enough to admit native presentation.
+      void receipt("ready", { height, viewportHeight: window.innerHeight, stamps: (query.data?.requests || []).map(r => r.stamp) }).catch(() => { /* Older shells keep their fixed size. */ });
     };
     const observer = new ResizeObserver(resize);
     observer.observe(header.current);
     observer.observe(content.current);
     resize();
     return () => observer.disconnect();
-  }, [query.isPending]);
+  }, [query.isPending, query.data, query.dataUpdatedAt]);
   const decide = async (request: Request, accept: boolean) => {
     setBusy(true); setError("");
     try {
       await receipt("decide", { stamp: request.stamp, accept });
       // Remove immediately; an older poll response must not re-enable buttons.
       await qc.cancelQueries({ queryKey: ["file-receipts"] });
-      qc.setQueryData<{ requests: Request[] }>(["file-receipts"], data => ({ requests: (data?.requests || []).filter(r => r.stamp !== request.stamp) }));
+      qc.setQueryData<Snapshot>(["file-receipts"], data => ({ requests: (data?.requests || []).filter(r => r.stamp !== request.stamp) }));
       await query.refetch();
     } catch (e) { setError((e as Error).message); await query.refetch(); }
     finally { setBusy(false); }
@@ -61,7 +69,7 @@ export default function FileReceipt() {
     <header ref={header}><span className="file-receipt-mark"><MeshGlyph name="inbox" /></span><div><strong>{zh ? "收到文件" : "Incoming files"}</strong><small>Calabi · {zh ? "文件传送" : "File transfers"}</small></div></header>
     <section className="file-receipt-list" aria-live="polite">
       <div ref={content}>
-      {(error || query.error) && <Alert type="error" showIcon message={t(`files.errors.${fileErrorKey(error || query.error?.message || "")}`)} />}
+      {(error || query.error || query.data?.error) && <Alert type="error" showIcon message={t(`files.errors.${fileErrorKey(error || query.error?.message || query.data?.error || "")}`)} />}
       {query.isPending && <Spin />}
       {!query.isPending && !query.error && !query.data?.requests.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={zh ? "没有待确认的文件" : "No pending files"} />}
       {!query.error && query.data?.requests.map(request => <article key={request.stamp}>

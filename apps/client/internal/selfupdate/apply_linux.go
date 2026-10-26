@@ -91,6 +91,16 @@ func swapBinary(ctx context.Context, archivePath string) error {
 	// --no-block queues the job with PID 1 and returns immediately, so the
 	// restart survives this process dying.
 	unit := serviceUnit()
+	fileUnit := "calabi-files"
+	if unit != "calabi" {
+		fileUnit += "-" + strings.TrimSuffix(unit, ".service")
+	}
+	if _, err := os.Stat(filepath.Join("/etc/calabi-files", fileUnit+".json")); err == nil {
+		refresh := exec.CommandContext(ctx, self, "mesh", "files", "service", "refresh", "--service-name", fileUnit)
+		if output, err := refresh.CombinedOutput(); err != nil {
+			return fmt.Errorf("selfupdate: binary replaced but file service refresh failed: %w: %s", err, output)
+		}
+	}
 	cmd := exec.Command(systemctl, "restart", "--no-block", unit)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {

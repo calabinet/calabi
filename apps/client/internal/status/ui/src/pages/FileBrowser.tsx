@@ -16,6 +16,9 @@ export default function FileBrowser() {
   const enter = async (secret: string) => {
     setBusy(true); setError(false);
     try {
+      if (!/^[a-f0-9]{64}$/.test(secret.trim())) {
+        try { secret = new URLSearchParams(new URL(secret.trim()).hash.split("?")[1] || "").get("key") || secret; } catch { /* treat as an access key */ }
+      }
       await fileWebRequest("session", { key: secret });
       setKey(""); setReady(true);
     } catch { setError(true); } finally { setBusy(false); }
@@ -35,6 +38,7 @@ export default function FileBrowser() {
     </Space>
     {ready ? <Files /> : <Space direction="vertical" size={16} style={{ maxWidth: 460, width: "100%" }}>
       <Typography.Text type="secondary">{t("files.web.loginHint")}</Typography.Text>
+      <Typography.Text type="secondary">{t("files.service.keyHint")}</Typography.Text>
       {error && <Alert type="error" message={t("files.web.loginError")} />}
       <Input.Password aria-label={t("files.web.key")} placeholder={t("files.web.key")} autoComplete="off" value={key} onChange={e => setKey(e.target.value)} onPressEnter={() => { void enter(key); }} />
       <Button type="primary" loading={busy} disabled={!key} onClick={() => { void enter(key); }}>{t("files.web.enter")}</Button>

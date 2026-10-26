@@ -44,6 +44,12 @@ param(
     [string]$AndroidHome = $(if ($env:ANDROID_HOME) { $env:ANDROID_HOME } else { "D:\Android\Sdk" })
 )
 $ErrorActionPreference = 'Stop'
+# Re-enter once through the shared cache lease; nested build scripts reuse it.
+. (Join-Path $PSScriptRoot '../dev/build-cache.ps1')
+if (-not (Test-CalabiBuildLease)) {
+    & (Join-Path $PSScriptRoot '../dev/build.ps1') __script $PSCommandPath $PSBoundParameters
+    exit $LASTEXITCODE
+}
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 function FromRepo([string]$p) { if ([IO.Path]::IsPathRooted($p)) { $p } else { Join-Path $repo $p } }

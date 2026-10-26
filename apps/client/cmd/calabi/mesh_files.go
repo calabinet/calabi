@@ -29,6 +29,8 @@ import (
 )
 
 type desktopFileAgent struct {
+	background      sync.WaitGroup
+	managed         *fileServiceState // protected by opMu
 	closeOnce       sync.Once
 	console         string
 	ctx             context.Context
@@ -44,6 +46,7 @@ type desktopFileAgent struct {
 	opMu            sync.Mutex // main/stdin owns UI actions; poll loop only snapshots workspace pointer
 	w               *filetransfer.Workspace
 	scope           string
+	wEpoch          int64
 	wMu             sync.RWMutex
 	publishMu       sync.Mutex
 	published       string
@@ -61,6 +64,7 @@ type fileAction struct {
 	Enabled   bool     `json:"enabled"`
 	Accept    bool     `json:"accept"`
 	Confirmed bool     `json:"confirmed"`
+	AutoSave  bool     `json:"auto_save"`
 }
 
 func newDesktopFileAgent(ctx context.Context, console string) (*desktopFileAgent, error) {
@@ -120,6 +124,12 @@ func newDesktopFileAgent(ctx context.Context, console string) (*desktopFileAgent
 	d := &desktopFileAgent{ctx: agentCtx, cancel: cancel, dir: dir, identity: id, identityError: identityErr, lease: string(b)}
 	d.console = console
 	d.poll()
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		if err := d.configureManaged(""); err != nil {
+			d.close()
+			return nil, err
+		}
+	}
 	context.AfterFunc(agentCtx, d.close)
 	go d.loop()
 	return d, nil
@@ -168,6 +178,7 @@ func (d *desktopFileAgent) loop() {
 			return
 		case <-ticker.C:
 			d.poll()
+			d.reconcileManaged()
 			n++
 			if n%20 == 0 {
 				d.wMu.RLock()
@@ -214,14 +225,14 @@ func (d *desktopFileAgent) ensure() (*filetransfer.Workspace, error) {
 	}
 	scope := view.Scope + "/" + d.identity.HistoryID()
 	d.wMu.RLock()
-	w, oldScope := d.w, d.scope
+	w, oldScope, oldEpoch := d.w, d.scope, d.wEpoch
 	d.wMu.RUnlock()
-	if w != nil && oldScope == scope && w.Agent.Alive() {
+	if w != nil && oldScope == scope && oldEpoch == view.ReceiveEpoch && w.Agent.Alive() {
 		return w, nil
 	}
 	if w != nil {
 		d.cancelPreparation()
-		if oldScope != scope {
+		if oldScope != scope || oldEpoch != view.ReceiveEpoch {
 			_ = w.Agent.SetReceiving(false)
 			w.Revoke()
 		}
@@ -238,7 +249,7 @@ func (d *desktopFileAgent) ensure() (*filetransfer.Workspace, error) {
 	}
 	resolve := func(ip netip.Addr) (filetransfer.Grant, bool) {
 		v, err := d.metadata()
-		if err != nil || v.Scope != view.Scope {
+		if err != nil || v.Scope != view.Scope || v.ReceiveEpoch != view.ReceiveEpoch {
 			return filetransfer.Grant{}, false
 		}
 		for _, p := range v.Peers {
@@ -250,7 +261,7 @@ func (d *desktopFileAgent) ensure() (*filetransfer.Workspace, error) {
 	}
 	incoming := func(ip netip.Addr, port uint16) bool {
 		v, err := d.metadata()
-		if err != nil || v.Scope != view.Scope || port != 17401 {
+		if err != nil || v.Scope != view.Scope || v.ReceiveEpoch != view.ReceiveEpoch || port != 17401 {
 			return false
 		}
 		for _, p := range v.Peers {
@@ -260,7 +271,10 @@ func (d *desktopFileAgent) ensure() (*filetransfer.Workspace, error) {
 		}
 		return false
 	}
-	authority := func() bool { v, err := d.metadata(); return err == nil && v.Scope == view.Scope && v.OwnsLease }
+	authority := func() bool {
+		v, err := d.metadata()
+		return err == nil && v.Scope == view.Scope && v.ReceiveEpoch == view.ReceiveEpoch && v.OwnsLease
+	}
 	w, err = filetransfer.NewWorkspace(filetransfer.AgentConfig{Authority: authority, Identity: d.identity, Directory: dir, Scope: scope, LocalIP: local, Port: 17401, Kbps: filetransfer.DefaultDeviceKbps, MaxBytes: 8 << 30, Resolve: resolve, Incoming: incoming})
 	if err != nil {
 		return nil, err
@@ -274,6 +288,7 @@ func (d *desktopFileAgent) ensure() (*filetransfer.Workspace, error) {
 	}
 	d.w = w
 	d.scope = scope
+	d.wEpoch = view.ReceiveEpoch
 	d.wMu.Unlock()
 	return w, nil
 }
@@ -281,6 +296,14 @@ func (d *desktopFileAgent) publish(w *filetransfer.Workspace, active bool) error
 	d.publishMu.Lock()
 	defer d.publishMu.Unlock()
 	view, err := d.metadata()
+	if err != nil && !active {
+		d.mu.RLock()
+		view = d.view
+		d.mu.RUnlock()
+		if view.Scope != "" {
+			err = nil
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -339,6 +362,12 @@ func (d *desktopFileAgent) handle(a fileAction) (any, error) {
 		return d.identitySnapshot(), nil
 	}
 	if a.Action == "revoke" {
+		if d.managed != nil {
+			d.managed.settings.Receiving = false
+			if err := d.saveServiceSettings(); err != nil {
+				return nil, err
+			}
+		}
 		d.cancelPreparation()
 		d.wMu.RLock()
 		current := d.w
@@ -350,11 +379,36 @@ func (d *desktopFileAgent) handle(a fileAction) (any, error) {
 		}
 		return map[string]bool{"ok": true}, nil
 	}
+	if a.Action == "service_settings" {
+		if d.managed == nil || d.managed.directory == "" {
+			return nil, errors.New("managed file service required")
+		}
+		d.managed.settings.AutoSave = a.AutoSave
+		if err := d.saveServiceSettings(); err != nil {
+			return nil, err
+		}
+	}
 	w, err := d.ensure()
 	if err != nil {
-		if a.Action == "snapshot" {
+		if d.managed != nil && a.Action == "receiving" && !a.Enabled {
+			d.managed.settings.Receiving = false
+			if err := d.saveServiceSettings(); err != nil {
+				return nil, err
+			}
+			d.wMu.RLock()
+			old := d.w
+			d.wMu.RUnlock()
+			if old != nil {
+				_ = old.Agent.StopServing()
+			}
+			state := d.identitySnapshot()
+			state["service"] = d.managedSnapshot()
+			return state, nil
+		}
+		if a.Action == "snapshot" || a.Action == "service_settings" {
 			state := d.identitySnapshot()
 			state["unavailable_reason"] = err.Error()
+			state["service"] = d.managedSnapshot()
 			return state, nil
 		}
 		return nil, err
@@ -364,12 +418,22 @@ func (d *desktopFileAgent) handle(a fileAction) (any, error) {
 		d.stageMu.Lock()
 		preparing, preparationError := d.stageCancel != nil, d.stageError
 		d.stageMu.Unlock()
-		return map[string]any{"available": true, "preparing": preparing, "preparation_error": preparationError, "receiving": w.Agent.Receiving(), "peers": v.Peers, "received": w.Agent.List(), "jobs": w.Jobs(), "sources": w.Staged(), "identity": filetransfer.ReadIdentityStatus(d.dir)}
+		return map[string]any{"available": true, "preparing": preparing, "preparation_error": preparationError, "receiving": w.Agent.Receiving(), "peers": v.Peers, "received": w.Agent.List(), "jobs": w.Jobs(), "sources": w.Staged(), "identity": filetransfer.ReadIdentityStatus(d.dir), "service": d.managedSnapshot()}
 	}
 	switch a.Action {
-	case "snapshot":
+	case "snapshot", "service_settings":
 		return result(), nil
 	case "receiving":
+		if d.managed != nil {
+			v, e := d.metadata()
+			if e != nil {
+				return nil, e
+			}
+			d.managed.settings.Scope, d.managed.settings.Epoch, d.managed.settings.Receiving = d.scope, v.ReceiveEpoch, a.Enabled
+			if err := d.saveServiceSettings(); err != nil {
+				return nil, err
+			}
+		}
 		err = d.setReceiving(w, a.Enabled)
 	case "pick":
 		d.stageMu.Lock()
@@ -442,7 +506,7 @@ func (d *desktopFileAgent) handle(a fileAction) (any, error) {
 		}
 		path, err = pickTransferDestination(name, a.Owner)
 		if err == nil && path != "" {
-			err = saveVerifiedFile(w, a.ID, path)
+			err = saveVerifiedFileReplacing(w, a.ID, path)
 		}
 	default:
 		err = errors.New("unknown file action")
@@ -454,17 +518,20 @@ func (d *desktopFileAgent) handle(a fileAction) (any, error) {
 }
 func (d *desktopFileAgent) close() {
 	d.closeOnce.Do(func() {
+		d.opMu.Lock()
+		d.cancel()
 		d.cancelPreparation()
 		d.wMu.RLock()
 		w := d.w
 		d.wMu.RUnlock()
+		d.opMu.Unlock()
 		if w != nil {
 			// Process exit checkpoints durable tasks. Explicit logout, identity
 			// maintenance and scope changes use Revoke separately.
 			_ = w.Close()
 			_ = d.publish(w, false)
 		}
-		d.cancel()
+		d.background.Wait()
 	})
 }
 
@@ -579,6 +646,12 @@ func (d *desktopFileAgent) startPreparation(w *filetransfer.Workspace, paths []s
 // allowlisted actions cross it; native dialogs choose all source/destination
 // paths within this ordinary user's process.
 func runMeshFiles(args []string) int {
+	if len(args) > 0 && args[0] == "firewall" {
+		return runMeshFileFirewall(args[1:])
+	}
+	if len(args) > 0 && args[0] == "service" {
+		return runFileService(args[1:])
+	}
 	fs := flag.NewFlagSet("mesh files", flag.ContinueOnError)
 	stdio := fs.Bool("stdio", false, "private JSON-lines protocol for desktop shell")
 	console := fs.String("console", "http://127.0.0.1:7400", "exact supervised daemon console URL")
