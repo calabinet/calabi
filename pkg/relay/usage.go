@@ -1,6 +1,8 @@
 package relay
 
 import (
+	"context"
+	"log/slog"
 	"sort"
 	"sync/atomic"
 
@@ -87,6 +89,9 @@ func (h *Hub) counterFor(key meshproto.NodeKey) *usageCounter {
 // entry that just yielded bytes may still receive more. Only dropping it once it
 // drains empty gives those in-flight bytes somewhere to land.
 func (h *Hub) TakeUsage() []UsageDelta {
+	if h.logger.Enabled(context.Background(), slog.LevelDebug) {
+		h.logger.Debug("relay transport counters", "performance", h.Performance())
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	out := make([]UsageDelta, 0, len(h.usage))

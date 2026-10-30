@@ -49,3 +49,9 @@ LangString calabiRemoveFirewallFailed ${LANG_SIMPCHINESE} "无法移除文件接
 LangString calabiRemovingService ${LANG_SIMPCHINESE} "正在移除 Calabi 后台服务…"
 
 !include "${CALABI_MAINTENANCE_FILE}"
+
+; Both configured languages are included after the pages/ChangeUI directives.
+!ifdef CALABI_COMPACT_UI
+  !delfile "${CALABI_COMPACT_UI}"
+  !undef CALABI_COMPACT_UI
+!endif

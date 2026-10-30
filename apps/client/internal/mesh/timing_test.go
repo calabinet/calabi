@@ -15,6 +15,7 @@ func TestDesktopTimingIsTheShippedCadence(t *testing.T) {
 	// TunnelReport is new (2026-09); it runs only when the daemon has tunnels
 	// to report to a self-hosted coordinator.
 	want := Timing{
+		ProbeRate:           50,
 		DiscoProbe:          5 * time.Second,
 		EndpointReport:      60 * time.Second,
 		HomeProbe:           5 * time.Minute,

@@ -17,8 +17,9 @@ import (
 
 // Hub tracks connected clients by node key and forwards packets between them.
 type Hub struct {
-	mu      sync.RWMutex
-	clients map[meshproto.NodeKey]*client
+	performance performanceCounters
+	mu          sync.RWMutex
+	clients     map[meshproto.NodeKey]*client
 	// usage accumulates relayed bytes per node key (usage.go). Guarded by mu
 	// for map access only; the counters themselves are atomic and the forwarding
 	// path reaches them through the client, never through this map.
@@ -191,8 +192,10 @@ func (h *Hub) serve(conn net.Conn, binding *meshproto.DERPBinding) {
 			// core into synchronous log I/O when it is on. What a per-packet log
 			// line could tell you, the usage counters and Dropped already do.
 			c.usage.in.Add(uint64(len(ciphertext)))
+			h.countPacket(ciphertext)
 			h.forward(c, dst, ciphertext)
 		case meshproto.DERPFramePing:
+			h.performance.linkPings.Add(1)
 			_ = c.write(meshproto.DERPFramePong, payload)
 		case meshproto.DERPFrameAuthProof:
 			// An answer to a re-challenge (Run sends those as a grant nears its
@@ -226,6 +229,7 @@ func (h *Hub) serve(conn net.Conn, binding *meshproto.DERPBinding) {
 func (h *Hub) forward(src *client, dst meshproto.NodeKey, ciphertext []byte) {
 	dc := h.lookup(dst)
 	if dc == nil {
+		h.performance.offline.Add(1)
 		return // dst offline; nothing to log per packet about it
 	}
 	if crossesMeshnets(src, dc) {
@@ -247,6 +251,7 @@ func (h *Hub) forward(src *client, dst meshproto.NodeKey, ciphertext []byte) {
 		return // oversize frame: the sender built it, the relay just declines it
 	}
 	dc.sendq.enqueue(frame, uint64(len(ciphertext)))
+	h.performance.queued.Add(1)
 }
 
 // crossesMeshnets reports whether a frame would go from one org to another.

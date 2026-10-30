@@ -6,5 +6,5 @@
   "remote": {
     "urls": ["http://127.0.0.1:*"]
   },
-  "permissions": ["shell:default"]
+  "permissions": ["shell:default", "allow-tray-set-locale"]
 }

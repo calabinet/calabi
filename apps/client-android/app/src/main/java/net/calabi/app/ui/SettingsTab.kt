@@ -133,6 +133,7 @@ fun SettingsTab(model: AppModel, onSignedOut: () -> Unit, onReplace: () -> Unit,
                 LinkRow(stringResource(R.string.settings_background), stringResource(BackgroundRun.hint())) {
                     BackgroundRun.allow(context)
                 }
+                BackgroundSteps(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
             }
         }
 

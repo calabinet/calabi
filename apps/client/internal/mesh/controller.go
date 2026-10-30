@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"net/netip"
+	"os"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -44,8 +45,8 @@ type DNSSink interface {
 // a WGConfig. The relay client (derp.Client) is wired into the real datapath in
 // the real-machine slice; this controller owns enroll + netmap → config.
 //
-// Reconnect/backoff on a dropped netmap stream lands with the daemon lifecycle
-// wiring; Run returns the terminating error so the caller can retry.
+// A superseded map reauthenticates within the live discovery transport. Other
+// stream failures return to the daemon lifecycle so it can rebuild the session.
 type Controller struct {
 	Coord    *CoordClient
 	Datapath Datapath
@@ -125,6 +126,10 @@ type Controller struct {
 	// session happened to start with. Everything else in Params is fixed for the
 	// session's lifetime and read without it.
 	paramsMu sync.Mutex
+	// Serialize declaration edits with full reauthentication so a retry cannot
+	// restore an older declaration after an edit has committed.
+	registrationOnce sync.Once
+	registrationGate chan struct{}
 
 	// stunMu guards stunServer, the resolved STUN endpoint (a relay's STUN port)
 	// this node probes for its reflexive address. It's derived from the DERP map +
@@ -171,6 +176,7 @@ type Controller struct {
 	// coalesces into one repair. Created on first use (netChanges).
 	netChangedOnce sync.Once
 	netChanged     chan struct{}
+	watchWake      chan struct{}
 
 	// registered is set once this session's Register has been accepted: the
 	// coordinator knows the node and Coord carries a live session token.
@@ -212,8 +218,9 @@ func dnsRecords(nm NetMap) map[string]netip.Addr {
 	return recs
 }
 
-// Run registers the node, then watches its netmap until ctx is cancelled or the
-// stream ends, applying each netmap to the datapath.
+// Run registers the node and applies its netmaps until cancellation or a stream
+// failure other than a superseded map. Supersession repeats full authentication
+// without rebuilding the live discovery transport.
 func (c *Controller) Run(ctx context.Context) error {
 	// Everything this session starts is bound to a context of its OWN, cancelled
 	// when Run returns.
@@ -234,6 +241,10 @@ func (c *Controller) Run(ctx context.Context) error {
 	// HERE, before any of that, so a change arriving mid-setup is still acted on.
 	select {
 	case <-c.netChanges():
+	default:
+	}
+	select {
+	case <-c.watchWake:
 	default:
 	}
 
@@ -284,6 +295,15 @@ func (c *Controller) Run(ctx context.Context) error {
 			// DISCO prober: ping peers' candidate endpoints and record which reach
 			// them.
 			prober = newDiscoProber(ms, c.Logger)
+			// Adaptive discovery needs the real, authenticated inner-packet hook.
+			// Legacy mode is a session-level rollback, including WG keepalives.
+			if _, ok := c.Datapath.(*WGDatapath); ok && c.timing().DiscoProbe > 0 && os.Getenv("CALABI_MESH_LEGACY_PROBING") != "1" {
+				rate := c.timing().ProbeRate
+				if rate <= 0 {
+					rate = 50
+				}
+				prober.scheduler = newProbeScheduler(prober, rate)
+			}
 			go prober.run(ctx, c.timing().DiscoProbe, c.peers)
 			// Hand the socket + prober to the datapath, so WireGuard traffic can
 			// take a validated direct path instead of the relay. A
@@ -337,12 +357,48 @@ func (c *Controller) Run(ctx context.Context) error {
 	// ("" while it can), so the WARN is said when that changes and not on each of
 	// the several netmaps a minute that repeat it.
 	exitGap := ""
-	return c.Coord.Watch(ctx, reg.NodeID, func(nm NetMap) {
+	var onGrant func([]byte)
+	if d, ok := c.Datapath.(interface{ SetRelayGrant([]byte) }); ok {
+		onGrant = d.SetRelayGrant
+	}
+	return c.Coord.watchReauthenticated(ctx, reg.NodeID, watchRecovery{wake: c.watchWake, onTimeout: func() { c.Logger.Warn("mesh: initial netmap timed out; reauthenticating") }, interrupted: func() {
+		c.fileTransferMap.Store(false)
+		c.fileTransferNegotiated.Store(false)
+		// Keep the old stream-end alias cleanup. The next authoritative map
+		// reinstalls only aliases still granted, and can retry a failed install.
+		dropAliases()
+		dropAliases, aliasFP = func() {}, ""
+	}, refresh: func(ctx context.Context) error {
+		unlock, err := c.lockRegistration(ctx)
+		if err != nil {
+			return err
+		}
+		defer unlock()
+		params := c.registerParams()
+		c.Reauth.apply(&params)
+		fresh, err := c.Coord.Register(ctx, params)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrRegister, err)
+		}
+		if fresh.NodeID != reg.NodeID || fresh.Overlay != reg.Overlay {
+			return fmt.Errorf("%w: identity changed during subscription recovery", ErrRegister)
+		}
+		c.Reauth.record(fresh)
+		c.fileTransferNegotiated.Store(fresh.Capabilities.Supports(meshproto.CapFileTransfer))
+		c.registered.Store(true)
+		return nil
+	}}, func(nm NetMap) {
+		if prober != nil && prober.scheduler != nil {
+			prober.Probe(nm.Peers)
+		}
 		c.setOverlay(nm.Self.Overlay)
 		c.setSelfServices(nm.SelfServices)
 		cfg := BuildWGConfig(nm)
 		for i := range cfg.Peers {
 			cfg.Peers[i].PersistentKeepalive = c.timing().PersistentKeepalive
+			if prober != nil && prober.scheduler != nil && os.Getenv("CALABI_MESH_KEEP_PEER_KEEPALIVE") != "1" {
+				cfg.Peers[i].PersistentKeepalive = 0
+			}
 		}
 		// Consumer-side route policy, applied before anything sees the config: a
 		// refused prefix never reaches WireGuard's allowed-ips, so it can neither
@@ -453,9 +509,11 @@ func (c *Controller) Run(ctx context.Context) error {
 			c.fileTransferMap.Store(nm.FileTransferSupported)
 			c.fileRelayLimit.Store(nm.RelayBandwidthKbps)
 			c.setPeers(nm.Peers)
-			prober.Probe(nm.Peers)
+			if prober.scheduler == nil {
+				prober.Probe(nm.Peers)
+			}
 		}
-	})
+	}, onGrant)
 }
 
 func (c *Controller) setPeers(peers []Peer) {
@@ -843,6 +901,7 @@ func appendUniqueAddrPort(eps []netip.AddrPort, ap netip.AddrPort) []netip.AddrP
 // datapath and lives in onWake.
 func (c *Controller) wakeLoop(ctx context.Context, nodeID int64, ms *magicSock, prober *discoProber) {
 	wake.Loop(ctx, func(gap time.Duration) {
+		c.wakeWatchRecovery()
 		c.Logger.Info("mesh: machine resumed from sleep; re-establishing the session",
 			"gap", gap.Round(time.Second).String())
 		c.onWake(ctx, nodeID, ms, prober)
@@ -866,10 +925,19 @@ func (c *Controller) NetworkChanged() {
 	case c.netChanges() <- struct{}{}:
 	default: // one already pending
 	}
+	c.wakeWatchRecovery()
+}
+
+func (c *Controller) wakeWatchRecovery() {
+	c.netChanges()
+	select {
+	case c.watchWake <- struct{}{}:
+	default:
+	}
 }
 
 func (c *Controller) netChanges() chan struct{} {
-	c.netChangedOnce.Do(func() { c.netChanged = make(chan struct{}, 1) })
+	c.netChangedOnce.Do(func() { c.netChanged = make(chan struct{}, 1); c.watchWake = make(chan struct{}, 1) })
 	return c.netChanged
 }
 
@@ -897,7 +965,11 @@ func (c *Controller) onWake(ctx context.Context, nodeID int64, ms *magicSock, pr
 		r.resumeFromSleep()
 	}
 	if prober != nil {
-		prober.Probe(c.peers()) // the NAT mapping behind every direct path is gone
+		if prober.scheduler != nil {
+			prober.scheduler.reset()
+		} else {
+			prober.Probe(c.peers())
+		}
 	}
 	if ms == nil || ctx.Err() != nil {
 		return
@@ -939,6 +1011,12 @@ func (c *Controller) endpointReportLoop(ctx context.Context, nodeID int64, ms *m
 // ErrNotEnrolled means the coordinator has no such node (or predates this RPC);
 // the caller re-enrolls instead.
 func (c *Controller) UpdateDeclarations(ctx context.Context, services []DeclaredService, fingerprint string) error {
+	unlock, err := c.lockRegistration(ctx)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	services = append([]DeclaredService(nil), services...)
 	c.paramsMu.Lock()
 	p := c.Params
 	c.paramsMu.Unlock()

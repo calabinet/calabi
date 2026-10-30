@@ -1,0 +1,6 @@
+{
+  "identifier": "tray-panel",
+  "description": "Local bundled tray panel only. No remote origins or general plugin access.",
+  "windows": ["tray-panel"],
+  "permissions": ["allow-tray-action"]
+}

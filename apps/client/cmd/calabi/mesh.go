@@ -493,23 +493,47 @@ type meshStatusResp struct {
 	// be a DIFFERENT build (an older service, a newer CLI), so it has to tolerate
 	// fields it doesn't know and absent fields it does.
 	Datapath struct {
-		SockRxPackets  uint64 `json:"sock_rx_packets"`
-		SockRxBytes    uint64 `json:"sock_rx_bytes"`
-		SockTxPackets  uint64 `json:"sock_tx_packets"`
-		SockTxBytes    uint64 `json:"sock_tx_bytes"`
-		SockTxErrors   uint64 `json:"sock_tx_errors"`
-		SockRxBufBytes int    `json:"sock_rx_buf_bytes"`
-		SockTxBufBytes int    `json:"sock_tx_buf_bytes"`
-		QueueDepth     int    `json:"queue_depth"`
-		QueueCap       int    `json:"queue_cap"`
-		QueueDropped   uint64 `json:"queue_dropped"`
-		RxDirect       uint64 `json:"rx_direct"`
-		RxRelay        uint64 `json:"rx_relay"`
-		TxDirect       uint64 `json:"tx_direct"`
-		TxRelay        uint64 `json:"tx_relay"`
-		TxDirectErrors uint64 `json:"tx_direct_errors"`
-		TxRelayErrors  uint64 `json:"tx_relay_errors"`
-		TxRelayDropped uint64 `json:"tx_relay_dropped"`
+		ProbeSent               uint64 `json:"probe_sent"`
+		ProbeFailed             uint64 `json:"probe_failed"`
+		ProbeLimited            uint64 `json:"probe_limited"`
+		ProbeActive             int    `json:"probe_active"`
+		ProbeCandidates         int    `json:"probe_candidates"`
+		ProbeSchedulerRuns      uint64 `json:"probe_scheduler_runs"`
+		ProbeHighSent           uint64 `json:"probe_high_sent"`
+		ProbeLowSent            uint64 `json:"probe_low_sent"`
+		ProbeRetries            uint64 `json:"probe_retries"`
+		ProbeTimeouts           uint64 `json:"probe_timeouts"`
+		ProbeConfirmed          uint64 `json:"probe_confirmed"`
+		ProbeMaxWaitMicros      uint64 `json:"probe_max_wait_micros"`
+		ProbePingsReceived      uint64 `json:"probe_pings_received"`
+		ProbePongsSent          uint64 `json:"probe_pongs_sent"`
+		ProbeReplyLimited       uint64 `json:"probe_reply_limited"`
+		ProbeReplyDropped       uint64 `json:"probe_reply_dropped"`
+		ProbeReplyCoalesced     uint64 `json:"probe_reply_coalesced"`
+		ProbeReplyPending       int    `json:"probe_reply_pending"`
+		ProbeReplyMaxWaitMicros uint64 `json:"probe_reply_max_wait_micros"`
+		ProbePending            int    `json:"probe_pending"`
+		ProbeLearned            int    `json:"probe_learned"`
+		ProbeIdle               int    `json:"probe_idle"`
+		ProbeDirect             int    `json:"probe_direct"`
+		ProbeRelayed            int    `json:"probe_relayed"`
+		SockRxPackets           uint64 `json:"sock_rx_packets"`
+		SockRxBytes             uint64 `json:"sock_rx_bytes"`
+		SockTxPackets           uint64 `json:"sock_tx_packets"`
+		SockTxBytes             uint64 `json:"sock_tx_bytes"`
+		SockTxErrors            uint64 `json:"sock_tx_errors"`
+		SockRxBufBytes          int    `json:"sock_rx_buf_bytes"`
+		SockTxBufBytes          int    `json:"sock_tx_buf_bytes"`
+		QueueDepth              int    `json:"queue_depth"`
+		QueueCap                int    `json:"queue_cap"`
+		QueueDropped            uint64 `json:"queue_dropped"`
+		RxDirect                uint64 `json:"rx_direct"`
+		RxRelay                 uint64 `json:"rx_relay"`
+		TxDirect                uint64 `json:"tx_direct"`
+		TxRelay                 uint64 `json:"tx_relay"`
+		TxDirectErrors          uint64 `json:"tx_direct_errors"`
+		TxRelayErrors           uint64 `json:"tx_relay_errors"`
+		TxRelayDropped          uint64 `json:"tx_relay_dropped"`
 		// Blocked or starved? A shed frame looks identical either way, and the two
 		// need opposite investigations — see internal/mesh/derp/sendq.go.
 		TxRelayBlockedMs uint64 `json:"tx_relay_blocked_ms"`
@@ -622,6 +646,11 @@ func printDatapath(st meshStatusResp) {
 	// 8 MB was a problem only because on that link it was 21 seconds.
 	fmt.Printf("    sndbuf:  %s\n", sndbufLine(d.TxRelaySockBuf, d.TxRelayRateBps))
 	fmt.Printf("    filter:  dropped %d    flows %d\n", d.FilterDropped, d.Flows)
+	if d.ProbeCandidates > 0 || d.ProbeSent > 0 {
+		fmt.Printf("    probes:  sent %d    send-errors %d    budget-waits %d    active %d    candidates %d\n", d.ProbeSent, d.ProbeFailed, d.ProbeLimited, d.ProbeActive, d.ProbeCandidates)
+		fmt.Printf("             high %d    low %d    confirmed %d    timeouts %d    pending %d    max-wait %d us\n", d.ProbeHighSent, d.ProbeLowSent, d.ProbeConfirmed, d.ProbeTimeouts, d.ProbePending, d.ProbeMaxWaitMicros)
+		fmt.Printf("    replies: received %d    sent %d    budget-waits %d    dropped %d    coalesced %d    queued %d\n", d.ProbePingsReceived, d.ProbePongsSent, d.ProbeReplyLimited, d.ProbeReplyDropped, d.ProbeReplyCoalesced, d.ProbeReplyPending)
+	}
 }
 
 // sndbufLine renders the kernel send-buffer state behind the relay socket.

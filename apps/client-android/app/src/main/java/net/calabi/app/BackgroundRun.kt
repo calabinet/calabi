@@ -5,10 +5,13 @@ import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
+import android.widget.Toast
 import androidx.annotation.StringRes
 
 /**
@@ -39,13 +42,27 @@ object BackgroundRun {
         else -> R.string.background_hint
     }
 
+    /** Optional device-specific instructions, kept out of the short summary. */
+    @StringRes
+    fun details(): Int? = if (isHuawei()) R.string.background_steps_huawei else null
+
     /** Opens the one place this phone lets the user allow it. */
     fun allow(context: Context) {
-        when {
-            makerSettings().isNotEmpty() -> openMakerSettings(context)
+        val hasMakerSettings = makerSettings().isNotEmpty()
+        val opened = when {
+            hasMakerSettings -> openMakerSettings(context)
             !batteryExempt(context) -> requestBatteryExemption(context)
-            else -> open(context, appDetails(context))
+            else -> false
         }
+        if (opened) return
+        if (hasMakerSettings) {
+            // App details is not App launch on Huawei. Make the fallback clear
+            // and prefer the settings search entry instead of the wrong page.
+            Toast.makeText(context, if (isHuawei()) R.string.background_manual_huawei else hint(), Toast.LENGTH_LONG).show()
+            if (open(context, Intent(Settings.ACTION_SETTINGS))) return
+        }
+        if (open(context, appDetails(context)) || open(context, Intent(Settings.ACTION_SETTINGS))) return
+        Toast.makeText(context, hint(), Toast.LENGTH_LONG).show()
     }
 
     private fun batteryExempt(context: Context): Boolean =
@@ -55,25 +72,47 @@ object BackgroundRun {
     // the phones that have one: on EMUI the maker switch is the one found to
     // matter, and one place to go is easier to follow than two.
     @SuppressLint("BatteryLife")
-    private fun requestBatteryExemption(context: Context) {
+    private fun requestBatteryExemption(context: Context): Boolean {
         val ask = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.fromParts("package", context.packageName, null))
-        if (!open(context, ask)) open(context, Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        return open(context, ask) || open(context, Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
     }
 
-    private fun openMakerSettings(context: Context) {
+    private fun openMakerSettings(context: Context): Boolean {
         for (intent in makerSettings()) {
-            if (open(context, intent)) return
+            if (open(context, intent)) return true
         }
-        open(context, appDetails(context))
+        return false
     }
 
-    private fun open(context: Context, intent: Intent): Boolean = try {
-        context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        true
-    } catch (_: ActivityNotFoundException) {
-        false
-    } catch (_: SecurityException) {
-        false
+    @Suppress("DEPRECATION")
+    private fun open(context: Context, intent: Intent): Boolean {
+        // Some OEMs open an empty resolver without throwing when an implicit
+        // settings action has no handler. Launch only real, accessible pages,
+        // and pin the component so a resolver is never mistaken for success.
+        val targets = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+        if (targets.isEmpty()) Log.w("BackgroundRun", "No settings page for ${intent.component ?: intent.action}")
+        for (target in targets) {
+            val info = target.activityInfo ?: continue
+            if (!info.enabled || !info.applicationInfo.enabled || !info.exported) {
+                Log.w("BackgroundRun", "Settings page is disabled or not exported: ${info.name}")
+                continue
+            }
+            if (info.permission != null && context.checkSelfPermission(info.permission) != PackageManager.PERMISSION_GRANTED) {
+                Log.w("BackgroundRun", "Settings permission unavailable: ${info.permission} for ${info.name}")
+                continue
+            }
+            val launch = Intent(intent).setComponent(ComponentName(info.packageName, info.name))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            try {
+                context.startActivity(launch)
+                return true
+            } catch (error: ActivityNotFoundException) {
+                Log.w("BackgroundRun", "Background settings page is unavailable: ${info.name}", error)
+            } catch (error: SecurityException) {
+                Log.w("BackgroundRun", "Background settings page denied access: ${info.name}", error)
+            }
+        }
+        return false
     }
 
     private fun appDetails(context: Context) =
@@ -89,8 +128,9 @@ object BackgroundRun {
     // already managed manually has to be switched on and off again).
     private fun makerSettings(): List<Intent> = when {
         isHuawei() -> listOf(
-            Intent("huawei.intent.action.HSM_STARTUPAPP_MANAGER"),
             Intent().setComponent(ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity")),
+            Intent().setComponent(ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.appcontrol.activity.StartupAppControlActivity")),
+            Intent("huawei.intent.action.HSM_STARTUPAPP_MANAGER").setPackage("com.huawei.systemmanager"),
         )
         maker() in setOf("xiaomi", "redmi") -> listOf(
             Intent().setComponent(ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")),

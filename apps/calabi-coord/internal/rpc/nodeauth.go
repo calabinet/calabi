@@ -296,18 +296,27 @@ func (s *nodeSessions) takeChallenge(id string, meshnet core.MeshnetID, nodeID i
 // start opens a session for a node that has just proved itself and returns its
 // token. The node's previous session, if any, ends: one live session per node.
 func (s *nodeSessions) start(node *core.Node) (string, error) {
+	token, _, err := s.startReplacing(node)
+	return token, err
+}
+
+// Report ephemeral withdrawal under the same lock that replaces the session;
+// checking before start would race a concurrent file-transfer announcement.
+func (s *nodeSessions) startReplacing(node *core.Node) (string, bool, error) {
 	tok, err := randomToken()
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	withdrawn := false
 	if old, ok := s.byNode[node.ID]; ok {
+		withdrawn = s.byToken[old].fileTransfer != nil
 		delete(s.byToken, old)
 	}
 	s.byToken[tok] = nodeSession{nodeID: node.ID, meshnet: node.Meshnet, nodeKey: node.NodeKey}
 	s.byNode[node.ID] = tok
-	return tok, nil
+	return tok, withdrawn, nil
 }
 
 func (s *nodeSessions) lookup(tok string) (nodeSession, bool) {

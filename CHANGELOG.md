@@ -10,6 +10,22 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## 2.5.1 — 2026-10-30
+
+### Mesh
+
+- **Changed** — Idle devices use bounded, on-demand connectivity probes and less background keepalive traffic, while devices on the same local network can still connect directly.
+- **Changed** — Coordinators share network snapshots and send incremental updates, reducing repeated processing and network traffic in large organizations. Updated clients are needed for the client-side savings.
+- **Fixed** — Large groups of devices can recover from coordinator interruptions without endless registration retries. Authorization is rechecked during recovery, and revoked access continues to stop stale updates.
+
+### Local console
+
+- **Fixed** — Desktop tray menus follow the interface language in all ten supported languages, and Windows tray clicks and installer layout behave more consistently.
+
+### Mobile
+
+- **Fixed** — Android closes the replacement prompt after a successful device replacement and provides clearer background-running guidance with a fallback when vendor settings are unavailable.
+
 ## 2.5.0 — 2026-10-26
 
 **Keep file transfers ready across restarts.** Linux installations can manage

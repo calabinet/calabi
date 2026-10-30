@@ -58,6 +58,13 @@ func TestFileTransferSessionScopeAndWithdrawal(t *testing.T) {
 		t.Fatal("offline listener advertised")
 	}
 	release := coord.Presence.Connected(1)
+	// Shared wire peers must remain immutable when live session data is added.
+	frozen := &meshpb.Peer{NodeId: 1, NodeKey: node.NodeKey.String()}
+	sharedMap := &meshpb.NetMap{Self: frozen, Peers: []*meshpb.Peer{frozen}}
+	s.addFileTransfers(sharedMap)
+	if frozen.FileTransfer != nil || sharedMap.Self == frozen || sharedMap.Peers[0] == frozen || sharedMap.Peers[0].FileTransfer == nil {
+		t.Fatal("live declaration mutated frozen peer")
+	}
 	if mapFor().Self.FileTransfer == nil {
 		t.Fatal("online listener absent")
 	}

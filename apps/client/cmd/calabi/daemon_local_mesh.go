@@ -355,10 +355,12 @@ func (r *meshRunner) loop(ctx context.Context) {
 
 // sleepUnlessDone waits out one retry delay. false means the runner is stopping.
 func sleepUnlessDone(ctx context.Context, d time.Duration) bool {
+	timer := time.NewTimer(mesh.ReconnectDelay(d))
+	defer timer.Stop()
 	select {
 	case <-ctx.Done():
 		return false
-	case <-time.After(d):
+	case <-timer.C:
 		return true
 	}
 }

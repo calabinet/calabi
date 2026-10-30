@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/netip"
+	"os"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -27,12 +28,16 @@ type Server struct {
 	logger *slog.Logger
 	// sessions holds registration challenges and node sessions (mesh protocol
 	// v2, nodeauth.go).
-	sessions *nodeSessions
+	sessions   *nodeSessions
+	maps       *netMapSnapshots
+	admissions *netMapAdmissions
+	legacyMaps bool
+	fullMaps   bool
 }
 
 // New builds the RPC server.
 func New(coord *core.Coordinator, auth core.Authenticator, notif *core.Notifier, logger *slog.Logger) *Server {
-	return &Server{coord: coord, auth: auth, notif: notif, logger: logger, sessions: newNodeSessions()}
+	return &Server{coord: coord, auth: auth, notif: notif, logger: logger, sessions: newNodeSessions(), maps: newNetMapSnapshots(), admissions: newNetMapAdmissions(), legacyMaps: os.Getenv("CALABI_COORD_LEGACY_NETMAP") == "1", fullMaps: os.Getenv("CALABI_COORD_FULL_NETMAP") == "1"}
 }
 
 // minNodeProtocolVersion is the oldest mesh protocol a node may enroll with.
@@ -262,6 +267,7 @@ func (s *Server) UpdateNodeDeclarations(ctx context.Context, req *meshpb.UpdateN
 		})
 	}
 	node, err := s.coord.UpdateDeclarations(ctx, in)
+	s.notif.Bump(self.Meshnet) // service reconciliation may partially commit before returning an error
 	if err != nil {
 		switch {
 		case errors.Is(err, core.ErrNodeNotFound):
@@ -272,7 +278,6 @@ func (s *Server) UpdateNodeDeclarations(ctx context.Context, req *meshpb.UpdateN
 			return nil, status.Errorf(codes.Internal, "update declarations: %v", err)
 		}
 	}
-	s.notif.Bump(self.Meshnet)
 	return &meshpb.UpdateNodeDeclarationsResponse{NodeId: node.ID}, nil
 }
 
@@ -330,7 +335,10 @@ func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeReque
 		// revoked API key, a removed member, a suspended account. Asked only
 		// here, after the proof, so a caller that is not the device costs the
 		// identity service nothing.
-		if err := s.auth.Reauthorize(ctx, meshnet, ident.Principal); err != nil {
+		identityStarted := time.Now()
+		err := s.auth.Reauthorize(ctx, meshnet, ident.Principal)
+		s.coord.Performance.Stages.Observe(core.IdentityCheck, identityStarted)
+		if err != nil {
 			if errors.Is(err, core.ErrAuthDenied) {
 				return nil, status.Error(codes.Unauthenticated, "what this device enrolled with no longer admits it; enroll with an auth key")
 			}
@@ -400,7 +408,7 @@ func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeReque
 		in.AliasedRoutes = append(in.AliasedRoutes, pfx.Masked())
 	}
 
-	node, err := s.coord.Register(ctx, in)
+	node, changed, err := s.coord.RegisterWithChange(ctx, in)
 	if err != nil {
 		undoSpend()
 		switch {
@@ -418,12 +426,19 @@ func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeReque
 	}
 
 	// The session every node-scoped call will be authorized by (nodeauth.go).
-	token, err := s.sessions.start(node)
+	token, withdrawn, err := s.sessions.startReplacing(node)
 	if err != nil {
+		if changed {
+			s.notif.Bump(meshnet)
+		}
 		return nil, status.Errorf(codes.Internal, "start session: %v", err)
 	}
-	// Peers in this meshnet should learn about the newcomer.
-	s.notif.Bump(meshnet)
+	s.admissions.cancelOtherSessions(node.ID, token)
+	// Reauthentication always replaces the token and cancels old streams. Only
+	// an unchanged persistent AND ephemeral peer state can skip the broadcast.
+	if changed || withdrawn {
+		s.notif.Bump(meshnet)
+	}
 
 	ver, caps := negotiate(req.GetProtocolVersion(), req.GetCapabilities())
 	return &meshpb.RegisterNodeResponse{
@@ -443,17 +458,35 @@ func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeReque
 // node_id alone (a simplification that outlived its note), which let
 // anyone read any org netmap.
 func (s *Server) PullNetMap(req *meshpb.PullNetMapRequest, stream meshpb.Coordinator_PullNetMapServer) error {
-	ctx := stream.Context()
+	ctx, cancel := context.WithCancel(stream.Context())
+	defer cancel()
+	stream = &netMapContextStream{Coordinator_PullNetMapServer: stream, ctx: ctx}
 	self, err := s.authorizeNode(ctx, req.GetSessionToken(), req.GetNodeId())
 	if err != nil {
 		return err
+	}
+	releaseAdmission, err := s.admissions.acquireSession(self.Meshnet, self.ID, req.GetSessionToken(), cancel)
+	if err != nil {
+		return err
+	}
+	defer releaseAdmission()
+	// Re-registration may race the first authorization before the lease exists.
+	// Once registered here, cancelOtherSessions can find it; recheck the token
+	// to cover a replacement that happened just before admission.
+	if _, ok := s.sessions.lookup(req.GetSessionToken()); !ok {
+		return status.Error(codes.Unauthenticated, "session ended before subscription")
+	}
+	if req.GetDeltaNetmap() && !s.legacyMaps && !s.fullMaps {
+		stream = &deltaNetMapStream{Coordinator_PullNetMapServer: stream}
 	}
 
 	// The netmap stream is the node's live control connection: hold it open =
 	// online, close it (client quit / network drop) = offline. Presence powers the
 	// console's online/offline indicator, distinct from the admin Disabled flag.
 	release := s.coord.Presence.Connected(self.ID)
+	s.coord.Performance.Streams.Add(1)
 	defer func() {
+		s.coord.Performance.Streams.Add(-1)
 		release()
 		if s.hasFileTransfer(self.ID) {
 			s.notif.Bump(self.Meshnet)
@@ -462,9 +495,12 @@ func (s *Server) PullNetMap(req *meshpb.PullNetMapRequest, stream meshpb.Coordin
 
 	sig, unsub := s.notif.Subscribe(self.Meshnet, self.ID)
 	defer unsub()
+	entry := s.maps.open(self.Meshnet)
+	defer s.maps.close(self.Meshnet, entry)
 
 	// Initial snapshot.
-	if err := s.sendNetMap(stream, self.ID); err != nil {
+	s.coord.Performance.InitialMaps.Add(1)
+	if err := s.sendNetMap(stream, self, entry, false); err != nil {
 		return err
 	}
 	// The netmap is otherwise event-driven, which is not enough once it carries a
@@ -479,18 +515,20 @@ func (s *Server) PullNetMap(req *meshpb.PullNetMapRequest, stream meshpb.Coordin
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-sig:
-			if err := s.sendNetMap(stream, self.ID); err != nil {
+			s.coord.Performance.ChangedMaps.Add(1)
+			if err := s.sendNetMap(stream, self, entry, false); err != nil {
 				return err
 			}
 		case <-refresh.C:
-			if err := s.sendNetMap(stream, self.ID); err != nil {
+			s.coord.Performance.GrantMaps.Add(1)
+			if err := s.sendNetMap(stream, self, entry, true); err != nil {
 				return err
 			}
 		}
 	}
 }
 
-func (s *Server) sendNetMap(stream meshpb.Coordinator_PullNetMapServer, nodeID int64) error {
+func (s *Server) sendLegacyNetMap(stream meshpb.Coordinator_PullNetMapServer, nodeID int64) error {
 	nm, err := s.coord.NetMapFor(stream.Context(), nodeID)
 	if err != nil {
 		// An admin disable fires a notify; recomputing the map then
@@ -503,7 +541,7 @@ func (s *Server) sendNetMap(stream meshpb.Coordinator_PullNetMapServer, nodeID i
 	}
 	out := toProtoNetMap(nm)
 	s.addFileTransfers(out)
-	return stream.Send(out)
+	return s.sendNetMapPayload(stream, out, nil)
 }
 
 // ReportServiceHealth records what a node observes about its own services.
@@ -602,7 +640,11 @@ func (s *Server) ReportEndpoints(ctx context.Context, req *meshpb.ReportEndpoint
 	// endpoint update above stands either way — and so does telling the peers.
 	homeMoved, err := s.coord.SetDERPHome(ctx, self.ID, req.GetHomeRegion())
 	if endpointsMoved || homeMoved {
-		s.notif.Bump(self.Meshnet)
+		if s.legacyMaps {
+			s.notif.Bump(self.Meshnet)
+		} else {
+			s.notif.BumpOrdinary(self.Meshnet)
+		}
 	}
 	if err != nil {
 		if errors.Is(err, core.ErrUnknownDERPRegion) {

@@ -44,11 +44,10 @@ func (s *Server) UpdateFileTransfer(ctx context.Context, req *meshpb.UpdateFileT
 
 func (s *Server) addFileTransfers(out *meshpb.NetMap) {
 	out.FileTransferSupported = true
-	peers := append([]*meshpb.Peer{out.Self}, out.Peers...)
 	now := time.Now()
-	for _, peer := range peers {
+	add := func(peer *meshpb.Peer) *meshpb.Peer {
 		if peer == nil || !s.coord.Presence.IsOnline(peer.NodeId) {
-			continue
+			return peer
 		}
 		s.sessions.mu.Lock()
 		sess := s.sessions.byToken[s.sessions.byNode[peer.NodeId]]
@@ -57,13 +56,24 @@ func (s *Server) addFileTransfers(out *meshpb.NetMap) {
 			info = proto.Clone(sess.fileTransfer).(*meshpb.FileTransferInfo)
 		}
 		s.sessions.mu.Unlock()
+		if info == nil {
+			return peer
+		}
 		key, err := meshproto.ParseNodeKey(peer.NodeKey)
 		if err != nil || key != sess.nodeKey {
-			continue
+			return peer
 		}
 		if _, err := meshproto.VerifyFileTransfer(key, info, now); err == nil {
+			// Frozen public peer messages are shared; attach live state only to a
+			// private copy. Expiry, online status and session identity stay live.
+			peer = proto.Clone(peer).(*meshpb.Peer)
 			peer.FileTransfer = info
 		}
+		return peer
+	}
+	out.Self = add(out.Self)
+	for i, p := range out.Peers {
+		out.Peers[i] = add(p)
 	}
 }
 

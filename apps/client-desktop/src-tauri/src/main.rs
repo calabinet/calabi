@@ -15,6 +15,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod daemon;
+mod tray;
+mod tray_locale;
 mod files;
 mod file_requests;
 
@@ -23,9 +25,7 @@ use std::time::Duration;
 
 use log::{error, info};
 use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder},
-    tray::{MouseButton, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager,
+    Emitter, Manager,
 };
 use tauri_plugin_notification::NotificationExt;
 
@@ -77,7 +77,7 @@ fn main() {
     // sections so we can bisect plugin-init crashes from the logfile.
     log::info!("builder: creating");
     let app = tauri::Builder::default();
-    let app = app.invoke_handler(tauri::generate_handler![files::files_action, files::file_receipt_action]);
+    let app = app.invoke_handler(tauri::generate_handler![files::files_action, files::file_receipt_action, tray::tray_action, tray::tray_set_locale]);
     log::info!("builder: +single_instance");
     let app = app.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
         log::info!("single_instance: second launch detected, focusing existing");
@@ -90,6 +90,8 @@ fn main() {
     let app = app.plugin(tauri_plugin_shell::init());
     log::info!("builder: +opener");
     let app = app.plugin(tauri_plugin_opener::init());
+    let app = app.plugin(tauri_plugin_dialog::init());
+    let app = app.plugin(tauri_plugin_clipboard_manager::init());
     log::info!("builder: +notification");
     let app = app.plugin(tauri_plugin_notification::init());
     log::info!("builder: +autostart");
@@ -139,12 +141,13 @@ fn main() {
             .visible(false)
             .theme(Some(tauri::Theme::Dark))
             .user_agent(&ua)
+            .initialization_script(include_str!("../../shell/tray-language.js"))
             .build()?;
 
             log::info!("setup: building tray");
             // Build the tray immediately so the user has feedback even
             // if the daemon takes a few seconds to come up.
-            if let Err(e) = build_tray(app.handle()) {
+            if let Err(e) = tray::build(app.handle()) {
                 // Don't fail the whole app if the tray can't be built —
                 // we still want the window to come up so the user sees
                 // something. Log and continue.
@@ -198,7 +201,7 @@ fn main() {
                     if let Some(w) = handle.get_webview_window("main") {
                         let _ = w.eval(
                             "var m=document.getElementById('msg'); \
-                             if(m){m.innerHTML='<span style=\\'color:#ef4444\\'>守护进程未响应</span><br>请用托盘菜单「Restart daemon」重试。';}",
+                             if(m){m.innerHTML='<span style=\\'color:#ef4444\\'>守护进程未响应</span><br>请用托盘菜单「连接诊断」检查。';}",
                         );
                         let _ = w.show();
                     }
@@ -211,19 +214,7 @@ fn main() {
                 tauri::async_runtime::spawn(async move {
                     loop {
                         let st = sup2.status().await;
-                        if let Some(tray) = handle2.tray_by_id("tray") {
-                            // Surface attach so the user knows the shell is riding
-                            // the machine-wide system service, not a daemon it spawned.
-                            let suffix = if st.attached { " · system service" } else { "" };
-                            let tip = if st.healthy {
-                                format!("Calabi ({}) · v{}{}", st.state, st.version, suffix)
-                            } else if st.running {
-                                format!("Calabi ({}){}", st.state, suffix)
-                            } else {
-                                "Calabi (not running)".into()
-                            };
-                            let _ = tray.set_tooltip(Some(tip));
-                        }
+                        tray::refresh(&handle2, &sup2, &st).await;
                         // Emit so the frontend (if mounted) can react too.
                         let _ = handle2.emit("daemon-status", st);
                         tokio::time::sleep(Duration::from_secs(5)).await;
@@ -274,179 +265,4 @@ fn desktop_user_agent() -> String {
          Chrome/120.0.0.0 Safari/537.36 CalabiDesktop/{}",
         env!("CARGO_PKG_VERSION")
     )
-}
-
-/// How to restart / stop the machine-wide service from a terminal, on this
-/// platform — the body of the notification the tray shows instead of doing it.
-///
-/// It used to say "sudo calabi daemon restart|stop" everywhere, which worked for
-/// nobody who only ran an installer: neither installer puts `calabi` on PATH,
-/// Windows has no `sudo`, and on macOS those commands did not reach the
-/// installer's LaunchDaemon at all until the CLI learned its label. These name
-/// tools the OS always has. (Linux keeps the CLI: there is no Linux installer,
-/// so a service there was put in place by `calabi daemon install`.)
-fn service_restart_hint() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "Restart it from Terminal: sudo launchctl kickstart -k system/com.calabi.daemon"
-    } else if cfg!(target_os = "windows") {
-        "Restart it from PowerShell run as administrator: Restart-Service calabi"
-    } else {
-        "Restart it from a terminal: sudo calabi daemon restart"
-    }
-}
-
-fn service_stop_hint() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "Stop it from Terminal: sudo launchctl bootout system/com.calabi.daemon"
-    } else if cfg!(target_os = "windows") {
-        "Stop it from PowerShell run as administrator: Stop-Service calabi"
-    } else {
-        "Stop it from a terminal: sudo calabi daemon stop"
-    }
-}
-
-fn build_tray(handle: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    let open = MenuItemBuilder::with_id("open", "Open dashboard").build(handle)?;
-    let probe = MenuItemBuilder::with_id("probe", "Refresh status").build(handle)?;
-    let restart = MenuItemBuilder::with_id("restart", "Restart daemon").build(handle)?;
-    let stop = MenuItemBuilder::with_id("stop", "Stop daemon").build(handle)?;
-    let quit = MenuItemBuilder::with_id("quit", "Quit Calabi").build(handle)?;
-
-    let menu = MenuBuilder::new(handle)
-        .item(&open)
-        .separator()
-        .item(&probe)
-        .item(&restart)
-        .item(&stop)
-        .separator()
-        .item(&quit)
-        .build()?;
-
-    // Tauri 2 requires an icon set explicitly when building the tray
-    // programmatically (vs. via tauri.conf.json's trayIcon block).
-    // Without one the tray creation succeeds silently but produces
-    // an unrendered system tray entry that Windows immediately
-    // garbage-collects — leading to "icon flashes then disappears
-    // and the app exits because no UI surface is left alive".
-    //
-    // We reuse the app's default window icon (loaded from bundle.icon
-    // in tauri.conf.json, which is the same icon.ico cargo tauri icon
-    // generated).
-    let mut builder = TrayIconBuilder::with_id("tray")
-        .menu(&menu)
-        .tooltip("Calabi")
-        .show_menu_on_left_click(false);
-    if let Some(icon) = handle.default_window_icon() {
-        log::info!("tray: using default window icon");
-        builder = builder.icon(icon.clone());
-    } else {
-        log::warn!("tray: no default window icon available — tray may be invisible");
-    }
-    builder
-        .on_tray_icon_event(|tray, event| {
-            // 只处理左键。右键交给 Tauri 默认行为（弹出菜单）—
-            // 之前匹配所有 Click 会让右键也尝试 focus 窗口，把焦点
-            // 从托盘抢走，菜单刚弹出就被关闭，于是表现为「窗口最小化
-            // 才弹得出菜单」。
-            if let TrayIconEvent::Click { button: MouseButton::Left, .. } = event {
-                let handle = tray.app_handle();
-                if let Some(w) = handle.get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
-            }
-        })
-        .on_menu_event(move |app, event| {
-            let id = event.id().0.as_str();
-            match id {
-                "open" => {
-                    if let Some(w) = app.get_webview_window("main") {
-                        let _ = w.show();
-                        let _ = w.set_focus();
-                    }
-                }
-                "probe" => {
-                    if let Some(sup) = app.state::<Option<Arc<Supervisor>>>().inner().clone() {
-                        let handle = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let st = sup.status().await;
-                            let _ = handle.emit("daemon-status", st);
-                        });
-                    }
-                }
-                "restart" => {
-                    if let Some(sup) = app.state::<Option<Arc<Supervisor>>>().inner().clone() {
-                        let handle = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if sup.is_attached() {
-                                let _ = handle
-                                    .notification()
-                                    .builder()
-                                    .title("Calabi runs as a system service")
-                                    .body(service_restart_hint())
-                                    .show();
-                                return;
-                            }
-                            let _ = sup.stop().await;
-                            tokio::time::sleep(Duration::from_millis(400)).await;
-                            if let Err(e) = sup.start().await {
-                                let _ = handle
-                                    .notification()
-                                    .builder()
-                                    .title("Calabi failed to restart")
-                                    .body(format!("{e}"))
-                                    .show();
-                                return;
-                            }
-                            // The restarted daemon may have landed on a new port
-                            // (e.g. ours got taken meanwhile) — re-point the
-                            // window once it's answering again.
-                            for _ in 0..40 {
-                                if sup.status().await.running {
-                                    let url = sup.url();
-                                    if let Some(w) = handle.get_webview_window("main") {
-                                        let _ = w.eval(&format!(
-                                            "window.location.replace({url:?})"
-                                        ));
-                                    }
-                                    return;
-                                }
-                                tokio::time::sleep(Duration::from_millis(300)).await;
-                            }
-                        });
-                    }
-                }
-                "stop" => {
-                    if let Some(sup) = app.state::<Option<Arc<Supervisor>>>().inner().clone() {
-                        let handle = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if sup.is_attached() {
-                                // The shell can't stop a root system service — tell
-                                // the user how, rather than silently detaching.
-                                let _ = handle
-                                    .notification()
-                                    .builder()
-                                    .title("Calabi runs as a system service")
-                                    .body(service_stop_hint())
-                                    .show();
-                                return;
-                            }
-                            let _ = sup.stop().await;
-                        });
-                    }
-                }
-                "quit" => {
-                    info!("quit from tray; stopping daemon if managed");
-                    if let Some(sup) = app.state::<Option<Arc<Supervisor>>>().inner().clone() {
-                        tauri::async_runtime::block_on(async move {
-                            let _ = sup.stop().await;
-                        });
-                    }
-                    app.exit(0);
-                }
-                _ => {}
-            }
-        })
-        .build(handle)?;
-    Ok(())
 }

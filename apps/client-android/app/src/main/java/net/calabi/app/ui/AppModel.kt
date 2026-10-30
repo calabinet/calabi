@@ -300,7 +300,12 @@ class AppModel {
 
     /** Deletes the old device and gives its name to this phone. */
     suspend fun replace(old: OldDevice): ApiResult {
+        // Completing this choice handles the whole notice, even if other old
+        // devices remain or a refresh briefly returns the deleted device.
+        // Capture before the request so a genuinely new candidate stays visible.
+        val offered = replaceable.map { it.id } + old.id
         val r = CoreClient.call("POST", "/v1/mesh/replace", JSONObject().put("node_id", old.id))
+        if (r.ok) AppPrefs.dismissReplace(CalabiApp.instance, offered)
         refreshAccount()
         refreshNodes()
         refreshReplaceable()

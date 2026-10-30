@@ -60,7 +60,8 @@ fun TilePrompt(model: AppModel) {
     var added by rememberTileAdded()
     var dismissed by remember { mutableStateOf(AppPrefs.tileTipDismissed(context)) }
     var steps by remember { mutableStateOf(false) }
-    val replacePending = model.replaceable.any { it.id !in AppPrefs.replaceDismissed(context) }
+    val replacedOrDismissed by rememberReplaceDismissed()
+    val replacePending = model.replaceable.any { it.id !in replacedOrDismissed }
 
     if (steps) TileStepsDialog { steps = false }
     if (!model.connected || added || dismissed || replacePending) return

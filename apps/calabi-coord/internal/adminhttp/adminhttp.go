@@ -38,6 +38,10 @@ type Notifier interface{ Bump(core.MeshnetID) }
 func New(coord *core.Coordinator, notif Notifier, logger *slog.Logger) http.Handler {
 	h := &handler{coord: coord, nodes: coord.Nodes, notif: notif, logger: logger}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/performance", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(coord.Performance.Snapshot())
+	})
 	mux.HandleFunc("GET /admin/meshnets/{id}/nodes", h.listNodes)
 	mux.HandleFunc("GET /admin/meshnets/{id}/usage", h.seatUsage)
 	// Data-plane audit trail (who exchanged traffic with whom, by the hour).
@@ -528,7 +532,9 @@ func (h *handler) putSettings(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "parse body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := h.coord.UpdateSettings(r.Context(), core.MeshnetID(id), in); err != nil {
+	err = h.coord.UpdateSettings(r.Context(), core.MeshnetID(id), in)
+	h.notif.Bump(core.MeshnetID(id)) // settings may commit before a later purge/grandfather error
+	if err != nil {
 		http.Error(w, "save settings: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -578,6 +584,7 @@ func (h *handler) deleteNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err = h.coord.DeleteNode(r.Context(), core.MeshnetID(meshnet), nodeID)
+	h.notif.Bump(core.MeshnetID(meshnet)) // earlier service removals may have committed even if node deletion failed
 	if errors.Is(err, core.ErrNodeNotFound) {
 		http.Error(w, "node not found in this meshnet", http.StatusNotFound)
 		return
@@ -586,7 +593,6 @@ func (h *handler) deleteNode(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "delete node: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	h.notif.Bump(core.MeshnetID(meshnet))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -776,7 +782,10 @@ func (h *handler) approveRoutes(w http.ResponseWriter, r *http.Request) {
 			real[0] = append(real[0], p.Masked())
 		}
 	}
+	// The store can commit approved_routes before alias persistence fails.
+	// Invalidate even on error so cached permission cannot outlive that write.
 	node, err := h.coord.ApproveRoutes(r.Context(), core.MeshnetID(meshnet), nodeID, routes, real...)
+	h.notif.Bump(core.MeshnetID(meshnet))
 	switch {
 	case errors.Is(err, core.ErrNodeNotFound):
 		http.Error(w, "node not found in this meshnet", http.StatusNotFound)
@@ -789,7 +798,6 @@ func (h *handler) approveRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Peers must re-pull: approving changes their allowed_ips for this node.
-	h.notif.Bump(node.Meshnet)
 	writeJSON(w, http.StatusOK, toView(node, h.coord.Presence.IsOnline(node.ID)))
 }
 

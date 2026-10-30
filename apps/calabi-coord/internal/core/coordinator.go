@@ -7,7 +7,9 @@ import (
 	"log/slog"
 	"math"
 	"net/netip"
+	"reflect"
 	"sync"
+	"time"
 
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
@@ -25,9 +27,10 @@ var ErrNodeSignedOut = errors.New("core: node signed out; enroll with an auth ke
 // seam with either self-hosted (in-memory/file) or platform (DB/tenant) stores and
 // is the SAME code the self-hosted coordinator ships.
 type Coordinator struct {
-	Nodes  NodeStore
-	Policy PolicyStore
-	IPAM   IPAM
+	Performance Performance
+	Nodes       NodeStore
+	Policy      PolicyStore
+	IPAM        IPAM
 	// AliasIPAM hands out stand-in prefixes for subnet routes that would collide
 	// with consumers' own LANs. Nil = this deployment does not offer aliasing:
 	// requests are simply not granted and routes publish under their real CIDRs,
@@ -142,15 +145,23 @@ type Coordinator struct {
 	// One process, like the v2 session table: a multi-replica coordinator would
 	// need a shared lock (or a unique seat row) instead. The zero value works, so
 	// callers that build a Coordinator literal need not initialize it.
-	enrollLocks sync.Map // MeshnetID -> *sync.Mutex
+	enrollLocks sync.Map // MeshnetID -> chan struct{}
 }
 
 // lockMeshnet serializes one meshnet's enrollments and returns the unlock func.
-func (c *Coordinator) lockMeshnet(t MeshnetID) func() {
-	v, _ := c.enrollLocks.LoadOrStore(t, &sync.Mutex{})
-	mu := v.(*sync.Mutex)
-	mu.Lock()
-	return mu.Unlock
+func (c *Coordinator) lockMeshnet(ctx context.Context, t MeshnetID) (func(), error) {
+	v, _ := c.enrollLocks.LoadOrStore(t, make(chan struct{}, 1))
+	gate := v.(chan struct{})
+	select {
+	case gate <- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			<-gate
+			return nil, err
+		}
+		return func() { <-gate }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // RegisterInput carries the fields a node presents at enrollment.
@@ -201,6 +212,19 @@ type RegisterInput struct {
 // id + overlay (so a daemon's reconnect loop doesn't churn addresses or leave
 // stale peers in the netmap).
 func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, error) {
+	n, _, err := c.RegisterWithChange(ctx, in)
+	return n, err
+}
+
+// RegisterWithChange reports whether peers must refresh after registration.
+// A successful registration with uncertain service state requires notification.
+func (c *Coordinator) RegisterWithChange(ctx context.Context, in RegisterInput) (*Node, bool, error) {
+	changed := true
+	n, err := c.register(ctx, in, &changed)
+	return n, changed, err
+}
+
+func (c *Coordinator) register(ctx context.Context, in RegisterInput, changed *bool) (*Node, error) {
 	if in.NodeKey.IsZero() {
 		return nil, fmt.Errorf("core: register: node_key is zero")
 	}
@@ -224,20 +248,44 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 	// deliberately: the seat count, the name check and the route-overlap check
 	// all read the same snapshot, and a lock that ended before the write would
 	// leave every one of them racy.
-	defer c.lockMeshnet(in.Meshnet)()
+	waitStarted := time.Now()
+	unlock, lockErr := c.lockMeshnet(ctx, in.Meshnet)
+	c.Performance.Stages.Observe(RegisterWait, waitStarted)
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock()
+	defer c.Performance.Stages.Observe(RegisterHeld, time.Now())
 
-	// The meshnet's nodes, fetched once. Three rules below read them: a name may
-	// not collide with a peer's, a CIDR a peer already publishes is not
-	// auto-approved, and the seat gate counts them.
-	peers, err := c.Nodes.ListMeshnet(ctx, in.Meshnet)
+	// Read the current device under the same organization gate before choosing
+	// a validation projection. Authentication and all persistent writes remain
+	// on the original path; no caller-supplied identity enables a shortcut.
+	findStarted := time.Now()
+	existing, err := c.Nodes.FindByKey(ctx, in.Meshnet, in.NodeKey)
+	c.Performance.Stages.Observe(RegisterFind, findStarted)
+	if err != nil && !errors.Is(err, ErrNodeNotFound) {
+		return nil, fmt.Errorf("core: find registration node: %w", err)
+	}
+	var peers []*Node
+	var taken map[string]bool
+	peersStarted := time.Now()
+	namesOnly := existing != nil && in.Reauth && len(in.AdvertisedRoutes) == 0 && len(in.AliasedRoutes) == 0 &&
+		len(existing.AdvertisedRoutes) == 0 && len(existing.ApprovedRoutes) == 0 && len(existing.RealRoutes) == 0 && len(existing.AliasedRoutes) == 0 && len(existing.RouteAliases) == 0
+	if namesOnly {
+		taken, err = c.registrationNames(ctx, in.Meshnet, existing.ID)
+	} else {
+		peers, err = c.registrationPeers(ctx, in.Meshnet)
+		if existing != nil {
+			taken = namesInMeshnet(peers, existing.ID)
+		}
+	}
+	c.Performance.Stages.Observe(RegisterPeers, peersStarted)
 	if err != nil {
-		return nil, fmt.Errorf("core: list meshnet: %w", err)
+		return nil, fmt.Errorf("core: list registration validation: %w", err)
 	}
 	routeMode := c.routeApprovalFor(ctx, in.Meshnet)
-
-	// Re-enrollment: reuse the existing node (same id + overlay), just refresh the
-	// mutable fields. No new IPAM allocation.
-	if existing, err := c.Nodes.FindByKey(ctx, in.Meshnet, in.NodeKey); err == nil && existing != nil {
+	if err == nil && existing != nil {
+		before := cloneMapNode(*existing)
 		// An admin-disabled node may not rejoin — refuse before touching
 		// any state, so its reconnect loop can't quietly re-enroll.
 		if existing.Disabled {
@@ -262,7 +310,7 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 			// Deduped for the same reason a fresh node's name is: re-registering
 			// under a colleague's name would inherit whatever an ACL granted that
 			// name.
-			existing.Name = dedupeNodeName(in.Name, namesInMeshnet(peers, existing.ID))
+			existing.Name = dedupeNodeName(in.Name, taken)
 		}
 		existing.DiscoKey = in.DiscoKey
 		// Tags and owner come from the auth key, so a re-registration by proof
@@ -317,22 +365,48 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 		// so reconcile on the re-enrollment path too — and AFTER the approval
 		// lines above, because an alias needs both halves.
 		existing.AliasedRoutes = in.AliasedRoutes
-		c.applyAliases(ctx, existing)
+		_, releaseAliases := c.planAliases(ctx, existing)
 		if existing.DERPHome == "" {
 			// enrolled before nodes had homes: backfill one
 			existing.DERPHome = c.DefaultDERPHome
 		}
-		stored, err := c.Nodes.Upsert(ctx, existing) // ID != 0 → update in place
+		writeStarted := time.Now()
+		var stored *Node
+		// Compare the entire node, not a field whitelist that could silently
+		// omit a future security field. Only proof reauthentication qualifies.
+		if touch, ok := c.Nodes.(RegistrationTouchStore); ok && in.Reauth && reflect.DeepEqual(before, cloneMapNode(*existing)) {
+			stored, err = touch.TouchRegistration(ctx, existing)
+		} else {
+			stored, err = c.Nodes.Upsert(ctx, existing)
+		}
+		c.Performance.Stages.Observe(RegisterWrite, writeStarted)
 		if err != nil {
 			return nil, fmt.Errorf("core: update node: %w", err)
 		}
+		if stored.Meshnet != existing.Meshnet || stored.NodeKey != existing.NodeKey || stored.ID != existing.ID {
+			return nil, ErrNodeNotFound
+		}
+		if stored.Disabled {
+			return nil, ErrNodeDisabled
+		}
+		if in.Reauth && stored.SignedOut {
+			return nil, ErrNodeSignedOut
+		}
+		c.releaseAliases(ctx, stored.ID, releaseAliases)
 		// A daemon restart with an edited config is the NORMAL way a declaration
 		// changes, so this has to run on the re-enrollment path too. Best-effort:
 		// the machine is already on the mesh, and a registry hiccup must not undo
 		// that.
-		if err := c.reconcileDeclaredServices(ctx, stored, in.DeclaredServices); err != nil && c.Logger != nil {
+		servicesStarted := time.Now()
+		servicesChanged, serviceErr := c.reconcileDeclaredServicesChanged(ctx, stored, in.DeclaredServices)
+		c.Performance.Stages.Observe(RegisterServices, servicesStarted)
+		if err := serviceErr; err != nil && c.Logger != nil {
 			c.Logger.Warn("reconciling declared services failed", "node_id", stored.ID, "err", err)
 		}
+		after := cloneMapNode(*stored)
+		// LastSeen is bookkeeping, never an authorization or topology input.
+		before.LastSeen, after.LastSeen = time.Time{}, time.Time{}
+		*changed = serviceErr != nil || servicesChanged || !reflect.DeepEqual(before, after)
 		if c.Logger != nil {
 			c.Logger.Info("node re-registered", "node_id", stored.ID, "meshnet", stored.Meshnet, "overlay", stored.Overlay)
 		}
@@ -423,7 +497,7 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 		Approved:          approved,
 		DERPHome:          c.DefaultDERPHome, // deployment home region until the node reports its own
 	}
-	c.applyAliases(ctx, n)
+	_, releaseAliases := c.planAliases(ctx, n)
 	stored, err := c.Nodes.Upsert(ctx, n)
 	if err != nil {
 		// Best-effort: return the address to the pool so a store failure doesn't
@@ -431,6 +505,7 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 		_ = c.IPAM.Release(ctx, addr)
 		return nil, fmt.Errorf("core: persist node: %w", err)
 	}
+	c.releaseAliases(ctx, stored.ID, releaseAliases)
 	if err := c.reconcileDeclaredServices(ctx, stored, in.DeclaredServices); err != nil && c.Logger != nil {
 		c.Logger.Warn("recording declared services failed", "node_id", stored.ID, "err", err)
 	}
@@ -445,7 +520,18 @@ func (c *Coordinator) Register(ctx context.Context, in RegisterInput) (*Node, er
 //
 // With no ACL configured the PolicyStore is allow-all and this is a full mesh
 // minus self; an ACL makes the Filter call cut the set.
-func (c *Coordinator) NetMapFor(ctx context.Context, nodeID int64) (*NetMap, error) {
+func (c *Coordinator) NetMapFor(ctx context.Context, nodeID int64) (result *NetMap, resultErr error) {
+	started := time.Now()
+	c.Performance.Builds.Add(1)
+	defer func() {
+		c.Performance.BuildNanos.Add(uint64(time.Since(started)))
+		if resultErr != nil {
+			c.Performance.BuildFailures.Add(1)
+		} else if result != nil {
+			c.Performance.BuiltPeers.Add(uint64(len(result.Peers)))
+		}
+	}()
+	c.Performance.NodeGets.Add(1)
 	self, err := c.Nodes.Get(ctx, nodeID)
 	if err != nil {
 		return nil, err
@@ -536,7 +622,9 @@ func (c *Coordinator) NetMapFor(ctx context.Context, nodeID int64) (*NetMap, err
 // an empty list: silently dropping services would turn "svc:" rules into rules
 // that grant nothing.
 func (c *Coordinator) nodesWithServices(ctx context.Context, t MeshnetID) ([]*Node, error) {
+	c.Performance.NodeLists.Add(1)
 	nodes, err := c.Nodes.ListMeshnet(ctx, t)
+	c.Performance.NodesListed.Add(uint64(len(nodes)))
 	if err != nil {
 		return nil, fmt.Errorf("core: list meshnet: %w", err)
 	}
@@ -876,11 +964,13 @@ func (c *Coordinator) ApproveRoutes(ctx context.Context, t MeshnetID, nodeID int
 	// Withdrawing approval must also take the alias back: it is an address other
 	// nodes hold routes for, and leaving it allocated to a route nobody may use
 	// leaks the block until the next restart re-warms the pool.
-	if c.applyAliases(ctx, node) {
+	changed, releaseAliases := c.planAliases(ctx, node)
+	if changed {
 		if err := c.Nodes.UpdateRouteAliases(ctx, nodeID, node.RouteAliases); err != nil {
 			return nil, fmt.Errorf("core: persist route aliases: %w", err)
 		}
 	}
+	c.releaseAliases(ctx, nodeID, releaseAliases)
 	if c.Logger != nil {
 		c.Logger.Info("node routes reviewed", "node_id", nodeID, "meshnet", t, "approved", len(approved), "advertised", len(node.AdvertisedRoutes))
 	}
@@ -1090,30 +1180,35 @@ func (c *Coordinator) UpdateDeclarations(ctx context.Context, in UpdateDeclarati
 	return stored, nil
 }
 
-// applyAliases brings node.RouteAliases in line with what the node asks for and
-// an admin approved, releasing whatever falls out. Reports whether the set
-// changed, so a caller that must persist it separately can skip a no-op write.
+// planAliases brings node.RouteAliases in line with what the node asks for and
+// an admin approved. It reports retired reservations without releasing them.
 //
 // Failures are logged, never returned: a subnet too large to alias, or an
 // exhausted pool, must not keep a node off the mesh. That route simply publishes
 // under its real CIDR — which is where it was before this feature existed.
-func (c *Coordinator) applyAliases(ctx context.Context, node *Node) bool {
+// Plan allocation changes without freeing previously published addresses. A
+// caller which persists the node must save first, then release; failed writes
+// conservatively retain reservations rather than allowing premature reuse.
+func (c *Coordinator) planAliases(ctx context.Context, node *Node) (bool, []netip.Prefix) {
 	keep, release, err := reconcileAliases(ctx, c.AliasIPAM, node.Meshnet, node, c.aliasBudgetFor(ctx, node))
 	if err != nil && c.Logger != nil {
 		c.Logger.Warn("could not alias every requested subnet; those routes publish under their real CIDR",
 			"node_id", node.ID, "meshnet", node.Meshnet, "err", err)
 	}
+	changed := len(release) > 0 || !sameAliases(node.RouteAliases, keep)
+	node.RouteAliases = keep
+	return changed, release
+}
+
+func (c *Coordinator) releaseAliases(ctx context.Context, nodeID int64, release []netip.Prefix) {
 	for _, alias := range release {
 		if c.AliasIPAM == nil {
 			break
 		}
 		if rerr := c.AliasIPAM.Release(ctx, alias); rerr != nil && c.Logger != nil {
-			c.Logger.Warn("releasing a subnet alias failed", "node_id", node.ID, "alias", alias, "err", rerr)
+			c.Logger.Warn("releasing a subnet alias failed", "node_id", nodeID, "alias", alias, "err", rerr)
 		}
 	}
-	changed := len(release) > 0 || !sameAliases(node.RouteAliases, keep)
-	node.RouteAliases = keep
-	return changed
 }
 
 func sameAliases(a, b []RouteAlias) bool {

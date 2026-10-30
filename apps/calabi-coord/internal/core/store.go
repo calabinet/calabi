@@ -11,6 +11,52 @@ import (
 // ErrNodeNotFound is returned by NodeStore.Get for an unknown id.
 var ErrNodeNotFound = errors.New("core: node not found")
 
+// RegistrationPeerStore optionally projects only the fields used by registration:
+// ID, Name, Disabled, OwnerUserID, ApprovedRoutes, RealRoutes and RouteAliases.
+// These incomplete nodes must never be used for maps, authentication or writes.
+type RegistrationPeerStore interface {
+	ListRegistrationPeers(context.Context, MeshnetID) ([]*Node, error)
+}
+
+// RegistrationNameStore reads all other names, including disabled nodes. Only
+// route-free existing registrations can use this projection; no policy state
+// is cached and name normalization still happens in the common Go code.
+type RegistrationNameStore interface {
+	ListRegistrationNames(context.Context, MeshnetID, int64) ([]string, error)
+}
+
+// RegistrationTouchStore can avoid rewriting identical registration state.
+// It must only touch bookkeeping, scope the update to the same live identity,
+// and return a freshly read node. Policy/declaration changes are not skipped.
+type RegistrationTouchStore interface {
+	TouchRegistration(context.Context, *Node) (*Node, error)
+}
+
+func (c *Coordinator) registrationNames(ctx context.Context, t MeshnetID, id int64) (map[string]bool, error) {
+	if s, ok := c.Nodes.(RegistrationNameStore); ok {
+		names, err := s.ListRegistrationNames(ctx, t, id)
+		if err != nil {
+			return nil, err
+		}
+		out := make(map[string]bool, len(names))
+		for _, name := range names {
+			if n := NormalizeNodeName(name); n != "" {
+				out[n] = true
+			}
+		}
+		return out, nil
+	}
+	peers, err := c.registrationPeers(ctx, t)
+	return namesInMeshnet(peers, id), err
+}
+
+func (c *Coordinator) registrationPeers(ctx context.Context, t MeshnetID) ([]*Node, error) {
+	if s, ok := c.Nodes.(RegistrationPeerStore); ok {
+		return s.ListRegistrationPeers(ctx, t)
+	}
+	return c.Nodes.ListMeshnet(ctx, t)
+}
+
 // NodeStore persists nodes. The platform build backs it with the tenant DB +
 // Device registry; the self-hosted build backs it with the in-memory MemNodeStore.
 type NodeStore interface {

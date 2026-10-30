@@ -2539,7 +2539,9 @@ type PullNetMapRequest struct {
 	NodeId int64                  `protobuf:"varint,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	// From RegisterNodeResponse (mesh protocol v2). The coordinator refuses the
 	// stream without it, or when it belongs to a different node than node_id.
-	SessionToken  string `protobuf:"bytes,4,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	SessionToken string `protobuf:"bytes,4,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	// Opt in to sequenced full/delta/grant frames. Absent means full maps only.
+	DeltaNetmap   bool `protobuf:"varint,5,opt,name=delta_netmap,json=deltaNetmap,proto3" json:"delta_netmap,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2588,13 +2590,33 @@ func (x *PullNetMapRequest) GetSessionToken() string {
 	return ""
 }
 
+func (x *PullNetMapRequest) GetDeltaNetmap() bool {
+	if x != nil {
+		return x.DeltaNetmap
+	}
+	return false
+}
+
 // NetMap is the ACL-filtered view of the meshnet a single node is allowed to
 // see. Peers the ACL denies are ABSENT (first layer of isolation).
 type NetMap struct {
-	state   protoimpl.MessageState `protogen:"open.v1"`
-	Self    *Peer                  `protobuf:"bytes,1,opt,name=self,proto3" json:"self,omitempty"`
-	Peers   []*Peer                `protobuf:"bytes,2,rep,name=peers,proto3" json:"peers,omitempty"`
-	DerpMap *DERPMap               `protobuf:"bytes,3,opt,name=derp_map,json=derpMap,proto3" json:"derp_map,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Sequence is scoped to this RPC stream. Its first frame is always full.
+	// A delta requires exactly base_sequence; on mismatch reconnect for a full
+	// snapshot. Full frames replace everything, including empty ACL lists.
+	Sequence       uint64  `protobuf:"varint,20,opt,name=sequence,proto3" json:"sequence,omitempty"`
+	BaseSequence   uint64  `protobuf:"varint,21,opt,name=base_sequence,json=baseSequence,proto3" json:"base_sequence,omitempty"`
+	Delta          bool    `protobuf:"varint,22,opt,name=delta,proto3" json:"delta,omitempty"`
+	RemovedPeerIds []int64 `protobuf:"varint,23,rep,packed,name=removed_peer_ids,json=removedPeerIds,proto3" json:"removed_peer_ids,omitempty"`
+	// In a delta, peers are complete upserts. When metadata_present is true,
+	// replace ALL non-peer fields, including zero/empty values. Otherwise retain
+	// them. relay_grant is always authoritative, including an empty grant.
+	MetadataPresent bool `protobuf:"varint,24,opt,name=metadata_present,json=metadataPresent,proto3" json:"metadata_present,omitempty"`
+	// A delta carrying only relay_grant; must not reconfigure the datapath.
+	GrantOnly bool     `protobuf:"varint,25,opt,name=grant_only,json=grantOnly,proto3" json:"grant_only,omitempty"`
+	Self      *Peer    `protobuf:"bytes,1,opt,name=self,proto3" json:"self,omitempty"`
+	Peers     []*Peer  `protobuf:"bytes,2,rep,name=peers,proto3" json:"peers,omitempty"`
+	DerpMap   *DERPMap `protobuf:"bytes,3,opt,name=derp_map,json=derpMap,proto3" json:"derp_map,omitempty"`
 	// Packet filter this node ENFORCES on inbound traffic. The
 	// coordinator compiles it from the meshnet's ACL for this node specifically:
 	// "these sources may reach these ports OF MINE". Enforcement is on the
@@ -2727,6 +2749,48 @@ func (x *NetMap) ProtoReflect() protoreflect.Message {
 // Deprecated: Use NetMap.ProtoReflect.Descriptor instead.
 func (*NetMap) Descriptor() ([]byte, []int) {
 	return file_meshpb_coord_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *NetMap) GetSequence() uint64 {
+	if x != nil {
+		return x.Sequence
+	}
+	return 0
+}
+
+func (x *NetMap) GetBaseSequence() uint64 {
+	if x != nil {
+		return x.BaseSequence
+	}
+	return 0
+}
+
+func (x *NetMap) GetDelta() bool {
+	if x != nil {
+		return x.Delta
+	}
+	return false
+}
+
+func (x *NetMap) GetRemovedPeerIds() []int64 {
+	if x != nil {
+		return x.RemovedPeerIds
+	}
+	return nil
+}
+
+func (x *NetMap) GetMetadataPresent() bool {
+	if x != nil {
+		return x.MetadataPresent
+	}
+	return false
+}
+
+func (x *NetMap) GetGrantOnly() bool {
+	if x != nil {
+		return x.GrantOnly
+	}
+	return false
 }
 
 func (x *NetMap) GetSelf() *Peer {
@@ -3734,11 +3798,19 @@ const file_meshpb_coord_proto_rawDesc = "" +
 	"\anode_id\x18\x01 \x01(\x03R\x06nodeId\x129\n" +
 	"\bservices\x18\x02 \x03(\v2\x1d.calabi.mesh.v1.ServiceHealthR\bservices\x12#\n" +
 	"\rsession_token\x18\x05 \x01(\tR\fsessionTokenJ\x04\b\x03\x10\x04J\x04\b\x04\x10\x05R\bauth_keyR\bnode_key\"\x1d\n" +
-	"\x1bReportServiceHealthResponse\"q\n" +
+	"\x1bReportServiceHealthResponse\"\x94\x01\n" +
 	"\x11PullNetMapRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\x03R\x06nodeId\x12#\n" +
-	"\rsession_token\x18\x04 \x01(\tR\fsessionTokenJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04R\bauth_keyR\bnode_key\"\xcf\x05\n" +
-	"\x06NetMap\x12(\n" +
+	"\rsession_token\x18\x04 \x01(\tR\fsessionToken\x12!\n" +
+	"\fdelta_netmap\x18\x05 \x01(\bR\vdeltaNetmapJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04R\bauth_keyR\bnode_key\"\x9a\a\n" +
+	"\x06NetMap\x12\x1a\n" +
+	"\bsequence\x18\x14 \x01(\x04R\bsequence\x12#\n" +
+	"\rbase_sequence\x18\x15 \x01(\x04R\fbaseSequence\x12\x14\n" +
+	"\x05delta\x18\x16 \x01(\bR\x05delta\x12(\n" +
+	"\x10removed_peer_ids\x18\x17 \x03(\x03R\x0eremovedPeerIds\x12)\n" +
+	"\x10metadata_present\x18\x18 \x01(\bR\x0fmetadataPresent\x12\x1d\n" +
+	"\n" +
+	"grant_only\x18\x19 \x01(\bR\tgrantOnly\x12(\n" +
 	"\x04self\x18\x01 \x01(\v2\x14.calabi.mesh.v1.PeerR\x04self\x12*\n" +
 	"\x05peers\x18\x02 \x03(\v2\x14.calabi.mesh.v1.PeerR\x05peers\x122\n" +
 	"\bderp_map\x18\x03 \x01(\v2\x17.calabi.mesh.v1.DERPMapR\aderpMap\x12?\n" +

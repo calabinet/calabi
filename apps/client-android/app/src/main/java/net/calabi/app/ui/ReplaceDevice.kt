@@ -15,6 +15,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,15 +35,29 @@ import kotlinx.coroutines.launch
 import net.calabi.app.AppPrefs
 import net.calabi.app.R
 
+@Composable
+internal fun rememberReplaceDismissed(): State<Set<Long>> {
+    val context = LocalContext.current
+    val state = remember(context) { mutableStateOf(AppPrefs.replaceDismissed(context)) }
+    DisposableEffect(context) {
+        val stop = AppPrefs.watchReplaceDismissed(context) {
+            state.value = AppPrefs.replaceDismissed(context)
+        }
+        state.value = AppPrefs.replaceDismissed(context)
+        onDispose { stop() }
+    }
+    return state
+}
+
 /**
  * Offered on the devices tab when this user has offline Android devices this
- * phone may be replacing (a reinstall or a new phone). Hidden once dismissed,
- * until a device not seen before turns up.
+ * phone may be replacing (a reinstall or a new phone). Hidden after a successful
+ * replacement or dismissal, until a device not seen before turns up.
  */
 @Composable
 fun ReplacePrompt(model: AppModel, onChoose: () -> Unit) {
     val context = LocalContext.current
-    var dismissed by remember(model.activeOrgId) { mutableStateOf(AppPrefs.replaceDismissed(context)) }
+    val dismissed by rememberReplaceDismissed()
     val fresh = model.replaceable.filter { it.id !in dismissed }
     if (fresh.isEmpty()) return
     Group(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
@@ -65,7 +81,6 @@ fun ReplacePrompt(model: AppModel, onChoose: () -> Unit) {
             Pill(onClick = onChoose) { Text(stringResource(R.string.replace_choose), style = Styles.chip) }
             TextButton(onClick = {
                 AppPrefs.dismissReplace(context, fresh.map { it.id })
-                dismissed = AppPrefs.replaceDismissed(context)
             }) { Text(stringResource(R.string.replace_dismiss), style = Styles.chip.copy(color = Palette.muted)) }
         }
     }

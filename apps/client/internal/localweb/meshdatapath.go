@@ -19,6 +19,30 @@ package localweb
 // ⚠ This struct is duplicated in localweb and statusapi and must stay
 // field-identical — see TestMeshShapesAgreeAcrossDaemonKinds.
 type MeshDatapath struct {
+	ProbeSent               uint64 `json:"probe_sent"`
+	ProbeFailed             uint64 `json:"probe_failed"`
+	ProbeLimited            uint64 `json:"probe_limited"`
+	ProbeActive             int    `json:"probe_active"`
+	ProbeCandidates         int    `json:"probe_candidates"`
+	ProbeSchedulerRuns      uint64 `json:"probe_scheduler_runs"`
+	ProbeHighSent           uint64 `json:"probe_high_sent"`
+	ProbeLowSent            uint64 `json:"probe_low_sent"`
+	ProbeRetries            uint64 `json:"probe_retries"`
+	ProbeTimeouts           uint64 `json:"probe_timeouts"`
+	ProbeConfirmed          uint64 `json:"probe_confirmed"`
+	ProbeMaxWaitMicros      uint64 `json:"probe_max_wait_micros"`
+	ProbePingsReceived      uint64 `json:"probe_pings_received"`
+	ProbePongsSent          uint64 `json:"probe_pongs_sent"`
+	ProbeReplyLimited       uint64 `json:"probe_reply_limited"`
+	ProbeReplyDropped       uint64 `json:"probe_reply_dropped"`
+	ProbeReplyCoalesced     uint64 `json:"probe_reply_coalesced"`
+	ProbeReplyPending       int    `json:"probe_reply_pending"`
+	ProbeReplyMaxWaitMicros uint64 `json:"probe_reply_max_wait_micros"`
+	ProbePending            int    `json:"probe_pending"`
+	ProbeLearned            int    `json:"probe_learned"`
+	ProbeIdle               int    `json:"probe_idle"`
+	ProbeDirect             int    `json:"probe_direct"`
+	ProbeRelayed            int    `json:"probe_relayed"`
 	// The hole-punched UDP socket: every datagram, WireGuard and probes alike.
 	SockRxPackets uint64 `json:"sock_rx_packets"`
 	SockRxBytes   uint64 `json:"sock_rx_bytes"`

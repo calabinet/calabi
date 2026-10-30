@@ -13,6 +13,15 @@ func testMeshConfig() meshConfig {
 	return meshConfig{Coord: "coord:7014", Relay: "relay:3340", AuthKey: "tk_test"}
 }
 
+func TestMeshJitterWaitCancelsImmediately(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	started := time.Now()
+	if sleepUnlessDone(ctx, time.Minute) || time.Since(started) > time.Second {
+		t.Fatal("jitter delayed shutdown")
+	}
+}
+
 // A coordinator blip must not touch the data plane.
 //
 // The regression this pins: one function used to own both halves of a session,

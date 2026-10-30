@@ -102,7 +102,7 @@ func (f *fakeCoord) PullNetMap(req *meshpb.PullNetMapRequest, stream meshpb.Coor
 	return stream.Context().Err()
 }
 
-func dialFake(t *testing.T, f *fakeCoord) *CoordClient {
+func dialFake(t *testing.T, f meshpb.CoordinatorServer) *CoordClient {
 	t.Helper()
 	lis := bufconn.Listen(1 << 20)
 	gs := grpc.NewServer()

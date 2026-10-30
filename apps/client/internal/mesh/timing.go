@@ -19,6 +19,9 @@ import "time"
 // The relay link's own liveness ping is not here: it is the datapath's, and its
 // phone setting waits on measurements.
 type Timing struct {
+	// ProbeRate is the adaptive scheduler's device-wide ping budget in packets
+	// per second. Zero uses the desktop default; phones explicitly choose 20.
+	ProbeRate int
 	// DiscoProbe re-pings every peer's candidate endpoints, to find direct paths
 	// and to keep the ones found from going stale.
 	DiscoProbe time.Duration
@@ -45,6 +48,7 @@ type Timing struct {
 // DesktopTiming is the timing a session runs with unless told otherwise.
 func DesktopTiming() Timing {
 	return Timing{
+		ProbeRate:           50,
 		DiscoProbe:          probeInterval,
 		EndpointReport:      endpointReportInterval,
 		HomeProbe:           homeProbeInterval,

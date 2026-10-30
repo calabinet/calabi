@@ -41,6 +41,7 @@ const (
 //   - relay regions re-measured on network changes only
 //   - no service self-checks: a phone declares no services
 var phoneTiming = mesh.Timing{
+	ProbeRate:      20,
 	DiscoProbe:     5 * time.Second,
 	EndpointReport: 5 * time.Minute,
 	ConnReport:     15 * time.Minute,
@@ -182,7 +183,7 @@ func (e *engine) nextBackoff(cur time.Duration) time.Duration {
 // short, in which case the caller retries now and starts its backoff over; ok
 // is false when the engine is stopping.
 func (e *engine) retryWait(ctx context.Context, d time.Duration) (ok, kicked bool) {
-	t := time.NewTimer(d)
+	t := time.NewTimer(mesh.ReconnectDelay(d))
 	defer t.Stop()
 	select {
 	case <-ctx.Done():
@@ -475,8 +476,9 @@ func isDenied(err error) bool {
 
 // meshStatus is GET /v1/mesh: this phone's connection and what it can reach.
 type meshStatus struct {
-	State string `json:"state"`
-	Error string `json:"error,omitempty"`
+	Datapath *mesh.DatapathStats `json:"datapath,omitempty"`
+	State    string              `json:"state"`
+	Error    string              `json:"error,omitempty"`
 	// Name is the name this phone joined with; Overlay its mesh address while
 	// connected. SelfOverlay is its address in this organization's meshnet
 	// whether or not it is connected — the org's device list includes the
@@ -540,6 +542,7 @@ func (e *engine) status() meshStatus {
 		return st
 	}
 	snap := dp.Snapshot()
+	st.Datapath = &snap.Datapath
 	st.Overlay = snap.Overlay
 	if snap.Relay != "" {
 		st.Relay = snap.Relay

@@ -76,8 +76,9 @@ const learnedTTL = 30 * time.Second
 // stops carrying it as soon as it goes stale (pathTTL) or a write fails
 // (invalidatePath).
 type discoProber struct {
-	ms     *magicSock
-	logger *slog.Logger
+	ms        *magicSock
+	logger    *slog.Logger
+	scheduler *probeScheduler // set before the transport and run loop are started
 
 	mu      sync.Mutex
 	pending map[discoTxID]pendingProbe
@@ -152,6 +153,10 @@ func (p *discoProber) onPong(peer meshproto.DiscoKey, tx discoTxID, _ netip.Addr
 		return
 	}
 	delete(p.pending, tx)
+	if p.scheduler != nil {
+		p.scheduler.confirmed.Add(1)
+		p.scheduler.signal()
+	}
 	now := time.Now()
 	rtt := now.Sub(pp.sent)
 	prev, had := p.paths[peer]
@@ -197,6 +202,10 @@ func (p *discoProber) adopt(peer meshproto.DiscoKey, ep netip.AddrPort, rtt time
 // registering each ping so its pong validates that endpoint. Called on each
 // netmap and on the periodic tick.
 func (p *discoProber) Probe(peers []Peer) {
+	if p.scheduler != nil {
+		p.scheduler.update(peers)
+		return
+	}
 	now := time.Now()
 	p.reapPending(now)
 	p.reapLearned(now)
@@ -217,17 +226,7 @@ func (p *discoProber) Probe(peers []Peer) {
 				return
 			}
 			sent[ep] = struct{}{}
-			tx, err := p.ms.SendPing(peer.DiscoKey, ep)
-			if err != nil {
-				return
-			}
-			p.mu.Lock()
-			// Stamped per send, not from the round's `now`: every ping in a round
-			// would otherwise share one start time, and an endpoint probed 20th
-			// would measure slower than one probed 1st by the length of the send
-			// loop — a bias that decides which path wins now that RTT does.
-			p.pending[tx] = pendingProbe{peer: peer.DiscoKey, ep: ep, sent: time.Now()}
-			p.mu.Unlock()
+			_ = p.sendProbe(peer.DiscoKey, ep)
 		}
 		for _, ep := range peer.Endpoints {
 			probe(ep)
@@ -241,6 +240,24 @@ func (p *discoProber) Probe(peers []Peer) {
 			probe(ep)
 		}
 	}
+}
+
+// Register BEFORE sending: a loopback or LAN pong can arrive before WriteTo
+// returns. Recording it afterwards silently loses that valid response.
+func (p *discoProber) sendProbe(peer meshproto.DiscoKey, ep netip.AddrPort) error {
+	tx, err := newDiscoTxID()
+	if err != nil {
+		return err
+	}
+	p.mu.Lock()
+	p.pending[tx] = pendingProbe{peer: peer, ep: ep, sent: time.Now()}
+	p.mu.Unlock()
+	if err = p.ms.sendDisco(ep, peer, discoMessage{Type: discoPing, Tx: tx}); err != nil {
+		p.mu.Lock()
+		delete(p.pending, tx)
+		p.mu.Unlock()
+	}
+	return err
 }
 
 // bestPath returns the peer's validated direct endpoint if one was confirmed
@@ -284,6 +301,9 @@ func (p *discoProber) reapPending(now time.Time) {
 	defer p.mu.Unlock()
 	for tx, pp := range p.pending {
 		if now.Sub(pp.sent) > pendingTTL {
+			if p.scheduler != nil {
+				p.scheduler.timeouts.Add(1)
+			}
 			delete(p.pending, tx)
 		}
 	}
@@ -308,8 +328,14 @@ func (p *discoProber) learnCandidate(peer meshproto.DiscoKey, ep netip.AddrPort)
 		m = make(map[netip.AddrPort]time.Time)
 		p.learned[peer] = m
 	}
+	if _, exists := m[ep]; !exists && len(m) >= probeCandidateLimit {
+		return
+	}
 	_, existed := m[ep]
 	m[ep] = time.Now()
+	if !existed && p.scheduler != nil {
+		p.scheduler.signal()
+	}
 	if !existed && p.logger != nil {
 		p.logger.Debug("mesh learned disco source", "ep", ep.String())
 	}
@@ -352,6 +378,10 @@ func (p *discoProber) reapLearned(now time.Time) {
 // probing: peers are then probed only when a netmap or a repair asks (Probe).
 func (p *discoProber) run(ctx context.Context, every time.Duration, peersFn func() []Peer) {
 	if every <= 0 {
+		return
+	}
+	if p.scheduler != nil {
+		p.scheduler.run(ctx)
 		return
 	}
 	t := time.NewTicker(every)

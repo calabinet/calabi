@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost"><title>托盘菜单</title>
+<style>
+:root{color-scheme:light dark;--bg:light-dark(#f0f1f3,#292c32);--text:light-dark(#222936,#edf0f5);--muted:light-dark(#677180,#abb3c0);--line:light-dark(#d8dce2,#414751);--hover:light-dark(#e3e6eb,#383d46);--good:light-dark(#1a7553,#80d4b0);--warn:light-dark(#935b0b,#efc173)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 'Segoe UI','Microsoft YaHei',sans-serif;user-select:none}.menu{position:relative;padding:6px;border:1px solid var(--line);min-height:100vh;border-radius:8px}.header{padding:9px 10px 9px}.device{display:flex;gap:12px;align-items:baseline}.name{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.local{margin-left:auto;font-size:12px;color:var(--muted);flex-shrink:0}.org{margin-top:3px;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.statusline{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px}.status{min-width:0;display:flex;align-items:center;gap:6px;color:var(--good)}.status.warning{color:var(--warn)}.dot{width:6px;height:6px;flex-shrink:0;border-radius:50%;background:currentColor}button{font:inherit;color:inherit;cursor:pointer}button:focus-visible{outline:2px solid var(--good);outline-offset:-2px}.copy{display:flex;gap:5px;align-items:center;margin-left:auto;background:transparent;border:0;padding:3px 4px;color:var(--muted);border-radius:4px;font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}.copy:hover,.row:hover{background:var(--hover)}.divider{height:1px;margin:3px 6px;background:var(--line)}.row{display:flex;width:100%;gap:10px;align-items:center;border:0;background:transparent;padding:7px 10px;border-radius:5px;text-align:left}.icon{width:16px;height:16px;flex-shrink:0;stroke:var(--muted);stroke-width:1.6;fill:none;stroke-linecap:round;stroke-linejoin:round}.copy .icon{width:13px;height:13px}.meta{margin-left:auto;color:var(--muted);font-size:12px}button:disabled{cursor:default;opacity:.55}.receipt{font-size:12px;color:var(--muted);position:absolute;top:87px;right:12px;padding:3px 8px;background:var(--bg);border:1px solid var(--line);border-radius:4px;white-space:normal;max-width:calc(100% - 28px);overflow-wrap:anywhere}.receipt:empty{display:none}
+</style></head><body><main class="menu" style="visibility:hidden">
+<header class="header"><div class="device"><span class="name" id="name">正在读取设备信息</span><span class="local" data-i18n="本机">本机</span></div><div class="org" id="org">所属组织 · 待读取</div><div class="statusline"><span class="status warning" id="status-wrap"><span class="dot"></span><span id="status">正在检查连接…</span></span><button class="copy" data-action="copy" id="copy" aria-label="复制组网 IP" title="复制组网 IP" disabled><span id="ip">IP 暂不可用</span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg></button></div></header>
+<div class="divider"></div>
+<button class="row" data-action="open"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span data-i18n="打开主窗口">打开主窗口</span><span class="meta">↗</span></button>
+<button class="row" data-action="mesh"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4H5v4m7-4h7v4"/></svg><span data-i18n="组网设备">组网设备</span><span class="meta" id="peers">状态待确认</span></button>
+<button class="row" data-action="files" id="files"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20V4h7l2 3h9v13H3m9-3V10m-3 3 3-3 3 3"/></svg><span data-i18n="文件传送">文件传送</span></button>
+<div class="divider"></div>
+<button class="row" data-action="diagnose"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12h5l3-8 4 16 3-8h5"/></svg><span data-i18n="连接诊断…">连接诊断…</span></button>
+<button class="row" data-action="settings"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M10 2h4l1 3 3 1 3 3-1 3 1 3-3 3-3 1-1 3h-4l-1-3-3-1-3-3 1-3-1-3 3-3 3-1z"/></svg><span data-i18n="设置…">设置…</span></button>
+<div class="divider"></div>
+<button class="row" data-action="quit"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3H3v18h7m4-15 6 6-6 6m-6-6h12"/></svg><span data-i18n="退出桌面程序…">退出桌面程序…</span></button>
+<div class="receipt" id="receipt" role="status" aria-live="polite"></div></main>
+<script>
+const el=id=>document.getElementById(id);
+const invoke=action=>window.__TAURI_INTERNALS__.invoke('tray_action',{action});
+let labels={}, locale='en', receiptKey='', receiptTimer;
+const t=key=>labels[key]||({'状态读取失败':'Could not load status','操作失败，请重试':'Action failed. Try again.'}[key]||key);
+function receipt(key){receiptKey=key;el('receipt').textContent=key?t(key):'';}
+function render(s){
+ labels=s.labels;locale=s.locale;document.documentElement.lang=locale;document.title=t('托盘菜单');
+ document.querySelectorAll('[data-i18n]').forEach(node=>node.textContent=t(node.dataset.i18n));
+ const name=s.name||s.fallback_name;
+ const org=s.org||(s.org_id>0?t('组织')+' '+s.org_id:s.fallback_org);
+ el('name').textContent=name;el('name').title=name;
+ el('org').textContent=t('所属组织')+' · '+org;el('org').title=org;
+ el('status').textContent=s.status;el('status-wrap').classList.toggle('warning',!s.up);
+ el('ip').textContent=s.ip||'—';el('copy').disabled=!s.ip;
+ el('copy').title=t(s.ip?'复制组网 IP':'IP 暂不可用');el('copy').setAttribute('aria-label',el('copy').title);
+ el('peers').textContent=s.online===null?t('状态待确认'):s.online+' '+t('台在线');
+ el('files').disabled=!s.files;receipt(receiptKey);
+ document.querySelector('.menu').style.visibility='visible';
+}
+async function update(){try{render(await invoke('snapshot'));}catch(e){receipt('状态读取失败');}}
+document.addEventListener('click',async event=>{
+ const b=event.target.closest('button[data-action]');if(!b||b.disabled)return;
+ try{await invoke(b.dataset.action);if(b.dataset.action==='copy'){
+  receipt('已复制组网 IP');clearTimeout(receiptTimer);receiptTimer=setTimeout(()=>receipt(''),2500);
+ }}catch(e){receipt('操作失败，请重试');}
+});
+document.addEventListener('keydown',event=>{if(event.key==='Escape')invoke('hide').catch(()=>{});if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();const list=[...document.querySelectorAll('button:not(:disabled)')];const i=list.indexOf(document.activeElement);list[(i+(event.key==='ArrowDown'?1:-1)+list.length)%list.length].focus();}});
+window.addEventListener('focus',()=>{update();receipt('');});update();setInterval(update,1000);
+</script></body></html>

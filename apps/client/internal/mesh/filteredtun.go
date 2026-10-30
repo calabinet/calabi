@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"sync/atomic"
+	"time"
 
 	"golang.zx2c4.com/wireguard/tun"
 )
@@ -46,6 +47,7 @@ type filteredTUN struct {
 	// the last hour" — and a legitimate refusal and a policy bug look identical
 	// from a packet capture, which only shows the hole.
 	dropped atomic.Uint64
+	probes  atomic.Pointer[probeScheduler]
 }
 
 func newFilteredTUN(ctx context.Context, inner tun.Device, filter *PacketFilter, meter *relayMeter, logger *slog.Logger) *filteredTUN {
@@ -74,6 +76,9 @@ func (t *filteredTUN) Read(bufs [][]byte, sizes []int, offset int) (int, error) 
 		}
 		if tp, ok := parseTuple(bufs[i][offset:end]); ok {
 			t.flows.observeOutbound(tp)
+			if s := t.probes.Load(); s != nil {
+				s.observe(tp.dst)
+			}
 		}
 	}
 	return n, err
@@ -99,6 +104,7 @@ func (t *filteredTUN) allowInbound(pkt []byte) bool {
 // dropped packet in the middle doesn't cost the ones after it.
 func (t *filteredTUN) Write(bufs [][]byte, offset int) (int, error) {
 	if !t.filter.Enabled() {
+		t.observeInbound(bufs, offset)
 		return t.Device.Write(bufs, offset)
 	}
 	kept := bufs[:0]
@@ -121,6 +127,7 @@ func (t *filteredTUN) Write(bufs [][]byte, offset int) (int, error) {
 	if len(kept) == 0 {
 		return len(bufs), nil // everything filtered; report the batch as consumed
 	}
+	t.observeInbound(kept, offset)
 	n, err := t.Device.Write(kept, offset)
 	if err != nil {
 		return n, err
@@ -128,8 +135,62 @@ func (t *filteredTUN) Write(bufs [][]byte, offset int) (int, error) {
 	return n + dropped, nil
 }
 
+func (t *filteredTUN) observeInbound(bufs [][]byte, offset int) {
+	s := t.probes.Load()
+	if s == nil {
+		return
+	}
+	for _, b := range bufs {
+		if offset >= 0 && offset <= len(b) {
+			if tp, ok := parseTuple(b[offset:]); ok {
+				s.observe(tp.src)
+			}
+		}
+	}
+}
+
 // stats fills in the filter's half of DatapathStats.
 func (t *filteredTUN) stats(st *DatapathStats) {
+	if s := t.probes.Load(); s != nil {
+		st.ProbeSent = s.sent.Load()
+		st.ProbeSchedulerRuns = s.runs.Load()
+		st.ProbeFailed = s.failed.Load()
+		st.ProbeLimited = s.limited.Load()
+		st.ProbeHighSent = s.highSent.Load()
+		st.ProbeLowSent = s.lowSent.Load()
+		st.ProbeRetries = s.retries.Load()
+		st.ProbeTimeouts = s.timeouts.Load()
+		st.ProbeConfirmed = s.confirmed.Load()
+		st.ProbeMaxWaitMicros = s.maxWaitNs.Load() / 1000
+		st.ProbePingsReceived = s.replyStats.received.Load()
+		st.ProbePongsSent = s.replyStats.sent.Load()
+		st.ProbeReplyLimited = s.replyStats.limited.Load()
+		st.ProbeReplyDropped = s.replyStats.dropped.Load()
+		st.ProbeReplyCoalesced = s.replyStats.coalesced.Load()
+		st.ProbeReplyMaxWaitMicros = s.replyStats.maxWaitNs.Load() / 1000
+		s.mu.Lock()
+		st.ProbeReplyPending = s.replyPending
+		s.p.mu.Lock()
+		st.ProbePending = len(s.p.pending)
+		for _, m := range s.p.learned {
+			st.ProbeLearned += len(m)
+		}
+		for _, sp := range s.peers {
+			st.ProbeCandidates += len(sp.candidates)
+			if stamp := sp.active.Load(); (stamp != 0 && time.Since(time.Unix(0, stamp)) <= probeIdle) || time.Now().Before(sp.remoteUntil) {
+				st.ProbeActive++
+				if p, ok := s.p.paths[sp.key]; ok && time.Since(p.confirmed) <= pathTTL {
+					st.ProbeDirect++
+				} else {
+					st.ProbeRelayed++
+				}
+			} else {
+				st.ProbeIdle++
+			}
+		}
+		s.p.mu.Unlock()
+		s.mu.Unlock()
+	}
 	st.FilterDropped = t.dropped.Load()
 	st.Flows = t.flows.len()
 }

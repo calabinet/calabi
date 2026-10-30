@@ -12,7 +12,16 @@ OutFile "${TEST_OUT}"
 !define UNINSTKEY "Software\CalabiLayoutTestNoInstallation"
 Var ReinstallPageCheck
 !define MUI_DISABLE_INSERT_LANGUAGE_AFTER_PAGES_WARNING
-Page custom CheckLayout
+!if "${TEST_PAGE}" == "welcome"
+  !define MUI_PAGE_CUSTOMFUNCTION_SHOW CheckWelcome
+  !insertmacro MUI_PAGE_WELCOME
+!else if "${TEST_PAGE}" == "finish"
+  !define MUI_FINISHPAGE_RUN "$INSTDIR\unused-fixture.exe"
+  !define MUI_PAGE_CUSTOMFUNCTION_SHOW CheckFinish
+  !insertmacro MUI_PAGE_FINISH
+!else
+  Page custom CheckLayout
+!endif
 Page instfiles
 !insertmacro MUI_LANGUAGE "English"
 !insertmacro MUI_LANGUAGE "SimpChinese"
@@ -50,13 +59,87 @@ Function MeasureControl
   ${EndIf}
 FunctionEnd
 
+; Check the actual MUI-created control, including its position in the resized
+; page. Measuring text height alone misses the right-edge clipping regression.
+Function MeasureBounds
+  Pop $1
+  System::Alloc 16
+  Pop $2
+  System::Alloc 16
+  Pop $3
+  System::Call 'user32::GetClientRect(p $R4, p r2)'
+  System::Call '*$2(i, i, i.r5, i.r6)'
+  System::Call 'user32::GetWindowRect(p r1, p r3)'
+  System::Call 'user32::MapWindowPoints(p 0, p $R4, p r3, i 2)'
+  System::Call '*$3(i.r0, i.r4, i.r7, i.r9)'
+  FileWriteUTF16LE $R8 "bounds=$0,$4,$7,$9 page=$5,$6$\r$\n"
+  System::Free $2
+  System::Free $3
+  ${If} $0 < 0
+  ${OrIf} $4 < 0
+  ${OrIf} $7 > $5
+  ${OrIf} $9 > $6
+    FileClose $R8
+    SetErrorLevel 1
+    Quit
+  ${EndIf}
+FunctionEnd
+
+!if "${TEST_PAGE}" == "welcome"
+Function CheckWelcome
+  StrCpy $R4 $mui.WelcomePage
+  FileOpen $R8 "${RESULT_FILE}" w
+  Push "$(MUI_TEXT_WELCOME_INFO_TEXT)"
+  Push $mui.WelcomePage.Text
+  Call MeasureControl
+  Push $mui.WelcomePage.Text
+  Call MeasureBounds
+  Push $mui.WelcomePage.Title
+  Call MeasureBounds
+  FileClose $R8
+  SetErrorLevel 0
+  Quit
+FunctionEnd
+!endif
+
+!if "${TEST_PAGE}" == "finish"
+Function CheckFinish
+  StrCpy $R4 $mui.FinishPage
+  FileOpen $R8 "${RESULT_FILE}" w
+  Push "$(MUI_TEXT_FINISH_INFO_TEXT)"
+  Push $mui.FinishPage.Text
+  Call MeasureControl
+  Push $mui.FinishPage.Text
+  Call MeasureBounds
+  Push $mui.FinishPage.Title
+  Call MeasureBounds
+  Push $mui.FinishPage.Run
+  Call MeasureBounds
+  FileClose $R8
+  SetErrorLevel 0
+  Quit
+FunctionEnd
+!endif
+
 Function CheckLayout
   nsDialogs::Create 1018
   Pop $R4
   FileOpen $R8 "${RESULT_FILE}" w
+  ; The page's client width must use the compact UI resource, not stock MUI.
+  System::Alloc 16
+  Pop $2
+  System::Call 'user32::GetClientRect(p $R4, p r2)'
+  System::Call '*$2(i, i, i.r5, i.r6)'
+  FileWriteUTF16LE $R8 "page width=$5 height=$6$\r$\n"
+  System::Free $2
   ${NSD_CreateLabel} 0 0 100% 24u "$(olderOrUnknownVersionInstalled)"
   Pop $1
   Push "$(olderOrUnknownVersionInstalled)"
+  Push $1
+  Call MeasureControl
+  ${NSD_CreateLabel} 0 0 100% 24u "$(newerVersionInstalled)"
+  Pop $1
+  Push "$(newerVersionInstalled)"
   Push $1
   Call MeasureControl
   ${NSD_CreateRadioButton} 30u 50u -30u 8u "$(uninstallBeforeInstalling)"

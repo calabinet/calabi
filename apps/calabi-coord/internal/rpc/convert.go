@@ -3,11 +3,16 @@ package rpc
 import (
 	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
+	"net/netip"
 )
 
 // toProtoNetMap maps a core.NetMap onto the wire type. Peers already come
 // ACL-filtered from the coordinator (v0 = full mesh minus self).
 func toProtoNetMap(nm *core.NetMap) *meshpb.NetMap {
+	return toProtoNetMapWithPeers(nm, toProtoPeer)
+}
+
+func toProtoNetMapWithPeers(nm *core.NetMap, peer func(*core.Node) *meshpb.Peer) *meshpb.NetMap {
 	out := &meshpb.NetMap{
 		Self:    toProtoPeer(&nm.Self),
 		DerpMap: toProtoDERPMap(nm.DERP),
@@ -17,8 +22,11 @@ func toProtoNetMap(nm *core.NetMap) *meshpb.NetMap {
 		FilterEnabled: true,
 		RelayGrant:    nm.RelayGrant,
 	}
+	if len(nm.Peers) > 0 {
+		out.Peers = make([]*meshpb.Peer, 0, len(nm.Peers))
+	}
 	for i := range nm.Peers {
-		out.Peers = append(out.Peers, toProtoPeer(&nm.Peers[i]))
+		out.Peers = append(out.Peers, peer(&nm.Peers[i]))
 	}
 	for _, r := range nm.PacketFilter {
 		fr := &meshpb.FilterRule{SrcCidrs: r.SrcCIDRs}
@@ -43,7 +51,16 @@ func toProtoNetMap(nm *core.NetMap) *meshpb.NetMap {
 	// The node's OWN alias mapping, sent only to itself. Peers see the alias in
 	// this node's allowed_ips and nothing else; the node needs both halves to
 	// install the 1:1 rewrite between them.
+	approved := make(map[netip.Prefix]bool, len(nm.Self.ApprovedRoutes))
+	for _, route := range nm.Self.ApprovedRoutes {
+		approved[route.Masked()] = true
+	}
 	for _, ra := range nm.Self.RouteAliases {
+		// A partial route withdrawal can leave an orphaned alias row. Never
+		// instruct the router to keep rewriting a route no longer approved.
+		if !approved[ra.Real.Masked()] {
+			continue
+		}
 		out.SubnetAliases = append(out.SubnetAliases, &meshpb.SubnetAlias{
 			Alias: ra.Alias.String(), Real: ra.Real.String(),
 		})

@@ -214,6 +214,10 @@ func (t RelayTLS) Equal(o RelayTLS) bool {
 // malformed peer entries are SKIPPED (best-effort) rather than dropping the
 // whole map, so one bad row can't sever the mesh.
 func FromNetMap(pb *meshpb.NetMap) (NetMap, error) {
+	return fromNetMap(pb, true)
+}
+
+func fromNetMap(pb *meshpb.NetMap, withPeers bool) (NetMap, error) {
 	if pb == nil || pb.GetSelf() == nil {
 		return NetMap{}, fmt.Errorf("mesh: netmap has no self")
 	}
@@ -263,13 +267,61 @@ func FromNetMap(pb *meshpb.NetMap) (NetMap, error) {
 	}
 	nm.AliasBudgetAddrs = int(pb.GetAliasBudgetAddrs())
 	nm.AliasUsedAddrs = int(pb.GetAliasUsedAddrs())
+	if withPeers && len(pb.Peers) > 0 {
+		nm.Peers = make([]Peer, 0, len(pb.Peers))
+	}
 	for _, pp := range pb.GetPeers() {
+		if !withPeers {
+			break
+		}
 		p, err := peerFromProto(pp)
 		if err != nil {
 			continue // skip malformed peer, keep the rest
 		}
 		nm.Peers = append(nm.Peers, p)
 	}
+	return nm, nil
+}
+
+// netMapConverter belongs to a single Watch stream. The decoder keeps unchanged
+// peer messages by identity; reuse their parsed, read-only values without key /
+// IP parsing on every delta. Only the latest graph is retained. Callback maps
+// and their nested slices are read-only, and updates never mutate old maps.
+type netMapConverter struct {
+	wire  []*meshpb.Peer
+	peers []Peer
+}
+
+func (c *netMapConverter) convert(pb *meshpb.NetMap) (NetMap, error) {
+	nm, err := fromNetMap(pb, false)
+	if err != nil {
+		return NetMap{}, err
+	}
+	if len(pb.Peers) > 0 {
+		nm.Peers = make([]Peer, 0, len(pb.Peers))
+	}
+	w, m := 0, 0
+	for _, p := range pb.Peers {
+		// Sequenced decoder output is sorted and validated. Malformed peers
+		// remain skipped, so advance wire and parsed cursors independently.
+		for w < len(c.wire) && c.wire[w].NodeId < p.NodeId {
+			w++
+		}
+		for m < len(c.peers) && c.peers[m].NodeID < p.NodeId {
+			m++
+		}
+		if w < len(c.wire) && c.wire[w] == p && m < len(c.peers) && c.peers[m].NodeID == p.NodeId && p.FileTransfer == nil {
+			nm.Peers = append(nm.Peers, c.peers[m])
+			continue
+		}
+		// File transfer authorization is time-dependent even for an unchanged
+		// protobuf. Always revalidate it, including expiry and key binding.
+		parsed, err := peerFromProto(p)
+		if err == nil {
+			nm.Peers = append(nm.Peers, parsed)
+		}
+	}
+	c.wire, c.peers = pb.Peers, nm.Peers
 	return nm, nil
 }
 

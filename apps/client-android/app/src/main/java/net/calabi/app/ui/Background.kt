@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -12,8 +13,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -44,6 +50,7 @@ fun StoppedPrompt(model: AppModel) {
                     stringResource(R.string.stopped_prompt_body, stringResource(BackgroundRun.hint())),
                     style = Styles.hint.copy(fontSize = 13.sp),
                 )
+                BackgroundSteps()
             }
         }
         Row(
@@ -58,5 +65,24 @@ fun StoppedPrompt(model: AppModel) {
                 Text(stringResource(R.string.replace_dismiss), style = Styles.chip.copy(color = Palette.muted))
             }
         }
+    }
+}
+
+/** Shared by the stopped notice and settings; initially collapsed on each screen. */
+@Composable
+fun BackgroundSteps(modifier: Modifier = Modifier) {
+    val details = BackgroundRun.details() ?: return
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) {
+            Text(
+                stringResource(if (expanded) R.string.background_steps_hide else R.string.background_steps_show),
+                style = Styles.chip.copy(color = Palette.muted),
+            )
+            Box(Modifier.padding(start = 4.dp).rotate(if (expanded) 180f else 0f)) {
+                Glyph(R.drawable.ic_chevron_down, Palette.muted, 14.dp)
+            }
+        }
+        if (expanded) Text(stringResource(details), style = Styles.hint.copy(fontSize = 13.sp))
     }
 }

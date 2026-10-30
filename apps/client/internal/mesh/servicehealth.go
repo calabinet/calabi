@@ -111,9 +111,10 @@ func (c *Controller) resolveServices() []DeclaredService {
 // resolveServicesWithSource is resolveServices plus, for each entry, whether it
 // came from the coordinator rather than this machine's config.
 func (c *Controller) resolveServicesWithSource() ([]DeclaredService, []bool) {
-	local := c.Params.Services
+	c.paramsMu.Lock()
+	out := append([]DeclaredService(nil), c.Params.Services...)
+	c.paramsMu.Unlock()
 	extra := c.getSelfServices()
-	out := append([]DeclaredService(nil), local...)
 	src := make([]bool, len(out))
 	seen := make(map[string]bool, len(out))
 	for _, s := range out {

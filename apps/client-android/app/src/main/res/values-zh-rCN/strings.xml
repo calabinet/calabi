@@ -72,8 +72,12 @@
     <string name="settings_connect_on_boot_hint">手机重启后自动连上。</string>
     <string name="settings_background">后台运行</string>
     <string name="background_hint">允许 Calabi 忽略电池优化，息屏后才能保持连接。</string>
-    <string name="background_hint_huawei">在「应用启动管理」里关掉 Calabi 的开关（已关的先打开再关掉），在弹窗里打开「允许自启动」和「允许后台活动」。</string>
+    <string name="background_hint_huawei">在「应用启动管理」中，将 Calabi 设为手动管理，开启「自启动」和「后台活动」。</string>
+    <string name="background_steps_show">展开说明</string>
+    <string name="background_steps_hide">收起说明</string>
+    <string name="background_steps_huawei">若 Calabi 已是手动管理，先打开开关再关闭，才会弹出选项。确认「允许自启动」和「允许后台活动」均已打开。</string>
     <string name="background_hint_maker">在手机设置里允许 Calabi 自启动和后台运行，息屏和重启后才能保持连接。</string>
+    <string name="background_manual_huawei">未能直达启动管理，请在系统设置中搜索「应用启动管理」。</string>
     <string name="settings_exit">出口设备</string>
     <string name="settings_exit_hint">让全部上网流量经由你的某台设备。</string>
     <string name="settings_exit_none">不使用</string>

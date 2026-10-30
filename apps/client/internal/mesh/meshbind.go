@@ -108,7 +108,8 @@ type meshBind struct {
 	// over whichever transport is best at that moment) instead of being pinned to
 	// the address it arrived from. Only known peers are recorded, so it stays
 	// bounded by the netmap.
-	srcOf map[netip.AddrPort]meshproto.DiscoKey
+	srcOf       map[netip.AddrPort]meshproto.DiscoKey
+	sourceOrder map[meshproto.DiscoKey][]netip.AddrPort
 
 	// held keeps the few packets WireGuard sent a peer while nothing could carry
 	// them: no relay link up yet (errNoRelayLink) and no direct path. That is the
@@ -209,11 +210,19 @@ func (b *meshBind) attachDirect(ms *magicSock, paths pathFinder) {
 	b.retireSockStatsLocked()
 	b.direct = ms
 	b.paths = paths
+	if p, ok := paths.(*discoProber); ok && p.scheduler != nil {
+		p.scheduler.paused.Store(b.directOff)
+	}
 	b.srcOf = make(map[netip.AddrPort]meshproto.DiscoKey) // a new socket ⇒ new source mappings
+	b.sourceOrder = make(map[meshproto.DiscoKey][]netip.AddrPort)
 	b.dmu.Unlock()
 
 	ms.setWGHandler(b.deliverDirect)
 	ms.setSourceHandler(b.noteDiscoSource)
+	if p, ok := paths.(*discoProber); ok && p.scheduler != nil {
+		ms.setPingHandler(p.scheduler.request)
+		ms.setPongQueue(p.scheduler.queuePong)
+	}
 	if f, ok := paths.(interface{ setOnPathFound(func()) }); ok {
 		f.setOnPathFound(b.retryHeld)
 	}
@@ -227,6 +236,7 @@ func (b *meshBind) detachDirect() {
 	b.direct = nil
 	b.paths = nil
 	b.srcOf = nil
+	b.sourceOrder = nil
 	b.dmu.Unlock()
 }
 
@@ -259,6 +269,10 @@ func (b *meshBind) retireSockStatsLocked() {
 func (b *meshBind) setDirectEnabled(on bool) {
 	b.dmu.Lock()
 	b.directOff = !on
+	if p, ok := b.paths.(*discoProber); ok && p.scheduler != nil {
+		p.scheduler.paused.Store(!on)
+		p.scheduler.signal()
+	}
 	b.dmu.Unlock()
 }
 
@@ -307,6 +321,11 @@ func (b *meshBind) setPeers(cfg WGConfig) {
 	for ap, dk := range b.srcOf {
 		if _, ok := keyOf[dk]; !ok {
 			delete(b.srcOf, ap)
+		}
+	}
+	for dk := range b.sourceOrder {
+		if _, ok := keyOf[dk]; !ok {
+			delete(b.sourceOrder, dk)
 		}
 	}
 }
@@ -398,7 +417,21 @@ func (b *meshBind) noteDiscoSource(peer meshproto.DiscoKey, from netip.AddrPort)
 		b.dmu.Unlock()
 		return
 	}
-	b.srcOf[from] = peer
+	if old, exists := b.srcOf[from]; !exists || old != peer {
+		if b.sourceOrder == nil {
+			b.sourceOrder = make(map[meshproto.DiscoKey][]netip.AddrPort)
+		}
+		order := b.sourceOrder[peer]
+		if len(order) >= probeCandidateLimit {
+			if b.srcOf[order[0]] == peer {
+				delete(b.srcOf, order[0])
+			}
+			copy(order, order[1:])
+			order = order[:len(order)-1]
+		}
+		b.sourceOrder[peer] = append(order, from)
+		b.srcOf[from] = peer
+	}
 	paths := b.paths
 	b.dmu.Unlock()
 	// Feed the observed source to the prober too: for a symmetric-NAT peer this is

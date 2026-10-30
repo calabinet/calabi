@@ -15,7 +15,7 @@ fn main() {
     embed_daemon();
 
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
-        tauri_build::AppManifest::new().commands(&["files_action", "file_receipt_action"]),
+        tauri_build::AppManifest::new().commands(&["files_action", "file_receipt_action", "tray_action", "tray_set_locale"]),
     )).expect("build desktop permissions");
 }
 

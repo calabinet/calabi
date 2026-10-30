@@ -1,6 +1,9 @@
 package core
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 // Notifier lets PullNetMap streams learn that their meshnet's topology changed
 // (a node joined/left, or endpoints moved) so they re-pull and re-push a fresh
@@ -23,13 +26,21 @@ type Notifier struct {
 	// It kept serving the node its stale netmap — including an ACL an
 	// admin had just tightened — until the 15-minute grant refresh happened to
 	// re-push, and a node could provoke that state deliberately.
-	nextSub int64
-	subs    map[MeshnetID]map[int64]chan struct{} // meshnet -> subscription id -> signal
+	nextSub     int64
+	subs        map[MeshnetID]map[int64]chan struct{} // meshnet -> subscription id -> signal
+	versions    map[MeshnetID]*notificationVersion
+	nextVersion uint64
+}
+
+type notificationVersion struct {
+	id       uint64
+	changed  chan struct{}
+	ordinary *time.Timer
 }
 
 // NewNotifier returns an empty notifier.
 func NewNotifier() *Notifier {
-	return &Notifier{subs: make(map[MeshnetID]map[int64]chan struct{})}
+	return &Notifier{subs: make(map[MeshnetID]map[int64]chan struct{}), versions: make(map[MeshnetID]*notificationVersion)}
 }
 
 // Subscribe registers a stream for meshnet t. It returns a signal channel
@@ -48,6 +59,8 @@ func (n *Notifier) Subscribe(t MeshnetID, nodeID int64) (<-chan struct{}, func()
 	if m == nil {
 		m = make(map[int64]chan struct{})
 		n.subs[t] = m
+		n.nextVersion++
+		n.versions[t] = &notificationVersion{id: n.nextVersion, changed: make(chan struct{})}
 	}
 	m[id] = ch
 	n.mu.Unlock()
@@ -58,6 +71,12 @@ func (n *Notifier) Subscribe(t MeshnetID, nodeID int64) (<-chan struct{}, func()
 			delete(m, id) // only ever its OWN entry
 			if len(m) == 0 {
 				delete(n.subs, t)
+				v := n.versions[t]
+				if v.ordinary != nil {
+					v.ordinary.Stop()
+				}
+				close(v.changed)
+				delete(n.versions, t)
 			}
 		}
 		n.mu.Unlock()
@@ -69,6 +88,19 @@ func (n *Notifier) Subscribe(t MeshnetID, nodeID int64) (<-chan struct{}, func()
 func (n *Notifier) Bump(t MeshnetID) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	n.bumpLocked(t)
+}
+
+func (n *Notifier) bumpLocked(t MeshnetID) {
+	if v := n.versions[t]; v != nil {
+		if v.ordinary != nil {
+			v.ordinary.Stop()
+			v.ordinary = nil
+		}
+		close(v.changed)
+		n.nextVersion++
+		v.id, v.changed = n.nextVersion, make(chan struct{})
+	}
 	for _, ch := range n.subs[t] {
 		select {
 		case ch <- struct{}{}:
@@ -77,18 +109,44 @@ func (n *Notifier) Bump(t MeshnetID) {
 	}
 }
 
+// Version is valid only while a meshnet has live subscribers. Generations are
+// never reused, even after the last subscriber leaves and a new one returns.
+func (n *Notifier) Version(t MeshnetID) (uint64, <-chan struct{}) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if v := n.versions[t]; v != nil {
+		return v.id, v.changed
+	}
+	return 0, nil
+}
+
+// BumpOrdinary coalesces endpoint-only changes in a fixed 150ms window. The
+// default Bump remains immediate for all authorization-affecting mutations.
+func (n *Notifier) BumpOrdinary(t MeshnetID) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	v := n.versions[t]
+	if v == nil || v.ordinary != nil {
+		return
+	}
+	var timer *time.Timer
+	timer = time.AfterFunc(150*time.Millisecond, func() {
+		n.mu.Lock()
+		defer n.mu.Unlock()
+		if n.versions[t] == v && v.ordinary == timer {
+			n.bumpLocked(t)
+		}
+	})
+	v.ordinary = timer
+}
+
 // BumpAll signals every subscriber across all meshnets to re-pull. Used when a
 // change affects potentially everyone — e.g. an ACL policy reload, which can
 // alter any node's visible peer set.
 func (n *Notifier) BumpAll() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	for _, m := range n.subs {
-		for _, ch := range m {
-			select {
-			case ch <- struct{}{}:
-			default:
-			}
-		}
+	for t := range n.subs {
+		n.bumpLocked(t)
 	}
 }

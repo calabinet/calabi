@@ -76,13 +76,23 @@ object AppPrefs {
         ApplicationExitInfo.REASON_INITIALIZATION_FAILURE,
     )
 
-    /** Old devices the user said this phone is not replacing: not offered again. */
+    /** Old devices covered by a completed replacement or dismissal: not offered again. */
     fun replaceDismissed(context: Context): Set<Long> =
         prefs(context).getStringSet(REPLACE_DISMISSED, emptySet()).orEmpty().mapNotNull { it.toLongOrNull() }.toSet()
 
     fun dismissReplace(context: Context, ids: Collection<Long>) {
         val all = replaceDismissed(context) + ids
         prefs(context).edit().putStringSet(REPLACE_DISMISSED, all.map { it.toString() }.toSet()).apply()
+    }
+
+    /** Keep every visible replacement notice in sync with a completed choice. */
+    fun watchReplaceDismissed(context: Context, onChange: () -> Unit): () -> Unit {
+        val p = prefs(context)
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == REPLACE_DISMISSED) onChange()
+        }
+        p.registerOnSharedPreferenceChangeListener(listener)
+        return { p.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
     /**

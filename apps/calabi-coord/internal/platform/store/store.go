@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/netip"
+	"time"
 
 	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 	"github.com/calabinet/calabi/apps/calabi-coord/internal/platform/store/ent"
@@ -153,7 +154,23 @@ func (s *Store) Upsert(ctx context.Context, n *core.Node) (*core.Node, error) {
 	return toNode(row)
 }
 
-// Get returns a node by id, or core.ErrNodeNotFound.
+// TouchRegistration updates only online bookkeeping for the same live device.
+func (s *Store) TouchRegistration(ctx context.Context, expected *core.Node) (*core.Node, error) {
+	// Only LastSeen can commit if the following read fails. No topology or
+	// authorization change can become invisible by skipping a notification.
+	n, err := s.client.MeshNode.Update().Where(meshnode.ID(int(expected.ID)),
+		meshnode.MeshnetID(int64(expected.Meshnet)), meshnode.NodeKey(expected.NodeKey.String()),
+		meshnode.Disabled(false), meshnode.SignedOut(false)).SetLastSeen(time.Now()).Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if n != 1 {
+		return nil, core.ErrNodeNotFound
+	}
+	return s.Get(ctx, expected.ID)
+}
+
+// Get returns a node by id, or ErrNodeNotFound.
 func (s *Store) Get(ctx context.Context, id int64) (*core.Node, error) {
 	row, err := s.client.MeshNode.Get(ctx, int(id))
 	if err != nil {
@@ -178,6 +195,40 @@ func (s *Store) FindByKey(ctx context.Context, t core.MeshnetID, key meshproto.N
 		return nil, err
 	}
 	return toNode(row)
+}
+
+// ListRegistrationNames retains every other name in the organization.
+func (s *Store) ListRegistrationNames(ctx context.Context, t core.MeshnetID, exceptID int64) ([]string, error) {
+	var names []string
+	err := s.client.MeshNode.Query().Where(meshnode.MeshnetID(int64(t)), meshnode.IDNEQ(int(exceptID))).
+		Select(meshnode.FieldName).Scan(ctx, &names)
+	return names, err
+}
+
+// ListRegistrationPeers includes the state required by new devices and routes.
+func (s *Store) ListRegistrationPeers(ctx context.Context, t core.MeshnetID) ([]*core.Node, error) {
+	rows, err := s.client.MeshNode.Query().Where(meshnode.MeshnetID(int64(t))).
+		Select(meshnode.FieldID, meshnode.FieldName, meshnode.FieldDisabled, meshnode.FieldOwnerUserID,
+			meshnode.FieldApprovedRoutesJSON, meshnode.FieldRealRoutesJSON, meshnode.FieldRouteAliasesJSON).
+		Order(ent.Asc(meshnode.FieldID)).All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*core.Node, 0, len(rows))
+	for _, row := range rows {
+		n := &core.Node{ID: int64(row.ID), Name: row.Name, Disabled: row.Disabled, OwnerUserID: row.OwnerUserID}
+		if n.ApprovedRoutes, err = parsePrefixes(row.ApprovedRoutesJSON); err != nil {
+			return nil, err
+		}
+		if n.RealRoutes, err = parsePrefixes(row.RealRoutesJSON); err != nil {
+			return nil, err
+		}
+		if n.RouteAliases, err = parseRouteAliases(row.RouteAliasesJSON); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, nil
 }
 
 // ListMeshnet returns every node in a meshnet (caller applies ACL).
@@ -314,6 +365,22 @@ func (s *Store) UpdateEndpoints(ctx context.Context, id int64, eps []netip.AddrP
 }
 
 // ---- declared services ----
+
+// ListNodeServices includes every declaration source and approval state, scoped
+// by both organization and device. Reconciliation applies ownership rules.
+func (s *Store) ListNodeServices(ctx context.Context, t core.MeshnetID, nodeID int64) ([]core.Service, error) {
+	rows, err := s.client.MeshService.Query().
+		Where(meshservice.MeshnetID(int64(t)), meshservice.NodeID(nodeID)).
+		Order(ent.Asc(meshservice.FieldID)).All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]core.Service, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, toService(row))
+	}
+	return out, nil
+}
 
 // ListServices returns every service declared in the meshnet, oldest first.
 func (s *Store) ListServices(ctx context.Context, t core.MeshnetID) ([]core.Service, error) {

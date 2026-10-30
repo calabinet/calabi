@@ -112,6 +112,12 @@ type ServiceStore interface {
 	UpdateService(ctx context.Context, s Service) error
 }
 
+// NodeServiceStore narrows declaration reconciliation to one device. Both
+// organization and device must be checked; console-authored rows stay included.
+type NodeServiceStore interface {
+	ListNodeServices(context.Context, MeshnetID, int64) ([]Service, error)
+}
+
 // ValidateService checks a declaration before it is stored. The name is a label
 // (same alphabet as a node name) because it will be an ACL selector; the
 // protocol is tcp/udp; the port is a real port. Pure — expects a normalized name.
@@ -236,6 +242,17 @@ func (c *Coordinator) SetServiceApproved(ctx context.Context, t MeshnetID, id in
 // hiccup must not keep a machine off the mesh. Errors are returned for the
 // caller to log, never to fail the enrollment.
 func (c *Coordinator) reconcileDeclaredServices(ctx context.Context, node *Node, declared []Service) error {
+	_, err := c.reconcileDeclaredServicesChanged(ctx, node, declared)
+	return err
+}
+
+func (c *Coordinator) reconcileDeclaredServicesChanged(ctx context.Context, node *Node, declared []Service) (bool, error) {
+	changed := false
+	err := c.reconcileServices(ctx, node, declared, &changed)
+	return changed || err != nil, err
+}
+
+func (c *Coordinator) reconcileServices(ctx context.Context, node *Node, declared []Service, changed *bool) error {
 	if c.Services == nil {
 		return nil
 	}
@@ -272,7 +289,13 @@ func (c *Coordinator) reconcileDeclaredServices(ctx context.Context, node *Node,
 		}
 	}
 
-	existing, err := c.Services.ListServices(ctx, node.Meshnet)
+	var existing []Service
+	var err error
+	if scoped, ok := c.Services.(NodeServiceStore); ok {
+		existing, err = scoped.ListNodeServices(ctx, node.Meshnet, node.ID)
+	} else {
+		existing, err = c.Services.ListServices(ctx, node.Meshnet)
+	}
 	if err != nil {
 		return fmt.Errorf("core: list services: %w", err)
 	}
@@ -292,6 +315,7 @@ func (c *Coordinator) reconcileDeclaredServices(ctx context.Context, node *Node,
 		}
 		d, still := want[cur.Name]
 		if !still {
+			*changed = true
 			if err := c.Services.DeleteService(ctx, cur.ID); err != nil && !errors.Is(err, ErrServiceNotFound) {
 				return fmt.Errorf("core: withdraw service %d: %w", cur.ID, err)
 			}
@@ -312,6 +336,7 @@ func (c *Coordinator) reconcileDeclaredServices(ctx context.Context, node *Node,
 		if endpointChanged {
 			upd.Approved = false
 		}
+		*changed = true
 		if err := c.Services.UpdateService(ctx, upd); err != nil {
 			return fmt.Errorf("core: update service %d: %w", cur.ID, err)
 		}
@@ -324,6 +349,7 @@ func (c *Coordinator) reconcileDeclaredServices(ctx context.Context, node *Node,
 		if seen[name] {
 			continue
 		}
+		*changed = true
 		if _, err := c.Services.CreateService(ctx, d); err != nil {
 			return fmt.Errorf("core: record declaration %q: %w", name, err)
 		}

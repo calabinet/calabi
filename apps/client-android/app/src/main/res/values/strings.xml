@@ -73,8 +73,12 @@
     <string name="settings_connect_on_boot_hint">Connects when the phone restarts.</string>
     <string name="settings_background">Background running</string>
     <string name="background_hint">Let Calabi ignore battery optimization, so it stays connected with the screen off.</string>
-    <string name="background_hint_huawei">In App launch, turn off Calabi\'s switch (if it is already off, turn it on and off again), then allow Auto-launch and Run in background.</string>
+    <string name="background_hint_huawei">In App launch, manage Calabi manually and enable Auto-launch and Run in background.</string>
+    <string name="background_steps_show">Show instructions</string>
+    <string name="background_steps_hide">Hide instructions</string>
+    <string name="background_steps_huawei">If Calabi is already managed manually, turn its switch on and off again to reveal the options. Make sure Auto-launch and Run in background are both enabled.</string>
     <string name="background_hint_maker">Allow Calabi to auto-start and run in the background in the phone\'s settings, so it stays connected with the screen off and after a restart.</string>
+    <string name="background_manual_huawei">Could not open App launch directly. Search for App launch in system settings.</string>
     <string name="settings_exit">Exit device</string>
     <string name="settings_exit_hint">Send all internet traffic through one of your devices.</string>
     <string name="settings_exit_none">None</string>

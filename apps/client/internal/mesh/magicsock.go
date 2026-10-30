@@ -39,10 +39,12 @@ type magicSock struct {
 	txErrors  atomic.Uint64
 	bufs      sockBufSizes
 
-	mu       sync.Mutex
-	closed   bool
-	stunWait map[stun.TxID]chan netip.AddrPort // in-flight reflexive probes
-	onPong   func(peer meshproto.DiscoKey, tx discoTxID, from netip.AddrPort)
+	mu        sync.Mutex
+	closed    bool
+	stunWait  map[stun.TxID]chan netip.AddrPort // in-flight reflexive probes
+	onPong    func(peer meshproto.DiscoKey, tx discoTxID, from netip.AddrPort)
+	onPing    func(peer meshproto.DiscoKey)
+	pongQueue func(meshproto.DiscoKey, discoTxID, netip.AddrPort)
 	// onSrc is told the source address of every authenticated DISCO packet, so the
 	// bind can attribute later WireGuard packets from that address to the peer.
 	onSrc func(peer meshproto.DiscoKey, from netip.AddrPort)
@@ -157,10 +159,21 @@ func (m *magicSock) handleDisco(pkt []byte, from netip.AddrPort) {
 	}
 	switch msg.Type {
 	case discoPing:
+		m.mu.Lock()
+		requested := m.onPing
+		queue := m.pongQueue
+		m.mu.Unlock()
+		if requested != nil {
+			requested(sender)
+		}
 		// Reply with a pong echoing the tx and reporting where we saw the ping —
 		// this both confirms the path and tells the pinger its per-peer reflexive
 		// address. Send it straight back to the source.
-		_ = m.sendDisco(from, sender, discoMessage{Type: discoPong, Tx: msg.Tx, Src: from})
+		if queue != nil {
+			queue(sender, msg.Tx, from)
+		} else {
+			_ = m.sendDisco(from, sender, discoMessage{Type: discoPong, Tx: msg.Tx, Src: from})
+		}
 	case discoPong:
 		m.mu.Lock()
 		h := m.onPong
@@ -175,6 +188,18 @@ func (m *magicSock) handleDisco(pkt []byte, from netip.AddrPort) {
 func (m *magicSock) setPongHandler(h func(meshproto.DiscoKey, discoTxID, netip.AddrPort)) {
 	m.mu.Lock()
 	m.onPong = h
+	m.mu.Unlock()
+}
+
+func (m *magicSock) setPingHandler(h func(meshproto.DiscoKey)) {
+	m.mu.Lock()
+	m.onPing = h
+	m.mu.Unlock()
+}
+
+func (m *magicSock) setPongQueue(h func(meshproto.DiscoKey, discoTxID, netip.AddrPort)) {
+	m.mu.Lock()
+	m.pongQueue = h
 	m.mu.Unlock()
 }
 

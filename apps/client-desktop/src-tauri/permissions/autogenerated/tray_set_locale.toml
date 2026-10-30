@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tray-set-locale"
+description = "Enables the tray_set_locale command without any pre-configured scope."
+commands.allow = ["tray_set_locale"]
+
+[[permission]]
+identifier = "deny-tray-set-locale"
+description = "Denies the tray_set_locale command without any pre-configured scope."
+commands.deny = ["tray_set_locale"]

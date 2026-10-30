@@ -585,11 +585,26 @@ message PullNetMapRequest {
   // From RegisterNodeResponse (mesh protocol v2). The coordinator refuses the
   // stream without it, or when it belongs to a different node than node_id.
   string session_token = 4;
+  // Opt in to sequenced full/delta/grant frames. Absent means full maps only.
+  bool delta_netmap = 5;
 }
 
 // NetMap is the ACL-filtered view of the meshnet a single node is allowed to
 // see. Peers the ACL denies are ABSENT (first layer of isolation).
 message NetMap {
+  // Sequence is scoped to this RPC stream. Its first frame is always full.
+  // A delta requires exactly base_sequence; on mismatch reconnect for a full
+  // snapshot. Full frames replace everything, including empty ACL lists.
+  uint64 sequence = 20;
+  uint64 base_sequence = 21;
+  bool delta = 22;
+  repeated int64 removed_peer_ids = 23;
+  // In a delta, peers are complete upserts. When metadata_present is true,
+  // replace ALL non-peer fields, including zero/empty values. Otherwise retain
+  // them. relay_grant is always authoritative, including an empty grant.
+  bool metadata_present = 24;
+  // A delta carrying only relay_grant; must not reconfigure the datapath.
+  bool grant_only = 25;
   Peer self = 1;
   repeated Peer peers = 2;
   DERPMap derp_map = 3;

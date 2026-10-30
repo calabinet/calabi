@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun"
@@ -129,19 +131,30 @@ type WGDatapath struct {
 	// pushes: the coordinator re-sends each node's netmap on a 15-min grant-refresh
 	// timer and on every endpoint/home report (several times a minute), and none of
 	// those change the peers. SetConfig goroutine only.
-	lastPeerConf string
+	lastPeerConf       string
+	peerConfigMu       sync.Mutex
+	routeConfigMu      sync.Mutex
+	configGeneration   atomic.Uint64
+	knownPeers         map[meshproto.NodeKey]bool
+	keepaliveOverrides map[meshproto.NodeKey]time.Duration
+	repairDesired      *WGConfig
+	repairNeeded       bool
+	repairRunning      bool
+	repairStop         chan struct{}
+	repairWG           sync.WaitGroup
+	configClosed       bool
 
 	// curSubnets are the subnet-router prefixes this datapath currently has an OS
 	// route installed for. Every apply diffs the netmap's selection against it
 	// (diffSubnetRoutes) so a CIDR a peer STOPPED advertising loses its route
-	// instead of blackholing traffic to it. SetConfig goroutine only.
+	// instead of blackholing traffic to it. Guarded by routeConfigMu.
 	curSubnets []netip.Prefix
 
 	// curDroppedFP fingerprints the local-wins drops last logged. The netmap is
 	// re-pushed several times a minute (grant refresh, endpoint reports), and
 	// none of those pushes change this — logging per apply turned one standing
 	// fact into an endless WARN stream, which is how a log stops being read.
-	// SetConfig goroutine only.
+	// Guarded by routeConfigMu.
 	curDroppedFP string
 
 	// Exit-node state, all touched only on SetConfig's goroutine.
@@ -288,6 +301,9 @@ var _ directTransport = (*WGDatapath)(nil)
 // this is a seam, not a constructor argument: a datapath with nothing attached is
 // exactly the relay-only datapath that shipped.
 func (d *WGDatapath) attachDirect(ms *magicSock, paths pathFinder) {
+	if p, ok := paths.(*discoProber); ok && d.ftun != nil {
+		d.ftun.probes.Store(p.scheduler)
+	}
 	d.bind.attachDirect(ms, paths)
 	d.logger.Info("mesh direct transport attached (hole punching active)", "port", ms.LocalPort())
 }
@@ -295,6 +311,9 @@ func (d *WGDatapath) attachDirect(ms *magicSock, paths pathFinder) {
 // detachDirect drops the direct transport again (the socket is closing with the
 // control-plane session); traffic returns to the relay.
 func (d *WGDatapath) detachDirect() {
+	if d.ftun != nil {
+		d.ftun.probes.Store(nil)
+	}
 	d.bind.detachDirect()
 }
 
@@ -467,6 +486,22 @@ func serveUAPI(ln net.Listener, dev *device.Device, logger *slog.Logger) {
 	}
 }
 
+// SetRelayGrant updates relay authorization without touching WireGuard peers,
+// routes, packet filters, DNS or discovery state.
+func (d *WGDatapath) SetRelayGrant(grant []byte) {
+	d.peerConfigMu.Lock()
+	defer d.peerConfigMu.Unlock()
+	if d.configClosed {
+		return
+	}
+	if d.repairDesired != nil {
+		d.repairDesired.RelayGrant = append([]byte(nil), grant...)
+	}
+	if d.relays != nil {
+		d.relays.SetGrant(append([]byte(nil), grant...))
+	}
+}
+
 // SetConfig applies the peer set via the WireGuard UAPI, then (on the first
 // apply / whenever the overlay IP changes) assigns the node's overlay /32 to the
 // tun and routes meshOverlayCIDR at it via configureLink. Idempotent
@@ -478,6 +513,66 @@ func serveUAPI(ln net.Listener, dev *device.Device, logger *slog.Logger) {
 // errLinkConfigManual and we warn once with the exact address/route the operator
 // must set by hand — see linkconfig_*.go), on a phone the platform's VPN API.
 func (d *WGDatapath) SetConfig(cfg WGConfig) error {
+	d.peerConfigMu.Lock()
+	defer d.peerConfigMu.Unlock()
+	if d.configClosed {
+		return fmt.Errorf("mesh: datapath closed")
+	}
+	d.configGeneration.Add(1)
+	err := d.setConfigLocked(cfg)
+	if err != nil || d.repairNeeded {
+		owned := cloneRepairConfig(cfg)
+		d.repairDesired = &owned
+		if !d.repairRunning {
+			if d.repairStop == nil {
+				d.repairStop = make(chan struct{})
+			}
+			d.repairRunning = true
+			d.repairWG.Add(1)
+			go d.repairConfigLoop()
+		}
+	} else {
+		d.repairDesired = nil
+	}
+	return err
+}
+
+// Caller owns peerConfigMu. Retrying shares the same operation and always uses
+// the latest desired state, including grant renewals and permission withdrawal.
+func (d *WGDatapath) setConfigLocked(cfg WGConfig) error {
+	d.repairNeeded = false
+	if err := d.applyPeerConfigLocked(cfg); err != nil {
+		return err
+	}
+	// A background OS call must never make the next control-plane permission
+	// update wait. Its routing target is replaced by SetConfig's caller below.
+	if !d.routeConfigMu.TryLock() {
+		d.repairNeeded = true
+		return nil
+	}
+	needed, err := d.applyRouteConfig(cfg)
+	d.routeConfigMu.Unlock()
+	d.repairNeeded = needed
+	d.relays.Reconcile(cfg.SelfRelay, peerRelayAddrs(cfg))
+	return err
+}
+
+// Only bounded in-process peer/policy changes here; slow OS/DNS work uses the
+// separate route lock. The repair worker never holds peerConfigMu during it.
+func (d *WGDatapath) applyPeerConfigLocked(cfg WGConfig) error {
+	cfg.Peers = append([]WGPeer(nil), cfg.Peers...)
+	wantedPeers := make(map[meshproto.NodeKey]bool, len(cfg.Peers))
+	for i := range cfg.Peers {
+		wantedPeers[cfg.Peers[i].PublicKey] = true
+		if interval, ok := d.keepaliveOverrides[cfg.Peers[i].PublicKey]; ok {
+			cfg.Peers[i].PersistentKeepalive = interval
+		}
+	}
+	if d.ftun != nil {
+		if s := d.ftun.probes.Load(); s != nil {
+			s.setRoutes(cfg)
+		}
+	}
 	// Give the bind its per-peer routing tables BEFORE the peers go live, so the
 	// first direct packet from a newly-added peer is already attributable and the
 	// first relayed one already takes that peer's own relay.
@@ -518,11 +613,6 @@ func (d *WGDatapath) SetConfig(cfg WGConfig) error {
 	// Before Reconcile: the dials it starts must already carry the current
 	// authorization, or a relay that requires one would reject them.
 	d.relays.SetGrant(cfg.RelayGrant)
-	// Also before Reconcile: while an exit device carries the default route, a
-	// relay dialled for the first time must already be pinned to the physical
-	// link, or its connection would travel inside the tunnel it exists to carry.
-	d.widenExitBypass(cfg)
-	d.relays.Reconcile(cfg.SelfRelay, peerRelayAddrs(cfg))
 
 	// Build the UAPI peer string from a key-sorted copy so it is CANONICAL: the
 	// coordinator doesn't guarantee a stable peer order across pushes, and an
@@ -572,6 +662,19 @@ func (d *WGDatapath) SetConfig(cfg WGConfig) error {
 		d.lastPeerConf = peerConf
 		d.logger.Info("mesh WG peers applied", "peers", len(cfg.Peers), "overlay", cfg.OverlayAddr)
 	}
+	d.knownPeers = wantedPeers
+	for key := range d.keepaliveOverrides {
+		if !wantedPeers[key] {
+			delete(d.keepaliveOverrides, key)
+		}
+	}
+	return nil
+}
+
+// Caller owns routeConfigMu, not peerConfigMu. A superseding map may already
+// have withdrawn WireGuard peers and permissions while an OS call completes.
+func (d *WGDatapath) applyRouteConfig(cfg WGConfig) (bool, error) {
+	needed := d.widenExitBypass(cfg)
 
 	// Assign the overlay address + route once (or when it changes) so the kernel
 	// actually delivers overlay traffic into the tun. Without this the peers are
@@ -585,7 +688,7 @@ func (d *WGDatapath) SetConfig(cfg WGConfig) error {
 			d.logger.Warn("mesh: configure the tun link manually", "hint", err.Error())
 			d.setOverlay(cfg.OverlayAddr) // warn once, not on every netmap update
 		default:
-			return fmt.Errorf("mesh: configure link: %w", err)
+			return true, fmt.Errorf("mesh: configure link: %w", err)
 		}
 	}
 
@@ -651,7 +754,7 @@ func (d *WGDatapath) SetConfig(cfg WGConfig) error {
 	d.curSubnets = nextSubnetState(extra, add, del, addOK, delOK)
 
 	d.applyExitNode(cfg)
-	return nil
+	return needed || !addOK || !delOK || !d.curExit.Equal(cfg.ExitNode), nil
 }
 
 // exitBypassNames is every endpoint the tunnel itself travels over, which a full
@@ -685,9 +788,9 @@ func (d *WGDatapath) exitBypassNames(cfg WGConfig) []string {
 // what the OS answers for it. The moment between the two leaves the default on
 // the physical link, which is the safe way round for the tunnel itself, and it
 // only happens when the relay map grows.
-func (d *WGDatapath) widenExitBypass(cfg WGConfig) {
+func (d *WGDatapath) widenExitBypass(cfg WGConfig) bool {
 	if d.exitCleanup == nil {
-		return
+		return false
 	}
 	names := d.exitBypassNames(cfg)
 	fresh := false
@@ -698,12 +801,12 @@ func (d *WGDatapath) widenExitBypass(cfg WGConfig) {
 		}
 	}
 	if !fresh {
-		return
+		return false
 	}
 	bypass, err := resolveBypass(names)
 	if err != nil {
 		d.logger.Warn("mesh: a relay the exit routes do not pin yet could not be resolved; keeping the routes as they are", "err", err)
-		return
+		return true
 	}
 	covered := true
 	for _, a := range bypass {
@@ -714,7 +817,7 @@ func (d *WGDatapath) widenExitBypass(cfg WGConfig) {
 	}
 	if covered {
 		d.exitPinnedNames = setOf(names)
-		return
+		return false
 	}
 	d.exitCleanup()
 	d.exitCleanup = nil
@@ -723,11 +826,12 @@ func (d *WGDatapath) widenExitBypass(cfg WGConfig) {
 		d.logger.Warn("mesh: re-installing the exit routes for a new relay failed; the full tunnel is off until the next netmap", "err", err)
 		d.curExit = meshproto.NodeKey{} // applyExitNode tries again
 		d.bind.setDirectEnabled(true)
-		return
+		return true
 	}
 	d.exitCleanup = cleanup
 	d.exitPinnedNames, d.exitPinned = setOf(names), setOf(bypass)
 	d.logger.Info("mesh: exit routes now also keep a new relay on the physical link", "bypass", names)
+	return false
 }
 
 func setOf[T comparable](xs []T) map[T]bool {
@@ -834,6 +938,23 @@ func (d *WGDatapath) resumeFromSleep() {
 }
 
 func (d *WGDatapath) Close() error {
+	d.peerConfigMu.Lock()
+	if d.configClosed {
+		d.peerConfigMu.Unlock()
+		return nil
+	}
+	d.configClosed = true
+	d.repairDesired = nil
+	if d.repairStop != nil {
+		close(d.repairStop)
+	}
+	d.peerConfigMu.Unlock()
+	// Stop packet processing now; a pending OS route call may still take time
+	// to finish. Down closes the bind and stops peers without closing the TUN.
+	if d.dev != nil {
+		_ = d.dev.Down()
+	}
+	d.repairWG.Wait()
 	if d.exitCleanup != nil {
 		d.exitCleanup()
 		d.exitCleanup = nil

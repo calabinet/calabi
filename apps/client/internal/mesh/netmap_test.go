@@ -7,6 +7,34 @@ import (
 	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
 )
 
+func TestConverterDeltaRevocationAndPreviousSnapshot(t *testing.T) {
+	var d meshproto.NetMapDecoder
+	var c netMapConverter
+	full := &meshpb.NetMap{Sequence: 1, Self: &meshpb.Peer{NodeId: 1, NodeKey: keyB64(1)}, Peers: []*meshpb.Peer{{NodeId: 2, NodeKey: keyB64(2), Endpoints: []string{"192.0.2.1:99"}}, {NodeId: 3, NodeKey: "bad"}}}
+	pb, _, err := d.Apply(full)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := c.convert(pb)
+	if err != nil || len(old.Peers) != 1 {
+		t.Fatal("initial conversion")
+	}
+	pb, _, err = d.Apply(&meshpb.NetMap{Delta: true, BaseSequence: 1, Sequence: 2, RemovedPeerIds: []int64{2}, MetadataPresent: true, Self: full.Self, FilterEnabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now, err := c.convert(pb)
+	if err != nil || len(now.Peers) != 0 || !now.FilterEnabled || len(now.Filter) != 0 {
+		t.Fatal("revoked state reused")
+	}
+	if len(old.Peers) != 1 || old.Peers[0].Endpoints[0].String() != "192.0.2.1:99" {
+		t.Fatal("old snapshot mutated")
+	}
+	if len(c.peers) != 0 {
+		t.Fatal("removed parsed peer retained")
+	}
+}
+
 func keyB64(b byte) string {
 	var k meshproto.NodeKey
 	for i := range k {

@@ -282,17 +282,49 @@ func (c *CoordClient) ReportServiceHealth(ctx context.Context, nodeID int64, in 
 }
 
 func (c *CoordClient) Watch(ctx context.Context, nodeID int64, onNetMap func(NetMap)) error {
-	stream, err := c.rpc.PullNetMap(ctx, &meshpb.PullNetMapRequest{NodeId: nodeID, SessionToken: c.sessionToken()})
+	return c.watchUpdates(ctx, nodeID, onNetMap, nil)
+}
+
+func (c *CoordClient) watchUpdates(ctx context.Context, nodeID int64, onNetMap func(NetMap), onGrant func([]byte)) error {
+	// Cancel the old RPC before a sequence error triggers controller reconnect.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stream, err := c.rpc.PullNetMap(ctx, &meshpb.PullNetMapRequest{NodeId: nodeID, SessionToken: c.sessionToken(), DeltaNetmap: true})
 	if err != nil {
 		return err
 	}
+	var decoder meshproto.NetMapDecoder
+	var converter netMapConverter
+	sequenced := false
 	for {
 		pb, err := stream.Recv()
 		if err != nil {
 			return err
 		}
-		nm, err := FromNetMap(pb)
+		grantOnly := false
+		if pb.Sequence != 0 || pb.Delta || sequenced {
+			sequenced = true
+			pb, grantOnly, err = decoder.Apply(pb)
+			if err != nil {
+				return err
+			}
+		}
+		if grantOnly && onGrant != nil {
+			onGrant(pb.RelayGrant)
+			continue
+		}
+		var nm NetMap
+		// The internal controller consumes immutable models. Preserve independent
+		// callback ownership for the public Watch API (which has no grant callback).
+		if sequenced && onGrant != nil {
+			nm, err = converter.convert(pb)
+		} else {
+			nm, err = FromNetMap(pb)
+		}
 		if err != nil {
+			if sequenced {
+				return err
+			}
 			continue // skip a malformed map, keep watching
 		}
 		onNetMap(nm)
