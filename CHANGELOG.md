@@ -10,6 +10,21 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## 2.6.0 — 2026-11-03
+
+### Mesh
+
+- Online devices appear first in the peer list. The client refreshes mesh status when you return to the window and retains your saved node preference after a restart.
+
+### Local console
+
+- Pair a browser with the Linux file service using a one-time link. You can manage files in the console and revoke a browser session without interrupting an approved transfer.
+- Start or stop mesh from the desktop tray. On Windows, the account using the desktop during installation can restart **Calabi Client Service** from the tray without an elevation prompt.
+
+### Mobile
+
+- Android shows the home screen once its initial data is ready, so its sections appear together.
+
 ## 2.5.1 — 2026-10-30
 
 ### Mesh

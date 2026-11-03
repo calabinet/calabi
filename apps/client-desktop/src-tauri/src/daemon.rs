@@ -89,6 +89,7 @@ pub struct Supervisor {
     // comes from the installer), so this is never spawned there.
     bin: Option<PathBuf>,
     child: Mutex<Option<Child>>,
+    restart_lock: tokio::sync::Mutex<()>,
     // The port we asked the daemon to bind (CALABI_STATUS_ADDR). Updated on each
     // start(); defaults to PORT_START before the first launch.
     start_port: Mutex<u16>,
@@ -117,6 +118,7 @@ impl Supervisor {
         Arc::new(Self {
             bin,
             child: Mutex::new(None),
+            restart_lock: tokio::sync::Mutex::new(()),
             // 0 = "haven't picked a port yet". status() treats this as
             // not-running and does NOT probe — critical so the tray status loop,
             // which can fire before start() runs, never scans from a default
@@ -185,9 +187,11 @@ impl Supervisor {
                 return self.spawn_dev_daemon(&bin);
             }
         }
-        Err("no running Calabi system service found — install or start it \
+        Err(
+            "no running Calabi system service found — install or start it \
              (the desktop app attaches to the machine-wide service)"
-            .into())
+                .into(),
+        )
     }
 
     /// Dev fallback (DEBUG only, gated by ALLOW_DEV_SPAWN): spawn our own daemon
@@ -272,6 +276,37 @@ impl Supervisor {
         Ok(())
     }
 
+    pub async fn restart(&self) -> Result<(), String> {
+        let _guard = self
+            .restart_lock
+            .try_lock()
+            .map_err(|_| "Restart already in progress")?;
+        let managed = self.child.lock().unwrap().is_some();
+        if managed {
+            self.stop().await?;
+            self.start().await?;
+        } else {
+            tokio::task::spawn_blocking(restart_system_service)
+                .await
+                .map_err(|e| e.to_string())??;
+        }
+        for _ in 0..20 {
+            if managed && self.status().await.running {
+                return Ok(());
+            }
+            if !managed {
+                if let Some(port) = discover_system_service().await {
+                    *self.attached.lock().unwrap() = Some(port);
+                    *self.start_port.lock().unwrap() = port;
+                    *self.bound_port.lock().unwrap() = Some(port);
+                    return Ok(());
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+        Err("Service did not respond after restart".into())
+    }
+
     /// Snapshot of the latest /healthz on our daemon's console port.
     pub async fn status(&self) -> DaemonStatus {
         // Copy values out and drop the guards BEFORE awaiting — a MutexGuard
@@ -302,6 +337,32 @@ impl Supervisor {
         }
         DaemonStatus::default()
     }
+}
+
+// Invoke only the installed Calabi service. No WebView input enters a command line.
+#[cfg(windows)]
+fn restart_system_service() -> Result<(), String> {
+    crate::windows_service::restart().map_err(|e| e.to_string())
+}
+
+#[cfg(not(windows))]
+fn restart_system_service() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    let output = Command::new("/usr/bin/osascript")
+        .args(["-e", r#"do shell script "/bin/launchctl kickstart -k system/com.calabi.daemon" with administrator privileges"#]).output();
+    #[cfg(not(any(windows, target_os = "macos")))]
+    let output = Command::new("/usr/bin/systemctl")
+        .args(["restart", "calabi.service"])
+        .output();
+    let output = output.map_err(|e| e.to_string())?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(format!(
+        "{} {}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr).trim()
+    ))
 }
 
 /// Find the first bindable console port: PORT_START, else the next few, else an
@@ -348,7 +409,11 @@ fn pid_is_calabi(pid: u32) -> bool {
         Err(_) => Command::new("ps")
             .args(["-p", &pid.to_string(), "-o", "comm="])
             .output()
-            .map(|o| String::from_utf8_lossy(&o.stdout).to_lowercase().contains("calabi"))
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .to_lowercase()
+                    .contains("calabi")
+            })
             .unwrap_or(false),
     }
 }
@@ -417,7 +482,9 @@ pub fn resolve_binary(extract_dir: Option<PathBuf>) -> Result<PathBuf, String> {
     #[cfg(target_os = "macos")]
     {
         let installed = PathBuf::from("/Library/Calabi/bin/calabi");
-        if installed.is_file() { return Ok(installed); }
+        if installed.is_file() {
+            return Ok(installed);
+        }
     }
     which("calabi").map_err(|_| {
         // Deliberately does NOT suggest CALABI_DAEMON_PATH: release builds ignore

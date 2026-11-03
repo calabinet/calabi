@@ -442,6 +442,15 @@ func (s *Server) handleEdgeAffinitySwitch(w http.ResponseWriter, r *http.Request
 		cfg = &creds.Config{}
 	}
 	if cfg.PreferPlatformEdge == preferPlatform {
+		// Even selecting the current default is an explicit choice. Remember it
+		// so a stale service environment cannot replace it on the next boot.
+		if !cfg.EdgeAffinitySelected {
+			cfg.EdgeAffinitySelected = true
+			if err := creds.Save(cfg); err != nil {
+				writeError(w, http.StatusInternalServerError, "persist affinity: "+err.Error())
+				return
+			}
+		}
 		// No-op switch — already on this affinity. Still kick the session so a
 		// parked daemon retries (mirrors the region-switch no-op behaviour).
 		if s.cfg.OnRegionSwitched != nil {
@@ -451,6 +460,7 @@ func (s *Server) handleEdgeAffinitySwitch(w http.ResponseWriter, r *http.Request
 		return
 	}
 	cfg.PreferPlatformEdge = preferPlatform
+	cfg.EdgeAffinitySelected = true
 	// Affinity change → clear the anchor so the picker re-evaluates from
 	// scratch (a stale region lock would otherwise pin the old edge). We must
 	// clear EdgeRegion too, not just the sticky LastEdgeRegion: effectiveRegion

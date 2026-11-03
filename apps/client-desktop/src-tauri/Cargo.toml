@@ -1,12 +1,15 @@
 [package]
 name = "calabi-desktop"
-version = "2.5.0"
+version = "2.6.0"
 description = "Calabi client — desktop shell"
 authors = ["Calabi Team"]
 license = "Proprietary"
 repository = "https://github.com/calabinet/calabi"
 edition = "2021"
 rust-version = "1.75"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Authorization", "Win32_System_Services", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 
 [build-dependencies]
 tauri-build = { version = "2.0", features = [] }

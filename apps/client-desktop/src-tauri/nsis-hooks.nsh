@@ -203,6 +203,19 @@
   ; Registered. Clear what an earlier failed attempt left behind.
   Delete "$INSTDIR\service-install-error.log"
 
+  ; Configure both fresh installs and upgrades.
+  nsExec::ExecToStack '"$INSTDIR\calabi-desktop.exe" --configure-installed-service'
+  Pop $R0
+  Pop $R1
+  ${If} $R0 != 0
+    FileOpen $R2 "$INSTDIR\service-install-error.log" w
+    FileWrite $R2 "configure-installed-service: $R0 $R1"
+    FileClose $R2
+    MessageBox MB_OK|MB_ICONSTOP "$(calabiServiceConfigFailed)" /SD IDOK
+    SetErrorLevel 6
+    Abort
+  ${EndIf}
+
   DetailPrint "$(calabiConfiguringFirewall)"
   !insertmacro CALABI_FILE_FIREWALL install
   ${If} $R0 != 0

@@ -62,6 +62,7 @@ Section
   ${EndIf}
 
   !ifdef TEST_POST
+    File /a "/oname=calabi-desktop.exe" "${TEST_REPLACEMENT}"
     !insertmacro NSIS_HOOK_POSTINSTALL
 
     ; Reached only if POSTINSTALL did not Abort.

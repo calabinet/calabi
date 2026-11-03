@@ -31,7 +31,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -309,25 +308,10 @@ func runPlatformDaemon(args []string) int {
 		}
 	}
 
-	// BYOI affinity toggle. Persist the chosen class and, when it CHANGES,
-	// clear the edge/region anchor so the next edgepicker run re-evaluates
-	// from scratch (a stale region lock would otherwise pin the old edge,
-	// e.g. an own→platform switch would stay stuck on the BYOI region that
-	// has no platform edge). Done before the single-instance lock; Save is
-	// atomic (tmp + rename).
-	if aff := strings.ToLower(strings.TrimSpace(*edgeAffinity)); aff == "own" || aff == "platform" {
-		preferPlatform := aff == "platform"
-		if c, lerr := creds.Load(); lerr == nil && c != nil {
-			if c.PreferPlatformEdge != preferPlatform {
-				c.PreferPlatformEdge = preferPlatform
-				c.LastEdgeNodeID = 0
-				c.LastEdgeRegion = ""
-				if serr := creds.Save(c); serr != nil {
-					setupDaemonLogger().Warn("persist edge-affinity failed",
-						"affinity", aff, "err", serr)
-				}
-			}
-		}
+	// An explicit flag can change a saved choice; an install-time environment
+	// value can only seed it until the user chooses in the UI or CLI.
+	if err := persistStartupEdgeAffinity(fs, *edgeAffinity); err != nil {
+		logger.Warn("persist edge-affinity failed", "err", err)
 	}
 
 	// single-instance lock. Refuse to start if another daemon

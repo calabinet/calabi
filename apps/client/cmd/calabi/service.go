@@ -729,14 +729,14 @@ func serviceConfig(installArgs []string, extraEnv map[string]string) *service.Co
 	if systemMode {
 		env["CALABI_SYSTEM_SERVICE"] = "1"
 	}
-	display := "Calabi Tunnel Client"
+	display := "Calabi Client Service"
 	if name != defaultServiceName {
-		display = "Calabi Tunnel Client (" + name + ")"
+		display += " (" + name + ")"
 	}
 	cfg := &service.Config{
 		Name:        name,
 		DisplayName: display,
-		Description: "Calabi tunnel daemon — keeps the local client online + auto-claims console-pushed tunnels.",
+		Description: "Runs Calabi network connections and endpoints in the background.",
 		Arguments:   serviceArguments(installArgs),
 		EnvVars:     env,
 		// Auto-restart the daemon if it exits abnormally, so "install as a

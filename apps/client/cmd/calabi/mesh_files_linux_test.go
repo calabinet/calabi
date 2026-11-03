@@ -210,11 +210,13 @@ func TestLinuxBrowserDirectoryAndRestart(t *testing.T) {
 	if err = os.Symlink(outside, filepath.Join(directory, "escape.bin")); err != nil {
 		t.Fatal(err)
 	}
-	b := &fileBrowser{d: d, root: root, directory: directory, authority: "127.0.0.1:7501", key: strings.Repeat("b", 64), action: d.handle}
+	b := &fileBrowser{d: d, root: root, directory: directory, authority: "127.0.0.1:7501", auth: newBrowserAuth(), action: d.handle}
+	pair, _ := b.auth.issuePair()
+	cookie, _, _ := b.auth.exchange(pair, b.authority, "test")
 	action := func(body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest("POST", "http://"+b.authority+"/file-web/action", strings.NewReader(body))
 		r.Header.Set("Origin", "http://"+b.authority)
-		r.AddCookie(&http.Cookie{Name: "calabi_file_browser", Value: b.key})
+		r.AddCookie(&http.Cookie{Name: "calabi_file_browser", Value: cookie})
 		w := httptest.NewRecorder()
 		b.ServeHTTP(w, r)
 		return w
@@ -238,19 +240,14 @@ func TestLinuxBrowserDirectoryAndRestart(t *testing.T) {
 	if _, err = os.Stat(filepath.Join(directory, "failed.bin")); !os.IsNotExist(err) {
 		t.Fatal("failed export retained")
 	}
-	firstKey, err := browserKey(d.dir)
-	if err != nil {
-		t.Fatal(err)
-	}
 	d.close()
 	reopened, err := newDesktopFileAgent(ctx, console)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer reopened.close()
-	secondKey, _ := browserKey(reopened.dir)
-	if secondKey != firstKey {
-		t.Fatal("access key lost on restart")
+	if _, ok := newBrowserAuth().authorize(cookie, b.authority, false); ok {
+		t.Fatal("browser session survived process restart")
 	}
 	restored, err := reopened.ensure()
 	if err != nil || len(restored.Staged()) != 1 || restored.Agent.Receiving() {

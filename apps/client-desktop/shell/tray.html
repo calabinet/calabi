@@ -10,7 +10,8 @@
 <button class="row" data-action="mesh"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4H5v4m7-4h7v4"/></svg><span data-i18n="组网设备">组网设备</span><span class="meta" id="peers">状态待确认</span></button>
 <button class="row" data-action="files" id="files"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20V4h7l2 3h9v13H3m9-3V10m-3 3 3-3 3 3"/></svg><span data-i18n="文件传送">文件传送</span></button>
 <div class="divider"></div>
-<button class="row" data-action="diagnose"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12h5l3-8 4 16 3-8h5"/></svg><span data-i18n="连接诊断…">连接诊断…</span></button>
+<button class="row" data-action="mesh-up" id="mesh-toggle" disabled><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path id="mesh-toggle-icon" d="M8 5l11 7-11 7z"/></svg><span id="mesh-toggle-label">启动组网</span></button>
+<button class="row" data-action="restart"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4v6h-6M20 10a8 8 0 1 0 0 5"/></svg><span data-i18n="重启服务">重启服务</span></button>
 <button class="row" data-action="settings"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M10 2h4l1 3 3 1 3 3-1 3 1 3-3 3-3 1-1 3h-4l-1-3-3-1-3-3 1-3-1-3 3-3 3-1z"/></svg><span data-i18n="设置…">设置…</span></button>
 <div class="divider"></div>
 <button class="row" data-action="quit"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3H3v18h7m4-15 6 6-6 6m-6-6h12"/></svg><span data-i18n="退出桌面程序…">退出桌面程序…</span></button>
@@ -32,6 +33,11 @@ function render(s){
  el('ip').textContent=s.ip||'—';el('copy').disabled=!s.ip;
  el('copy').title=t(s.ip?'复制组网 IP':'IP 暂不可用');el('copy').setAttribute('aria-label',el('copy').title);
  el('peers').textContent=s.online===null?t('状态待确认'):s.online+' '+t('台在线');
+ const stop=s.mesh_action==='mesh-down';
+ el('mesh-toggle').dataset.action=stop?'mesh-down':'mesh-up';
+ el('mesh-toggle').disabled=!stop && s.mesh_action!=='mesh-up';
+ el('mesh-toggle-label').textContent=t(stop?'停止组网':'启动组网');
+ el('mesh-toggle-icon').setAttribute('d',stop?'M6 6h12v12H6z':'M8 5l11 7-11 7z');
  el('files').disabled=!s.files;receipt(receiptKey);
  document.querySelector('.menu').style.visibility='visible';
 }

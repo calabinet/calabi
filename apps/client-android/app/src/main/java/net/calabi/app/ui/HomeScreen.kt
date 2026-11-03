@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import net.calabi.app.R
 import net.calabi.app.BuildConfig
@@ -75,6 +76,7 @@ private sealed interface Route {
 @Composable
 fun HomeScreen(onConnect: () -> Unit, onDisconnect: () -> Unit, onSignedOut: () -> Unit, shared: List<Uri> = emptyList(), onShareTaken: () -> Unit = {}, showFiles: Boolean = false, onFilesTaken: () -> Unit = {}) {
     val model = remember { AppModel() }
+    var initialLoading by remember { mutableStateOf(true) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var sheet by remember { mutableStateOf<Sheet?>(null) }
     var route by remember { mutableStateOf<Route?>(null) }
@@ -83,17 +85,32 @@ fun HomeScreen(onConnect: () -> Unit, onDisconnect: () -> Unit, onSignedOut: () 
     LaunchedEffect(shared) { if (BuildConfig.FILE_TRANSFER_ENABLED && shared.isNotEmpty()) { tab = 3; route = null; filePeer = "" } }
     LaunchedEffect(showFiles) { if (BuildConfig.FILE_TRANSFER_ENABLED && showFiles) { tab = 3; route = null; fileReview = true; onFilesTaken() } }
 
-    LaunchedEffect(Unit) { model.refreshAccount() }
     // Live state every 2s while the screen is up; the org's device list less often.
     LaunchedEffect(Unit) {
-        var tick = 0
+        // Keep partial initial data out of the composition, including the
+        // navigation bar. Later polling must not replace an already usable page.
+        coroutineScope {
+            launch { model.refreshAccount() }
+            launch { model.refreshLive() }
+            launch { model.refreshNodes() }
+        }
+        initialLoading = false
+        launch { model.refreshReplaceable() }
+        var tick = 1
         while (true) {
+            delay(2000)
             model.refreshLive()
             if (tick % 5 == 0) model.refreshNodes()
             if (tick % 30 == 0) model.refreshReplaceable()
             tick++
-            delay(2000)
         }
+    }
+
+    if (initialLoading) {
+        Box(Modifier.fillMaxSize().background(Palette.ground), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Palette.accent)
+        }
+        return
     }
 
     BackHandler(enabled = route != null) {

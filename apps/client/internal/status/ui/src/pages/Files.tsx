@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { Alert, Button, Drawer, Input, Modal, Progress, Segmented, Select, Space, Spin, Switch, Table, Tooltip, Typography, message } from "antd";
 import ListSearch from "../components/ListSearch";
 import { matchesListSearch } from "../lib/listSearch";
@@ -6,28 +6,28 @@ import MeshGlyph, { deviceGlyph, fileGlyph } from "../components/MeshGlyph";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { fileAction, fileWebRequest, hasBrowserFiles, hasNativeFiles, useFileSupport, type FileSource } from "../api/files";
+import { FileWebContext, fileAction as dispatchFileAction, fileWebRequest as dispatchFileWebRequest, hasBrowserFiles, hasNativeFiles, useFileSupport, type FileSource, type FileSnapshot } from "../api/files";
 import { api } from "../api/client";
 import { fileTargets } from "../lib/fileTargets";
 import { fileRecords, fileRecordMatches, fileRequests, fileJobState, fileJobSummary, fileRecordTime, type FileRecord } from "../lib/fileRecords";
 import { fileErrorKey, fileJobErrorKey } from "../lib/fileErrors";
 import "../styles/files.css";
+import FileBrowser from "./FileBrowser";
 
 const bytes = (n: number) => n >= 2 ** 30 ? `${(n / 2 ** 30).toFixed(2)} GiB` : n >= 2 ** 20 ? `${(n / 2 ** 20).toFixed(1)} MiB` : n >= 1024 ? `${(n / 1024).toFixed(1)} KiB` : `${n} B`;
 const percent = (offset: number, size: number) => size > 0 ? Math.min(100, Math.floor(offset * 100 / size)) : 100;
 
 export default function Files() {
-  if (!hasNativeFiles()) return <FileServiceEntry />;
+  if (!hasNativeFiles()) return <FileBrowser embedded />;
   return <FileTransfers />;
 }
 
-function FileServiceEntry() {
-  const { t } = useTranslation();
-  const support = useFileSupport();
-  return <Space direction="vertical" size="middle"><Typography.Paragraph>{t("files.service.entryHint")}</Typography.Paragraph><Button type="primary" href={`/file-service/${window.location.hash}`} disabled={support.data !== true}>{t("files.service.open")}</Button>{support.data === false && <Alert type="warning" message={t("files.service.unavailable")} />}</Space>;
-}
-
-function FileTransfers() {
+export function FileTransfers() {
+  const context = useContext(FileWebContext);
+  const web = context !== null || hasBrowserFiles();
+  const fileAction = <T = FileSnapshot,>(a: Record<string, unknown>) => dispatchFileAction<T>(a, context?.base, context?.session);
+  const fileWebRequest = <T,>(path: string, body?: unknown) => dispatchFileWebRequest<T>(path, body, context?.base, context?.session);
+  const fileQueryKey = web ? ["file-web-files", context?.session] : ["user-files"];
   const { t } = useTranslation();
   const errorText = (error: string) => t(`files.errors.${fileErrorKey(error)}`);
   const qc = useQueryClient();
@@ -60,10 +60,10 @@ function FileTransfers() {
   const reviewRequest = params.get("review");
   useEffect(() => { if (reviewRequest === "1") { setSearch(""); setDirection("incoming"); } }, [reviewRequest, location.key]);
   const pickBefore = useRef<Set<string> | null>(null);
-  const mesh = useQuery({ queryKey: ["mesh"], queryFn: () => hasBrowserFiles() ? fileWebRequest<Awaited<ReturnType<typeof api.mesh>>>("mesh") : api.mesh(), enabled: support.data === true, refetchInterval: 3000, retry: false });
-  const query = useQuery({ queryKey: ["user-files"], queryFn: () => fileAction({ action: "snapshot" }), enabled: support.data === true, refetchInterval: 1000, retry: false });
+  const mesh = useQuery({ queryKey: web ? ["file-web-mesh", context?.session] : ["mesh"], queryFn: () => web ? fileWebRequest<Awaited<ReturnType<typeof api.mesh>>>("mesh") : api.mesh(), enabled: support.data === true, refetchInterval: 3000, retry: false });
+  const query = useQuery({ queryKey: fileQueryKey, queryFn: () => fileAction({ action: "snapshot" }), enabled: support.data === true, refetchInterval: 1000, retry: false });
   const data = query.data;
-  const mutation = useMutation({ mutationFn: (action: Record<string, unknown>) => fileAction(action), onSuccess: snapshot => qc.setQueryData(["user-files"], snapshot), onError: (err: Error) => message.error(errorText(err.message)) });
+  const mutation = useMutation({ mutationFn: (action: Record<string, unknown>) => fileAction(action), onSuccess: snapshot => qc.setQueryData(fileQueryKey, snapshot), onError: (err: Error) => message.error(errorText(err.message)) });
   const busy = mutation.isPending;
   const run = (action: string, args: Record<string, unknown> = {}) => mutation.mutate({ action, ...args });
   const state = (s: string) => t(`files.states.${s}`, { defaultValue: s });
@@ -109,7 +109,7 @@ function FileTransfers() {
     setComposing(false);
   };
   const chooseFiles = async () => {
-    if (hasBrowserFiles()) {
+    if (web) {
       try { setCatalog(await fileWebRequest("catalog")); setServerSelection([]); } catch { message.error(t("files.web.directoryError")); }
       return;
     }
@@ -167,7 +167,7 @@ function FileTransfers() {
           {job.state === "paused" && <Tooltip title={t(job.error ? "files.retry" : "files.resume")}><Button type="text" aria-label={t(job.error ? "files.retry" : "files.resume")} icon={<MeshGlyph name="play" />} disabled={busy} onClick={() => run("resume", { id: job.id, peer: job.peer_ip })} /></Tooltip>}
           {["paused", "sending"].includes(job.state) ? <Tooltip title={t("files.cancel")}><Button type="text" aria-label={t("files.cancel")} icon={<MeshGlyph name="close" />} disabled={busy} onClick={() => run("cancel", { id: job.id })} /></Tooltip> : <Tooltip title={t("files.remove")}><Button type="text" aria-label={t("files.remove")} icon={<MeshGlyph name="trash" />} disabled={busy} onClick={() => remove("forget_job", job.id)} /></Tooltip>}
         </> : <>
-          {transfer.state === "completed" && <Button type="link" disabled={busy} onClick={() => hasBrowserFiles() ? setServerSave({id:transfer.id,name:transfer.name}) : run("save", { id: transfer.id })}>{t("files.save")}</Button>}
+          {transfer.state === "completed" && <Button type="link" disabled={busy} onClick={() => web ? setServerSave({id:transfer.id,name:transfer.name}) : run("save", { id: transfer.id })}>{t("files.save")}</Button>}
           {["accepted", "receiving", "waiting_sender"].includes(transfer.state) && <Tooltip title={t(transfer.pause_supported ? "files.pause" : "files.updateSender")}><Button type="text" aria-label={t("files.pause")} icon={<MeshGlyph name="pause" />} disabled={busy || !transfer.pause_supported} onClick={() => run("pause_receive", { id: transfer.id })} /></Tooltip>}
           {transfer.state === "paused" && <Tooltip title={t("files.resume")}><Button type="text" aria-label={t("files.resume")} icon={<MeshGlyph name="play" />} disabled={busy} onClick={() => run("resume_receive", { id: transfer.id })} /></Tooltip>}
           {["accepted", "receiving", "paused", "waiting_sender"].includes(transfer.state) && <Button type="text" aria-label={t("files.cancel")} icon={<MeshGlyph name="close" />} disabled={busy} onClick={() => run("cancel_receive", { id: transfer.id })} />}
@@ -253,7 +253,7 @@ function FileTransfers() {
         {!!data.identity.expires_unix && <Typography.Text>{t("files.identityExpires", { date: new Date(data.identity.expires_unix * 1000).toLocaleString() })}</Typography.Text>}
         {data.identity.error && <Alert type="error" message={errorText(data.identity.error)} />}
         {data.identity.needs_renewal && !data.identity.error && <Alert type="warning" message={t("files.identityDue")} />}
-        {!hasBrowserFiles() && <Space wrap><Button disabled={busy || !data.identity.fingerprint} onClick={() => maintain("renew")}>{t("files.identityRenew")}</Button><Button danger disabled={busy || !data.identity.exists} onClick={() => maintain("reset")}>{t("files.identityReset")}</Button></Space>}
+        {!web && <Space wrap><Button disabled={busy || !data.identity.fingerprint} onClick={() => maintain("renew")}>{t("files.identityRenew")}</Button><Button danger disabled={busy || !data.identity.exists} onClick={() => maintain("reset")}>{t("files.identityReset")}</Button></Space>}
       </Space> : <Typography.Text type="secondary">{t("files.identityUnavailable")}</Typography.Text>}
     </Drawer>
   </div>;

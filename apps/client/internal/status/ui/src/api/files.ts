@@ -1,17 +1,22 @@
+import { createContext, useContext } from "react";
 import { useQuery } from "@tanstack/react-query";
 import i18n from "../i18n";
 type NativeWindow = Window & { __TAURI_INTERNALS__?: { invoke<T>(command: string, args: unknown): Promise<T> }; __CALABI_FILE_WEB__?: boolean; __CALABI_FILE_WEB_BASE__?: string };
 export const hasBrowserFiles = () => (window as NativeWindow).__CALABI_FILE_WEB__ === true;
 export const hasNativeFiles = () => !!(window as NativeWindow).__TAURI_INTERNALS__ || hasBrowserFiles();
-export async function fileWebRequest<T>(path: string, body?: unknown): Promise<T> {
-  const base = (window as NativeWindow).__CALABI_FILE_WEB_BASE__ || "";
+export const FileWebContext = createContext<{ base: string; session: string } | null>(null);
+export async function fileWebRequest<T>(path: string, body?: unknown, endpoint?: string, scope?: string): Promise<T> {
+  const base = endpoint ?? ((window as NativeWindow).__CALABI_FILE_WEB_BASE__ || "");
   const response = await fetch(`${base}/file-web/${path}`, { credentials: "same-origin", ...(body !== undefined ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}) });
   const value = await response.json();
-  if (!response.ok) throw new Error(value.error || "File browser unavailable");
+  if (!response.ok) {
+    if (response.status === 401 && path !== "session") window.dispatchEvent(new CustomEvent("calabi-file-auth-expired", { detail: { base, scope } }));
+    throw new Error(value.error || "File browser unavailable");
+  }
   return value as T;
 }
-export async function fileAction<T = FileSnapshot>(action: Record<string, unknown>): Promise<T> {
-  if (hasBrowserFiles()) return fileWebRequest<T>("action", action);
+export async function fileAction<T = FileSnapshot>(action: Record<string, unknown>, endpoint?: string, scope?: string): Promise<T> {
+  if (endpoint !== undefined || hasBrowserFiles()) return fileWebRequest<T>("action", action, endpoint, scope);
   const native = (window as NativeWindow).__TAURI_INTERNALS__;
   if (!native) throw new Error("File transfers require the desktop app");
   const result = await native.invoke<T & { error?: string }>("files_action", { action }).catch((err: unknown) => {
@@ -21,11 +26,12 @@ export async function fileAction<T = FileSnapshot>(action: Record<string, unknow
   return result;
 }
 export function useFileSupport() {
-  return useQuery({ queryKey: ["files-support", i18n.language], queryFn: async () => {
-    if (!hasNativeFiles()) {
+  const web = useContext(FileWebContext);
+  return useQuery({ queryKey: ["files-support", i18n.language, web?.session || "native"], queryFn: async () => {
+    if (!web && !hasNativeFiles()) {
       try { const response = await fetch("/file-service/available", { credentials: "same-origin" }); if (!response.ok) return false; return (await response.json()).supported === true; } catch { return false; }
     }
-    return (await fileAction<{ supported: boolean }>({ action: "supported", locale: i18n.language })).supported;
+    return (await fileAction<{ supported: boolean }>({ action: "supported", locale: i18n.language }, web?.base, web?.session)).supported;
   }, staleTime: 5000, retry: false, refetchInterval: query => query.state.data === true ? false : 5000 });
 }
 export async function revokeUserFiles() {

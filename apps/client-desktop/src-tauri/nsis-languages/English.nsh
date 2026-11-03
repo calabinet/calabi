@@ -36,6 +36,7 @@ LangString calabiStoppingService ${LANG_ENGLISH} "Stopping the Calabi background
 LangString calabiFileBusy ${LANG_ENGLISH} "Calabi files are still in use; installation stopped."
 LangString calabiFileBusyError ${LANG_ENGLISH} "Calabi files are still in use and cannot be replaced. Close any Calabi command-line programs or file tools and try again. The existing service has been asked to restart."
 LangString calabiRegisteringService ${LANG_ENGLISH} "Registering the Calabi background service..."
+LangString calabiServiceConfigFailed ${LANG_ENGLISH} "Could not configure the Calabi service. Windows error: $R0"
 LangString calabiServiceInstallResult ${LANG_ENGLISH} "Service registration returned: $R0"
 LangString calabiServiceNotRegistered ${LANG_ENGLISH} "The Calabi background service is not registered."
 LangString calabiServiceInstallFailed ${LANG_ENGLISH} "The background service could not be registered. Resolve the error and try installing again.$\r$\n$\r$\nTechnical details: $R1"

@@ -31,7 +31,18 @@ use tauri_plugin_notification::NotificationExt;
 
 use crate::daemon::Supervisor;
 
+#[cfg(windows)]
+mod windows_service;
+
 fn main() {
+    #[cfg(windows)]
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--configure-installed-service")) {
+        if let Err(error) = windows_service::configure_installed_service() {
+            eprintln!("{error}");
+            std::process::exit(error.raw_os_error().unwrap_or(1));
+        }
+        return;
+    }
     // GUI subsystem builds (release) detach stdout/stderr — env_logger
     // would write to a black hole. Pipe everything to a known file so
     // crashes can be diagnosed after the fact.
@@ -201,7 +212,7 @@ fn main() {
                     if let Some(w) = handle.get_webview_window("main") {
                         let _ = w.eval(
                             "var m=document.getElementById('msg'); \
-                             if(m){m.innerHTML='<span style=\\'color:#ef4444\\'>守护进程未响应</span><br>请用托盘菜单「连接诊断」检查。';}",
+                             if(m){m.innerHTML='<span style=\\'color:#ef4444\\'>守护进程未响应</span><br>请在托盘菜单中选择「重启服务」。';}",
                         );
                         let _ = w.show();
                     }

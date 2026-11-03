@@ -115,6 +115,9 @@ type Config struct {
 	// clears LastEdgeNodeID/LastEdgeRegion so the next pick re-evaluates from
 	// scratch (otherwise the stale region anchor would pin the old edge).
 	PreferPlatformEdge bool `json:"prefer_platform_edge,omitempty"`
+	// EdgeAffinitySelected marks a choice saved by the UI or an explicit CLI
+	// flag. Old install-time environment defaults must not overwrite it at boot.
+	EdgeAffinitySelected bool `json:"edge_affinity_selected,omitempty"`
 
 	// Mode is the client's explicit operating mode, mirroring the edge's
 	// top-level `mode`:

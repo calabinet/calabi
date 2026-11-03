@@ -17,7 +17,7 @@ for (const code of codes) {
 (async () => {
   const browser = await chromium.launch({ channel: 'msedge', headless: true });
   try {
-    const page = await browser.newPage({ viewport: { width: 288, height: 340 } });
+    const page = await browser.newPage({ viewport: { width: 288, height: 375 } });
     const errors = [];
     page.on('pageerror', e => errors.push(e.message));
     await page.addInitScript(({ labels }) => {
@@ -32,6 +32,14 @@ for (const code of codes) {
     await page.goto('file:///' + path.join(root, 'shell/tray.html').replaceAll('\\', '/'));
     await page.getByText('Open main window', { exact: true }).waitFor();
     assert.equal(await page.locator('#peers').innerText(), '3 online');
+    await page.getByRole('button', { name: 'Restart service', exact: true }).click();
+    assert.deepEqual(await page.evaluate(() => window.actions), ['restart']);
+    assert.ok(await page.locator('#mesh-toggle').isDisabled());
+    for (const [action, key] of [['mesh-down','停止组网'], ['mesh-up','启动组网']]) {
+      await page.evaluate(action => { snapshot.mesh_action=action; return update(); }, action);
+      await page.getByRole('button', {name: labels[key], exact:true}).click();
+      assert.equal(await page.evaluate(() => window.actions.at(-1)), action);
+    }
     await page.locator('#copy').click();
     assert.equal(await page.locator('#receipt').innerText(), 'Mesh IP copied');
     for (const locale of [...codes, 'en']) {
@@ -46,13 +54,13 @@ for (const code of codes) {
       const overflow = await page.evaluate(() => [...document.querySelectorAll('.row, .header, .statusline, .copy')]
         .filter(el => el.scrollWidth > el.clientWidth || el.getBoundingClientRect().right > innerWidth).map(el => el.className));
       assert.deepEqual(overflow, [], locale);
-      assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= 340), locale);
+      assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= 375), locale);
       for (const key of ['正在检查连接…', '后台服务不可用', '组网状态暂不可用', '组网已暂停', '组网未开启', '组网连接中']) {
         await page.evaluate(key => {
           snapshot.status = snapshot.labels[key]; snapshot.ip = ''; snapshot.online = null;
           return update();
         }, key);
-        assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= 340), locale + ': ' + key);
+        assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= 375), locale + ': ' + key);
         assert.equal(await page.locator('#peers').innerText(), catalog[locale]['状态待确认']);
       }
       await page.evaluate(() => { snapshot.status = snapshot.labels['组网已连接']; snapshot.ip = '100.64.0.36'; snapshot.online = 3; return update(); });

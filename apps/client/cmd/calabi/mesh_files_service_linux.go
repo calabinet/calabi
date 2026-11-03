@@ -393,24 +393,12 @@ func fileServiceCLI(args []string) error {
 	switch args[0] {
 	case "reset-web-key":
 		if os.Geteuid() != 0 {
-			return errors.New("reset the private browser key as root")
+			return errors.New("revoke browser access as root")
 		}
-		active := exec.Command("systemctl", "is-active", "--quiet", c.Name+".service").Run() == nil
-		if err := fileServiceCommand("stop", c.Name+".service"); err != nil {
+		if _, err := browserAuthRequest(filepath.Join(filepath.Dir(c.socket()), "auth.sock"), "revoke-all"); err != nil {
 			return err
 		}
-		// Remove only this capability, as its owner. The ordinary-user service
-		// generates its replacement; root never creates private profile files.
-		keyPath := filepath.Join(c.StateDir, ".config", "Calabi", "file-agent", "browser-access-key")
-		if err := exec.Command("runuser", "-u", c.User, "--", "rm", "-f", "--", keyPath).Run(); err != nil {
-			return fmt.Errorf("file service stopped; could not revoke browser key: %w", err)
-		}
-		if active {
-			if err := fileServiceCommand("start", c.Name+".service"); err != nil {
-				return err
-			}
-		}
-		fmt.Println("Private browser access revoked. A new key is generated when the file service starts; use web-url to retrieve it.")
+		fmt.Println("All browser sessions and pending pairings revoked. Approved transfers continue. Use web-url to pair again.")
 		return nil
 	case "run":
 		return serveManagedFiles(c)
@@ -420,20 +408,15 @@ func fileServiceCLI(args []string) error {
 		if os.Geteuid() != 0 {
 			account, e := user.Current()
 			if e != nil || account.Username != c.User {
-				return errors.New("only root or the file-service user may read its private browser key")
+				return errors.New("only root or the file-service user may issue a pairing link")
 			}
 		}
-		// This command only reads: running it before the service starts must not
-		// create root-owned files in the ordinary user's private profile.
-		body, err := os.ReadFile(filepath.Join(c.StateDir, ".config", "Calabi", "file-agent", "browser-access-key"))
+		link, err := browserAuthRequest(filepath.Join(filepath.Dir(c.socket()), "auth.sock"), "pair")
 		if err != nil {
-			return fmt.Errorf("private browser key unavailable; start the file service first: %w", err)
+			return err
 		}
-		key := strings.TrimSpace(string(body))
-		if !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(key) {
-			return errors.New("invalid private browser access key")
-		}
-		fmt.Printf("%s/file-service/#/mesh/files?key=%s\n", c.Console, key)
+		fmt.Println(link)
+		fmt.Println("Single-use pairing link; expires in five minutes. Do not share.")
 		return nil
 	case "status":
 		fmt.Printf("User: %s\nConsole: %s\nFiles: %s\n", c.User, c.Console, c.Directory)
@@ -474,10 +457,7 @@ func serveManagedFiles(c fileServiceConfig) error {
 		return err
 	}
 	defer root.Close()
-	key, err := browserKey(d.dir)
-	if err != nil {
-		return err
-	}
+	auth := newBrowserAuth()
 	// systemd creates a private runtime directory; refuse accidental manual root paths.
 	st, err := os.Lstat(filepath.Dir(c.socket()))
 	if err != nil {
@@ -507,7 +487,12 @@ func serveManagedFiles(c fileServiceConfig) error {
 	if err = os.Chmod(c.socket(), 0600); err != nil {
 		return err
 	}
-	web := &fileBrowser{d: d, root: root, directory: c.Directory, key: key, action: d.handle, managed: true}
+	closeAuth, err := startBrowserAuth(ctx, filepath.Join(filepath.Dir(c.socket()), "auth.sock"), strings.TrimRight(c.Console, "/")+"/", auth)
+	if err != nil {
+		return err
+	}
+	defer closeAuth()
+	web := &fileBrowser{d: d, root: root, directory: c.Directory, auth: auth, action: d.handle, managed: true}
 	srv := &http.Server{Handler: web, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	stop := context.AfterFunc(ctx, func() { _ = srv.Close() })
 	defer stop()

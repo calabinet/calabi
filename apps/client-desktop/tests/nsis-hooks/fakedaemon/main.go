@@ -38,6 +38,11 @@ func main() {
 	}
 
 	switch {
+	case args == "--configure-installed-service":
+		if os.Getenv("CALABI_FAKE_ACCESS") == "fail" {
+			os.Exit(5)
+		}
+		fmt.Println("restart permission configured")
 	case args == "desktop-idle", args == "daemon-idle", args == "mesh files --stdio":
 		time.Sleep(2 * time.Minute)
 	case args == "daemon stop", args == "daemon uninstall":

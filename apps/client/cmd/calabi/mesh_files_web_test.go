@@ -14,9 +14,12 @@ func TestFileBrowserSecurity(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer root.Close()
-	key := strings.Repeat("a", 64)
+	auth := newBrowserAuth()
+	key, _ := auth.issuePair()
+	other, _ := auth.issuePair()
+	cookie, _, _ := auth.exchange(other, "127.0.0.1:7501", "test")
 	calls := 0
-	b := &fileBrowser{root: root, authority: "127.0.0.1:7501", key: key, action: func(fileAction) (any, error) { calls++; return true, nil }}
+	b := &fileBrowser{root: root, authority: "127.0.0.1:7501", auth: auth, action: func(fileAction) (any, error) { calls++; return true, nil }}
 	req := func(path, body, origin, cookie string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest("POST", "http://"+b.authority+path, strings.NewReader(body))
 		r.Header.Set("Origin", origin)
@@ -33,12 +36,12 @@ func TestFileBrowserSecurity(t *testing.T) {
 		code                       int
 	}{
 		{"/file-web/action", `{"action":"snapshot"}`, origin, "", 401},
-		{"/file-web/session", `{"key":"` + key + `"}`, "http://evil.example", "", 403},
-		{"/file-web/action", `{"action":"snapshot"}`, "http://evil.example", key, 403},
-		{"/file-web/action", `{"action":"pick"}`, origin, key, 400},
-		{"/file-web/action", `{"action":"identity_reset"}`, origin, key, 400},
-		{"/file-web/action", `{"action":"web_stage","names":["../outside"]}`, origin, key, 400},
-		{"/file-web/action", `{"action":"snapshot","unknown":true}`, origin, key, 400},
+		{"/file-web/session", `{"pair":"` + key + `"}`, "http://evil.example", "", 403},
+		{"/file-web/action", `{"action":"snapshot"}`, "http://evil.example", cookie, 403},
+		{"/file-web/action", `{"action":"pick"}`, origin, cookie, 400},
+		{"/file-web/action", `{"action":"identity_reset"}`, origin, cookie, 400},
+		{"/file-web/action", `{"action":"web_stage","names":["../outside"]}`, origin, cookie, 400},
+		{"/file-web/action", `{"action":"snapshot","unknown":true}`, origin, cookie, 400},
 	} {
 		if w := req(tc.path, tc.body, tc.origin, tc.cookie); w.Code != tc.code {
 			t.Fatal(tc, w.Code, w.Body.String())
@@ -47,7 +50,7 @@ func TestFileBrowserSecurity(t *testing.T) {
 	if calls != 0 {
 		t.Fatal("unauthorized operation reached agent")
 	}
-	login := req("/file-web/session", `{"key":"`+key+`"}`, origin, "")
+	login := req("/file-web/session", `{"pair":"`+key+`"}`, origin, "")
 	if login.Code != 200 {
 		t.Fatal(login.Body.String())
 	}
@@ -55,7 +58,7 @@ func TestFileBrowserSecurity(t *testing.T) {
 	if len(cookies) != 1 || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteStrictMode {
 		t.Fatal("unsafe cookie")
 	}
-	if w := req("/file-web/action", `{"action":"snapshot"}`, origin, key); w.Code != 200 || calls != 1 {
+	if w := req("/file-web/action", `{"action":"snapshot"}`, origin, cookie); w.Code != 200 || calls != 1 {
 		t.Fatal(w.Code, calls)
 	}
 	r := httptest.NewRequest("GET", "http://evil.example/file-web/ping", nil)
@@ -82,13 +85,12 @@ func TestFileBrowserAddressKey(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	dir := t.TempDir()
-	a, err := browserKey(dir)
-	if err != nil {
-		t.Fatal(err)
+	auth := newBrowserAuth()
+	pair, err := auth.issuePair()
+	if err != nil || len(pair) != 64 {
+		t.Fatal("pairing generation failed", err)
 	}
-	b, err := browserKey(dir)
-	if err != nil || a != b || len(a) != 64 {
-		t.Fatal("key not persisted")
+	if _, _, ok := newBrowserAuth().exchange(pair, "host", "test"); ok {
+		t.Fatal("pairing crossed instance boundary")
 	}
 }

@@ -66,7 +66,7 @@ import {
 import { matchesListSearch } from "../lib/listSearch";
 import { relayOwner, relayOwnerKind } from "../lib/relayRegion";
 import { peerAddresses } from "../lib/peerAddresses";
-import { peerPresence } from "../lib/peerPresence";
+import { displayedPeerPresence, isPresenceCurrent, peerPresence, presenceQueryOptions } from "../lib/peerPresence";
 import { useLocation, useNavigate } from "react-router-dom";
 import Services from "./Services";
 import Files from "./Files";
@@ -211,14 +211,27 @@ export default function Mesh() {
     queryKey: ["mesh-org-nodes", presenceScope, data?.org_id || 0],
     queryFn: api.meshOrgNodes,
     enabled: presenceEnabled,
-    staleTime: 5_000,
-    refetchInterval: 5_000,
+    ...presenceQueryOptions,
     retry: false,
     throwOnError: false,
   });
   const orgNodes = presenceEnabled ? nodesQuery.data : undefined;
-  const presenceCurrent = presenceEnabled && nodesQuery.isSuccess && Date.now() - nodesQuery.dataUpdatedAt < 15_000;
+  const presenceCurrent = isPresenceCurrent(presenceEnabled, nodesQuery);
   const presenceOf = (peer: MeshPeer) => peerPresence(peer.allowed_ips, presenceCurrent ? orgNodes?.items : undefined);
+  const presenceBadge = (peer: MeshPeer) => {
+    const status = displayedPeerPresence(peer.allowed_ips, orgNodes?.items, presenceEnabled, nodesQuery);
+    return status === null ? null : <Tooltip title={t(`mesh.presence.${status}Hint`)}><span className={`mesh-peer-presence ${status}`}>{t(`mesh.presence.${status}`)}</span></Tooltip>;
+  };
+  // Some desktop WebViews focus the existing window without changing document
+  // visibility. Cover that event too; reuse any fetch already started on show.
+  useEffect(() => {
+    if (!presenceEnabled) return;
+    const refresh = () => {
+      if (document.visibilityState !== "hidden") void nodesQuery.refetch({ cancelRefetch: false });
+    };
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [presenceEnabled, nodesQuery.refetch]);
   const ownerByOverlay = useMemo(() => {
     const m = new Map<string, string>();
     for (const n of orgNodes?.items ?? []) {
@@ -339,10 +352,13 @@ export default function Mesh() {
   // table this narrow.
   const shownPeers = useMemo(() => {
     const all = data?.peers ?? [];
+    const presenceNodes = presenceCurrent ? orgNodes?.items : undefined;
     return all.filter(p => matchesListSearch(peerQuery, p.name, p.public_key,
       ...(p.allowed_ips || []), ...(p.services || []).map(service => service.name),
-      ownerByOverlay.get(peerAddresses(p.allowed_ips).overlay)));
-  }, [data?.peers, peerQuery, ownerByOverlay]);
+      ownerByOverlay.get(peerAddresses(p.allowed_ips).overlay)))
+      .sort((a, b) => Number(peerPresence(b.allowed_ips, presenceNodes) === "online")
+        - Number(peerPresence(a.allowed_ips, presenceNodes) === "online"));
+  }, [data?.peers, peerQuery, ownerByOverlay, orgNodes, presenceCurrent]);
 
   const columns = useMemo(
     () => [
@@ -699,7 +715,7 @@ export default function Mesh() {
         <section className="mesh-peer-section">
           <div className="mesh-peer-heading list-toolbar"><Text>{t("files.peerDevices")}</Text><ListSearch placeholder={t("listSearch.devices")} value={peerQuery} onChange={setPeerQuery} /></div>
           {data.up ? <Table<MeshPeer> size="middle" rowKey="public_key" dataSource={shownPeers} pagination={{ pageSize: 20, showSizeChanger: false }} scroll={{ x: 600 }} locale={{ emptyText: peerQuery && (data.peers || []).length > 0 ? t("mesh.peerFilterNoMatch") : t("mesh.noPeers") }} columns={[
-            { title: t("mesh.colPeer"), key: "device", render: (_, peer) => <div className="mesh-device-name"><span className="files-file-icon"><MeshGlyph name={deviceGlyph(peer.os)} /></span><div><div className="mesh-device-label-row"><Text className="mesh-device-label">{peer.name || shortKey(peer.public_key)}</Text><Tooltip title={t(`mesh.presence.${presenceOf(peer)}Hint`)}><span className={`mesh-peer-presence ${presenceOf(peer)}`}>{t(`mesh.presence.${presenceOf(peer)}`)}</span></Tooltip></div><div className="mesh-device-meta"><span className="files-secondary">{[osLabel(peer.os), ownerByOverlay.get(peerAddresses(peer.allowed_ips).overlay)?.split("@")[0]].filter(Boolean).join(" · ")}</span><span className="mesh-device-capabilities">
+            { title: t("mesh.colPeer"), key: "device", render: (_, peer) => <div className="mesh-device-name"><span className="files-file-icon"><MeshGlyph name={deviceGlyph(peer.os)} /></span><div><div className="mesh-device-label-row"><Text className="mesh-device-label">{peer.name || shortKey(peer.public_key)}</Text>{presenceBadge(peer)}</div><div className="mesh-device-meta"><span className="files-secondary">{[osLabel(peer.os), ownerByOverlay.get(peerAddresses(peer.allowed_ips).overlay)?.split("@")[0]].filter(Boolean).join(" · ")}</span><span className="mesh-device-capabilities">
               {peerAddresses(peer.allowed_ips).routes.length > 0 && <Tooltip title={t("mesh.peerHasSubnets")}><Button className="mesh-capability" type="text" size="small" aria-label={t("mesh.peerHasSubnets")} icon={<MeshGlyph name="network" />} onClick={() => setConnectionKey(peer.public_key)} /></Tooltip>}
               {!!peer.services?.length && <Tooltip title={t("mesh.peerHasServices")}><Button className="mesh-capability" type="text" size="small" aria-label={t("mesh.peerHasServices")} icon={<MeshGlyph name="service" />} onClick={() => setConnectionKey(peer.public_key)} /></Tooltip>}
             </span></div></div></div> },
@@ -740,7 +756,7 @@ export default function Mesh() {
       {fileSupport.error && tab !== "files" && <Alert type="warning" showIcon message={t("files.bridgeUnavailable")} description={fileSupport.error.message} action={<Button onClick={() => fileSupport.refetch()}>{t("files.retry")}</Button>} />}
       <Drawer rootClassName="mesh-connection-drawer" open={!!connectionPeer} onClose={() => { setPeerDetail(null); setConnectionKey(""); }} title={t("files.connectionDetails")} width={600}>
         {connectionPeer && <Space direction="vertical" size={24} style={{ width: "100%" }}>
-          <span className={`mesh-peer-presence ${presenceOf(connectionPeer)}`}>{t(`mesh.presence.${presenceOf(connectionPeer)}`)}</span>
+          {presenceBadge(connectionPeer)}
           <div className="mesh-device-name"><span className="files-file-icon"><MeshGlyph name={deviceGlyph(connectionPeer.os)} /></span><div><Text strong>{connectionPeer.name || shortKey(connectionPeer.public_key)}</Text><span className="files-secondary">{osLabel(connectionPeer.os)}</span></div></div>
           <Descriptions bordered size="small" column={1} items={[
             { key: "overlay", label: t("mesh.peerDetails.overlay"), children: <Text copyable>{peerAddresses(connectionPeer.allowed_ips).overlay || "—"}</Text> },

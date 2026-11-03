@@ -13,7 +13,10 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 use tauri_plugin_notification::NotificationExt;
 
+const PANEL_HEIGHT: f64 = 375.0;
+
 struct Items {
+    mesh_change: tokio::sync::Mutex<()>,
     snapshot: Mutex<Value>,
     address: Mutex<String>,
 }
@@ -95,7 +98,15 @@ pub fn tray_action(
         return Ok(Value::Null);
     }
     if ![
-        "open", "mesh", "files", "diagnose", "settings", "copy", "quit",
+        "open",
+        "mesh",
+        "mesh-up",
+        "mesh-down",
+        "files",
+        "restart",
+        "settings",
+        "copy",
+        "quit",
     ]
     .contains(&action.as_str())
     {
@@ -133,14 +144,14 @@ fn open(app: &AppHandle, route: &str) {
 
 pub fn build(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     app.manage(Language::default());
-    app.manage(Items { snapshot: Mutex::new(serde_json::json!({"name":"", "org":"", "fallback_name":"正在读取设备信息", "fallback_org":"待读取", "status":"正在检查连接…", "ip":"", "up":false, "online":null, "files":crate::files::supported()})), address: Mutex::new(String::new()) });
+    app.manage(Items { mesh_change: Default::default(), snapshot: Mutex::new(serde_json::json!({"name":"", "org":"", "fallback_name":"正在读取设备信息", "fallback_org":"待读取", "status":"正在检查连接…", "ip":"", "up":false, "online":null, "files":crate::files::supported()})), address: Mutex::new(String::new()) });
     let window = tauri::WebviewWindowBuilder::new(
         app,
         "tray-panel",
         tauri::WebviewUrl::App("tray.html".into()),
     )
     .title(tr(app, "托盘菜单"))
-    .inner_size(288.0, 340.0)
+    .inner_size(288.0, PANEL_HEIGHT)
     .decorations(false)
     .shadow(false)
     .resizable(false)
@@ -200,7 +211,7 @@ pub fn build(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                         let area = monitor.work_area();
                         let scale = monitor.scale_factor();
                         let width = 288.0 * scale;
-                        let height = 340.0 * scale;
+                        let height = PANEL_HEIGHT * scale;
                         let left = area.position.x as f64;
                         let top = area.position.y as f64;
                         let x = (position.x - width)
@@ -226,45 +237,67 @@ fn run_action(app: &AppHandle, action: &str) {
         "open" => open(app, "/overview"),
         "mesh" => open(app, "/mesh"),
         "files" => open(app, "/mesh/files"),
-        "diagnose" => {
+        "restart" => {
             let handle = app.clone();
-            let sup = app.state::<Option<Arc<Supervisor>>>().inner().clone();
+            let supervisor = app.state::<Option<Arc<Supervisor>>>().inner().clone();
             tauri::async_runtime::spawn(async move {
-                if let Some(sup) = sup {
-                    let health = sup.status().await;
-                    refresh(&handle, &sup, &health).await;
-                    let state = localized_snapshot(&handle)["status"]
-                        .as_str()
-                        .unwrap_or("未知")
-                        .to_owned();
-                    let hint = if cfg!(windows) {
-                        "如后台服务不可用，请在管理员 PowerShell 中运行：\nRestart-Service calabi"
-                    } else if cfg!(target_os = "macos") {
-                        "如后台服务不可用，请在终端运行：\nsudo launchctl kickstart -k system/com.calabi.daemon"
-                    } else {
-                        "如后台服务不可用，请在终端运行：\nsudo calabi daemon restart"
-                    };
-                    handle
-                        .dialog()
-                        .message(format!(
-                            "{}: {}\n{}: {}\n\n{}",
-                            tr(&handle, "后台服务"),
-                            tr(
-                                &handle,
-                                if health.running {
-                                    "有响应"
-                                } else {
-                                    "无响应"
+                let result = match supervisor {
+                    Some(sup) => {
+                        let result = sup.restart().await;
+                        let health = sup.status().await;
+                        refresh(&handle, &sup, &health).await;
+                        if result.is_ok() {
+                            if let Some(main) = handle.get_webview_window("main") {
+                                if let Ok(url) = reqwest::Url::parse(&sup.url()) {
+                                    if main.url().ok().map(|u| u.origin()) != Some(url.origin()) {
+                                        let _ = main.navigate(url);
+                                    }
                                 }
-                            ),
-                            tr(&handle, "组网"),
-                            state,
-                            tr(&handle, hint)
-                        ))
-                        .title(tr(&handle, "连接诊断"))
-                        .buttons(MessageDialogButtons::OkCustom(tr(&handle, "确定")))
-                        .show(|_| {});
+                            }
+                        }
+                        result
+                    }
+                    None => Err("Supervisor unavailable".into()),
+                };
+                let key = match result {
+                    Ok(()) if cfg!(windows) => return,
+                    Ok(()) => "服务已重启",
+                    Err(error) => {
+                        log::warn!("Service restart failed: {error}");
+                        "服务重启失败"
+                    }
+                };
+                handle
+                    .dialog()
+                    .message(tr(&handle, key))
+                    .title(tr(&handle, "重启服务"))
+                    .buttons(MessageDialogButtons::OkCustom(tr(&handle, "确定")))
+                    .show(|_| {});
+            });
+        }
+        "mesh-up" | "mesh-down" => {
+            let handle = app.clone();
+            let stop = action == "mesh-down";
+            tauri::async_runtime::spawn(async move {
+                let items = handle.state::<Items>();
+                let Ok(_guard) = items.mesh_change.try_lock() else {
+                    return;
+                };
+                let sup = handle.state::<Option<Arc<Supervisor>>>().inner().clone();
+                if let Some(sup) = sup {
+                    let result = change_mesh(&sup.url(), stop).await;
+                    refresh(&handle, &sup, &sup.status().await).await;
+                    match result {
+                        Ok(()) => return,
+                        Err(error) => log::warn!("Tray mesh change failed: {error}"),
+                    }
                 }
+                handle
+                    .dialog()
+                    .message(tr(&handle, "操作失败，请重试"))
+                    .title(tr(&handle, if stop { "停止组网" } else { "启动组网" }))
+                    .buttons(MessageDialogButtons::OkCustom(tr(&handle, "确定")))
+                    .show(|_| {});
             });
         }
         "settings" => open(app, "/settings"),
@@ -314,6 +347,59 @@ fn run_action(app: &AppHandle, action: &str) {
         }
         _ => {}
     }
+}
+
+fn mesh_action(state: &Value) -> Option<&'static str> {
+    if state["paused"] == true {
+        Some("mesh-up")
+    } else if state["enabled"] == true {
+        Some("mesh-down")
+    } else {
+        None
+    }
+}
+
+async fn change_mesh(base: &str, stop: bool) -> Result<(), String> {
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(5))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let state = get(&client, base, "/v1/mesh")
+        .await
+        .ok_or("Mesh unavailable")?;
+    let (action, path) = if stop {
+        ("mesh-down", "/v1/mesh/down")
+    } else {
+        ("mesh-up", "/v1/mesh/up")
+    };
+    if mesh_action(&state) != Some(action) {
+        return Err("Mesh state changed".into());
+    }
+    for attempt in 0..2 {
+        let auth = get(&client, base, "/v1/local-token")
+            .await
+            .ok_or("Local token unavailable")?;
+        let token = auth["token"]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .ok_or("Missing local token")?;
+        let response = client
+            .post(format!("{base}{path}"))
+            .header("X-Local-Token", token)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        if attempt == 0 && response.status() == reqwest::StatusCode::UNAUTHORIZED {
+            continue;
+        }
+        return response
+            .error_for_status()
+            .map(|_| ())
+            .map_err(|e| e.to_string());
+    }
+    Err("Local authorization failed".into())
 }
 
 async fn get(client: &reqwest::Client, base: &str, path: &str) -> Option<Value> {
@@ -397,6 +483,6 @@ pub async fn refresh(app: &AppHandle, sup: &Supervisor, health: &DaemonStatus) {
                 .count()
         });
     *items.address.lock().unwrap() = ip.into();
-    *items.snapshot.lock().unwrap() = serde_json::json!({"name":name,"org":org,"org_id":org_id,"fallback_name":"本机","fallback_org":"暂不可用","status":status,"ip":ip,"up":up,"online":online,"files":crate::files::supported()});
+    *items.snapshot.lock().unwrap() = serde_json::json!({"name":name,"org":org,"org_id":org_id,"fallback_name":"本机","fallback_org":"暂不可用","status":status,"ip":ip,"up":up,"mesh_action":mesh_action(&mesh),"online":online,"files":crate::files::supported()});
     update_tooltip(app);
 }

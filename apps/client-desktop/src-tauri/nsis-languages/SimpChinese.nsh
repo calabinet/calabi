@@ -36,6 +36,7 @@ LangString calabiStoppingService ${LANG_SIMPCHINESE} "正在停止 Calabi 后台
 LangString calabiFileBusy ${LANG_SIMPCHINESE} "Calabi 程序文件仍被占用，已停止安装。"
 LangString calabiFileBusyError ${LANG_SIMPCHINESE} "Calabi 程序文件仍被占用，无法替换。请关闭仍在运行的 Calabi 命令行或文件工具后重试。已尝试恢复原后台服务。"
 LangString calabiRegisteringService ${LANG_SIMPCHINESE} "正在注册 Calabi 后台服务…"
+LangString calabiServiceConfigFailed ${LANG_SIMPCHINESE} "无法配置 Calabi 服务。Windows 错误码：$R0"
 LangString calabiServiceInstallResult ${LANG_SIMPCHINESE} "后台服务注册返回码：$R0"
 LangString calabiServiceNotRegistered ${LANG_SIMPCHINESE} "Calabi 后台服务尚未注册。"
 LangString calabiServiceInstallFailed ${LANG_SIMPCHINESE} "无法注册后台服务。请解决下述问题后重试安装。$\r$\n$\r$\n技术详情：$R1"

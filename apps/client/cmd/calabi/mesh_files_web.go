@@ -2,9 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/subtle"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,11 +24,12 @@ import (
 // A dedicated capability protects private records; daemon console credentials
 // cannot access it. Remote binding is restricted to the current overlay IP.
 type fileBrowser struct {
-	d                         *desktopFileAgent
-	root                      *os.Root
-	directory, authority, key string
-	action                    func(fileAction) (any, error)
-	managed                   bool
+	d                    *desktopFileAgent
+	root                 *os.Root
+	directory, authority string
+	auth                 *browserAuth
+	action               func(fileAction) (any, error)
+	managed              bool
 }
 
 func browserAddress(addr, overlay string) error {
@@ -79,7 +77,8 @@ func (d *desktopFileAgent) serveBrowser(addr, directory string) error {
 		return err
 	}
 	defer root.Close()
-	key, err := browserKey(d.dir)
+	auth := newBrowserAuth()
+	pair, err := auth.issuePair()
 	if err != nil {
 		return err
 	}
@@ -87,49 +86,23 @@ func (d *desktopFileAgent) serveBrowser(addr, directory string) error {
 	if err != nil {
 		return err
 	}
-	web := &fileBrowser{d: d, root: root, directory: directory, authority: l.Addr().String(), key: key, action: d.handle}
+	web := &fileBrowser{d: d, root: root, directory: directory, authority: l.Addr().String(), auth: auth, action: d.handle}
+	closeAuth, err := startBrowserAuth(d.ctx, filepath.Join(d.dir, "browser-auth.sock"), "http://"+web.authority+"/", auth)
+	if err != nil {
+		l.Close()
+		return err
+	}
+	defer closeAuth()
 	srv := &http.Server{Handler: web, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	stop := context.AfterFunc(d.ctx, func() { _ = srv.Close() })
 	defer stop()
-	fmt.Printf("File browser (private access link; do not share): http://%s/#/mesh/files?key=%s\n", web.authority, key)
+	fmt.Printf("File browser (single-use pairing, valid for five minutes; do not share): http://%s/#/mesh/files?pair=%s\n", web.authority, pair)
 	fmt.Printf("Server file directory: %s\nReception starts off; keep this process running.\n", directory)
 	err = srv.Serve(l)
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
 	return err
-}
-
-func browserKey(directory string) (string, error) {
-	root, err := os.OpenRoot(directory)
-	if err != nil {
-		return "", err
-	}
-	defer root.Close()
-	b, err := root.ReadFile("browser-access-key")
-	if errors.Is(err, os.ErrNotExist) {
-		var secret [32]byte
-		if _, err = rand.Read(secret[:]); err != nil {
-			return "", err
-		}
-		b = []byte(hex.EncodeToString(secret[:]))
-		f, e := root.OpenFile("browser-access-key", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-		if e != nil {
-			return "", e
-		}
-		_, err = f.Write(b)
-		if err == nil {
-			err = f.Sync()
-		}
-		err = errors.Join(err, f.Close())
-	}
-	if err != nil {
-		return "", err
-	}
-	if _, err := hex.DecodeString(string(b)); err != nil || len(b) != 64 {
-		return "", errors.New("invalid private browser access key")
-	}
-	return string(b), nil
 }
 
 func browserJSON(w http.ResponseWriter, code int, value any) {
@@ -164,24 +137,30 @@ func (b *fileBrowser) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
-		if r.URL.Path == "/file-web/session" && r.Method == "POST" {
-			var v struct {
-				Key string `json:"key"`
-			}
-			if json.NewDecoder(r.Body).Decode(&v) != nil || len(v.Key) != 64 || subtle.ConstantTimeCompare([]byte(v.Key), []byte(b.key)) != 1 {
-				browserError(w, 401, "invalid browser access key")
-				return
-			}
-			cookiePath := "/file-web/"
-			if b.managed {
-				cookiePath = "/file-service/file-web/"
-			}
-			http.SetCookie(w, &http.Cookie{Name: "calabi_file_browser", Value: b.key, HttpOnly: true, SameSite: http.SameSiteStrictMode, Path: cookiePath})
-			browserJSON(w, 200, map[string]bool{"ok": true})
+		if b.auth == nil {
+			browserError(w, 401, "browser authentication required")
 			return
 		}
-		cookie, err := r.Cookie("calabi_file_browser")
-		if err != nil || subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(b.key)) != 1 {
+		if r.URL.Path == "/file-web/session" && r.Method == "POST" {
+			var v struct {
+				Pair string `json:"pair"`
+			}
+			dec := json.NewDecoder(r.Body)
+			dec.DisallowUnknownFields()
+			if dec.Decode(&v) != nil {
+				browserError(w, 401, "invalid or expired pairing")
+				return
+			}
+			token, session, ok := b.auth.exchange(v.Pair, r.Host, r.UserAgent())
+			if !ok {
+				browserError(w, 401, "invalid or expired pairing")
+				return
+			}
+			http.SetCookie(w, &http.Cookie{Name: "calabi_file_browser", Value: token, HttpOnly: true, SameSite: http.SameSiteStrictMode, Path: b.cookiePath(), Secure: r.TLS != nil || strings.HasPrefix(r.Header.Get("Origin"), "https://")})
+			browserJSON(w, 200, session)
+			return
+		}
+		if _, ok := b.auth.authorize(browserCookie(r), r.Host, false); !ok {
 			browserError(w, 401, "browser authentication required")
 			return
 		}
@@ -234,6 +213,23 @@ func browserName(name string) bool {
 func (b *fileBrowser) api(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == "GET" && r.URL.Path == "/file-web/ping":
+		session, _ := b.auth.authorize(browserCookie(r), r.Host, false)
+		browserJSON(w, 200, session)
+		return
+	case r.Method == "GET" && r.URL.Path == "/file-web/sessions":
+		browserJSON(w, 200, b.auth.list(browserCookie(r), r.Host))
+		return
+	case r.Method == "POST" && r.URL.Path == "/file-web/sessions/revoke":
+		var v struct {
+			ID  string `json:"id"`
+			All bool   `json:"all"`
+		}
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if dec.Decode(&v) != nil || !b.auth.revoke(browserCookie(r), r.Host, v.ID, v.All) {
+			browserError(w, 400, "invalid browser session")
+			return
+		}
 		browserJSON(w, 200, map[string]bool{"ok": true})
 		return
 	case r.Method == "GET" && r.URL.Path == "/file-web/catalog":
@@ -289,11 +285,10 @@ func (b *fileBrowser) api(w http.ResponseWriter, r *http.Request) {
 		browserJSON(w, 200, map[string]any{"up": v.Ready, "overlay": v.Overlay, "peers": peers})
 		return
 	case r.Method == "POST" && r.URL.Path == "/file-web/logout":
-		cookiePath := "/file-web/"
-		if b.managed {
-			cookiePath = "/file-service/file-web/"
+		if session, ok := b.auth.authorize(browserCookie(r), r.Host, false); ok {
+			b.auth.revoke(browserCookie(r), r.Host, session.ID, false)
 		}
-		http.SetCookie(w, &http.Cookie{Name: "calabi_file_browser", Value: "", Path: cookiePath, HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1})
+		http.SetCookie(w, &http.Cookie{Name: "calabi_file_browser", Value: "", Path: b.cookiePath(), HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1, Secure: r.TLS != nil || strings.HasPrefix(r.Header.Get("Origin"), "https://")})
 		browserJSON(w, 200, map[string]bool{"ok": true})
 		return
 	case r.Method == "POST" && r.URL.Path == "/file-web/action":
@@ -308,6 +303,13 @@ func (b *fileBrowser) api(w http.ResponseWriter, r *http.Request) {
 		if dec.Decode(&a) != nil {
 			browserError(w, 400, "invalid file action")
 			return
+		}
+		// Background snapshots and status polling must not keep an unattended session alive.
+		if a.Action != "snapshot" && a.Action != "supported" && a.Action != "identity_status" {
+			if _, ok := b.auth.authorize(browserCookie(r), r.Host, true); !ok {
+				browserError(w, 401, "browser authentication required")
+				return
+			}
 		}
 		var result any
 		var err error
@@ -396,4 +398,18 @@ func (b *fileBrowser) api(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.NotFound(w, r)
+}
+
+func (b *fileBrowser) cookiePath() string {
+	if b.managed {
+		return "/file-service/file-web/"
+	}
+	return "/file-web/"
+}
+func browserCookie(r *http.Request) string {
+	cookie, err := r.Cookie("calabi_file_browser")
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
 }

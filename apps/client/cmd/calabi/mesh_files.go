@@ -656,6 +656,7 @@ func runMeshFiles(args []string) int {
 	stdio := fs.Bool("stdio", false, "private JSON-lines protocol for desktop shell")
 	console := fs.String("console", "http://127.0.0.1:7400", "exact supervised daemon console URL")
 	web := fs.String("web", "", "Linux browser control: explicit loopback or this device's overlay IP:port")
+	webURL := fs.Bool("web-url", false, "issue a five-minute single-use pairing link for the running browser file agent")
 	webDir := fs.String("web-dir", "", "existing directory for browser file selection and export")
 	if fs.Parse(args) != nil {
 		return 2
@@ -667,6 +668,19 @@ func runMeshFiles(args []string) int {
 	if (*web != "" && (runtime.GOOS != "linux" || *stdio || *webDir == "")) || (*web == "" && *webDir != "") {
 		fmt.Fprintln(os.Stderr, "browser control requires Linux, --web IP:port and --web-dir; it cannot be combined with --stdio")
 		return 2
+	}
+	if *webURL {
+		if *stdio || *web != "" || *webDir != "" {
+			fmt.Fprintln(os.Stderr, "--web-url cannot start a file agent")
+			return 2
+		}
+		link, err := standaloneBrowserURL()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		fmt.Println(link)
+		return 0
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

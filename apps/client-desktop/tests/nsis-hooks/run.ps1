@@ -194,7 +194,7 @@ function Scenario {
 # registered, did the installer say so truthfully (exit code), and what did the
 # hook actually run.
 function PostScenario {
-    param($name, $installMode, $startMode, [bool]$preRegistered, [bool]$expectOk, $expectInErrorLog = '', $firewallMode = 'ok', [bool]$legacyFixture = $true)
+    param($name, $installMode, $startMode, [bool]$preRegistered, [bool]$expectOk, $expectInErrorLog = '', $firewallMode = 'ok', [bool]$legacyFixture = $true, $accessMode = 'ok')
 
     if (Test-Path $dirPost) { [System.IO.Directory]::Delete($dirPost, $true) }
     New-Item -ItemType Directory -Force -Path $dirPost | Out-Null
@@ -209,6 +209,7 @@ function PostScenario {
     $env:CALABI_FAKE_REGKEY = $fakeKey
     $env:CALABI_FAKE_LOG = $fakeLog
     $env:CALABI_FAKE_FIREWALL = $firewallMode
+    $env:CALABI_FAKE_ACCESS = $accessMode
 
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $p = Start-Process -FilePath $instPost -ArgumentList '/S' -Wait -PassThru
@@ -233,7 +234,7 @@ function PostScenario {
         if (-not $afterPost) { $problems += 'hook aborted' }
         if ($p.ExitCode -ne 0) { $problems += "installer exited $($p.ExitCode)" }
         if (-not $registered) { $problems += 'service is NOT registered' }
-        if ($calls.Count -ne 3 -or $calls[1] -ne 'mesh files firewall install' -or $calls[2] -ne 'daemon start') { $problems += "ran [$($calls -join ' | ')], want install then firewall then start" }
+        if ($calls.Count -ne 4 -or $calls[1] -ne '--configure-installed-service' -or $calls[2] -ne 'mesh files firewall install' -or $calls[3] -ne 'daemon start') { $problems += "ran [$($calls -join ' | ')], want install then restart access then firewall then start" }
         if ($errLog) { $problems += 'left a service-install-error.log behind' }
     } else {
         if ($afterPost) { $problems += 'hook did NOT abort' }
@@ -246,7 +247,7 @@ function PostScenario {
         if ($firewallMode -eq 'fail' -and ($calls -contains 'daemon start')) { $problems += 'started service despite firewall setup failure' }
     }
 
-    $enrolled = $installMode -ne 'refuse' -and $firewallMode -ne 'fail'
+    $enrolled = $accessMode -eq 'ok' -and $installMode -ne 'refuse' -and $firewallMode -ne 'fail'
     if ((Test-Path -LiteralPath $legacyScript) -ne ($legacyFixture -and -not $enrolled)) { $problems += 'legacy script cleanup did not match embedded enrollment outcome' }
     $verdict = if ($problems.Count -eq 0) { 'PASS' } else { 'FAIL' }
     if ($problems.Count -gt 0) { $script:failures++ }
@@ -280,6 +281,7 @@ try {
     # The field failure: refused, nothing registered, and the installer said "Completed".
     PostScenario 'install refused: nothing registered'             'refuse' 'ok'   $false $false 'standalone mode'
     PostScenario 'registered, but the service will not start'      'ok'     'fail' $false $false 'did not respond'
+    PostScenario 'restart permission setup refused' 'ok' 'ok' $false $false 'configure-installed-service' 'ok' $true 'fail'
     PostScenario 'firewall refused: install must report failure'   'ok'     'ok'   $false $false 'firewall policy denied' 'fail'
     UninstallScenario $false
     UninstallScenario $true
@@ -289,7 +291,7 @@ try {
 }
 finally {
     Set-ImagePath $null
-    foreach ($v in 'CALABI_FAKE_INSTALL', 'CALABI_FAKE_START', 'CALABI_FAKE_REGKEY', 'CALABI_FAKE_LOG', 'CALABI_FAKE_FIREWALL', 'CALABI_FAKE_DELETE_DATA', 'CALABI_FAKE_UPDATE_MODE') {
+    foreach ($v in 'CALABI_FAKE_ACCESS', 'CALABI_FAKE_INSTALL', 'CALABI_FAKE_START', 'CALABI_FAKE_REGKEY', 'CALABI_FAKE_LOG', 'CALABI_FAKE_FIREWALL', 'CALABI_FAKE_DELETE_DATA', 'CALABI_FAKE_UPDATE_MODE') {
         Remove-Item "Env:$v" -ErrorAction SilentlyContinue
     }
 }
