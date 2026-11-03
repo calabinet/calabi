@@ -14,16 +14,18 @@ verification instructions on the releases page, but no written changelog.
 
 ### Mesh
 
-- Online devices appear first in the peer list. The client refreshes mesh status when you return to the window and retains your saved node preference after a restart.
+- **Changed** — Online devices appear first in the peer list, and the client refreshes mesh status when you return to the window.
+- **Fixed** — Your saved node preference is retained after a restart.
 
 ### Local console
 
-- Pair a browser with the Linux file service using a one-time link. You can manage files in the console and revoke a browser session without interrupting an approved transfer.
-- Start or stop mesh from the desktop tray. On Windows, the account using the desktop during installation can restart **Calabi Client Service** from the tray without an elevation prompt.
+- **Added** — Pair a browser with the Linux file service using a one-time link. You can manage files in the console and revoke a browser session without interrupting an approved transfer.
+- **Added** — Start or stop mesh from the desktop tray.
+- **Changed** — On Windows, the account using the desktop during installation can restart the service from the tray without an elevation prompt. The service is now displayed as **Calabi Client Service**.
 
 ### Mobile
 
-- Android shows the home screen once its initial data is ready, so its sections appear together.
+- **Fixed** — Android shows the home screen once its initial data is ready, so its sections appear together.
 
 ## 2.5.1 — 2026-10-30
 
