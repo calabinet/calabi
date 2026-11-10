@@ -167,6 +167,14 @@ code, bound in with gomobile (`apps/client/mobile`).
 - **Per-day usage split** — the local console books mesh traffic as *direct* vs
   *relayed*, so you can see how much actually needed a relay.
 
+### File transfers and remote access
+
+- **Send files between mesh devices** from **Mesh → File transfers**. The receiving device enables file reception and confirms incoming requests.
+- **Connect to your own Windows desktop** from the device's **Remote login** menu. The Windows and macOS desktop apps support copying files in either direction during an RDP session.
+- **Open a Linux SSH terminal** from the same device menu. Use the session's **Files** panel to manage files over SFTP.
+
+See the [file transfer and remote access guide](docs/mesh-file-and-remote-access.md) for setup, supported platforms, and availability on self-hosted and calabi.net networks.
+
 ## The local console
 
 While the daemon runs it serves a web console on **`http://127.0.0.1:7400`** —
