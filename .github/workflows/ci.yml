@@ -52,6 +52,12 @@ jobs:
             apps/*/go.sum
             pkg/*/go.sum
 
+      # The file-copy tests bind two distinct loopback addresses. macOS
+      # runners only assign 127.0.0.1 to lo0 by default.
+      - name: Add the second test loopback address on macOS
+        if: runner.os == 'macOS'
+        run: sudo /sbin/ifconfig lo0 alias 127.0.0.2 netmask 255.255.255.255
+
       # The module list comes from go.work rather than a list pinned here, so a
       # new module is covered the day it is added. The paths in go.work are
       # relative and forward-slashed, which `cd` accepts on Windows too.
