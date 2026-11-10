@@ -170,6 +170,7 @@ code, bound in with gomobile (`apps/client/mobile`).
 ### File transfers and remote access
 
 - **Send files between mesh devices** from **Mesh → File transfers**. The receiving device enables file reception and confirms incoming requests.
+- **Help another mesh member** from the device's **Offer assistance** menu. The person at the Windows PC approves screen viewing and can separately allow keyboard and mouse control.
 - **Connect to your own Windows desktop** from the device's **Remote login** menu. The Windows and macOS desktop apps support copying files in either direction during an RDP session.
 - **Open a Linux SSH terminal** from the same device menu. Use the session's **Files** panel to manage files over SFTP.
 

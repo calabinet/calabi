@@ -7,6 +7,7 @@ These steps apply to Calabi 2.7.0. Connect both devices to the same mesh and mak
 | What you want to do | Where to start | Where it is available |
 | --- | --- | --- |
 | Send local files to another mesh device | **Mesh → File transfers** | Windows, macOS, Android, and Linux with the Calabi file service. Self-hosted and calabi.net meshes. |
+| Help another user with their current Windows desktop | **Mesh → Devices → More → Offer assistance** | Windows or macOS desktop app helping a Windows user on the same self-hosted or calabi.net mesh. The Windows user approves each session. |
 | Copy files while using a Windows desktop | **Mesh → Devices → More → Remote login** | A Windows or macOS desktop app connecting to a Windows device that calabi.net identifies as belonging to the same user. |
 | Open a Linux terminal or manage files over SFTP | **Mesh → Devices → More → Remote login** | A Windows or macOS desktop app connecting to a Linux mesh device. Self-hosted and calabi.net meshes. |
 
@@ -17,6 +18,14 @@ These steps apply to Calabi 2.7.0. Connect both devices to the same mesh and mak
 3. On the receiving device, accept the request. Both sides can see progress in **File transfers**. The receiver can save the completed files to the desired location.
 
 On Linux, use the Calabi file service and its file-management page. Run `calabi mesh files service status` to check the service and `calabi mesh files service web-url` to generate a one-time browser pairing link. Turn on receiving in the file-management page. A managed Linux receiver can also save incoming files automatically if you explicitly enable that option.
+
+## Offer remote assistance to another mesh member
+
+1. On the Windows device receiving help, sign in to Windows and open the Calabi desktop app. Go to **Mesh → Mesh settings → Receive on this device** and turn on **Allow assistance requests on this device**. This setting is off by default and takes effect immediately. The Windows user must be present to approve the request.
+2. On the helper's Windows or macOS desktop app, go to **Mesh → Devices**, open **More** on the other user's online Windows device, and choose **Offer assistance**. The Windows user reviews the request and approves viewing. The helper can then see that user's current desktop in **View only** mode.
+3. If keyboard and mouse control is needed, the Windows user grants it separately. They can revoke control while continuing to share their screen, or end the session at any time. A new session requires fresh approval.
+
+Assistance shares the current Windows desktop and uses Calabi's consent prompts. To exchange files during assistance, use [device-to-device file transfers](#send-files-between-mesh-devices) with its own receiving setting.
 
 ## Copy files in a Windows Remote Desktop session
 
