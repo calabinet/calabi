@@ -34,6 +34,7 @@ import (
 // flowKey identifies one conversation from THIS machine's point of view, so the
 // outbound and inbound halves produce the same key.
 type flowKey struct {
+	echoID     uint32
 	proto      uint8
 	local      netip.Addr
 	remote     netip.Addr
@@ -95,7 +96,10 @@ func (f *flowTable) clock() time.Time {
 // with port 0, which only ever matches another port-less packet of the same
 // protocol between the same hosts.
 func (f *flowTable) observeOutbound(t tuple) {
-	k := flowKey{proto: t.proto, local: t.src, remote: t.dst, localPort: t.srcPort, remotePort: t.dstPort}
+	if t.isICMP() && t.echoKind != echoRequest {
+		return
+	}
+	k := flowKey{proto: t.proto, local: t.src, remote: t.dst, localPort: t.srcPort, remotePort: t.dstPort, echoID: t.echoID}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	now := f.clock()
@@ -114,7 +118,7 @@ func (f *flowTable) observeOutbound(t tuple) {
 // isReply reports whether an inbound packet is the other half of a conversation
 // this machine started, refreshing the flow when it is.
 func (f *flowTable) isReply(t tuple) bool {
-	k := flowKey{proto: t.proto, local: t.dst, remote: t.src, localPort: t.dstPort, remotePort: t.srcPort}
+	k := flowKey{proto: t.proto, local: t.dst, remote: t.src, localPort: t.dstPort, remotePort: t.srcPort, echoID: t.echoID}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	exp, ok := f.seen[k]

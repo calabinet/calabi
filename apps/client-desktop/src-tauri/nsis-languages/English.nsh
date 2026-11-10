@@ -50,3 +50,5 @@ LangString calabiRemoveFirewallFailed ${LANG_ENGLISH} "The file reception firewa
 LangString calabiRemovingService ${LANG_ENGLISH} "Removing the Calabi background service..."
 
 !include "${CALABI_MAINTENANCE_FILE}"
+
+LangString calabiFileAgentSetupFailed ${LANG_ENGLISH} "Could not configure the Calabi file agent sign-in task.$\r$\n$\r$\nTechnical details: $R1"

@@ -24,7 +24,7 @@ var nodeFieldHandling = map[string]string{
 	"DERPHome": "both", "AdvertisedRoutes": "both", "ApprovedRoutes": "both",
 	"RoutesReviewed": "both", "AliasedRoutes": "both", "RouteAliases": "both",
 	"OwnerUserID": "both", "Tags": "both", "DeviceFingerprint": "both", "OS": "both",
-	"BlockIncoming": "both", "EnrolledBy": "both", "SignedOut": "both",
+	"BlockIncoming": "both", "ACLPortless": "both", "ACLICMP": "both", "EnrolledBy": "both", "SignedOut": "both",
 	// Admin decisions: set on insert, never by a node's own re-enrolment
 	// (each has its own setter).
 	"Approved": "insert", "TagsPinned": "insert", "RealRoutes": "insert",
@@ -58,6 +58,8 @@ func nodeWith(v byte) *core.Node {
 		DeviceFingerprint: "fp-" + string('a'+v),
 		OS:                "os-" + string('a'+v),
 		BlockIncoming:     &b,
+		ACLPortless:       &b,
+		ACLICMP:           &b,
 		EnrolledBy:        "user:" + string('1'+v),
 		SignedOut:         b,
 		Approved:          b,

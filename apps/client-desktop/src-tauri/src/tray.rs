@@ -77,6 +77,7 @@ pub fn tray_set_locale(
     }
     let language = app.try_state::<Language>().ok_or("Tray not ready")?;
     language.set(&locale);
+    crate::tray_locale::persist_native_locale(&app).map_err(|error| error.to_string())?;
     update_tooltip(&app);
     Ok(())
 }
@@ -320,7 +321,9 @@ fn run_action(app: &AppHandle, action: &str) {
                 .as_ref()
                 .map(|s| s.is_attached())
                 .unwrap_or(true);
-            let message = if attached {
+            let message = if attached && cfg!(windows) {
+                "后台组网与端点继续运行。只要 Windows 用户保持登录，远程控制此设备时仍可双向复制文件。"
+            } else if attached {
                 "后台组网与端点继续运行。文件接收和进行中的传输将停止。"
             } else {
                 "组网、端点和文件传输将停止。"

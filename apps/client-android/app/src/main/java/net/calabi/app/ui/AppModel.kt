@@ -159,7 +159,7 @@ class AppModel {
         stoppedInBackground = AppPrefs.vpnStoppedFromOutside(CalabiApp.instance)
         val m = CoreClient.call("GET", "/v1/mesh").json()
         connection = Connection(
-            state = m.optString("state"), error = UserErrors.stateError(m.optString("error")), name = m.optString("name"),
+            state = m.optString("state"), error = UserErrors.stateError(m.optString("error"), m.optString("enrollment_error")), name = m.optString("name"),
             overlay = m.optString("overlay"), selfOverlay = m.optString("self_overlay"), exitNode = m.optString("exit_node"),
             peers = m.optJSONArray("peers") ?: JSONArray(),
             certPresented = m.optString("cert_presented"), certPinned = m.optString("cert_pinned"),

@@ -706,14 +706,18 @@ func (r *meshRunner) MeshStatus() localweb.MeshStatus {
 	// overview a self-hosted relay from a platform one. Read from the controller,
 	// which owns the measured home; Relay below is only the address.
 	r.mu.Lock()
-	ctrl := r.ctrl
+	ctrl, lastErr := r.ctrl, r.lastErr
 	r.mu.Unlock()
+	if ctrl == nil || !ctrl.Registered() {
+		ms.EnrollmentError = mesh.EnrollmentError(lastErr)
+	}
 	if ctrl != nil {
 		ms.DerpHome = ctrl.HomeRegion()
 	}
 	if dp := r.datapath(); dp != nil {
-		ms.Up = true
 		snap := dp.Snapshot()
+		// A TUN exists before registration; only an applied netmap makes it usable.
+		ms.Up = snap.NetMapSeen && snap.Overlay != "" && ms.EnrollmentError == ""
 		ms.Overlay = snap.Overlay
 		if snap.Relay != "" {
 			ms.Relay = snap.Relay // the relay actually homed at, which may have moved

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"github.com/gofrs/flock"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/netip"
@@ -24,13 +25,21 @@ import (
 )
 
 type Grant struct {
-	Path      string `json:"path,omitempty"`
-	Peer      Peer   `json:"peer"`
-	DeviceKey string `json:"device_key"`
-	Port      uint16 `json:"port"`
-	Receiving bool   `json:"receiving"`
+	ClipboardTransport bool   `json:"clipboard_transport,omitempty"`
+	Path               string `json:"path,omitempty"`
+	Peer               Peer   `json:"peer"`
+	DeviceKey          string `json:"device_key"`
+	Port               uint16 `json:"port"`
+	Receiving          bool   `json:"receiving"`
+	Assistance         bool   `json:"assistance,omitempty"`
 }
 type AgentConfig struct {
+	ClipboardPeer   func(Grant) bool // local desktop capability and current owned-device check
+	AssistDenialLog func(netip.Addr, string)
+	HandshakeLookup func(netip.Addr) (Grant, error)
+	HandshakeLog    func(netip.Addr, string, bool)
+	// Optional ordinary-user service, dispatched only after the peer and ACL checks.
+	Assist    func(context.Context, Grant, http.ResponseWriter, *http.Request)
 	Authority func() bool // optional OS-user lease check; no HTTP token can substitute for it
 	Identity  *Identity
 	Directory string // existing private directory of this ordinary user, per scope
@@ -56,21 +65,27 @@ type Received struct {
 // Agent belongs to the interactive user process, never the privileged mesh
 // service. It owns the only file listener, shared budget and private inbox.
 type Agent struct {
-	lock        *flock.Flock
-	identityUse *flock.Flock
-	cfg         AgentConfig
-	root        *os.Root
-	mu          sync.Mutex
-	admission   sync.Mutex
-	receivers   map[string]*agentReceiver
-	budget      *Pacer
-	relayBudget *Pacer
-	gate        chan struct{}
-	receiving   atomic.Bool
-	closed      atomic.Bool
-	server      *http.Server
-	ctx         context.Context
-	cancel      context.CancelFunc
+	copyMu             sync.Mutex
+	copySession        *meshCopySession
+	lock               *flock.Flock
+	identityUse        *flock.Flock
+	cfg                AgentConfig
+	root               *os.Root
+	mu                 sync.Mutex
+	admission          sync.Mutex
+	receivers          map[string]*agentReceiver
+	budget             *Pacer
+	relayBudget        *Pacer
+	gate               chan struct{}
+	assistMu           sync.Mutex
+	assistCtx          context.Context
+	stopAssist         context.CancelFunc
+	clipboardReceiving atomic.Bool
+	receiving          atomic.Bool
+	closed             atomic.Bool
+	server             *http.Server
+	ctx                context.Context
+	cancel             context.CancelFunc
 }
 
 func NewAgent(cfg AgentConfig) (*Agent, error) {
@@ -169,7 +184,12 @@ func NewAgent(cfg AgentConfig) (*Agent, error) {
 }
 
 func (a *Agent) peerDir(g Grant) string {
-	h := sha256.Sum256([]byte(a.cfg.Scope + "\x00" + g.DeviceKey + "\x00" + g.Peer.IP.String() + "\x00" + g.Peer.Fingerprint))
+	h := sha256.Sum256([]byte(a.cfg.Scope + func() string {
+		if g.ClipboardTransport {
+			return "/rdp-clipboard"
+		}
+		return ""
+	}() + "\x00" + g.DeviceKey + "\x00" + g.Peer.IP.String() + "\x00" + g.Peer.Fingerprint))
 	return "peer-" + hex.EncodeToString(h[:])
 }
 func (a *Agent) receiver(g Grant, create bool) (*agentReceiver, error) {
@@ -204,7 +224,7 @@ func (a *Agent) receiver(g Grant, create bool) (*agentReceiver, error) {
 	directory := pr.Name()
 	pr.Close()
 	allowed := func() bool {
-		if a.closed.Load() || !a.receiving.Load() || (a.cfg.Authority != nil && !a.cfg.Authority()) || !a.cfg.Incoming(g.Peer.IP, a.cfg.Port) {
+		if a.closed.Load() || !(a.receiving.Load() && !g.ClipboardTransport || g.ClipboardTransport && a.ClipboardReceiving() && a.cfg.ClipboardPeer != nil && a.cfg.ClipboardPeer(g)) || (a.cfg.Authority != nil && !a.cfg.Authority()) || !a.cfg.Incoming(g.Peer.IP, a.cfg.Port) {
 			return false
 		}
 		now, ok := a.cfg.Resolve(g.Peer.IP)
@@ -241,18 +261,70 @@ func (a *Agent) checkQuota(extra int64, adding bool) error {
 
 func (a *Agent) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if a.closed.Load() || !a.receiving.Load() || (a.cfg.Authority != nil && !a.cfg.Authority()) {
-			fail(w, 403, "file receiving is disabled")
-			return
-		}
 		addr, err := netip.ParseAddrPort(req.RemoteAddr)
 		if err != nil {
 			fail(w, 403, "invalid source")
 			return
 		}
-		g, ok := a.cfg.Resolve(addr.Addr().Unmap())
-		if !ok || g.Peer.IP != addr.Addr().Unmap() || req.TLS == nil || checkCertificate(*req.TLS, g.Peer.Fingerprint) != nil || !a.cfg.Incoming(g.Peer.IP, a.cfg.Port) {
-			fail(w, 403, "device is no longer authorized")
+		ip := addr.Addr().Unmap()
+		assist := req.URL.Path == "/assist/v1/session"
+		deny := func(reason string) {
+			if assist && a.cfg.AssistDenialLog != nil {
+				a.cfg.AssistDenialLog(ip, reason)
+			}
+			fail(w, 403, reason)
+		}
+		if a.closed.Load() || (a.cfg.Authority != nil && !a.cfg.Authority()) {
+			deny("local session unavailable")
+			return
+		}
+		g, ok := a.cfg.Resolve(ip)
+		if !ok || g.Peer.IP != ip {
+			deny("source grant unavailable")
+			return
+		}
+		if req.TLS == nil || checkCertificate(*req.TLS, g.Peer.Fingerprint) != nil {
+			deny("source certificate rejected")
+			return
+		}
+		if !a.cfg.Incoming(ip, a.cfg.Port) {
+			deny("incoming access denied")
+			return
+		}
+		if req.URL.Path == "/rdp-copy/v2" {
+			if a.cfg.ClipboardPeer == nil || !a.cfg.ClipboardPeer(g) {
+				fail(w, 403, "remote copy unavailable")
+				return
+			}
+			a.serveMeshCopy(g, w, req)
+			return
+		}
+		if assist {
+			a.assistMu.Lock()
+			ctx := a.assistCtx
+			a.assistMu.Unlock()
+			if ctx == nil || ctx.Err() != nil {
+				deny("assistance is disabled")
+				return
+			}
+			a.cfg.Assist(ctx, g, w, req)
+			return
+		}
+		clipboardRoute := strings.HasPrefix(req.URL.Path, "/rdp-files/v1/")
+		if clipboardRoute {
+			if !a.ClipboardReceiving() || a.cfg.ClipboardPeer == nil || !a.cfg.ClipboardPeer(g) {
+				fail(w, 403, "RDP clipboard unavailable")
+				return
+			}
+			g.ClipboardTransport = true
+			clone := req.Clone(req.Context())
+			u := *req.URL
+			u.Path = strings.Replace(u.Path, "/rdp-files/v1/", "/file/v1/", 1)
+			clone.URL = &u
+			req = clone
+		}
+		if !clipboardRoute && !a.receiving.Load() {
+			fail(w, 403, "file receiving is disabled")
 			return
 		}
 		if req.Method == "POST" && req.URL.Path == "/file/v1/offers" {
@@ -265,7 +337,7 @@ func (a *Agent) Handler() http.Handler {
 			}
 			req.Body = io.NopCloser(bytes.NewReader(b))
 			var o Offer
-			if json.Unmarshal(b, &o) != nil || o.Size < 0 {
+			if json.Unmarshal(b, &o) != nil || o.Size < 0 || o.Clipboard != clipboardRoute {
 				fail(w, 400, "invalid offer")
 				return
 			}
@@ -312,13 +384,37 @@ func (a *Agent) Serve(listener net.Listener) (<-chan error, error) {
 		if err != nil {
 			return nil, err
 		}
-		g, ok := a.cfg.Resolve(addr.Addr().Unmap())
-		if !ok {
-			return nil, errors.New("unknown mesh peer")
+		ip := addr.Addr().Unmap()
+		var g Grant
+		if a.cfg.HandshakeLookup != nil {
+			g, err = a.cfg.HandshakeLookup(ip)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			var ok bool
+			g, ok = a.cfg.Resolve(ip)
+			if !ok {
+				return nil, errors.New("unknown mesh peer")
+			}
 		}
-		return a.cfg.Identity.ServerTLS(g.Peer), nil
+		config := a.cfg.Identity.ServerTLS(g.Peer)
+		if a.cfg.HandshakeLog != nil {
+			verify := config.VerifyConnection
+			config.VerifyConnection = func(cs tls.ConnectionState) error {
+				err := verify(cs)
+				if err == nil {
+					a.cfg.HandshakeLog(ip, "peer_certificate_verified", true)
+				}
+				return err
+			}
+		}
+		return config, nil
 	}}
 	a.server = &http.Server{Handler: a.Handler(), TLSConfig: tlsConfig, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 90 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192, BaseContext: func(net.Listener) context.Context { return a.ctx }}
+	if a.cfg.HandshakeLog != nil {
+		a.server.ErrorLog = log.New(handshakeLogWriter{a.cfg.HandshakeLog}, "", 0)
+	}
 	done := make(chan error, 1)
 	server := a.server
 	go func() {
@@ -329,6 +425,7 @@ func (a *Agent) Serve(listener net.Listener) (<-chan error, error) {
 		}
 		a.mu.Unlock()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			_ = a.SetAssistance(false)
 			_ = a.SetReceiving(false)
 		}
 		done <- err
@@ -340,7 +437,8 @@ func (a *Agent) Serve(listener net.Listener) (<-chan error, error) {
 // second OS user can claim their own receiving session. It retains the private
 // workspace and does not interrupt an outgoing transfer by this same user.
 func (a *Agent) StopServing() error {
-	err := a.SetReceiving(false)
+	_ = a.SetAssistance(false)
+	err := errors.Join(a.SetReceiving(false), a.SetClipboardReceiving(false))
 	a.mu.Lock()
 	server := a.server
 	a.server = nil
@@ -357,6 +455,9 @@ func (a *Agent) SetReceiving(enabled bool) error {
 		a.receiving.Store(false)
 		a.mu.Lock()
 		for _, r := range a.receivers {
+			if r.grant.ClipboardTransport {
+				continue
+			}
 			r.receiver.Interrupt()
 		}
 		a.mu.Unlock()
@@ -374,6 +475,9 @@ func (a *Agent) SetReceiving(enabled bool) error {
 	a.mu.Lock()
 	receivers := make([]*Receiver, 0, len(a.receivers))
 	for _, r := range a.receivers {
+		if r.grant.ClipboardTransport {
+			continue
+		}
 		receivers = append(receivers, r.receiver)
 	}
 	a.mu.Unlock()
@@ -383,6 +487,30 @@ func (a *Agent) SetReceiving(enabled bool) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+func (a *Agent) SetAssistance(enabled bool) error {
+	a.assistMu.Lock()
+	defer a.assistMu.Unlock()
+	if !enabled {
+		if a.stopAssist != nil {
+			a.stopAssist()
+		}
+		a.assistCtx = nil
+		a.stopAssist = nil
+		return nil
+	}
+	if a.cfg.Assist == nil || a.closed.Load() {
+		return errors.New("assistance unavailable")
+	}
+	if a.assistCtx == nil {
+		a.assistCtx, a.stopAssist = context.WithCancel(a.ctx)
+	}
+	return nil
+}
+func (a *Agent) Assisting() bool {
+	a.assistMu.Lock()
+	defer a.assistMu.Unlock()
+	return a.assistCtx != nil && a.assistCtx.Err() == nil
 }
 func (a *Agent) Receiving() bool { return a.receiving.Load() && !a.closed.Load() }
 func (a *Agent) Alive() bool     { return !a.closed.Load() }
@@ -496,17 +624,21 @@ func (a *Agent) CopyCompleted(ctx context.Context, id string, dst io.Writer) err
 	}
 	return r.CopyCompleted(ctx, id, dst)
 }
-func (a *Agent) Sender(ip netip.Addr) (*BatchSender, error) {
+func (a *Agent) Sender(ip netip.Addr) (*BatchSender, error) { return a.sender(ip, false) }
+func (a *Agent) sender(ip netip.Addr, clipboard bool) (*BatchSender, error) {
 	g, ok := a.cfg.Resolve(ip)
-	if !ok || !g.Receiving {
+	if !ok || (!clipboard && !g.Receiving) || (clipboard && (a.cfg.ClipboardPeer == nil || !a.cfg.ClipboardPeer(g))) {
 		return nil, errors.New("peer is offline, unsupported or not receiving")
 	}
 	allowed := func() bool {
 		now, ok := a.cfg.Resolve(ip)
-		return !a.closed.Load() && (a.cfg.Authority == nil || a.cfg.Authority()) && ok && now.Receiving && now.Peer == g.Peer && now.DeviceKey == g.DeviceKey && now.Port == g.Port
+		return !a.closed.Load() && (a.cfg.Authority == nil || a.cfg.Authority()) && ok && (now.Receiving && !clipboard || clipboard && a.cfg.ClipboardPeer != nil && a.cfg.ClipboardPeer(now)) && now.Peer == g.Peer && now.DeviceKey == g.DeviceKey && now.Port == g.Port
 	}
 	s, err := NewBatchSender(a.cfg.Identity, a.cfg.LocalIP, g.Peer, int(g.Port), a.budget, allowed, a.cfg.Scope)
 	if err == nil {
+		if clipboard {
+			s.base = "https://" + netJoin(g.Peer.IP, int(g.Port)) + "/rdp-files/v1"
+		}
 		s.flow, _ = NewPacer(a.cfg.Kbps)
 		s.flow.startAt(InitialKbps)
 		s.pathBudget = func() *Pacer { return a.pathBudget(ip) }
@@ -525,6 +657,9 @@ func (a *Agent) Close() error {
 		return nil
 	}
 	a.cancel()
+	a.copyMu.Lock()
+	a.dropCopyLocked()
+	a.copyMu.Unlock()
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.server != nil {
@@ -550,4 +685,53 @@ func (a *Agent) Close() error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// net/http reports TLS failures here, including ones before VerifyConnection.
+// Never retain arbitrary bytes from a malformed or unauthenticated ClientHello.
+type handshakeLogWriter struct {
+	record func(netip.Addr, string, bool)
+}
+
+func (w handshakeLogWriter) Write(p []byte) (int, error) {
+	const prefix = "http: TLS handshake error from "
+	line := strings.TrimSpace(string(p))
+	if !strings.HasPrefix(line, prefix) {
+		log.Print(line)
+		return len(p), nil
+	}
+	address, reason, ok := strings.Cut(strings.TrimPrefix(line, prefix), ": ")
+	addr, err := netip.ParseAddrPort(address)
+	if !ok || err != nil {
+		return len(p), nil
+	}
+	switch reason {
+	case "metadata_agent_stopped", "metadata_refresh_timeout", "metadata_refresh_failed", "metadata_not_ready", "declaration_missing", "member_not_in_netmap", "metadata_unavailable", "scope_changed", "declaration_expired", "no_verified_declaration",
+		"invalid file transfer declaration", "invalid file transfer lease", "invalid file transfer certificate", "invalid file transfer certificate usage or lifetime", "invalid file transfer possession proof", "invalid assistance capability proof",
+		"transfer certificate fingerprint mismatch", "transfer certificate expired or not yet valid", "exactly one pinned transfer certificate required",
+		"tls: client didn't provide a certificate", "remote error: tls: bad certificate", "remote error: tls: unknown certificate authority", "EOF", "unexpected EOF":
+	default:
+		reason = "other_tls_handshake_failure"
+	}
+	w.record(addr.Addr().Unmap(), reason, false)
+	return len(p), nil
+}
+
+func (a *Agent) ClipboardReceiving() bool { return a.clipboardReceiving.Load() && !a.closed.Load() }
+func (a *Agent) SetClipboardReceiving(enabled bool) error {
+	if a.closed.Load() {
+		return errors.New("agent closed")
+	}
+	a.clipboardReceiving.Store(enabled)
+	if !enabled {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		for _, r := range a.receivers {
+			if r.grant.ClipboardTransport {
+				r.receiver.Interrupt()
+				_ = r.receiver.CancelIncomplete()
+			}
+		}
+	}
+	return nil
 }

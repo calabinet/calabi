@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"net/netip"
 	"sync"
+
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // Node-side enforcement of the coordinator's packet filter. Until this
@@ -123,7 +125,7 @@ func (f *PacketFilter) allow(t tuple) bool {
 		if !matchSrc(r.SrcCIDRs, t.src) {
 			continue
 		}
-		if matchPort(r.DstPorts, t.proto, t.dstPort) {
+		if matchPort(r.DstPorts, t) {
 			return true
 		}
 	}
@@ -143,8 +145,25 @@ func matchSrc(cidrs []netip.Prefix, src netip.Addr) bool {
 // empty Proto matches any protocol; a port of 0 (a protocol without ports, like
 // ICMP, or a fragment whose header we don't have) is admitted ONLY by a
 // full-range any-protocol rule — i.e. by a rule that opens everything anyway.
-func matchPort(ranges []PortRange, proto uint8, port uint16) bool {
+func matchPort(ranges []PortRange, packet tuple) bool {
+	proto, port := packet.proto, packet.dstPort
 	for _, r := range ranges {
+		if r.Proto == meshproto.ACLICMP {
+			if packet.isICMP() {
+				return true
+			}
+			continue
+		}
+		if r.Proto == meshproto.ACLPortless || r.Proto == meshproto.ACLNonICMPPortless {
+			// Opaque extension headers may hide TCP or UDP. Only a full
+			// wildcard may admit packets whose transport we cannot classify.
+			if port == 0 && proto != protoTCP && proto != protoUDP &&
+				(packet.src.Is4() || knownPortlessProtocol(proto)) &&
+				(r.Proto == meshproto.ACLPortless || !packet.isICMP()) {
+				return true
+			}
+			continue
+		}
 		if r.Proto != "" && r.Proto != protoName(proto) {
 			continue
 		}
@@ -161,10 +180,21 @@ func matchPort(ranges []PortRange, proto uint8, port uint16) bool {
 	return false
 }
 
+func knownPortlessProtocol(proto uint8) bool {
+	switch proto {
+	case 1, 2, 4, 41, 46, 47, 50, 58, 59, 88, 89, 103, 112, 115:
+		// Terminal protocol numbers as seen by the existing packet parser.
+		return true
+	default:
+		return false
+	}
+}
+
 const (
-	protoICMP = 1
-	protoTCP  = 6
-	protoUDP  = 17
+	protoICMP   = 1
+	protoTCP    = 6
+	protoUDP    = 17
+	protoICMPv6 = 58
 )
 
 func protoName(p uint8) string {
@@ -192,6 +222,36 @@ type tuple struct {
 	src, dst         netip.Addr
 	proto            uint8
 	srcPort, dstPort uint16
+	tcpOpening       bool
+	echoKind         uint8
+	echoID           uint32 // ICMP echo identifier and sequence
+}
+
+const (
+	echoRequest = 1
+	echoReply   = 2
+)
+
+func (t tuple) isICMP() bool {
+	if t.src.Is4() {
+		return t.proto == protoICMP
+	}
+	return t.proto == protoICMPv6
+}
+
+func (t *tuple) readEcho(header []byte) {
+	if !t.isICMP() || len(header) < 8 || header[1] != 0 {
+		return
+	}
+	switch {
+	case t.proto == protoICMP && header[0] == 8, t.proto == protoICMPv6 && header[0] == 128:
+		t.echoKind = echoRequest
+	case t.proto == protoICMP && header[0] == 0, t.proto == protoICMPv6 && header[0] == 129:
+		t.echoKind = echoReply
+	default:
+		return
+	}
+	t.echoID = binary.BigEndian.Uint32(header[4:8])
 }
 
 func parseTuple(pkt []byte) (tuple, bool) {
@@ -230,6 +290,8 @@ func parseIPv4(pkt []byte) (tuple, bool) {
 		return tuple{}, false
 	}
 	t.srcPort, t.dstPort = sp, dp
+	t.tcpOpening = tcpOpening(pkt[ihl:], t.proto)
+	t.readEcho(pkt[ihl:])
 	return t, true
 }
 
@@ -254,7 +316,28 @@ func parseIPv6(pkt []byte) (tuple, bool) {
 		return tuple{}, false
 	}
 	t.srcPort, t.dstPort = sp, dp
+	t.tcpOpening = tcpOpening(pkt[40:], t.proto)
+	t.readEcho(pkt[40:])
 	return t, true
+}
+
+func tcpOpening(header []byte, proto uint8) bool {
+	const syn, ack = 0x02, 0x10
+	return proto == protoTCP && len(header) > 13 && header[13]&(syn|ack) == syn
+}
+
+func (t tuple) canBeReply() bool {
+	if t.isICMP() {
+		return t.echoKind == echoReply
+	}
+	switch t.proto {
+	case protoTCP:
+		return !t.tcpOpening && t.srcPort != 0 && t.dstPort != 0
+	case protoUDP:
+		return t.srcPort != 0 && t.dstPort != 0
+	default:
+		return t.src.Is4() || knownPortlessProtocol(t.proto)
+	}
 }
 
 // l4Ports reads both ports of a TCP/UDP header. ok=false means the header is

@@ -197,6 +197,14 @@ func cloneMapNode(n Node) Node {
 		v := *n.BlockIncoming
 		n.BlockIncoming = &v
 	}
+	if n.ACLPortless != nil {
+		v := *n.ACLPortless
+		n.ACLPortless = &v
+	}
+	if n.ACLICMP != nil {
+		v := *n.ACLICMP
+		n.ACLICMP = &v
+	}
 	return n
 }
 

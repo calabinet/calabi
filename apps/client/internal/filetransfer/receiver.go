@@ -27,6 +27,7 @@ import (
 // Each offer names one file. V1 submits a bounded batch of idempotent offers
 // before waiting for local confirmation; retains its one-file limit.
 type Offer struct {
+	Clipboard  bool   `json:"clipboard,omitempty"`
 	BatchCount int    `json:"batch_count,omitempty"`
 	ClientID   string `json:"client_id,omitempty"`
 	Batch      string `json:"batch,omitempty"`
@@ -36,6 +37,7 @@ type Offer struct {
 }
 
 type Transfer struct {
+	Clipboard        bool   `json:"clipboard,omitempty"`
 	CreatedUnixMs    int64  `json:"created_unix_ms,omitempty"`
 	PauseSupported   bool   `json:"pause_supported,omitempty"`
 	StopReason       string `json:"stop_reason,omitempty"`
@@ -268,7 +270,7 @@ func (r *Receiver) offer(w http.ResponseWriter, req *http.Request) {
 		for _, s := range r.sessions {
 			t := s.view()
 			if t.ClientID == o.ClientID {
-				if t.Batch != o.Batch || t.BatchCount != o.BatchCount || t.Name != o.Name || t.Size != o.Size || t.SHA256 != o.SHA256 {
+				if t.Clipboard != o.Clipboard || t.Batch != o.Batch || t.BatchCount != o.BatchCount || t.Name != o.Name || t.Size != o.Size || t.SHA256 != o.SHA256 {
 					fail(w, 409, "offer identifier reused with different metadata")
 					return
 				}
@@ -332,7 +334,7 @@ func (r *Receiver) offer(w http.ResponseWriter, req *http.Request) {
 	if r.cfg.Durable {
 		kbps = min(kbps, r.pacer.Ceiling())
 	}
-	s := &receiveSession{Transfer: Transfer{BatchCount: o.BatchCount, ClientID: o.ClientID, Batch: o.Batch, ID: randomID(), Name: o.Name, Size: o.Size, SHA256: o.SHA256, State: "waiting", Kbps: kbps, MaxBlock: max(paceChunk, min(BlockSize, kbps*128))}, token: randomID(), created: time.Now(), ctx: ctx, cancel: cancel}
+	s := &receiveSession{Transfer: Transfer{Clipboard: o.Clipboard, BatchCount: o.BatchCount, ClientID: o.ClientID, Batch: o.Batch, ID: randomID(), Name: o.Name, Size: o.Size, SHA256: o.SHA256, State: "waiting", Kbps: kbps, MaxBlock: max(paceChunk, min(BlockSize, kbps*128))}, token: randomID(), created: time.Now(), ctx: ctx, cancel: cancel}
 	s.PauseSupported = r.cfg.Durable && req.Header.Get("X-Calabi-File-Control") == "pause-v1"
 	s.CreatedUnixMs = s.created.UnixMilli()
 	if err := r.persist(s); err != nil {

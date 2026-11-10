@@ -56,3 +56,5 @@ LangString calabiRemovingService ${LANG_SIMPCHINESE} "正在移除 Calabi 后台
   !delfile "${CALABI_COMPACT_UI}"
   !undef CALABI_COMPACT_UI
 !endif
+
+LangString calabiFileAgentSetupFailed ${LANG_SIMPCHINESE} "无法配置 Calabi 文件代理的登录任务。$\r$\n$\r$\n技术详情：$R1"

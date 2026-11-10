@@ -10,9 +10,23 @@ import (
 	"github.com/calabinet/calabi/apps/client/internal/filetransfer"
 )
 
-// Terminal actions accept paths from the invoking user. Native save uses the
-// same exclusive writer after the OS chooser. No arbitrary path is accepted
-// by the stdio UI API, metadata IPC, or the privileged mesh daemon.
+// Terminal actions accept paths only from the local OS user, including over
+// the Windows user pipe. The desktop UI cannot request these actions.
+func (d *desktopFileAgent) handleConsoleAction(action fileAction) (any, error) {
+	switch action.Action {
+	case "console_stage", "console_export":
+		if len(action.Paths) != 1 || action.Paths[0] == "" {
+			return nil, errors.New("one local file path required")
+		}
+		if action.Action == "console_stage" {
+			return nil, d.stageLocal(action.Paths[0])
+		}
+		return nil, d.exportLocal(action.ID, action.Paths[0])
+	default:
+		return d.handle(action)
+	}
+}
+
 func (d *desktopFileAgent) stageLocal(path string) error {
 	d.opMu.Lock()
 	defer d.opMu.Unlock()

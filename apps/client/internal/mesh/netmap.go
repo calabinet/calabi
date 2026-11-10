@@ -10,6 +10,7 @@
 package mesh
 
 import (
+	"encoding/hex"
 	"fmt"
 	"net/netip"
 	"time"
@@ -29,17 +30,20 @@ type PeerService struct {
 
 // Peer is one node the local node may reach, as resolved from a NetMap.
 type Peer struct {
-	FileTransfer *meshpb.FileTransferInfo
-	NodeID       int64
-	Name         string // MagicDNS label
-	Services     []PeerService
-	OS           string // "windows" / "linux" / "darwin"; "" from an older node
-	NodeKey      meshproto.NodeKey
-	DiscoKey     meshproto.DiscoKey
-	Overlay      netip.Addr
-	AllowedIPs   []netip.Prefix
-	Endpoints    []netip.AddrPort
-	DERPHome     string
+	RDPPin           string
+	SameOwner        bool
+	DeclarationError string `json:"-"`
+	FileTransfer     *meshpb.FileTransferInfo
+	NodeID           int64
+	Name             string // MagicDNS label
+	Services         []PeerService
+	OS               string // "windows" / "linux" / "darwin"; "" from an older node
+	NodeKey          meshproto.NodeKey
+	DiscoKey         meshproto.DiscoKey
+	Overlay          netip.Addr
+	AllowedIPs       []netip.Prefix
+	Endpoints        []netip.AddrPort
+	DERPHome         string
 }
 
 // SubnetAlias is one real subnet behind this node and the unique prefix the mesh
@@ -330,10 +334,15 @@ func peerFromProto(pp *meshpb.Peer) (Peer, error) {
 	if err != nil {
 		return Peer{}, fmt.Errorf("node_key: %w", err)
 	}
-	p := Peer{NodeID: pp.GetNodeId(), Name: pp.GetName(), NodeKey: nk, DERPHome: pp.GetDerpHome(), OS: pp.GetOs()}
+	p := Peer{SameOwner: pp.GetSameOwner(), NodeID: pp.GetNodeId(), Name: pp.GetName(), NodeKey: nk, DERPHome: pp.GetDerpHome(), OS: pp.GetOs()}
+	if p.SameOwner && p.OS == "windows" && len(pp.GetRdpCertificateSha256()) == 32 {
+		p.RDPPin = hex.EncodeToString(pp.GetRdpCertificateSha256())
+	}
 	// A malformed optional declaration disables only file transfer, never mesh.
 	if _, err := meshproto.VerifyFileTransfer(nk, pp.GetFileTransfer(), time.Now()); err == nil {
 		p.FileTransfer = cloneFileTransfer(pp.GetFileTransfer())
+	} else if pp.GetFileTransfer() != nil {
+		p.DeclarationError = err.Error()
 	}
 	for _, sv := range pp.GetServices() {
 		if sv.GetName() == "" {

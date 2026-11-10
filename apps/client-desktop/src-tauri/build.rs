@@ -14,8 +14,21 @@ fn main() {
 
     embed_daemon();
 
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos")
+        && std::env::var_os("CARGO_FEATURE_RDP_NATIVE_MACOS").is_some()
+    {
+        println!("cargo:rerun-if-changed=src/macos_rdp_view.m");
+        cc::Build::new()
+            .file("src/macos_rdp_view.m")
+            .flag("-fobjc-arc")
+            .compile("calabi_rdp_view");
+        for framework in ["AppKit", "CoreGraphics", "QuartzCore"] {
+            println!("cargo:rustc-link-lib=framework={framework}");
+        }
+    }
+
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
-        tauri_build::AppManifest::new().commands(&["files_action", "file_receipt_action", "tray_action", "tray_set_locale"]),
+        tauri_build::AppManifest::new().commands(&["files_action", "file_receipt_action", "tray_action", "tray_set_locale", "ssh_session", "ssh_read", "remote_workspace", "remote_frame"]),
     )).expect("build desktop permissions");
 }
 

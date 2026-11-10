@@ -129,3 +129,21 @@ func TestFromNetMapPacketFilter(t *testing.T) {
 		t.Fatalf("legacy netmap = %+v, want unfiltered", old)
 	}
 }
+
+func TestHandshakeMissingVersusInvalidDeclaration(t *testing.T) {
+	raw := &meshpb.Peer{NodeKey: keyB64(1)}
+	for _, invalid := range []bool{false, true} {
+		if invalid {
+			raw.FileTransfer = &meshpb.FileTransferInfo{}
+		}
+		peer, err := peerFromProto(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := Controller{curPeers: []Peer{peer}}
+		member := c.FileMembers()[0]
+		if member.FileTransfer != nil || (member.DeclarationError != "") != invalid {
+			t.Fatalf("invalid=%v unexpectedly yielded %+v", invalid, member)
+		}
+	}
+}

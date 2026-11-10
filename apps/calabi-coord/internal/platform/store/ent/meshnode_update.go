@@ -328,6 +328,34 @@ func (mnu *MeshNodeUpdate) SetNillableTagsPinned(b *bool) *MeshNodeUpdate {
 	return mnu
 }
 
+// SetACLPortless sets the "acl_portless" field.
+func (mnu *MeshNodeUpdate) SetACLPortless(b bool) *MeshNodeUpdate {
+	mnu.mutation.SetACLPortless(b)
+	return mnu
+}
+
+// SetNillableACLPortless sets the "acl_portless" field if the given value is not nil.
+func (mnu *MeshNodeUpdate) SetNillableACLPortless(b *bool) *MeshNodeUpdate {
+	if b != nil {
+		mnu.SetACLPortless(*b)
+	}
+	return mnu
+}
+
+// SetACLIcmp sets the "acl_icmp" field.
+func (mnu *MeshNodeUpdate) SetACLIcmp(b bool) *MeshNodeUpdate {
+	mnu.mutation.SetACLIcmp(b)
+	return mnu
+}
+
+// SetNillableACLIcmp sets the "acl_icmp" field if the given value is not nil.
+func (mnu *MeshNodeUpdate) SetNillableACLIcmp(b *bool) *MeshNodeUpdate {
+	if b != nil {
+		mnu.SetACLIcmp(*b)
+	}
+	return mnu
+}
+
 // SetTagsJSON sets the "tags_json" field.
 func (mnu *MeshNodeUpdate) SetTagsJSON(s string) *MeshNodeUpdate {
 	mnu.mutation.SetTagsJSON(s)
@@ -535,6 +563,12 @@ func (mnu *MeshNodeUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := mnu.mutation.TagsPinned(); ok {
 		_spec.SetField(meshnode.FieldTagsPinned, field.TypeBool, value)
+	}
+	if value, ok := mnu.mutation.ACLPortless(); ok {
+		_spec.SetField(meshnode.FieldACLPortless, field.TypeBool, value)
+	}
+	if value, ok := mnu.mutation.ACLIcmp(); ok {
+		_spec.SetField(meshnode.FieldACLIcmp, field.TypeBool, value)
 	}
 	if value, ok := mnu.mutation.TagsJSON(); ok {
 		_spec.SetField(meshnode.FieldTagsJSON, field.TypeString, value)
@@ -874,6 +908,34 @@ func (mnuo *MeshNodeUpdateOne) SetNillableTagsPinned(b *bool) *MeshNodeUpdateOne
 	return mnuo
 }
 
+// SetACLPortless sets the "acl_portless" field.
+func (mnuo *MeshNodeUpdateOne) SetACLPortless(b bool) *MeshNodeUpdateOne {
+	mnuo.mutation.SetACLPortless(b)
+	return mnuo
+}
+
+// SetNillableACLPortless sets the "acl_portless" field if the given value is not nil.
+func (mnuo *MeshNodeUpdateOne) SetNillableACLPortless(b *bool) *MeshNodeUpdateOne {
+	if b != nil {
+		mnuo.SetACLPortless(*b)
+	}
+	return mnuo
+}
+
+// SetACLIcmp sets the "acl_icmp" field.
+func (mnuo *MeshNodeUpdateOne) SetACLIcmp(b bool) *MeshNodeUpdateOne {
+	mnuo.mutation.SetACLIcmp(b)
+	return mnuo
+}
+
+// SetNillableACLIcmp sets the "acl_icmp" field if the given value is not nil.
+func (mnuo *MeshNodeUpdateOne) SetNillableACLIcmp(b *bool) *MeshNodeUpdateOne {
+	if b != nil {
+		mnuo.SetACLIcmp(*b)
+	}
+	return mnuo
+}
+
 // SetTagsJSON sets the "tags_json" field.
 func (mnuo *MeshNodeUpdateOne) SetTagsJSON(s string) *MeshNodeUpdateOne {
 	mnuo.mutation.SetTagsJSON(s)
@@ -1111,6 +1173,12 @@ func (mnuo *MeshNodeUpdateOne) sqlSave(ctx context.Context) (_node *MeshNode, er
 	}
 	if value, ok := mnuo.mutation.TagsPinned(); ok {
 		_spec.SetField(meshnode.FieldTagsPinned, field.TypeBool, value)
+	}
+	if value, ok := mnuo.mutation.ACLPortless(); ok {
+		_spec.SetField(meshnode.FieldACLPortless, field.TypeBool, value)
+	}
+	if value, ok := mnuo.mutation.ACLIcmp(); ok {
+		_spec.SetField(meshnode.FieldACLIcmp, field.TypeBool, value)
 	}
 	if value, ok := mnuo.mutation.TagsJSON(); ok {
 		_spec.SetField(meshnode.FieldTagsJSON, field.TypeString, value)

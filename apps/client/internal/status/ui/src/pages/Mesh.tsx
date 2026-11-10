@@ -6,17 +6,18 @@
 // node's overlay IP, coordinator/relay, and each peer's live WireGuard state
 // (handshake age + bytes), the same data `calabi mesh status` prints.
 //
-// Four tabs under one heading, each at its own URL:
+// Tabs under one heading, each at its own URL:
 //
 //   设备 /mesh          — this machine's state and the peers it can reach
 //   服务 /mesh/services — ports it offers to the mesh (pages/Services.tsx)
 //   文件传送 /mesh/files — ordinary-user file transfer center
+//   远程 /mesh/remote — successful remote logins on this device
 //   网络设置 /mesh/routing — subnets / exit device it offers, subnets it accepts
 //
 // 服务 and 路由 are the same question at two sizes — what this machine offers
 // the mesh, one port or a whole subnet — which is why they sit side by side.
 // The web console's 组网配置 uses the same 设备 / 服务 split.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -49,11 +50,15 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { useTranslation } from "react-i18next";
 
 import { api, ApiError } from "../api/client";
-import { hasNativeFiles, fileAction, useFileSupport } from "../api/files";
+import { hasNativeFiles, fileAction, useFileSupport, type FileSnapshot } from "../api/files";
+import { sshErrorKey } from "../api/ssh";
 import { fileTargets } from "../lib/fileTargets";
 import { fileRecords, fileRecordMatches } from "../lib/fileRecords";
+import { fileErrorKey } from "../lib/fileErrors";
+import { nativeAssist } from "../components/AssistSession";
 import ListSearch from "../components/ListSearch";
 import MeshGlyph, { deviceGlyph } from "../components/MeshGlyph";
+import MeshReceptionLink, { fileReceptionState, receptionControl } from "../components/MeshReceptionLink";
 import "../styles/mesh-center.css";
 import {
   exitStanding,
@@ -82,6 +87,9 @@ import type {
 } from "../api/types";
 
 const { Title, Text } = Typography;
+
+type RemoteRecent = { peer: string; name: string; ip: string; account: string; used_at?: number };
+type SshRecent = RemoteRecent & { port: number };
 
 // A direct path's round-trip. Sub-millisecond IS the interesting case — that is
 // what a LAN path looks like — so it keeps a decimal that whole milliseconds
@@ -146,9 +154,11 @@ export default function Mesh() {
     ? "services"
     : pathname.startsWith("/mesh/routing")
       ? "routing"
-      : pathname.startsWith("/mesh/files")
-        ? "files"
-        : "devices";
+      : pathname.startsWith("/mesh/remote")
+        ? "remote"
+        : pathname.startsWith("/mesh/files")
+          ? "files"
+          : "devices";
   // Peer filter. A fleet of 20 machines turns this table into scrolling, and the
   // thing you arrive knowing is the machine's NAME — so match on that first,
   // then on the address you might have pasted from somewhere, then on the key
@@ -156,6 +166,15 @@ export default function Mesh() {
   const [peerQuery, setPeerQuery] = useState("");
   const [connectionKey, setConnectionKey] = useState("");
   const files = useQuery({ queryKey: ["user-files"], queryFn: () => fileAction({ action: "snapshot" }), enabled: fileSupport.data === true && hasNativeFiles(), refetchInterval: 1000, retry: false });
+  const assistSupported = nativeAssist() && !!files.data?.assist_supported;
+  const reception = useMutation({
+    mutationFn: ({ kind, enabled }: { kind: keyof typeof receptionControl; enabled: boolean }) =>
+      fileAction({ action: kind === "assist" ? "assist_receiving" : "receiving", enabled }),
+    onSuccess: snapshot => qc.setQueryData(["user-files"], snapshot),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["user-files"] }),
+    onError: (e, { kind }) => message.error(kind === "assist"
+      ? (e as Error).message : t(`files.errors.${fileErrorKey((e as Error).message)}`)),
+  });
   const [peerDetail, setPeerDetail] = useState<{ key: string; section: "routes" | "services" } | null>(null);
   const setPeerDetailOpen = (peer: MeshPeer, section: "routes" | "services", open: boolean) => {
     setPeerDetail((current) => open ? { key: peer.public_key, section } :
@@ -301,6 +320,41 @@ export default function Mesh() {
   });
   const standalone = me?.plan?.code === "standalone";
   const orgMismatch = meshOrgID > 0 && activeOrgID > 0 && meshOrgID !== activeOrgID;
+  const rdpAvailable = nativeAssist() && files.data?.rdp_supported === true;
+  const sshAvailable = nativeAssist() && files.data?.ssh_supported === true;
+  const remoteAvailable = rdpAvailable || sshAvailable;
+  const sshHistory = useQuery({
+    queryKey: ["ssh-history", me?.user.id, meshOrgID, data?.overlay],
+    queryFn: () => fileAction<SshRecent[]>({ action: "ssh_history" }),
+    enabled: sshAvailable && !!data?.up && !orgMismatch && tab === "remote",
+    retry: false,
+  });
+  const beginSshLogin = (peer: MeshPeer, recent?: SshRecent) => {
+    void fileAction<{ warning?: string }>({
+      action: "ssh_open", peer: peer.public_key,
+      name: peer.name || peerAddresses(peer.allowed_ips).overlay,
+      account: recent?.account, port: recent?.port,
+    }).then(reply => {
+      void qc.invalidateQueries({ queryKey: ["ssh-history"] });
+      if (reply.warning) message.warning(t(sshErrorKey(reply.warning)));
+    }).catch(error => message.error(t(sshErrorKey(error))));
+  };
+  const history = useQuery({
+    queryKey: ["rdp-history", me?.user.id, meshOrgID, data?.overlay],
+    queryFn: () => fileAction<RemoteRecent[]>({ action: "rdp_history" }),
+    enabled: tab === "remote" && rdpAvailable && !!data?.up && !orgMismatch,
+    refetchInterval: tab === "remote" ? 2000 : false,
+    retry: false,
+  });
+  const openRemote = (peer: string, name: string) =>
+    void fileAction({ action: "rdp_open", peer, name }).catch(e => message.error(e.message));
+
+  const remoteRecords = [
+    ...(rdpAvailable ? history.data ?? [] : []).map(record => ({ kind: "rdp" as const, record })),
+    ...(sshAvailable ? sshHistory.data ?? [] : []).map(record => ({ kind: "ssh" as const, record })),
+  ].sort((a, b) => (b.record.used_at ?? 0) - (a.record.used_at ?? 0));
+  const remoteLoading = (rdpAvailable && history.isPending) || (sshAvailable && sshHistory.isPending);
+  const remoteFailed = (rdpAvailable && history.isError) || (sshAvailable && sshHistory.isError);
 
   const stop = useMutation({
     mutationFn: api.meshDown,
@@ -667,6 +721,9 @@ export default function Mesh() {
   } else {
     body = (
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {data.enrollment_error === "device_limit" && (
+          <Alert type="warning" showIcon message={t("mesh.deviceLimit")} description={t("mesh.deviceLimitHelp")} />
+        )}
         {adv?.block_incoming && (
           <Alert
             type="warning"
@@ -680,7 +737,7 @@ export default function Mesh() {
             <Card size="small">
               <Statistic
                 title={t("mesh.state")}
-                value={data.up ? t("mesh.stateUp") : t("mesh.stateDown")}
+                value={data.up ? t("mesh.stateUp") : t(data.enrollment_error === "device_limit" ? "mesh.deviceLimitState" : "mesh.stateConnecting")}
                 className={data.up ? "mesh-status-up" : "mesh-status-down"}
               />
             </Card>
@@ -693,6 +750,8 @@ export default function Mesh() {
           <Col xs={12} md={6}>
             <Card size="small">
               <Statistic title={t("mesh.node")} value={data.name || "—"} className="mesh-status-identity" />
+              {assistSupported && <MeshReceptionLink kind="assist"
+                state={adv?.block_incoming ? "blocked" : files.data?.assist_receiving ? "on" : "off"} />}
             </Card>
           </Col>
           <Col xs={12} md={6}>
@@ -724,10 +783,14 @@ export default function Mesh() {
             ...columns.filter(column => column.key === "traffic").map(column => ({ ...column, width: 150 })),
             { key: "actions", width: 48, render: (_, peer) => {
               const address = peerAddresses(peer.allowed_ips).overlay;
+              const ownWindows = files.data?.rdp_targets?.includes(peer.public_key);
               const receiver = receivers.find(target => target.key === peer.public_key);
               const ready = receiver?.status === "ready";
               return <Dropdown trigger={["click"]} menu={{ items: [
                 ...(fileSupport.data ? [{ key: "send", icon: <MeshGlyph name="send" />, label: <Tooltip trigger={["hover", "focus"]} title={!ready ? t(`files.targetStatus.${receiver?.status || "notReady"}`) : undefined}><span tabIndex={!ready ? 0 : undefined} className="mesh-send-menu-label">{t("files.send")}</span></Tooltip>, disabled: !ready, onClick: () => navigate(`/mesh/files?device=${encodeURIComponent(peer.public_key)}`, { state: { fileTarget: { key: peer.public_key, name: peer.name || "", ip: address } } }) }] : []),
+                ...(nativeAssist() && ownWindows ? [{key:"rdp", icon:<MeshGlyph name="network" />, label:t("assist.login"), disabled:presenceOf(peer)==="offline", onClick:()=>openRemote(peer.public_key,peer.name || address)}] : []),
+                ...(sshAvailable && peer.os === "linux" ? [{ key: "ssh", icon: <MeshGlyph name="terminal" />, label: t("assist.login"), disabled: !address || presenceOf(peer) === "offline", onClick: () => beginSshLogin(peer) }] : []),
+                ...(nativeAssist() && !ownWindows && peer.os?.toLowerCase() === "windows" ? [{ key: "assist", icon: <MeshGlyph name="network" />, label: t("assist.request"), disabled: !receiver?.assistance || presenceOf(peer) === "offline", onClick: () => void fileAction({action:"assist_open", peer:peer.public_key, name:peer.name || address}).catch(e=>message.error(e.message)) }] : []),
                 { key: "details", icon: <MeshGlyph name="info" />, label: t("files.connectionDetails"), onClick: () => setConnectionKey(peer.public_key) },
               ] }}><Button type="text" icon={<MeshGlyph name="more" />} aria-label={t("files.deviceActions", { device: peer.name || address })} /></Dropdown>;
             } },
@@ -785,8 +848,53 @@ export default function Mesh() {
         items={[
           { key: "devices", label: t("mesh.tabs.devices"), children: body },
           { key: "services", label: t("mesh.tabs.services"), children: <Services /> },
-          ...(fileSupport.data || tab === "files" ? [{ key: "files", label: t("files.title"), children: <Files /> }] : []),
-          { key: "routing", label: t("mesh.tabs.routing"), children: <MeshAdvertiseCard /> },
+          ...(remoteAvailable || tab === "remote" ? [{
+            key: "remote", label: t("remote.tab"), children: <section aria-label={t("remote.title")}>
+              <Title level={5}>{t("remote.title")}</Title>
+              <Text type="secondary">{t("remote.description")}</Text>
+              {!remoteAvailable || !data?.up || orgMismatch ? <Empty description={t("remote.unavailable")} /> : <>
+                {remoteFailed && <Alert type="warning" showIcon message={t("remote.loadFailed")}
+                  action={<Button size="small" onClick={() => {
+                    if (rdpAvailable && history.isError) void history.refetch();
+                    if (sshAvailable && sshHistory.isError) void sshHistory.refetch();
+                  }}>{t("remote.retry")}</Button>} />}
+                {remoteLoading && !remoteRecords.length ? <div className="mesh-remote-empty"><Spin /></div> :
+                  !remoteRecords.length ? !remoteFailed && <Empty description={t("remote.empty")} /> :
+                  <div className="mesh-remote-grid">
+                    {remoteRecords.map(item => {
+                      const { record, kind } = item;
+                      const peer = data.peers?.find(device => device.public_key === record.peer);
+                      const ip = (peer && peerAddresses(peer.allowed_ips).overlay) || record.ip;
+                      const name = peer?.name || record.name || ip;
+                      const allowed = peer && presenceOf(peer) !== "offline" && (kind === "ssh"
+                        ? peer.os === "linux" : files.data?.rdp_targets?.includes(record.peer));
+                      const key = kind === "ssh" ? `${kind}/${record.peer}/${record.account}/${item.record.port}` : `${kind}/${record.peer}`;
+                      return <button type="button" className="mesh-remote-card" key={key} disabled={!allowed}
+                        aria-label={t("remote.connectDevice", { name })} onClick={() => {
+                          if (item.kind === "ssh" && peer) beginSshLogin(peer, item.record);
+                          if (item.kind === "rdp") openRemote(record.peer, name);
+                        }}>
+                        <span className="mesh-remote-art">
+                          <MeshGlyph name={kind === "ssh" ? "terminal" : "monitor"} />
+                          <span className="mesh-remote-action">{allowed ? t("assist.login") : t("remote.deviceUnavailable")}</span>
+                        </span>
+                        <span className="mesh-remote-details">
+                          <strong>{name}</strong>
+                          <span><code>{ip}</code>{record.account && <> · {record.account}</>}</span>
+                        </span>
+                      </button>;
+                    })}
+                  </div>}
+              </>}
+            </section>,
+          }] : []),
+          ...(fileSupport.data || tab === "files" ? [{ key: "files", label: t("files.title"),
+            children: <Files blockIncoming={adv?.block_incoming} /> }] : []),
+          { key: "routing", label: t("mesh.tabs.routing"), children: <MeshAdvertiseCard
+            snapshot={files.data} assistSupported={assistSupported}
+            receptionPending={reception.isPending ? reception.variables?.kind : undefined}
+            onReceptionChange={(kind, enabled) => reception.mutate({ kind, enabled })}
+          /> },
         ]}
       />
     </div>
@@ -839,6 +947,8 @@ function SettingRow({
   checked,
   onChange,
   disabled,
+  id,
+  loading,
   children,
 }: {
   title: string;
@@ -846,10 +956,12 @@ function SettingRow({
   checked: boolean;
   onChange: (v: boolean) => void;
   disabled?: boolean;
+  id?: string;
+  loading?: boolean;
   children?: React.ReactNode;
 }) {
   return (
-    <div>
+    <div id={id} tabIndex={id ? -1 : undefined}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 500 }}>{title}</div>
@@ -857,7 +969,8 @@ function SettingRow({
             {desc}
           </Text>
         </div>
-        <Switch checked={checked} onChange={onChange} disabled={disabled} style={{ flexShrink: 0, marginTop: 2 }} />
+        <Switch aria-label={title} checked={checked} onChange={onChange} disabled={disabled}
+          loading={loading} style={{ flexShrink: 0, marginTop: 2 }} />
       </div>
       {checked && children && <div style={{ marginTop: 10 }}>{children}</div>}
     </div>
@@ -1042,9 +1155,17 @@ function CidrListEditor({
 // no mesh controller (the GET 404s there) it says so, in the words the 设备 tab
 // uses. Forwarding is Linux-only; off Linux the offer tab warns that the node
 // advertises but won't forward.
-function MeshAdvertiseCard() {
+function MeshAdvertiseCard({ snapshot, assistSupported, receptionPending, onReceptionChange }: {
+  snapshot?: FileSnapshot;
+  assistSupported: boolean;
+  receptionPending?: keyof typeof receptionControl;
+  onReceptionChange: (kind: keyof typeof receptionControl, enabled: boolean) => void;
+}) {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const location = useLocation();
+  const [settingsTab, setSettingsTab] = useState("accept");
+  const focusedNavigation = useRef("");
   const { data, error } = useQuery<MeshAdvertise>({
     queryKey: ["mesh-advertise"],
     queryFn: api.meshAdvertise,
@@ -1141,9 +1262,50 @@ function MeshAdvertiseCard() {
     onError: (e) => message.error((e as Error).message),
   });
 
+  const target = location.pathname.startsWith("/mesh/routing") ? location.hash.slice(1) : "";
+  const targetAvailable = target === receptionControl.assist ? assistSupported
+    : target === receptionControl.files && !!snapshot;
+  useEffect(() => {
+    if (target === receptionControl.assist || target === receptionControl.files) setSettingsTab("accept");
+  }, [location.key, target]);
+  const showReception = !!data || !!error;
+  useEffect(() => {
+    if (!targetAvailable || !showReception || settingsTab !== "accept" ||
+        focusedNavigation.current === location.key) return;
+    const frame = requestAnimationFrame(() => {
+      const row = document.getElementById(target);
+      if (!row) return;
+      focusedNavigation.current = location.key;
+      row.scrollIntoView({ block: "nearest" });
+      (row.querySelector<HTMLElement>('[role="switch"]:not(:disabled)') ?? row).focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [location.key, settingsTab, showReception, target, targetAvailable]);
+
+  const receiveFiles = snapshot?.service?.receiving_requested ?? snapshot?.receiving ?? false;
+  const receivingSettings = snapshot && (
+    <section className="mesh-reception-settings">
+      <Title level={5}>{t("mesh.reception.permissions")}</Title>
+      <Text type="secondary">{t("mesh.reception.immediate")}</Text>
+      <Space direction="vertical" size={12} style={{ width: "100%" }}>
+        {assistSupported && <SettingRow id={receptionControl.assist} title={t("assist.receiveRequests")}
+          desc={t("mesh.reception.assistHelp")} checked={!!snapshot.assist_receiving}
+          disabled={!!receptionPending} loading={receptionPending === "assist"}
+          onChange={enabled => onReceptionChange("assist", enabled)} />}
+        <SettingRow id={receptionControl.files} title={t("files.receiving")}
+          desc={t("mesh.reception.filesHelp")} checked={receiveFiles}
+          disabled={!!receptionPending || (!snapshot.available && !snapshot.service?.receiving_requested)}
+          loading={receptionPending === "files"} onChange={enabled => onReceptionChange("files", enabled)} />
+        {data?.block_incoming ? <Text type="secondary">{t("mesh.reception.blockedHelp")}</Text>
+          : fileReceptionState(snapshot) === "waiting" ? <Text type="secondary">{t("files.service.waiting")}</Text> : null}
+      </Space>
+    </section>
+  );
+
   if (error instanceof ApiError && error.status === 404) {
     return (
       <Card size="small">
+        {receivingSettings}
         <Empty description={t("mesh.unavailable")} />
       </Card>
     );
@@ -1151,6 +1313,7 @@ function MeshAdvertiseCard() {
   if (!data) {
     return (
       <Card size="small" loading={!error}>
+        {error && receivingSettings}
         {error && <Empty description={(error as Error).message} />}
       </Card>
     );
@@ -1231,12 +1394,19 @@ function MeshAdvertiseCard() {
     <Card size="small">
       <Tabs
         size="small"
+        activeKey={settingsTab}
+        onChange={setSettingsTab}
         items={[
           {
             key: "accept",
             label: label(t("mesh.adv.acceptSection"), acceptDirty),
             children: (
               <Space direction="vertical" size={16} style={{ width: "100%" }}>
+              {receivingSettings}
+              {receivingSettings && <div className="mesh-reception-network">
+                <Title level={5}>{t("mesh.reception.network")}</Title>
+                <Text type="secondary">{t("mesh.reception.saveHelp")}</Text>
+              </div>}
               {/* First, because it is the one that decides whether this machine
                   answers at all. Under the route list it would read as a detail
                   of routing, which it is not. */}

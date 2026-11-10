@@ -108,7 +108,7 @@ type Registration struct {
 }
 
 // clientCapabilities is what this client asks the coordinator for.
-var clientCapabilities = []string{string(meshproto.CapNodeReauth), string(meshproto.CapFileTransfer)}
+var clientCapabilities = []string{string(meshproto.CapNodeReauth), string(meshproto.CapFileTransfer), string(meshproto.CapACLPortless), string(meshproto.CapACLICMP)}
 
 // Register enrolls the node and returns its mesh identity (id + overlay addr).
 //

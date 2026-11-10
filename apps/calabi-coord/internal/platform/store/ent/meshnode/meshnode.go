@@ -53,6 +53,10 @@ const (
 	FieldBlockIncoming = "block_incoming"
 	// FieldTagsPinned holds the string denoting the tags_pinned field in the database.
 	FieldTagsPinned = "tags_pinned"
+	// FieldACLPortless holds the string denoting the acl_portless field in the database.
+	FieldACLPortless = "acl_portless"
+	// FieldACLIcmp holds the string denoting the acl_icmp field in the database.
+	FieldACLIcmp = "acl_icmp"
 	// FieldTagsJSON holds the string denoting the tags_json field in the database.
 	FieldTagsJSON = "tags_json"
 	// FieldApproved holds the string denoting the approved field in the database.
@@ -94,6 +98,8 @@ var Columns = []string{
 	FieldOs,
 	FieldBlockIncoming,
 	FieldTagsPinned,
+	FieldACLPortless,
+	FieldACLIcmp,
 	FieldTagsJSON,
 	FieldApproved,
 	FieldDisabled,
@@ -150,6 +156,10 @@ var (
 	DefaultOs string
 	// DefaultTagsPinned holds the default value on creation for the "tags_pinned" field.
 	DefaultTagsPinned bool
+	// DefaultACLPortless holds the default value on creation for the "acl_portless" field.
+	DefaultACLPortless bool
+	// DefaultACLIcmp holds the default value on creation for the "acl_icmp" field.
+	DefaultACLIcmp bool
 	// DefaultTagsJSON holds the default value on creation for the "tags_json" field.
 	DefaultTagsJSON string
 	// DefaultApproved holds the default value on creation for the "approved" field.
@@ -274,6 +284,16 @@ func ByBlockIncoming(opts ...sql.OrderTermOption) OrderOption {
 // ByTagsPinned orders the results by the tags_pinned field.
 func ByTagsPinned(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTagsPinned, opts...).ToFunc()
+}
+
+// ByACLPortless orders the results by the acl_portless field.
+func ByACLPortless(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldACLPortless, opts...).ToFunc()
+}
+
+// ByACLIcmp orders the results by the acl_icmp field.
+func ByACLIcmp(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldACLIcmp, opts...).ToFunc()
 }
 
 // ByTagsJSON orders the results by the tags_json field.

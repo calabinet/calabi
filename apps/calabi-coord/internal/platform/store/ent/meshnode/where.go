@@ -154,6 +154,16 @@ func TagsPinned(v bool) predicate.MeshNode {
 	return predicate.MeshNode(sql.FieldEQ(FieldTagsPinned, v))
 }
 
+// ACLPortless applies equality check predicate on the "acl_portless" field. It's identical to ACLPortlessEQ.
+func ACLPortless(v bool) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldACLPortless, v))
+}
+
+// ACLIcmp applies equality check predicate on the "acl_icmp" field. It's identical to ACLIcmpEQ.
+func ACLIcmp(v bool) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldACLIcmp, v))
+}
+
 // TagsJSON applies equality check predicate on the "tags_json" field. It's identical to TagsJSONEQ.
 func TagsJSON(v string) predicate.MeshNode {
 	return predicate.MeshNode(sql.FieldEQ(FieldTagsJSON, v))
@@ -1227,6 +1237,26 @@ func TagsPinnedEQ(v bool) predicate.MeshNode {
 // TagsPinnedNEQ applies the NEQ predicate on the "tags_pinned" field.
 func TagsPinnedNEQ(v bool) predicate.MeshNode {
 	return predicate.MeshNode(sql.FieldNEQ(FieldTagsPinned, v))
+}
+
+// ACLPortlessEQ applies the EQ predicate on the "acl_portless" field.
+func ACLPortlessEQ(v bool) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldACLPortless, v))
+}
+
+// ACLPortlessNEQ applies the NEQ predicate on the "acl_portless" field.
+func ACLPortlessNEQ(v bool) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNEQ(FieldACLPortless, v))
+}
+
+// ACLIcmpEQ applies the EQ predicate on the "acl_icmp" field.
+func ACLIcmpEQ(v bool) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldACLIcmp, v))
+}
+
+// ACLIcmpNEQ applies the NEQ predicate on the "acl_icmp" field.
+func ACLIcmpNEQ(v bool) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNEQ(FieldACLIcmp, v))
 }
 
 // TagsJSONEQ applies the EQ predicate on the "tags_json" field.

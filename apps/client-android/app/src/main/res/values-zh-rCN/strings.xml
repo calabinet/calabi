@@ -291,4 +291,5 @@
     <string name="settings_leave_server">断开并忘记此服务器</string>
     <string name="settings_leave_server_confirm">断开并忘记此服务器？</string>
     <string name="settings_leave_server_body">这台手机会离开该组网。再次加入需要新的邀请。</string>
+    <string name="mesh_device_limit">组网设备数量已达上限。请在控制台停用或删除不再使用的设备，或联系管理员增加额度。释放名额后将自动重试连接。</string>
 </resources>

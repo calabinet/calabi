@@ -396,10 +396,14 @@ func cancelInboxIdentityTasks(root *os.Root) error {
 }
 
 func (i *Identity) Declaration(node meshproto.NodeKey, port uint16, receiving bool) (*meshpb.FileTransferInfo, error) {
+	return i.DesktopDeclaration(node, port, receiving, false)
+}
+
+func (i *Identity) DesktopDeclaration(node meshproto.NodeKey, port uint16, receiving, assistance bool) (*meshpb.FileTransferInfo, error) {
 	key, ok := i.Certificate.PrivateKey.(ed25519.PrivateKey)
 	if !ok || len(i.Certificate.Certificate) != 1 {
 		return nil, errors.New("dedicated Ed25519 identity required")
 	}
 	info := &meshpb.FileTransferInfo{Version: 1, Port: uint32(port), Receiving: receiving, Certificate: append([]byte(nil), i.Certificate.Certificate[0]...), ExpiresUnix: time.Now().Add(meshproto.FileTransferLease).Unix()}
-	return info, meshproto.SignFileTransfer(node, info, key)
+	return info, meshproto.SignDesktopCapabilities(node, info, key, assistance)
 }

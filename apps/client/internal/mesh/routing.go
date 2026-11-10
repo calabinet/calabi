@@ -38,10 +38,6 @@ type Routing interface {
 // itself, through the per-OS implementations.
 type osRouting struct{ d *WGDatapath }
 
-func (r osRouting) ConfigureLink(overlay netip.Addr) error {
-	return configureLink(r.d.tunLUID(), r.d.ifname, overlay)
-}
-
 func (r osRouting) AddSubnetRoutes(routes []netip.Prefix) error {
 	return addSubnetRoutes(r.d.tunLUID(), r.d.ifname, routes)
 }

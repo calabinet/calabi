@@ -13,13 +13,8 @@ import (
 // failure mode of a hand-written simulator is that it agrees with the real
 // filter right up until the day it matters.
 //
-// ⚠ Reachability here is the NETMAP layer, which is UNDIRECTED: MemPolicy.Filter
-// keeps a peer when self may reach it OR it may reach self, because both ends
-// need each other's key for a WireGuard handshake. So a rule "a → b" today opens
-// the pair in both directions. Directional (and port-level) enforcement is the
-// node-side packet filter's; this check answers for the netmap layer
-// and says so explicitly rather than letting an admin believe they wrote a
-// one-way rule.
+// The original pair fields report netmap visibility. Transport checks and
+// changes additionally use the inbound packet filter, with a specific direction.
 
 // ReachPair is one node pair whose reachability changed.
 type ReachPair struct {
@@ -31,11 +26,15 @@ type ReachPair struct {
 
 // ACLDiff is what an edit would change, in node pairs.
 type ACLDiff struct {
-	Nodes      int         `json:"nodes"`
-	TotalPairs int         `json:"total_pairs"`
-	Added      []ReachPair `json:"added"`     // newly reachable
-	Removed    []ReachPair `json:"removed"`   // cut by this edit
-	Unchanged  int         `json:"unchanged"` // pairs whose reachability is untouched
+	Nodes               int             `json:"nodes"`
+	TotalPairs          int             `json:"total_pairs"`
+	Added               []ReachPair     `json:"added"`     // newly reachable
+	Removed             []ReachPair     `json:"removed"`   // cut by this edit
+	Unchanged           int             `json:"unchanged"` // pairs whose reachability is untouched
+	Traffic             *ACLTrafficDiff `json:"traffic,omitempty"`
+	FirstConfiguration  bool            `json:"first_configuration,omitempty"`
+	Baseline            string          `json:"baseline"`
+	IncompatibleDevices []string        `json:"incompatible_devices,omitempty"`
 }
 
 // AccessCheck explains one src→dst question against a policy.
@@ -50,7 +49,8 @@ type AccessCheck struct {
 	ReverseRule int  `json:"reverse_rule"`
 	// Reachable is the EFFECTIVE answer at the netmap layer: undirected, so
 	// either direction matching opens the pair (see the note above).
-	Reachable bool `json:"reachable"`
+	Reachable bool             `json:"reachable"`
+	Transport *AccessTransport `json:"transport,omitempty"`
 }
 
 // reachable reports whether the pair is mutually visible under p (nil = the
@@ -134,12 +134,41 @@ func (c *Coordinator) PreviewACL(ctx context.Context, t MeshnetID, doc ACLPolicy
 	if err != nil {
 		return ACLDiff{}, err
 	}
-	return DiffPolicies(nodes, before, doc), nil
+	diff := DiffPolicies(nodes, before, doc)
+	diff.FirstConfiguration = before == nil
+	diff.Baseline = "allow_rules"
+	if hasFullMeshAllow(&doc) {
+		diff.Baseline = "allow_all"
+	}
+	if hasACLAction(&doc, "deny") || hasICMPRule(&doc) {
+		if err := ValidateACLPolicy(doc); err != nil {
+			return ACLDiff{}, fmt.Errorf("%w: %s", ErrInvalidACL, err)
+		}
+		diff.IncompatibleDevices, err = incompatibleACLDevices(ctx, nodes, &doc)
+		if err != nil {
+			return ACLDiff{}, fmt.Errorf("%w: %s", ErrInvalidACL, err)
+		}
+	}
+	diff.Traffic, err = diffACLTraffic(ctx, nodes, before, &doc)
+	return diff, err
 }
 
 // CheckAccess answers "can src reach dst" for two nodes named in the meshnet.
 // doc is the policy to evaluate — pass nil to ask about what is live now.
 func (c *Coordinator) CheckAccess(ctx context.Context, t MeshnetID, srcName, dstName string, doc *ACLPolicy) (AccessCheck, error) {
+	return c.checkAccess(ctx, t, srcName, dstName, doc, nil)
+}
+
+func (c *Coordinator) CheckPortAccess(ctx context.Context, t MeshnetID, srcName, dstName string, doc *ACLPolicy, protocol string, port int) (AccessCheck, error) {
+	valid := (protocol == "tcp" || protocol == "udp") && port >= 1 && port <= 65535
+	if !valid && (protocol != "icmp" || port != 0) {
+		return AccessCheck{}, ErrInvalidAccessPort
+	}
+	target := &AccessTransport{Protocol: protocol, Port: uint16(port), Rule: -1}
+	return c.checkAccess(ctx, t, srcName, dstName, doc, target)
+}
+
+func (c *Coordinator) checkAccess(ctx context.Context, t MeshnetID, srcName, dstName string, doc *ACLPolicy, target *AccessTransport) (AccessCheck, error) {
 	nodes, err := c.nodesWithServices(ctx, t)
 	if err != nil {
 		return AccessCheck{}, err
@@ -152,13 +181,17 @@ func (c *Coordinator) CheckAccess(ctx context.Context, t MeshnetID, srcName, dst
 	if dst == nil {
 		return AccessCheck{}, fmt.Errorf("%w: %q", ErrNodeNotFound, dstName)
 	}
-	if doc == nil {
+	live := doc == nil
+	if live {
 		if doc, err = c.currentPolicy(ctx, t); err != nil {
 			return AccessCheck{}, err
 		}
 	}
 	fwd := matchingRule(doc, src, dst)
 	rev := matchingRule(doc, dst, src)
+	if target != nil {
+		checkTransport(nodes, src, dst, doc, live, target)
+	}
 	return AccessCheck{
 		SrcName:     src.Name,
 		DstName:     dst.Name,
@@ -167,6 +200,7 @@ func (c *Coordinator) CheckAccess(ctx context.Context, t MeshnetID, srcName, dst
 		Reverse:     doc == nil || rev >= 0,
 		ReverseRule: rev,
 		Reachable:   reachable(doc, src, dst),
+		Transport:   target,
 	}, nil
 }
 

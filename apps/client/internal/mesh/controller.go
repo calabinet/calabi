@@ -144,6 +144,7 @@ type Controller struct {
 	fileTransferNegotiated atomic.Bool
 	fileTransferMap        atomic.Bool
 	fileRelayLimit         atomic.Uint32
+	fileGeneration         atomic.Int64
 	fileNodeID             atomic.Int64
 
 	// homeMu guards the home-relay selection: the DERP map from the
@@ -271,6 +272,7 @@ func (c *Controller) Run(ctx context.Context) error {
 	c.fileTransferMap.Store(false)
 	defer c.fileTransferMap.Store(false)
 	c.fileNodeID.Store(reg.NodeID)
+	c.fileGeneration.Store(time.Now().UnixNano())
 	c.fileTransferNegotiated.Store(reg.Capabilities.Supports(meshproto.CapFileTransfer))
 	defer c.fileTransferNegotiated.Store(false)
 	c.registered.Store(true)
@@ -328,6 +330,7 @@ func (c *Controller) Run(ctx context.Context) error {
 	// Self-check the declared services and report what this machine actually
 	// observes. No-op when nothing is declared.
 	go c.serviceHealthLoop(ctx, reg.NodeID)
+	startRDPCertificateReporter(ctx, c.Coord, c.Logger)
 	// The tunnels this daemon serves, for a self-hosted coordinator's phones.
 	// Relay-only sessions too: it needs the coordinator, not a direct path.
 	go c.tunnelReportLoop(ctx)

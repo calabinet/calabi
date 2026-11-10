@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/netip"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -183,6 +184,8 @@ type RegisterInput struct {
 	// BlockIncoming is the node's own shields switch. nil = not reported (an
 	// older daemon), which must leave a stored value alone rather than clear it.
 	BlockIncoming *bool
+	ACLPortless   bool
+	ACLICMP       bool
 	// DeclaredServices are the services the node's OWN CONFIG declares. A
 	// claim: they land pending and an admin confirms them before any ACL
 	// "svc:" rule matches. Only Name/Proto/Port/Note are read.
@@ -340,6 +343,8 @@ func (c *Coordinator) register(ctx context.Context, in RegisterInput, changed *b
 			v := *in.BlockIncoming
 			existing.BlockIncoming = &v
 		}
+		existing.ACLPortless = &in.ACLPortless
+		existing.ACLICMP = &in.ACLICMP
 		if in.OS != "" {
 			existing.OS = in.OS
 		}
@@ -494,6 +499,8 @@ func (c *Coordinator) register(ctx context.Context, in RegisterInput, changed *b
 		DeviceFingerprint: in.DeviceFingerprint,
 		OS:                in.OS,
 		BlockIncoming:     in.BlockIncoming,
+		ACLPortless:       &in.ACLPortless,
+		ACLICMP:           &in.ACLICMP,
 		Approved:          approved,
 		DERPHome:          c.DefaultDERPHome, // deployment home region until the node reports its own
 	}
@@ -665,6 +672,19 @@ func (c *Coordinator) SaveACL(ctx context.Context, t MeshnetID, doc ACLPolicy, a
 	}
 	if err := ValidateACLPolicy(doc); err != nil {
 		return fmt.Errorf("%w: %s", ErrInvalidACL, err)
+	}
+	if hasACLAction(&doc, "deny") || hasICMPRule(&doc) {
+		nodes, err := c.nodesWithServices(ctx, t)
+		if err != nil {
+			return err
+		}
+		blockers, err := incompatibleACLDevices(ctx, nodes, &doc)
+		if err != nil {
+			return fmt.Errorf("%w: %s", ErrInvalidACL, err)
+		}
+		if len(blockers) != 0 {
+			return fmt.Errorf("%w: upgrade receiving devices to enforce this policy accurately: %s", ErrInvalidACL, strings.Join(blockers, ", "))
+		}
 	}
 	if err := c.ACL.SetACL(ctx, t, doc); err != nil {
 		return fmt.Errorf("core: save acl: %w", err)
@@ -1163,6 +1183,8 @@ func (c *Coordinator) UpdateDeclarations(ctx context.Context, in UpdateDeclarati
 	if in.OS != "" {
 		existing.OS = in.OS
 	}
+	existing.ACLPortless = nil
+	existing.ACLICMP = nil
 	stored, err := c.Nodes.Upsert(ctx, existing)
 	if err != nil {
 		return nil, fmt.Errorf("core: update node: %w", err)

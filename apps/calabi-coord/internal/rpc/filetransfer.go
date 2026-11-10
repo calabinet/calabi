@@ -42,6 +42,35 @@ func (s *Server) UpdateFileTransfer(ctx context.Context, req *meshpb.UpdateFileT
 	return &meshpb.UpdateFileTransferResponse{}, nil
 }
 
+func (s *Server) ReportRdpCertificate(ctx context.Context, req *meshpb.ReportRdpCertificateRequest) (*meshpb.ReportRdpCertificateResponse, error) {
+	node, err := s.authorizeNode(ctx, req.GetSessionToken(), 0)
+	if err != nil {
+		return nil, err
+	}
+	if node.OS != "windows" || !node.Approved || node.SignedOut || node.OwnerUserID <= 0 {
+		return nil, status.Error(codes.PermissionDenied, "owned Windows device required")
+	}
+	pin := string(req.GetSha256())
+	if len(pin) != 0 && len(pin) != 32 {
+		return nil, status.Error(codes.InvalidArgument, "expected SHA-256")
+	}
+	s.sessions.mu.Lock()
+	session, ok := s.sessions.byToken[req.GetSessionToken()]
+	changed := ok && session.rdpPin != pin
+	if changed {
+		session.rdpPin = pin
+		s.sessions.byToken[req.GetSessionToken()] = session
+	}
+	s.sessions.mu.Unlock()
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "session ended")
+	}
+	if changed {
+		s.notif.Bump(node.Meshnet)
+	}
+	return &meshpb.ReportRdpCertificateResponse{}, nil
+}
+
 func (s *Server) addFileTransfers(out *meshpb.NetMap) {
 	out.FileTransferSupported = true
 	now := time.Now()
@@ -56,12 +85,16 @@ func (s *Server) addFileTransfers(out *meshpb.NetMap) {
 			info = proto.Clone(sess.fileTransfer).(*meshpb.FileTransferInfo)
 		}
 		s.sessions.mu.Unlock()
-		if info == nil {
+		if info == nil && sess.rdpPin == "" {
 			return peer
 		}
 		key, err := meshproto.ParseNodeKey(peer.NodeKey)
 		if err != nil || key != sess.nodeKey {
 			return peer
+		}
+		if peer.SameOwner && peer.Os == "windows" && sess.rdpPin != "" {
+			peer = proto.Clone(peer).(*meshpb.Peer)
+			peer.RdpCertificateSha256 = []byte(sess.rdpPin)
 		}
 		if _, err := meshproto.VerifyFileTransfer(key, info, now); err == nil {
 			// Frozen public peer messages are shared; attach live state only to a
@@ -80,5 +113,6 @@ func (s *Server) addFileTransfers(out *meshpb.NetMap) {
 func (s *Server) hasFileTransfer(nodeID int64) bool {
 	s.sessions.mu.Lock()
 	defer s.sessions.mu.Unlock()
-	return s.sessions.byToken[s.sessions.byNode[nodeID]].fileTransfer != nil
+	session := s.sessions.byToken[s.sessions.byNode[nodeID]]
+	return session.fileTransfer != nil || session.rdpPin != ""
 }

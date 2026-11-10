@@ -10,6 +10,8 @@ import (
 
 	"golang.zx2c4.com/wireguard/tun"
 	"golang.zx2c4.com/wireguard/tun/tuntest"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/calabinet/calabi/apps/client/internal/creds"
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
@@ -357,5 +359,31 @@ func TestMeshStatusRemembersThisPhonesAddressAfterDisconnect(t *testing.T) {
 	}
 	if st := meshState(t, c); st["self_overlay"] != nil {
 		t.Fatalf("in another organization, self_overlay = %v, want none", st["self_overlay"])
+	}
+}
+
+func TestDeviceLimitIsReportedAndClearedAfterAutomaticRetry(t *testing.T) {
+	useMemoryTUNs(t)
+	coord, addr := startFakeCoord(t, &meshpb.NetMap{Self: &meshpb.Peer{NodeId: 11, OverlayAddr: "100.64.0.7"}})
+	coord.registerErr = status.Error(codes.ResourceExhausted, "core: mesh node quota exceeded: limit 2 reached for mesh_node")
+	bff := &fakeBFF{enrollment: fmt.Sprintf(`{"enabled":true,"coord_addr":%q,"relay_addr":"127.0.0.1:1"}`, addr)}
+	c := newTestCore(t, bff, &fakePlatform{})
+	signIn(t, c)
+	if err := c.Connect(); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "device limit refusal", func() bool {
+		st := meshState(t, c)
+		return st["state"] == stateRetrying && st["enrollment_error"] == "device_limit"
+	})
+	if st := meshState(t, c); st["overlay"] != nil {
+		t.Fatalf("refused device got an overlay: %v", st)
+	}
+	coord.mu.Lock()
+	coord.registerErr = nil
+	coord.mu.Unlock()
+	waitFor(t, "automatic recovery after a seat is freed", func() bool { return meshState(t, c)["state"] == stateConnected })
+	if st := meshState(t, c); st["enrollment_error"] != nil || st["error"] != nil {
+		t.Fatalf("stale refusal after recovery: %v", st)
 	}
 }

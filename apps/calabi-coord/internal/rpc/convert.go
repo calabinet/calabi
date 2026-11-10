@@ -3,6 +3,7 @@ package rpc
 import (
 	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
+	"google.golang.org/protobuf/proto"
 	"net/netip"
 )
 
@@ -26,7 +27,7 @@ func toProtoNetMapWithPeers(nm *core.NetMap, peer func(*core.Node) *meshpb.Peer)
 		out.Peers = make([]*meshpb.Peer, 0, len(nm.Peers))
 	}
 	for i := range nm.Peers {
-		out.Peers = append(out.Peers, peer(&nm.Peers[i]))
+		out.Peers = append(out.Peers, peerForOwner(nm.Self.OwnerUserID, &nm.Peers[i], peer(&nm.Peers[i])))
 	}
 	for _, r := range nm.PacketFilter {
 		fr := &meshpb.FilterRule{SrcCidrs: r.SrcCIDRs}
@@ -73,6 +74,16 @@ func toProtoNetMapWithPeers(nm *core.NetMap, peer func(*core.Node) *meshpb.Peer)
 	out.RelayBandwidthBurstKbps = nm.RelayBandwidthBurstKbps
 	out.AliasUsedAddrs = uint32(nm.AliasUsedAddrs)
 	return out
+}
+
+// The base wire peer may be shared by different recipients of one snapshot.
+func peerForOwner(owner int64, node *core.Node, base *meshpb.Peer) *meshpb.Peer {
+	if owner <= 0 || owner != node.OwnerUserID {
+		return base
+	}
+	result := proto.Clone(base).(*meshpb.Peer)
+	result.SameOwner = true
+	return result
 }
 
 func toProtoPeer(n *core.Node) *meshpb.Peer {

@@ -284,6 +284,34 @@ func (mnc *MeshNodeCreate) SetNillableTagsPinned(b *bool) *MeshNodeCreate {
 	return mnc
 }
 
+// SetACLPortless sets the "acl_portless" field.
+func (mnc *MeshNodeCreate) SetACLPortless(b bool) *MeshNodeCreate {
+	mnc.mutation.SetACLPortless(b)
+	return mnc
+}
+
+// SetNillableACLPortless sets the "acl_portless" field if the given value is not nil.
+func (mnc *MeshNodeCreate) SetNillableACLPortless(b *bool) *MeshNodeCreate {
+	if b != nil {
+		mnc.SetACLPortless(*b)
+	}
+	return mnc
+}
+
+// SetACLIcmp sets the "acl_icmp" field.
+func (mnc *MeshNodeCreate) SetACLIcmp(b bool) *MeshNodeCreate {
+	mnc.mutation.SetACLIcmp(b)
+	return mnc
+}
+
+// SetNillableACLIcmp sets the "acl_icmp" field if the given value is not nil.
+func (mnc *MeshNodeCreate) SetNillableACLIcmp(b *bool) *MeshNodeCreate {
+	if b != nil {
+		mnc.SetACLIcmp(*b)
+	}
+	return mnc
+}
+
 // SetTagsJSON sets the "tags_json" field.
 func (mnc *MeshNodeCreate) SetTagsJSON(s string) *MeshNodeCreate {
 	mnc.mutation.SetTagsJSON(s)
@@ -485,6 +513,14 @@ func (mnc *MeshNodeCreate) defaults() {
 		v := meshnode.DefaultTagsPinned
 		mnc.mutation.SetTagsPinned(v)
 	}
+	if _, ok := mnc.mutation.ACLPortless(); !ok {
+		v := meshnode.DefaultACLPortless
+		mnc.mutation.SetACLPortless(v)
+	}
+	if _, ok := mnc.mutation.ACLIcmp(); !ok {
+		v := meshnode.DefaultACLIcmp
+		mnc.mutation.SetACLIcmp(v)
+	}
 	if _, ok := mnc.mutation.TagsJSON(); !ok {
 		v := meshnode.DefaultTagsJSON
 		mnc.mutation.SetTagsJSON(v)
@@ -578,6 +614,12 @@ func (mnc *MeshNodeCreate) check() error {
 	}
 	if _, ok := mnc.mutation.TagsPinned(); !ok {
 		return &ValidationError{Name: "tags_pinned", err: errors.New(`ent: missing required field "MeshNode.tags_pinned"`)}
+	}
+	if _, ok := mnc.mutation.ACLPortless(); !ok {
+		return &ValidationError{Name: "acl_portless", err: errors.New(`ent: missing required field "MeshNode.acl_portless"`)}
+	}
+	if _, ok := mnc.mutation.ACLIcmp(); !ok {
+		return &ValidationError{Name: "acl_icmp", err: errors.New(`ent: missing required field "MeshNode.acl_icmp"`)}
 	}
 	if _, ok := mnc.mutation.TagsJSON(); !ok {
 		return &ValidationError{Name: "tags_json", err: errors.New(`ent: missing required field "MeshNode.tags_json"`)}
@@ -705,6 +747,14 @@ func (mnc *MeshNodeCreate) createSpec() (*MeshNode, *sqlgraph.CreateSpec) {
 	if value, ok := mnc.mutation.TagsPinned(); ok {
 		_spec.SetField(meshnode.FieldTagsPinned, field.TypeBool, value)
 		_node.TagsPinned = value
+	}
+	if value, ok := mnc.mutation.ACLPortless(); ok {
+		_spec.SetField(meshnode.FieldACLPortless, field.TypeBool, value)
+		_node.ACLPortless = value
+	}
+	if value, ok := mnc.mutation.ACLIcmp(); ok {
+		_spec.SetField(meshnode.FieldACLIcmp, field.TypeBool, value)
+		_node.ACLIcmp = value
 	}
 	if value, ok := mnc.mutation.TagsJSON(); ok {
 		_spec.SetField(meshnode.FieldTagsJSON, field.TypeString, value)

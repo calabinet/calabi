@@ -56,6 +56,11 @@ func TestReplyToOurOwnConnectionIsAllowed(t *testing.T) {
 	if !tn.allowInbound(reply) {
 		t.Fatal("the reply to a connection this machine opened was dropped")
 	}
+	newSYN := append(append([]byte(nil), reply...), make([]byte, 16)...)
+	newSYN[20+13] = 0x02
+	if tn.allowInbound(newSYN) {
+		t.Fatal("a new TCP SYN must match the ACL even with a reverse flow entry")
+	}
 }
 
 // The allowance is the exact reversed 5-tuple, not "this host may talk to us".
@@ -136,20 +141,24 @@ func TestEstablishedAllowanceRefreshes(t *testing.T) {
 	}
 }
 
-// ICMP carries no ports, so ping replies ride on the host pair alone. Without
-// this a ping to a peer would time out under any filter that doesn't open
-// everything (matchPort only admits port-less packets via a full-range rule).
 func TestICMPReplyIsAllowed(t *testing.T) {
 	tn := tunOf(true)
-	out := ipv4Flow("100.64.0.1", "100.64.0.2", protoICMP, 0, 0)
+	echo := func(src, dst string, typ byte, seq byte) []byte {
+		packet := ipv4Flow(src, dst, protoICMP, 0, 0)
+		packet[20] = typ
+		return append(packet, 0, 42, 0, seq)
+	}
+	out := echo("100.64.0.1", "100.64.0.2", 8, 1)
 	tp, _ := parseTuple(out)
 	tn.flows.observeOutbound(tp)
 
-	if !tn.allowInbound(ipv4Flow("100.64.0.2", "100.64.0.1", protoICMP, 0, 0)) {
+	if !tn.allowInbound(echo("100.64.0.2", "100.64.0.1", 0, 1)) {
 		t.Error("an ICMP reply to our own ping was dropped")
 	}
-	if tn.allowInbound(ipv4Flow("100.64.0.3", "100.64.0.1", protoICMP, 0, 0)) {
-		t.Error("ICMP from a host we never pinged was admitted")
+	if tn.allowInbound(echo("100.64.0.2", "100.64.0.1", 8, 1)) ||
+		tn.allowInbound(echo("100.64.0.2", "100.64.0.1", 0, 2)) ||
+		tn.allowInbound(echo("100.64.0.3", "100.64.0.1", 0, 1)) {
+		t.Error("a new echo request or unrelated reply bypassed the inbound rule")
 	}
 }
 

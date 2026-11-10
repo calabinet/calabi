@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -594,6 +595,13 @@ func (d *WGDatapath) applyPeerConfigLocked(cfg WGConfig) error {
 	)
 	// Access rules for INBOUND traffic. Applied before the peers go live so a
 	// packet can't slip in during the window between the two.
+	if runtime.GOOS == "windows" && d.ftun != nil {
+		owners := make(map[netip.Addr]bool, len(cfg.RDPOwners))
+		for _, ip := range cfg.RDPOwners {
+			owners[ip] = true
+		}
+		d.ftun.rdp.Store(&rdpOwnerFilter{cfg.OverlayAddr, owners})
+	}
 	if d.filter.SetRules(cfg.FilterEnabled, cfg.Filter) {
 		d.logger.Info("mesh access rules applied (inbound)",
 			"enforcing", cfg.FilterEnabled, "rules", len(cfg.Filter))

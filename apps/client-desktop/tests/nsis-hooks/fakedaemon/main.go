@@ -43,8 +43,10 @@ func main() {
 			os.Exit(5)
 		}
 		fmt.Println("restart permission configured")
-	case args == "desktop-idle", args == "daemon-idle", args == "mesh files --stdio":
+	case args == "desktop-idle", args == "daemon-idle", args == "mesh files --stdio", args == "mesh files --background":
 		time.Sleep(2 * time.Minute)
+	case args == "test-file-agent Register", args == "test-file-agent Remove":
+		fmt.Println("fake file agent task configured")
 	case args == "daemon stop", args == "daemon uninstall":
 		fmt.Println("fake service removed")
 	case args == "mesh files firewall install", args == "mesh files firewall remove":

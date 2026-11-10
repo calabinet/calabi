@@ -2,9 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/netip"
 	"reflect"
 	"testing"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/calabinet/calabi/apps/client/internal/localweb"
 	"github.com/calabinet/calabi/apps/client/internal/mesh"
@@ -309,5 +313,31 @@ func TestToStatusapiMeshCopiesEveryDatapathField(t *testing.T) {
 			t.Errorf("field %s came out zero — toStatusapiMesh does not copy it",
 				out.Type().Field(i).Name)
 		}
+	}
+}
+
+func TestDeviceLimitReachesBothDaemonStatusShapes(t *testing.T) {
+	r := newMeshRunner(quietLogger(), testMeshConfig())
+	r.lastErr = fmt.Errorf("%w: %w", mesh.ErrRegister, status.Error(codes.ResourceExhausted, "core: mesh node quota exceeded"))
+	local := r.MeshStatus()
+	for kind, st := range map[string]any{"local": local, "platform": toStatusapiMesh(local)} {
+		raw, err := json.Marshal(st)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var wire struct {
+			Up    bool   `json:"up"`
+			Error string `json:"enrollment_error"`
+		}
+		if err := json.Unmarshal(raw, &wire); err != nil {
+			t.Fatal(err)
+		}
+		if wire.Up || wire.Error != "device_limit" {
+			t.Errorf("%s status = %s", kind, raw)
+		}
+	}
+	r.lastErr = status.Error(codes.Unavailable, "temporarily unavailable")
+	if got := r.MeshStatus().EnrollmentError; got != "" {
+		t.Fatalf("network error became quota: %s", got)
 	}
 }

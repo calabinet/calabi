@@ -10,6 +10,8 @@ import (
 
 	"github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/types/dynamicpb"
 )
 
 func TestFileTransferBinding(t *testing.T) {
@@ -28,7 +30,44 @@ func TestFileTransferBinding(t *testing.T) {
 	if pin, err := VerifyFileTransfer(node, info, now); err != nil || len(pin) != 64 {
 		t.Fatalf("pin=%s err=%v", pin, err)
 	}
+	if err := SignDesktopCapabilities(node, info, key, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyFileTransfer(node, info, now); err != nil {
+		t.Fatal(err)
+	}
+	// The deployed v1 coordinator clones the declaration in memory. Exercise its
+	// old six-field schema so an upgrade cannot silently require a new coordinator.
+	t.Run("legacy coordinator forwards optional proof", func(t *testing.T) {
+		fd := protodesc.ToFileDescriptorProto(meshpb.File_meshpb_coord_proto)
+		for _, m := range fd.MessageType {
+			if m.GetName() == "FileTransferInfo" {
+				m.Field = m.Field[:6]
+			}
+		}
+		legacy, err := protodesc.NewFile(fd, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		old := dynamicpb.NewMessage(legacy.Messages().ByName("FileTransferInfo"))
+		wire, err := proto.Marshal(info)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := proto.Unmarshal(wire, old); err != nil {
+			t.Fatal(err)
+		}
+		wire, err = proto.Marshal(proto.Clone(old))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var forwarded meshpb.FileTransferInfo
+		if err := proto.Unmarshal(wire, &forwarded); err != nil || !proto.Equal(info, &forwarded) {
+			t.Fatal("capability lost during v1 relay", err)
+		}
+	})
 	for name, mutate := range map[string]func(*meshpb.FileTransferInfo){
+		"assistance":  func(i *meshpb.FileTransferInfo) { i.AssistanceProof = append([]byte(nil), i.Proof...) },
 		"port":        func(i *meshpb.FileTransferInfo) { i.Port++ },
 		"receiving":   func(i *meshpb.FileTransferInfo) { i.Receiving = false },
 		"expiry":      func(i *meshpb.FileTransferInfo) { i.ExpiresUnix++ },

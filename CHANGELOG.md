@@ -10,6 +10,26 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## 2.7.0 — 2026-11-10
+
+### Local console
+
+- **Added** — Connect to your own Windows desktop from Calabi on Windows or macOS. Choose a recent device to reconnect and optionally save its login credentials on this computer.
+- **Added** — Open an SSH terminal for a Linux device from the desktop client. Use the SFTP panel to upload, download, and manage remote files.
+- **Added** — Switch between SSH and remote desktop sessions in a shared workspace.
+- **Changed** — Windows remote desktop sessions use native rendering by default, with Canvas as a fallback. On Windows, the main Calabi window stays visible while the remote login dialog is open.
+- **Changed** — The device and file transfer pages link to their respective switches in the local receiving settings. Assistance and file reception take effect immediately. Inbound connection and subnet settings take effect on save.
+- **Fixed** — Windows native remote desktop sessions no longer flicker when leaving full screen with F11 or the session panel.
+
+### Mesh
+
+- **Added** — Configure and preview access rules by protocol and destination port. TCP and UDP can use port ranges, and ICMP has its own rule type.
+- **Fixed** — The desktop and Android clients show a specific message when the device limit is reached and distinguish it from a connection still in progress.
+
+### Platform administration
+
+- **Added** — View service health and recent logs in the administration console.
+
 ## 2.6.0 — 2026-11-03
 
 ### Mesh

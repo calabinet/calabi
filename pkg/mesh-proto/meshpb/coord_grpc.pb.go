@@ -33,6 +33,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	Coordinator_ReportRdpCertificate_FullMethodName   = "/calabi.mesh.v1.Coordinator/ReportRdpCertificate"
 	Coordinator_UpdateFileTransfer_FullMethodName     = "/calabi.mesh.v1.Coordinator/UpdateFileTransfer"
 	Coordinator_RegisterNode_FullMethodName           = "/calabi.mesh.v1.Coordinator/RegisterNode"
 	Coordinator_GetRegisterChallenge_FullMethodName   = "/calabi.mesh.v1.Coordinator/GetRegisterChallenge"
@@ -61,6 +62,8 @@ const (
 type CoordinatorClient interface {
 	// Dedicated metadata update: cannot replace service declarations or ACLs.
 	// Absent info withdraws this session's file listener. Never carries file names.
+	// A machine may publish or withdraw only its own Windows listener pin.
+	ReportRdpCertificate(ctx context.Context, in *ReportRdpCertificateRequest, opts ...grpc.CallOption) (*ReportRdpCertificateResponse, error)
 	UpdateFileTransfer(ctx context.Context, in *UpdateFileTransferRequest, opts ...grpc.CallOption) (*UpdateFileTransferResponse, error)
 	// RegisterNode enrolls a node into its meshnet (= org): the coordinator
 	// records its public keys, allocates an overlay IP (IPAM), and returns the
@@ -189,6 +192,16 @@ type coordinatorClient struct {
 
 func NewCoordinatorClient(cc grpc.ClientConnInterface) CoordinatorClient {
 	return &coordinatorClient{cc}
+}
+
+func (c *coordinatorClient) ReportRdpCertificate(ctx context.Context, in *ReportRdpCertificateRequest, opts ...grpc.CallOption) (*ReportRdpCertificateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportRdpCertificateResponse)
+	err := c.cc.Invoke(ctx, Coordinator_ReportRdpCertificate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *coordinatorClient) UpdateFileTransfer(ctx context.Context, in *UpdateFileTransferRequest, opts ...grpc.CallOption) (*UpdateFileTransferResponse, error) {
@@ -361,6 +374,8 @@ func (c *coordinatorClient) ReportConnections(ctx context.Context, in *ReportCon
 type CoordinatorServer interface {
 	// Dedicated metadata update: cannot replace service declarations or ACLs.
 	// Absent info withdraws this session's file listener. Never carries file names.
+	// A machine may publish or withdraw only its own Windows listener pin.
+	ReportRdpCertificate(context.Context, *ReportRdpCertificateRequest) (*ReportRdpCertificateResponse, error)
 	UpdateFileTransfer(context.Context, *UpdateFileTransferRequest) (*UpdateFileTransferResponse, error)
 	// RegisterNode enrolls a node into its meshnet (= org): the coordinator
 	// records its public keys, allocates an overlay IP (IPAM), and returns the
@@ -491,6 +506,9 @@ type CoordinatorServer interface {
 // pointer dereference when methods are called.
 type UnimplementedCoordinatorServer struct{}
 
+func (UnimplementedCoordinatorServer) ReportRdpCertificate(context.Context, *ReportRdpCertificateRequest) (*ReportRdpCertificateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportRdpCertificate not implemented")
+}
 func (UnimplementedCoordinatorServer) UpdateFileTransfer(context.Context, *UpdateFileTransferRequest) (*UpdateFileTransferResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateFileTransfer not implemented")
 }
@@ -555,6 +573,24 @@ func RegisterCoordinatorServer(s grpc.ServiceRegistrar, srv CoordinatorServer) {
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&Coordinator_ServiceDesc, srv)
+}
+
+func _Coordinator_ReportRdpCertificate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportRdpCertificateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoordinatorServer).ReportRdpCertificate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Coordinator_ReportRdpCertificate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoordinatorServer).ReportRdpCertificate(ctx, req.(*ReportRdpCertificateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Coordinator_UpdateFileTransfer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -827,6 +863,10 @@ var Coordinator_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "calabi.mesh.v1.Coordinator",
 	HandlerType: (*CoordinatorServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ReportRdpCertificate",
+			Handler:    _Coordinator_ReportRdpCertificate_Handler,
+		},
 		{
 			MethodName: "UpdateFileTransfer",
 			Handler:    _Coordinator_UpdateFileTransfer_Handler,

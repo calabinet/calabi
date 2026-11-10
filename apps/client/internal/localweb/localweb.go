@@ -109,11 +109,12 @@ type MeshSource interface {
 
 // MeshStatus is the JSON shape for /v1/mesh.
 type MeshStatus struct {
-	Enabled bool   `json:"enabled"`
-	Up      bool   `json:"up"`
-	Paused  bool   `json:"paused,omitempty"` // stopped from the console; POST /v1/mesh/up resumes
-	Coord   string `json:"coord,omitempty"`
-	Relay   string `json:"relay,omitempty"`
+	EnrollmentError string `json:"enrollment_error,omitempty"` // stable registration refusal code
+	Enabled         bool   `json:"enabled"`
+	Up              bool   `json:"up"`
+	Paused          bool   `json:"paused,omitempty"` // stopped from the console; POST /v1/mesh/up resumes
+	Coord           string `json:"coord,omitempty"`
+	Relay           string `json:"relay,omitempty"`
 	// DerpHome is the region code this node is homed on ("self-…" = the org's own
 	// relay). Relay is the address; DerpHome is what tells self-hosted from
 	// platform, so the console can flag "中继节点：自建".

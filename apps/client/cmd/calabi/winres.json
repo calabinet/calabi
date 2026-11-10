@@ -1,0 +1,23 @@
+{
+  "RT_GROUP_ICON": {
+    "#1": {
+      "0000": "../../../client-desktop/src-tauri/icons/icon.ico"
+    }
+  },
+  "RT_VERSION": {
+    "#1": {
+      "0000": {
+        "info": {
+          "0409": {
+            "CompanyName": "Calabi",
+            "FileDescription": "Calabi Core",
+            "FileVersion": "0.0.0.0",
+            "InternalName": "calabi",
+            "OriginalFilename": "calabi.exe",
+            "ProductName": "Calabi"
+          }
+        }
+      }
+    }
+  }
+}

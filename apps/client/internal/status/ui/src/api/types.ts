@@ -642,7 +642,8 @@ export interface MeshStatus {
   published_routes?: string[];
   netmap_seen?: boolean;
   enabled: boolean; // a `mesh:` block is configured on this daemon
-  up: boolean; // the datapath is currently live
+  up: boolean; // the datapath has received its mesh configuration
+  enrollment_error?: "device_limit";
   paused?: boolean; // stopped locally via meshDown; Start (meshUp) re-enrolls
   coord?: string;
   relay?: string;

@@ -20,7 +20,8 @@ import (
 //
 // luid is the wintun adapter LUID (WGDatapath.tunLUID); ifname is used only for
 // error context. Needs administrator privileges (like creating the tun itself).
-func configureLink(luid uint64, ifname string, overlay netip.Addr) error {
+func (r osRouting) ConfigureLink(overlay netip.Addr) error {
+	luid, ifname := r.d.tunLUID(), r.d.ifname
 	if luid == 0 {
 		return fmt.Errorf("mesh: tun %q has no wintun LUID; cannot configure link", ifname)
 	}
@@ -32,6 +33,26 @@ func configureLink(luid uint64, ifname string, overlay netip.Addr) error {
 	}
 	if err := l.SetIPAddresses([]netip.Prefix{netip.PrefixFrom(overlay, bits)}); err != nil {
 		return fmt.Errorf("mesh: set tun address %s: %w", overlay, err)
+	}
+	// On Windows CreateTUN stores the requested MTU in wireguard-go, but
+	// TCP derives its MSS from the OS interface, which may still report 65535.
+	mtu, err := r.d.tun.MTU()
+	if err != nil {
+		return fmt.Errorf("mesh: read tun %s MTU: %w", ifname, err)
+	}
+	family := winipcfg.AddressFamily(windows.AF_INET)
+	if overlay.Is6() {
+		family = windows.AF_INET6
+	}
+	row, err := l.IPInterface(family)
+	if err != nil {
+		return fmt.Errorf("mesh: read IP interface %s: %w", ifname, err)
+	}
+	if row.NLMTU != uint32(mtu) {
+		row.NLMTU = uint32(mtu)
+		if err := row.Set(); err != nil {
+			return fmt.Errorf("mesh: set IP interface %s MTU %d: %w", ifname, mtu, err)
+		}
 	}
 
 	pfx, err := netip.ParsePrefix(meshOverlayCIDR)

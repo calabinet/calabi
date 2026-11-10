@@ -18,7 +18,7 @@ func (c *Controller) FileMembers() []Peer {
 	defer c.peersMu.Unlock()
 	out := make([]Peer, 0, len(c.curPeers))
 	for _, p := range c.curPeers {
-		out = append(out, Peer{NodeKey: p.NodeKey, Overlay: p.Overlay})
+		out = append(out, Peer{RDPPin: p.RDPPin, SameOwner: p.SameOwner, OS: p.OS, NodeKey: p.NodeKey, Overlay: p.Overlay, Name: p.Name, DeclarationError: p.DeclarationError, FileTransfer: cloneFileTransfer(p.FileTransfer)})
 	}
 	return out
 }
@@ -36,6 +36,7 @@ func (c *Controller) FileTransferReady() bool {
 }
 
 func (c *Controller) FileRelayLimit() uint32 { return c.fileRelayLimit.Load() }
+func (c *Controller) FileGeneration() int64  { return c.fileGeneration.Load() }
 func (c *Controller) FileNodeID() int64      { return c.fileNodeID.Load() }
 
 func (c *Controller) FilePeers() []Peer {

@@ -3504,6 +3504,8 @@ type MeshNodeMutation struct {
 	os                     *string
 	block_incoming         *bool
 	tags_pinned            *bool
+	acl_portless           *bool
+	acl_icmp               *bool
 	tags_json              *string
 	approved               *bool
 	disabled               *bool
@@ -4388,6 +4390,78 @@ func (m *MeshNodeMutation) ResetTagsPinned() {
 	m.tags_pinned = nil
 }
 
+// SetACLPortless sets the "acl_portless" field.
+func (m *MeshNodeMutation) SetACLPortless(b bool) {
+	m.acl_portless = &b
+}
+
+// ACLPortless returns the value of the "acl_portless" field in the mutation.
+func (m *MeshNodeMutation) ACLPortless() (r bool, exists bool) {
+	v := m.acl_portless
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldACLPortless returns the old "acl_portless" field's value of the MeshNode entity.
+// If the MeshNode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshNodeMutation) OldACLPortless(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldACLPortless is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldACLPortless requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldACLPortless: %w", err)
+	}
+	return oldValue.ACLPortless, nil
+}
+
+// ResetACLPortless resets all changes to the "acl_portless" field.
+func (m *MeshNodeMutation) ResetACLPortless() {
+	m.acl_portless = nil
+}
+
+// SetACLIcmp sets the "acl_icmp" field.
+func (m *MeshNodeMutation) SetACLIcmp(b bool) {
+	m.acl_icmp = &b
+}
+
+// ACLIcmp returns the value of the "acl_icmp" field in the mutation.
+func (m *MeshNodeMutation) ACLIcmp() (r bool, exists bool) {
+	v := m.acl_icmp
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldACLIcmp returns the old "acl_icmp" field's value of the MeshNode entity.
+// If the MeshNode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshNodeMutation) OldACLIcmp(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldACLIcmp is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldACLIcmp requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldACLIcmp: %w", err)
+	}
+	return oldValue.ACLIcmp, nil
+}
+
+// ResetACLIcmp resets all changes to the "acl_icmp" field.
+func (m *MeshNodeMutation) ResetACLIcmp() {
+	m.acl_icmp = nil
+}
+
 // SetTagsJSON sets the "tags_json" field.
 func (m *MeshNodeMutation) SetTagsJSON(s string) {
 	m.tags_json = &s
@@ -4674,7 +4748,7 @@ func (m *MeshNodeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *MeshNodeMutation) Fields() []string {
-	fields := make([]string, 0, 27)
+	fields := make([]string, 0, 29)
 	if m.meshnet_id != nil {
 		fields = append(fields, meshnode.FieldMeshnetID)
 	}
@@ -4734,6 +4808,12 @@ func (m *MeshNodeMutation) Fields() []string {
 	}
 	if m.tags_pinned != nil {
 		fields = append(fields, meshnode.FieldTagsPinned)
+	}
+	if m.acl_portless != nil {
+		fields = append(fields, meshnode.FieldACLPortless)
+	}
+	if m.acl_icmp != nil {
+		fields = append(fields, meshnode.FieldACLIcmp)
 	}
 	if m.tags_json != nil {
 		fields = append(fields, meshnode.FieldTagsJSON)
@@ -4804,6 +4884,10 @@ func (m *MeshNodeMutation) Field(name string) (ent.Value, bool) {
 		return m.BlockIncoming()
 	case meshnode.FieldTagsPinned:
 		return m.TagsPinned()
+	case meshnode.FieldACLPortless:
+		return m.ACLPortless()
+	case meshnode.FieldACLIcmp:
+		return m.ACLIcmp()
 	case meshnode.FieldTagsJSON:
 		return m.TagsJSON()
 	case meshnode.FieldApproved:
@@ -4867,6 +4951,10 @@ func (m *MeshNodeMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldBlockIncoming(ctx)
 	case meshnode.FieldTagsPinned:
 		return m.OldTagsPinned(ctx)
+	case meshnode.FieldACLPortless:
+		return m.OldACLPortless(ctx)
+	case meshnode.FieldACLIcmp:
+		return m.OldACLIcmp(ctx)
 	case meshnode.FieldTagsJSON:
 		return m.OldTagsJSON(ctx)
 	case meshnode.FieldApproved:
@@ -5029,6 +5117,20 @@ func (m *MeshNodeMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTagsPinned(v)
+		return nil
+	case meshnode.FieldACLPortless:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetACLPortless(v)
+		return nil
+	case meshnode.FieldACLIcmp:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetACLIcmp(v)
 		return nil
 	case meshnode.FieldTagsJSON:
 		v, ok := value.(string)
@@ -5223,6 +5325,12 @@ func (m *MeshNodeMutation) ResetField(name string) error {
 		return nil
 	case meshnode.FieldTagsPinned:
 		m.ResetTagsPinned()
+		return nil
+	case meshnode.FieldACLPortless:
+		m.ResetACLPortless()
+		return nil
+	case meshnode.FieldACLIcmp:
+		m.ResetACLIcmp()
 		return nil
 	case meshnode.FieldTagsJSON:
 		m.ResetTagsJSON()

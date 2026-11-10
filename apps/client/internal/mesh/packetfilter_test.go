@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"net/netip"
 	"testing"
+
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // ipv4 builds a minimal IPv4 packet with an optional TCP/UDP header.
@@ -124,6 +126,41 @@ func TestFilterIPv6(t *testing.T) {
 	v4only.SetRules(true, []FilterRule{rule("0.0.0.0/0", PortRange{First: 0, Last: 65535})})
 	if v4only.Allow(ipv6("fd00::1", protoTCP, 80)) {
 		t.Fatal("0.0.0.0/0 must not match a v6 source")
+	}
+}
+
+func TestFilterPortlessRangeDoesNotAdmitOpaqueTransport(t *testing.T) {
+	var f PacketFilter
+	portless := PortRange{Proto: meshproto.ACLPortless}
+	f.SetRules(true, []FilterRule{rule("0.0.0.0/0", portless), rule("::/0", portless)})
+	if !f.Allow(ipv4("100.64.0.1", protoICMP, 0, 0)) || !f.Allow(ipv6("fd00::1", 58, 0)) {
+		t.Fatal("portless allow must preserve ICMP")
+	}
+	if f.Allow(ipv4("100.64.0.1", protoTCP, 0, 0x20)) || f.Allow(ipv6("fd00::1", 44, 0)) ||
+		f.Allow(ipv6("fd00::1", 60, 0)) {
+		t.Fatal("portless allow must not admit fragments or opaque IPv6 extension headers")
+	}
+}
+
+func TestFilterSeparatesICMPFromOtherPortlessProtocols(t *testing.T) {
+	for _, spec := range []struct {
+		proto string
+		icmp  bool
+	}{
+		{meshproto.ACLICMP, true},
+		{meshproto.ACLNonICMPPortless, false},
+	} {
+		f := &PacketFilter{}
+		span := PortRange{Proto: spec.proto}
+		f.SetRules(true, []FilterRule{rule("0.0.0.0/0", span), rule("::/0", span)})
+		if f.Allow(ipv4("100.64.0.1", protoICMP, 0, 0)) != spec.icmp ||
+			f.Allow(ipv6("fd00::1", protoICMPv6, 0)) != spec.icmp ||
+			f.Allow(ipv4("100.64.0.1", 47, 0, 0)) == spec.icmp ||
+			f.Allow(ipv6("fd00::1", 47, 0)) == spec.icmp ||
+			f.Allow(ipv4("100.64.0.1", protoTCP, 0, 22)) ||
+			f.Allow(ipv6("fd00::1", 0, 0)) {
+			t.Fatalf("unexpected traffic matched %s", spec.proto)
+		}
 	}
 }
 

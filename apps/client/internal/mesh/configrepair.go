@@ -71,6 +71,7 @@ func (d *WGDatapath) repairConfigLoop() {
 // retains no WGConfig for repair. Copy mutable fields so caller changes cannot
 // change permissions while a retry is waiting.
 func cloneRepairConfig(c WGConfig) WGConfig {
+	c.RDPOwners = append([]netip.Addr(nil), c.RDPOwners...)
 	c.Peers = append([]WGPeer(nil), c.Peers...)
 	for i := range c.Peers {
 		c.Peers[i].AllowedIPs = append([]netip.Prefix(nil), c.Peers[i].AllowedIPs...)

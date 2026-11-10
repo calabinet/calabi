@@ -116,6 +116,15 @@ func TestAdminPreviewAndCheckACL(t *testing.T) {
 	if !chk.Reachable {
 		t.Fatal("with no stored doc the meshnet is allow-all; check should say reachable")
 	}
+	rr = post("/admin/meshnets/1/acl/check", `{"src":"a","dst":"b","transport":{"protocol":"tcp","port":65535}}`)
+	var transport core.AccessCheck
+	if err := json.Unmarshal(rr.Body.Bytes(), &transport); rr.Code != http.StatusOK || err != nil ||
+		transport.Transport == nil || !transport.Transport.Allowed || transport.Transport.Reason != "default" {
+		t.Fatalf("transport check = %d, %s, decode error %v", rr.Code, rr.Body.String(), err)
+	}
+	if rr := post("/admin/meshnets/1/acl/check", `{"src":"a","dst":"b","transport":{"protocol":"udp","port":65536}}`); rr.Code != http.StatusBadRequest {
+		t.Fatalf("invalid port check = %d, want 400", rr.Code)
+	}
 
 	// An unknown node name is a 404, not a silent "denied".
 	if rr := post("/admin/meshnets/1/acl/check", `{"src":"a","dst":"ghost"}`); rr.Code != http.StatusNotFound {

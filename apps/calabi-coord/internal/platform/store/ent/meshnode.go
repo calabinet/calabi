@@ -57,6 +57,10 @@ type MeshNode struct {
 	BlockIncoming *bool `json:"block_incoming,omitempty"`
 	// an admin set the tags in the console; re-registration must not overwrite them from the auth key
 	TagsPinned bool `json:"tags_pinned,omitempty"`
+	// ACLPortless holds the value of the "acl_portless" field.
+	ACLPortless bool `json:"acl_portless,omitempty"`
+	// ACLIcmp holds the value of the "acl_icmp" field.
+	ACLIcmp bool `json:"acl_icmp,omitempty"`
 	// JSON array of ACL tags resolved from the auth key
 	TagsJSON string `json:"tags_json,omitempty"`
 	// device approval: false = enrolled but not yet allowed to reach anything. Defaults TRUE so enabling approval never retroactively parks existing nodes
@@ -79,7 +83,7 @@ func (*MeshNode) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case meshnode.FieldNamePinned, meshnode.FieldRoutesReviewed, meshnode.FieldBlockIncoming, meshnode.FieldTagsPinned, meshnode.FieldApproved, meshnode.FieldDisabled, meshnode.FieldSignedOut:
+		case meshnode.FieldNamePinned, meshnode.FieldRoutesReviewed, meshnode.FieldBlockIncoming, meshnode.FieldTagsPinned, meshnode.FieldACLPortless, meshnode.FieldACLIcmp, meshnode.FieldApproved, meshnode.FieldDisabled, meshnode.FieldSignedOut:
 			values[i] = new(sql.NullBool)
 		case meshnode.FieldID, meshnode.FieldMeshnetID, meshnode.FieldOwnerUserID:
 			values[i] = new(sql.NullInt64)
@@ -229,6 +233,18 @@ func (mn *MeshNode) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				mn.TagsPinned = value.Bool
 			}
+		case meshnode.FieldACLPortless:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field acl_portless", values[i])
+			} else if value.Valid {
+				mn.ACLPortless = value.Bool
+			}
+		case meshnode.FieldACLIcmp:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field acl_icmp", values[i])
+			} else if value.Valid {
+				mn.ACLIcmp = value.Bool
+			}
 		case meshnode.FieldTagsJSON:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tags_json", values[i])
@@ -368,6 +384,12 @@ func (mn *MeshNode) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("tags_pinned=")
 	builder.WriteString(fmt.Sprintf("%v", mn.TagsPinned))
+	builder.WriteString(", ")
+	builder.WriteString("acl_portless=")
+	builder.WriteString(fmt.Sprintf("%v", mn.ACLPortless))
+	builder.WriteString(", ")
+	builder.WriteString("acl_icmp=")
+	builder.WriteString(fmt.Sprintf("%v", mn.ACLIcmp))
 	builder.WriteString(", ")
 	builder.WriteString("tags_json=")
 	builder.WriteString(mn.TagsJSON)

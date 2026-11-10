@@ -12,12 +12,27 @@
 // "frontendDist" Tauri requires; the actual UI is the SPA the daemon
 // embeds (see apps/client/internal/status/ui/).
 
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(all(windows, any(not(debug_assertions), feature = "windows-gui")), windows_subsystem = "windows")]
 
 mod daemon;
 mod tray;
 mod tray_locale;
 mod files;
+#[cfg(any(windows, target_os = "macos"))]
+mod ssh;
+#[cfg(any(windows, target_os = "macos"))]
+mod remote_workspace;
+#[cfg(any(windows, target_os = "macos"))]
+mod rdp_workspace;
+#[cfg(all(target_os = "macos", feature = "rdp-native-macos"))]
+mod macos_rdp_view;
+#[cfg(windows)]
+mod windows_rdp_view;
+#[cfg(windows)]
+mod ssh_auth;
+#[cfg(target_os = "macos")]
+#[path = "ssh_auth_macos.rs"]
+mod ssh_auth;
 mod file_requests;
 
 use std::sync::Arc;
@@ -33,8 +48,21 @@ use crate::daemon::Supervisor;
 
 #[cfg(windows)]
 mod windows_service;
+#[cfg(windows)]
+mod windows_file_agent;
 
 fn main() {
+    #[cfg(windows)]
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--run-file-agent")) {
+        if files::start_installed_background_agent().is_err() {
+            std::process::exit(1);
+        }
+        return;
+    }
+    #[cfg(any(windows, target_os = "macos"))]
+    if let Some(code) = ssh_auth::askpass() {
+        std::process::exit(code);
+    }
     #[cfg(windows)]
     if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--configure-installed-service")) {
         if let Err(error) = windows_service::configure_installed_service() {
@@ -88,6 +116,9 @@ fn main() {
     // sections so we can bisect plugin-init crashes from the logfile.
     log::info!("builder: creating");
     let app = tauri::Builder::default();
+    #[cfg(any(windows, target_os = "macos"))]
+    let app = app.invoke_handler(tauri::generate_handler![files::files_action, files::file_receipt_action, tray::tray_action, tray::tray_set_locale, ssh::ssh_session, ssh::ssh_read, remote_workspace::remote_workspace, remote_workspace::remote_frame]);
+    #[cfg(not(any(windows, target_os = "macos")))]
     let app = app.invoke_handler(tauri::generate_handler![files::files_action, files::file_receipt_action, tray::tray_action, tray::tray_set_locale]);
     log::info!("builder: +single_instance");
     let app = app.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
@@ -131,6 +162,10 @@ fn main() {
             let supervisor: Option<Arc<Supervisor>> = Some(Supervisor::new(bin, daemon_dir));
             app.manage(supervisor.clone());
             files::install(app);
+            #[cfg(any(windows, target_os = "macos"))]
+            app.manage(ssh::Windows::default());
+            #[cfg(any(windows, target_os = "macos"))]
+            app.manage(remote_workspace::Workspace::default());
             // Create the main window here (not in tauri.conf.json) so its
             // User-Agent can reflect the real OS. A config userAgent is a
             // single static string — it used to claim "Windows NT 10.0" on
@@ -147,8 +182,8 @@ fn main() {
             .title("Calabi")
             .inner_size(1100.0, 720.0)
             .min_inner_size(880.0, 560.0)
-            .resizable(false)
-            .maximizable(false)
+            .resizable(true)
+            .maximizable(true)
             .visible(false)
             .theme(Some(tauri::Theme::Dark))
             .user_agent(&ua)

@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -18,12 +19,13 @@ import (
 // Linux's managed service and ordinary Windows/macOS agents persist reception.
 // Preferences are private to the OS user, identity and authenticated scope.
 type fileServiceSettings struct {
-	Scope     string            `json:"scope"`
-	Epoch     int64             `json:"epoch"`
-	Receiving bool              `json:"receiving"`
-	AutoSave  bool              `json:"auto_save"`
-	Saved     map[string]string `json:"saved,omitempty"`
-	Exported  map[string]bool   `json:"exported,omitempty"`
+	Scope      string            `json:"scope"`
+	Epoch      int64             `json:"epoch"`
+	Assistance bool              `json:"assistance,omitempty"`
+	Receiving  bool              `json:"receiving"`
+	AutoSave   bool              `json:"auto_save"`
+	Saved      map[string]string `json:"saved,omitempty"`
+	Exported   map[string]bool   `json:"exported,omitempty"`
 }
 type fileServiceState struct {
 	saving    bool
@@ -140,12 +142,12 @@ func (d *desktopFileAgent) reconcileManaged() {
 			return
 		}
 	}
-	view, err := d.metadata()
+	view, err := d.inboundMetadata()
 	if err != nil {
 		d.wMu.RLock()
 		w := d.w
 		d.wMu.RUnlock()
-		if w != nil && w.Agent.Receiving() {
+		if w != nil && (w.Agent.Receiving() || w.Agent.Assisting()) {
 			_ = w.Agent.StopServing()
 		}
 		m.err = err.Error()
@@ -176,10 +178,16 @@ func (d *desktopFileAgent) reconcileManaged() {
 			return
 		}
 	}
+	if runtime.GOOS == "windows" && m.settings.Assistance != w.Agent.Assisting() {
+		if err := d.setInbound(w, true, m.settings.Assistance); err != nil {
+			m.err = err.Error()
+			return
+		}
+	}
 	m.err = ""
 	if m.directory != "" && m.settings.AutoSave && !m.saving && time.Now().After(m.saveAfter) {
 		for _, row := range w.Agent.List() {
-			if row.Transfer.State != "completed" || m.settings.Exported[row.Transfer.ID] {
+			if row.Transfer.Clipboard || row.Transfer.State != "completed" || m.settings.Exported[row.Transfer.ID] {
 				continue
 			}
 			m.saving = true

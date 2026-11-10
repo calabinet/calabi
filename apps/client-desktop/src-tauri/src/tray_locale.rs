@@ -1,6 +1,6 @@
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    OnceLock,
+    Mutex, OnceLock,
 };
 use tauri::{AppHandle, Manager};
 
@@ -44,6 +44,22 @@ fn catalog() -> &'static serde_json::Value {
 
 pub fn code(app: &AppHandle) -> &'static str {
     CODES[app.state::<Language>().0.load(Ordering::Relaxed)]
+}
+
+pub fn native_locale_path(app: &AppHandle) -> Option<std::path::PathBuf> {
+    app.path().app_local_data_dir().ok().map(|dir| dir.join("native-ui-language"))
+}
+
+pub fn persist_native_locale(app: &AppHandle) -> std::io::Result<()> {
+    static WRITE: Mutex<()> = Mutex::new(());
+    let _guard = WRITE.lock().unwrap_or_else(|error| error.into_inner());
+    let Some(path) = native_locale_path(app) else { return Ok(()); };
+    let locale = code(app);
+    if std::fs::read_to_string(&path).as_deref().ok() == Some(locale) { return Ok(()); }
+    if let Some(directory) = path.parent() { std::fs::create_dir_all(directory)?; }
+    let temporary = path.with_extension("tmp");
+    std::fs::write(&temporary, locale)?;
+    std::fs::rename(temporary, path)
 }
 
 pub fn text(app: &AppHandle, key: &str) -> String {

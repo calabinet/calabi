@@ -145,7 +145,7 @@ func (w *Workspace) Revoke() {
 		if err != nil {
 			continue
 		}
-		s, err := w.Agent.Sender(ip)
+		s, err := w.Agent.sender(ip, len(r.Ticket.Files) > 0 && r.Ticket.Files[0].Offer.Clipboard)
 		if err != nil {
 			continue
 		}
@@ -442,6 +442,15 @@ func (w *Workspace) Jobs() []Job {
 }
 
 func (w *Workspace) Send(ip netip.Addr, ids []string, resume string) (string, error) {
+	return w.send(ip, ids, resume, false)
+}
+
+// SendClipboard marks offers as awaiting a local Shell paste. This changes
+// notification routing only; it does not grant acceptance or file access.
+func (w *Workspace) SendClipboard(ip netip.Addr, ids []string) (string, error) {
+	return w.send(ip, ids, "", true)
+}
+func (w *Workspace) send(ip netip.Addr, ids []string, resume string, clipboard bool) (string, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.closed {
@@ -491,9 +500,9 @@ func (w *Workspace) Send(ip netip.Addr, ids []string, resume string) (string, er
 			return "", err
 		}
 		opened = append(opened, f)
-		sources = append(sources, Source{Reader: f, Name: s.Name, Size: s.Size})
+		sources = append(sources, Source{Reader: f, Name: s.Name, Size: s.Size, Clipboard: clipboard})
 	}
-	sender, err := w.Agent.Sender(ip)
+	sender, err := w.Agent.sender(ip, clipboard)
 	if err != nil {
 		closeFiles()
 		return "", err

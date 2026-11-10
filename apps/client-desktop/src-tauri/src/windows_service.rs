@@ -69,12 +69,18 @@ fn desktop_user() -> io::Result<Option<Vec<usize>>> {
         if process.is_null() {
             return Err(io::Error::last_os_error());
         }
+        let user = process_user(process);
+        CloseHandle(process);
+        user.map(Some)
+    }
+}
+
+pub fn process_user(process: windows_sys::Win32::Foundation::HANDLE) -> io::Result<Vec<usize>> {
+    unsafe {
         let mut token = null_mut();
         let opened = OpenProcessToken(process, TOKEN_QUERY, &mut token);
-        let error = io::Error::last_os_error();
-        CloseHandle(process);
         if opened == 0 {
-            return Err(error);
+            return Err(io::Error::last_os_error());
         }
         let mut bytes = 0;
         GetTokenInformation(token, TokenUser, null_mut(), 0, &mut bytes);
@@ -91,7 +97,7 @@ fn desktop_user() -> io::Result<Option<Vec<usize>>> {
         if read == 0 {
             return Err(error);
         }
-        Ok(Some(buffer))
+        Ok(buffer)
     }
 }
 

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-remote-workspace"
+description = "Enables the remote_workspace command without any pre-configured scope."
+commands.allow = ["remote_workspace"]
+
+[[permission]]
+identifier = "deny-remote-workspace"
+description = "Denies the remote_workspace command without any pre-configured scope."
+commands.deny = ["remote_workspace"]

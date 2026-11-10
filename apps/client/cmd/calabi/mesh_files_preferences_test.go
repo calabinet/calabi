@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -126,10 +127,37 @@ func TestDesktopReceptionSurvivesRestartButNotAuthBoundary(t *testing.T) {
 	if _, err = d.handle(fileAction{Action: "receiving", Enabled: true}); err != nil {
 		t.Fatal(err)
 	}
+	if runtime.GOOS == "windows" {
+		if d.w.Agent.Assisting() {
+			t.Fatal("file preference enabled assistance")
+		}
+		for _, action := range []fileAction{{Action: "assist_receiving", Enabled: true}, {Action: "receiving", Enabled: false}} {
+			if _, err = d.handle(action); err != nil {
+				t.Fatal(err)
+			}
+		}
+		d.close()
+		d = open()
+		if !d.w.Agent.Assisting() || d.w.Agent.Receiving() {
+			t.Fatal("assist-only restart changed reception choices")
+		}
+		if _, err = d.handle(fileAction{Action: "receiving", Enabled: true}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = d.handle(fileAction{Action: "assist_receiving", Enabled: false}); err != nil {
+			t.Fatal(err)
+		}
+		if !d.w.Agent.Receiving() || d.w.Agent.Assisting() {
+			t.Fatal("disabling assistance disrupted file reception")
+		}
+		if _, err = d.handle(fileAction{Action: "assist_receiving", Enabled: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	epoch.Add(1)
 	d.poll()
 	d.reconcileManaged()
-	if d.managed.settings.Receiving || d.w.Agent.Receiving() {
+	if d.managed.settings.Receiving || d.w.Agent.Receiving() || d.managed.settings.Assistance || d.w.Agent.Assisting() {
 		t.Fatal("logout/org boundary retained reception")
 	}
 	b, err := os.ReadFile(filepath.Join(d.dir, "receive-settings.json"))

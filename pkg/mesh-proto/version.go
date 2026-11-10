@@ -30,6 +30,21 @@ const CapNodeReauth Capability = "node_reauth"
 // It does not grant permission to receive files or bypass the packet filter.
 const CapFileTransfer Capability = "file_transfer_v1"
 
+// CapACLPortless allows a positive filter range with proto "portless".
+const CapACLPortless Capability = "acl_portless_v1"
+
+// ACLPortless matches packets without a transport port. Older receivers
+// ignore this range and therefore cannot accidentally allow a denied port.
+const ACLPortless = "portless"
+
+// CapACLICMP lets a receiver distinguish ICMP from other portless protocols.
+const CapACLICMP Capability = "acl_icmp_v1"
+
+const (
+	ACLICMP            = "icmp"
+	ACLNonICMPPortless = "portless_non_icmp"
+)
+
 // Capabilities is the set a peer advertises. Intersection = the working subset.
 type Capabilities []Capability
 

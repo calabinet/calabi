@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
+import { LANGS } from "../i18n/languages.ts";
 import { fileErrorKey, fileJobErrorKey } from "./fileErrors.ts";
 
-test("legacy errors become safe localized summaries in both supported languages", () => {
+test("legacy errors become safe localized summaries in every supported language", () => {
   const cases = [
     ["cancelled locally; awaiting peer cancellation: file transfer is no longer authorized", "authorization"],
     ['Post "https://100.64.0.26:17401/file/v1/offers": dial tcp 100.64.0.18:0->100.64.0.26:17401: i/o timeout', "connection"],
@@ -22,14 +23,14 @@ test("legacy errors become safe localized summaries in both supported languages"
     ["context canceled", "interrupted"],
     ["unexpected exception with /private/local/path", "generic"],
   ];
-  for (const [raw, key] of cases) {
-    assert.equal(fileErrorKey(raw), key);
-    for (const language of ["en", "zh-CN"]) {
-      const locale = JSON.parse(readFileSync(new URL(`../i18n/locales/${language}.json`, import.meta.url), "utf8"));
+  for (const [raw, key] of cases) assert.equal(fileErrorKey(raw), key);
+  for (const { code } of LANGS) {
+    const locale = JSON.parse(readFileSync(new URL(`../i18n/locales/${code}.json`, import.meta.url), "utf8"));
+    for (const [raw, key] of cases) {
       const message = locale.files.errors[key];
-      assert.ok(message && !message.includes(raw));
+      assert.ok(message && !message.includes(raw), `${code}: ${key}`);
       assert.doesNotMatch(message, /https:|\/private|context canceled|\?\?\?/);
-      if (language === "zh-CN") assert.match(message, /[\u4e00-\u9fff]/);
+      if (code.startsWith("zh-")) assert.match(message, /[\u4e00-\u9fff]/);
     }
   }
 });

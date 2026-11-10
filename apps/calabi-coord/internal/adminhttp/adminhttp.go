@@ -824,7 +824,7 @@ func (h *handler) listACLRevisions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, revs)
 }
 
-// previewACL reports what saving this doc WOULD change, in node pairs, against
+// previewACL reports what saving this doc WOULD change, against
 // what the meshnet runs on right now. Deliberately does NOT validate the doc:
 // the most valuable preview is of the doc we refuse to save (zero rules), where
 // the answer — "this cuts all N connections" — is the explanation for the
@@ -843,6 +843,10 @@ func (h *handler) previewACL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	diff, err := h.coord.PreviewACL(r.Context(), core.MeshnetID(id), doc)
+	if errors.Is(err, core.ErrInvalidACL) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		http.Error(w, "preview acl: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -860,9 +864,13 @@ func (h *handler) checkAccess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Src    string          `json:"src"`
-		Dst    string          `json:"dst"`
-		Policy *core.ACLPolicy `json:"policy"`
+		Src       string          `json:"src"`
+		Dst       string          `json:"dst"`
+		Policy    *core.ACLPolicy `json:"policy"`
+		Transport *struct {
+			Protocol string `json:"protocol"`
+			Port     int    `json:"port"`
+		} `json:"transport"`
 	}
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256*1024))
 	dec.DisallowUnknownFields()
@@ -870,7 +878,16 @@ func (h *handler) checkAccess(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "parse body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	got, err := h.coord.CheckAccess(r.Context(), core.MeshnetID(id), body.Src, body.Dst, body.Policy)
+	var got core.AccessCheck
+	if body.Transport == nil {
+		got, err = h.coord.CheckAccess(r.Context(), core.MeshnetID(id), body.Src, body.Dst, body.Policy)
+	} else {
+		got, err = h.coord.CheckPortAccess(r.Context(), core.MeshnetID(id), body.Src, body.Dst, body.Policy, body.Transport.Protocol, body.Transport.Port)
+	}
+	if errors.Is(err, core.ErrInvalidAccessPort) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if errors.Is(err, core.ErrNodeNotFound) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return

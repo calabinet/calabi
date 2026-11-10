@@ -8,6 +8,7 @@ import (
 	"github.com/calabinet/calabi/apps/client/internal/filecontrol"
 	"github.com/calabinet/calabi/apps/client/internal/filetransfer"
 	"github.com/calabinet/calabi/apps/client/internal/mesh"
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 	"github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
 	"log/slog"
 	"net"
@@ -69,13 +70,25 @@ func startFileControl(ctx context.Context, logger *slog.Logger, source any, cons
 		if ctrl == nil || !ctrl.FileTransferReady() || !st.Up || st.Overlay == "" {
 			return nil, filecontrol.Snapshot{}, errors.New("coordinator does not support file transfer or mesh is not ready")
 		}
-		view := filecontrol.Snapshot{Ready: true, Scope: fmt.Sprintf("%s/%d/%d/%s", r.cfg.Coord, org, ctrl.FileNodeID(), ctrl.Params.NodeKey.String()), NodeKey: ctrl.Params.NodeKey.String(), Overlay: st.Overlay, RelayKbps: ctrl.FileRelayLimit(), Peers: []filecontrol.Peer{}}
+		view := filecontrol.Snapshot{Ready: true, Registration: ctrl.FileGeneration(), Scope: fmt.Sprintf("%s/%d/%d/%s", r.cfg.Coord, org, ctrl.FileNodeID(), ctrl.Params.NodeKey.String()), NodeKey: ctrl.Params.NodeKey.String(), Overlay: st.Overlay, RelayKbps: ctrl.FileRelayLimit(), Peers: []filecontrol.Peer{}}
 		if cfg, err := creds.Load(); err == nil && cfg != nil {
 			view.ReceiveEpoch = cfg.FileReceiveEpoch
+			view.AccountID = cfg.User.ID
 		}
-		for _, p := range ctrl.FilePeers() {
-			_, pin, ok := ctrl.FilePeer(p.Overlay)
-			if !ok {
+		for _, p := range ctrl.FileMembers() {
+			// Describe presence and validate the certificate from the same netmap snapshot.
+			incoming := r.IncomingTCPAllowed(p.Overlay, 17401)
+			member := filecontrol.Member{OS: p.OS, RDPPin: p.RDPPin, SameOwner: p.SameOwner, OwnWindows: p.SameOwner && p.OS == "windows", IP: p.Overlay.String(), DeviceKey: p.NodeKey.String(), Incoming: incoming}
+			pin, err := meshproto.VerifyFileTransfer(p.NodeKey, p.FileTransfer, time.Now())
+			if p.DeclarationError != "" {
+				member.DeclarationError = p.DeclarationError
+			} else if p.FileTransfer == nil {
+				member.DeclarationError = "declaration_missing"
+			} else if err != nil {
+				member.DeclarationError = err.Error()
+			}
+			view.Members = append(view.Members, member)
+			if err != nil {
 				continue
 			}
 			path := ""
@@ -85,10 +98,7 @@ func startFileControl(ctx context.Context, logger *slog.Logger, source any, cons
 					break
 				}
 			}
-			view.Peers = append(view.Peers, filecontrol.Peer{Grant: filetransfer.Grant{Path: path, Peer: filetransfer.Peer{IP: p.Overlay, Fingerprint: pin}, DeviceKey: p.NodeKey.String(), Port: uint16(p.FileTransfer.Port), Receiving: p.FileTransfer.Receiving}, Name: p.Name, Incoming: r.IncomingTCPAllowed(p.Overlay, 17401), ExpiresUnix: p.FileTransfer.ExpiresUnix})
-		}
-		for _, p := range ctrl.FileMembers() {
-			view.Members = append(view.Members, filecontrol.Member{IP: p.Overlay.String(), DeviceKey: p.NodeKey.String(), Incoming: r.IncomingTCPAllowed(p.Overlay, 17401)})
+			view.Peers = append(view.Peers, filecontrol.Peer{Grant: filetransfer.Grant{Path: path, Peer: filetransfer.Peer{IP: p.Overlay, Fingerprint: pin}, DeviceKey: p.NodeKey.String(), Port: uint16(p.FileTransfer.Port), Receiving: p.FileTransfer.Receiving, Assistance: len(p.FileTransfer.AssistanceProof) > 0}, Name: p.Name, Incoming: incoming, ExpiresUnix: p.FileTransfer.ExpiresUnix})
 		}
 		return ctrl, view, nil
 	}

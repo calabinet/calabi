@@ -1,0 +1,39 @@
+#include <windows.h>
+
+#ifdef CALABI_PASTE
+#define CALABI_DESCRIPTION "Calabi File Paste"
+#define CALABI_INTERNAL_NAME "calabi-paste"
+#define CALABI_FILENAME "calabi-paste.exe"
+#else
+#define CALABI_DESCRIPTION "Calabi Remote Desktop"
+#define CALABI_INTERNAL_NAME "calabi-rdp"
+#define CALABI_FILENAME "calabi-rdp.exe"
+#endif
+
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+
+#ifdef CALABI_PASTE
+1 ICON "icon.ico"
+#endif
+
+1 VERSIONINFO
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "Calabi"
+            VALUE "FileDescription", CALABI_DESCRIPTION
+            VALUE "FileVersion", "0.0.0.0"
+            VALUE "InternalName", CALABI_INTERNAL_NAME
+            VALUE "OriginalFilename", CALABI_FILENAME
+            VALUE "ProductName", "Calabi"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END

@@ -26,6 +26,8 @@ type Peer struct {
 	ExpiresUnix int64              `json:"expires_unix"`
 }
 type Snapshot struct {
+	AccountID    int64    `json:"account_id,omitempty"`
+	Registration int64    `json:"registration,omitempty"`
 	ReceiveEpoch int64    `json:"receive_epoch,omitempty"`
 	OwnsLease    bool     `json:"owns_lease"`
 	Members      []Member `json:"members"`
@@ -45,33 +47,44 @@ type Source struct {
 }
 
 type Member struct {
-	IP        string `json:"ip"`
-	DeviceKey string `json:"device_key"`
-	Incoming  bool   `json:"incoming"`
+	OS               string `json:"os,omitempty"`
+	RDPPin           string `json:"rdp_pin,omitempty"`
+	SameOwner        bool   `json:"same_owner,omitempty"`
+	OwnWindows       bool   `json:"own_windows,omitempty"`
+	DeclarationError string `json:"declaration_error,omitempty"`
+	IP               string `json:"ip"`
+	DeviceKey        string `json:"device_key"`
+	Incoming         bool   `json:"incoming"`
 }
 type Request struct {
-	Op    string                   `json:"op"`
-	Scope string                   `json:"scope,omitempty"`
-	Lease string                   `json:"lease,omitempty"`
-	Info  *meshpb.FileTransferInfo `json:"info,omitempty"`
+	// Private authenticated IPC only; never changes the advertised file or
+	// assistance permissions. Uses the same fixed, mesh-only listener rule.
+	ClipboardListening bool                     `json:"clipboard_listening,omitempty"`
+	Op                 string                   `json:"op"`
+	Scope              string                   `json:"scope,omitempty"`
+	Lease              string                   `json:"lease,omitempty"`
+	Info               *meshpb.FileTransferInfo `json:"info,omitempty"`
 }
 type Response struct {
 	Snapshot Snapshot `json:"snapshot"`
 	Error    string   `json:"error,omitempty"`
 }
 type Control struct {
-	Source    Source
-	mu        sync.Mutex
-	owner     string
-	lease     string
-	scope     string
-	expires   time.Time
-	receiving bool
+	Source     Source
+	mutationMu sync.Mutex // serializes changes to the listener and its publication
+	mu         sync.Mutex
+	owner      string
+	lease      string
+	scope      string
+	expires    time.Time
+	receiving  bool
 }
 
 // ReconcileReception closes the host exception after an agent lease expires or
 // the mesh session changes, even if no further IPC requests arrive.
 func (c *Control) ReconcileReception(ctx context.Context) error {
+	c.mutationMu.Lock()
+	defer c.mutationMu.Unlock()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !c.receiving {
@@ -97,6 +110,8 @@ func (c *Control) setReceiving(ctx context.Context, receiving bool) error {
 // StopReception is also called on startup to close a rule left by a crashed
 // daemon, and on shutdown without relying on a desktop agent's cleanup.
 func (c *Control) StopReception(ctx context.Context) error {
+	c.mutationMu.Lock()
+	defer c.mutationMu.Unlock()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.setReceiving(ctx, false)
@@ -155,6 +170,8 @@ func (c *Control) Handle(ctx context.Context, principal string, req Request) Res
 			return fail(err)
 		}
 	}
+	c.mutationMu.Lock()
+	defer c.mutationMu.Unlock()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	owned := c.scope == view.Scope && time.Now().Before(c.expires)
@@ -162,6 +179,20 @@ func (c *Control) Handle(ctx context.Context, principal string, req Request) Res
 		return fail(errors.New("another local user session owns file transfers"))
 	}
 	if req.Info == nil && !owned {
+		return Response{Snapshot: view}
+	}
+	// Renewing the same listener needs no firewall or principal transition.
+	// Snapshots must still see the old, unextended lease during a slow RPC.
+	listen := req.Info != nil && (req.Info.Receiving || len(req.Info.AssistanceProof) > 0 || req.ClipboardListening)
+	if owned && req.Info != nil && c.receiving == listen {
+		c.mu.Unlock()
+		err := c.Source.Publish(ctx, view.Scope, req.Info)
+		c.mu.Lock()
+		if err != nil {
+			return fail(err)
+		}
+		c.expires = time.Unix(req.Info.ExpiresUnix, 0)
+		view.OwnsLease = time.Now().Before(c.expires)
 		return Response{Snapshot: view}
 	}
 	// Reserve ownership before the RPC: a lost response cannot unlock a
@@ -172,7 +203,7 @@ func (c *Control) Handle(ctx context.Context, principal string, req Request) Res
 		c.scope = view.Scope
 		c.expires = time.Unix(req.Info.ExpiresUnix, 0)
 	}
-	if err := c.setReceiving(ctx, req.Info != nil && req.Info.Receiving); err != nil {
+	if err := c.setReceiving(ctx, listen); err != nil {
 		return fail(err)
 	}
 	if err := c.Source.Publish(ctx, view.Scope, req.Info); err != nil {

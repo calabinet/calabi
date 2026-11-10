@@ -28,7 +28,10 @@ import (
 	"io/fs"
 )
 
-//go:embed all:ui/dist
+// Require the lazy remote workspace assets explicitly. Otherwise a partial
+// source archive can build a daemon with a working main page and blank remote windows.
+//
+//go:embed all:ui/dist ui/dist/assets/RemoteWorkspace-*.js ui/dist/assets/RemoteWorkspace-*.css
 var uiDistFS embed.FS
 
 // UIFileSystem returns the embedded SPA root as an fs.FS. The root

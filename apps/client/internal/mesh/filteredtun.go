@@ -3,6 +3,7 @@ package mesh
 import (
 	"context"
 	"log/slog"
+	"net/netip"
 	"sync/atomic"
 	"time"
 
@@ -23,7 +24,13 @@ import (
 // A dropped packet is simply not written. WireGuard counts the write as done,
 // which is correct: from its point of view the packet was delivered to the
 // device, and the device is what discarded it.
+type rdpOwnerFilter struct {
+	local  netip.Addr
+	owners map[netip.Addr]bool
+}
+
 type filteredTUN struct {
+	rdp atomic.Pointer[rdpOwnerFilter]
 	tun.Device
 	filter *PacketFilter
 	flows  *flowTable
@@ -94,7 +101,13 @@ func (t *filteredTUN) allowInbound(pkt []byte) bool {
 	if !ok {
 		return false // unparseable: we don't know its ports, so we don't guess
 	}
-	if t.flows.isReply(tp) {
+	if guard := t.rdp.Load(); guard != nil && tp.dst == guard.local && (tp.proto == protoTCP || tp.proto == protoUDP) && tp.dstPort == 3389 && !guard.owners[tp.src] {
+		return false
+	}
+	if !t.filter.Enabled() {
+		return true
+	}
+	if tp.canBeReply() && t.flows.isReply(tp) {
 		return true
 	}
 	return t.filter.allow(tp)
@@ -103,7 +116,7 @@ func (t *filteredTUN) allowInbound(pkt []byte) bool {
 // Write forwards only the allowed packets. It compacts the batch in place so a
 // dropped packet in the middle doesn't cost the ones after it.
 func (t *filteredTUN) Write(bufs [][]byte, offset int) (int, error) {
-	if !t.filter.Enabled() {
+	if !t.filter.Enabled() && t.rdp.Load() == nil {
 		t.observeInbound(bufs, offset)
 		return t.Device.Write(bufs, offset)
 	}

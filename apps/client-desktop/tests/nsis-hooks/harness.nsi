@@ -72,8 +72,7 @@ Section
   !endif
 SectionEnd
 
-; Compile in the real uninstall context too, where installer-only instructions
-; such as File are forbidden. The test runner does not execute this section.
+; Compile in the real uninstall context too, so uninstall-specific instructions are checked. The test runner does not execute this section.
 Section "Uninstall"
   !insertmacro NSIS_HOOK_PREUNINSTALL
 SectionEnd

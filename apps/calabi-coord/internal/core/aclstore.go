@@ -153,7 +153,7 @@ const (
 // (write path). It rejects the shapes MemPolicy would silently ignore
 // so an admin gets a clear error instead of a policy that quietly does nothing:
 //
-//   - only action "accept" is supported (there is no deny; absence = denial)
+//   - actions are "accept" and "deny"; the document must grant access explicitly
 //   - every rule needs at least one src, one dst and one port
 //   - selectors must be non-empty and within length limits
 //   - a group:<name> selector must reference a group defined in Groups
@@ -170,8 +170,8 @@ const (
 // matching Tailscale — an unmatched name is simply a rule that grants nothing.
 //
 // It DOES reject a doc with zero rules. That shape is the most dangerous thing
-// an editor can produce by accident: there is no deny action, so "no rules" is
-// not "no policy" — it is deny-everything, and saving it cuts every node pair in
+// an editor can produce by accident: a saved policy needs explicit allows.
+// Saving an empty document cuts every node pair in
 // the meshnet at once (the write path re-pushes all netmaps immediately). An
 // admin who deletes the last rule almost always means "go back to open", which
 // is a rule, not the absence of one. Blocking it here covers every caller (both
@@ -233,8 +233,8 @@ func ValidateACLPolicy(p ACLPolicy) error {
 	}
 	// Rules.
 	for i, r := range p.ACLs {
-		if !strings.EqualFold(strings.TrimSpace(r.Action), "accept") {
-			return fmt.Errorf("rule %d: action %q unsupported (only \"accept\")", i, r.Action)
+		if !isACLAction(r, "accept") && !isACLAction(r, "deny") {
+			return fmt.Errorf("rule %d: action %q unsupported (use \"accept\" or \"deny\")", i, r.Action)
 		}
 		if len(r.Src) == 0 || len(r.Dst) == 0 {
 			return fmt.Errorf("rule %d: needs at least one src and one dst", i)
@@ -260,6 +260,9 @@ func ValidateACLPolicy(p ACLPolicy) error {
 			return err
 		}
 	}
+	if !hasACLAction(&p, "accept") {
+		return fmt.Errorf("a policy with only deny rules blocks all access; add an allow rule to choose the network baseline")
+	}
 	return nil
 }
 
@@ -273,7 +276,7 @@ func validatePortSpecs(where string, specs []string) error {
 		}
 		if _, ok := parsePortSpec(s); !ok {
 			return fmt.Errorf(`%s: %q is not a port — use "*", "5432", "8000-8100", "tcp:5432" `+
-				`or "svc:<service-name>"`, where, s)
+				`or "svc:<service-name>", or "icmp" without a port`, where, s)
 		}
 	}
 	return nil

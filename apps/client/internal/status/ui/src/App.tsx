@@ -7,7 +7,10 @@
 // ConsoleLockGate wraps everything, login included: a visitor from another
 // machine unlocks the console before anything else (see its header).
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { lazy, Suspense } from "react";
 import AuthGate from "./components/AuthGate";
+import AssistSession from "./components/AssistSession";
+import { fileAction, hasNativeFiles } from "./api/files";
 import ConsoleLockGate from "./components/ConsoleLockGate";
 import Layout from "./components/Layout";
 import Overview from "./pages/Overview";
@@ -22,6 +25,8 @@ import Tools from "./pages/Tools";
 import FileReceipt from "./pages/FileReceipt";
 import FileBrowser from "./pages/FileBrowser";
 import { hasBrowserFiles } from "./api/files";
+
+const RemoteWorkspace = lazy(() => import("./components/RemoteWorkspace"));
 
 // Keeps ?declare_port=… on the way through, so an old link from 工具 still
 // opens the declaration form prefilled.
@@ -40,6 +45,15 @@ function TunnelsMoved() {
 export default function App() {
   const location = useLocation();
   if (hasBrowserFiles()) return <FileBrowser />;
+  if (location.pathname === "/ssh-session" && hasNativeFiles()) {
+    return <ConsoleLockGate><Suspense fallback={null}><RemoteWorkspace /></Suspense></ConsoleLockGate>;
+  }
+  if (location.pathname === "/assist-session" && hasNativeFiles()) {
+    const params = new URLSearchParams(location.search);
+    const peer = params.get("peer");
+    return peer && <ConsoleLockGate><AssistSession peer={peer} name={params.get("name") || peer}
+      onClose={() => { void fileAction({action:"assist_close"}); }} /></ConsoleLockGate>;
+  }
   if (location.pathname === "/file-requests") return <FileReceipt />;
   return (
     <ConsoleLockGate>
@@ -64,11 +78,12 @@ export default function App() {
               reload. Nested under /endpoints so the sidebar keeps 隧道 selected
               (Layout reads the first path segment). */}
           <Route path="endpoints/new" element={<TunnelNew />} />
-          {/* 组网 is one menu entry with four tabs, each with its own URL so a
+          {/* 组网 is one menu entry with tabs, each with its own URL so a
               tab can be linked to (工具's port scanner lands on 服务) and
               survives a reload. Same shape as the web console's 组网配置. */}
           <Route path="mesh" element={<Mesh />} />
           <Route path="mesh/files" element={<Mesh />} />
+          <Route path="mesh/remote" element={<Mesh />} />
           <Route path="mesh/services" element={<Mesh />} />
           <Route path="mesh/routing" element={<Mesh />} />
           {/* 服务 was a top-level menu entry until 2026-09-16. It is a mesh

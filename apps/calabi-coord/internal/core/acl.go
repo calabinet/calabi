@@ -56,9 +56,8 @@ type ACLPolicy struct {
 	ACLs   []ACLRule           `json:"acls"`
 }
 
-// ACLRule is one accept rule: every Src machine may reach every Dst machine on
-// Ports. v0 supports action "accept" only (there is no deny; absence of an
-// allowing rule is denial, and rules are a union — order never matters).
+// ACLRule applies to every Src → Dst combination on Ports. Accepts add access
+// and a matching deny removes it regardless of rule order.
 //
 // Ports is RULE-level rather than per-dst-selector on purpose. Two reasons:
 //
@@ -93,6 +92,9 @@ func LoadACLPolicy(path string) (*ACLPolicy, error) {
 	var p ACLPolicy
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return nil, fmt.Errorf("core: parse acl policy %s: %w", path, err)
+	}
+	if hasACLAction(&p, "deny") || hasICMPRule(&p) {
+		return nil, fmt.Errorf("core: explicit deny and ICMP rules require the meshnet ACL save API for device compatibility checks")
 	}
 	return &p, nil
 }

@@ -292,4 +292,5 @@
     <string name="settings_leave_server">Leave this server</string>
     <string name="settings_leave_server_confirm">Leave this server?</string>
     <string name="settings_leave_server_body">This phone leaves the server\'s mesh. Joining again takes a new invite.</string>
+    <string name="mesh_device_limit">Mesh device limit reached. Disable or delete unused devices in the console, or ask your administrator for more quota. Connection will retry automatically when a seat is available.</string>
 </resources>

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/netip"
 	"os"
+	"slices"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -408,6 +409,9 @@ func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeReque
 		in.AliasedRoutes = append(in.AliasedRoutes, pfx.Masked())
 	}
 
+	ver, caps := negotiate(req.GetProtocolVersion(), req.GetCapabilities())
+	in.ACLPortless = slices.Contains(caps, string(meshproto.CapACLPortless))
+	in.ACLICMP = slices.Contains(caps, string(meshproto.CapACLICMP))
 	node, changed, err := s.coord.RegisterWithChange(ctx, in)
 	if err != nil {
 		undoSpend()
@@ -440,7 +444,6 @@ func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeReque
 		s.notif.Bump(meshnet)
 	}
 
-	ver, caps := negotiate(req.GetProtocolVersion(), req.GetCapabilities())
 	return &meshpb.RegisterNodeResponse{
 		NodeId:          node.ID,
 		OverlayAddr:     node.Overlay.String(),
@@ -484,6 +487,9 @@ func (s *Server) PullNetMap(req *meshpb.PullNetMapRequest, stream meshpb.Coordin
 	// online, close it (client quit / network drop) = offline. Presence powers the
 	// console's online/offline indicator, distinct from the admin Disabled flag.
 	release := s.coord.Presence.Connected(self.ID)
+	if s.hasFileTransfer(self.ID) {
+		s.notif.Bump(self.Meshnet)
+	}
 	s.coord.Performance.Streams.Add(1)
 	defer func() {
 		s.coord.Performance.Streams.Add(-1)
@@ -691,4 +697,4 @@ func negotiate(clientVer uint32, clientCaps []string) (uint32, []string) {
 
 // serverCapabilities is what this coordinator does beyond the base protocol.
 // RegisterNodeResponse carries the part the node also asked for.
-var serverCapabilities = meshproto.Capabilities{meshproto.CapNodeReauth, meshproto.CapFileTransfer}
+var serverCapabilities = meshproto.Capabilities{meshproto.CapNodeReauth, meshproto.CapFileTransfer, meshproto.CapACLPortless, meshproto.CapACLICMP}

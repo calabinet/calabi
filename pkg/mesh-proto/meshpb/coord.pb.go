@@ -38,15 +38,17 @@ const (
 // A short-lived declaration signed by the DEDICATED Ed25519 transfer key.
 // The signature binds every field to the authenticated WireGuard node key.
 type FileTransferInfo struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Version       uint32                 `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
-	Port          uint32                 `protobuf:"varint,2,opt,name=port,proto3" json:"port,omitempty"`
-	Receiving     bool                   `protobuf:"varint,3,opt,name=receiving,proto3" json:"receiving,omitempty"`
-	Certificate   []byte                 `protobuf:"bytes,4,opt,name=certificate,proto3" json:"certificate,omitempty"`
-	ExpiresUnix   int64                  `protobuf:"varint,5,opt,name=expires_unix,json=expiresUnix,proto3" json:"expires_unix,omitempty"`
-	Proof         []byte                 `protobuf:"bytes,6,opt,name=proof,proto3" json:"proof,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Version     uint32                 `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
+	Port        uint32                 `protobuf:"varint,2,opt,name=port,proto3" json:"port,omitempty"`
+	Receiving   bool                   `protobuf:"varint,3,opt,name=receiving,proto3" json:"receiving,omitempty"`
+	Certificate []byte                 `protobuf:"bytes,4,opt,name=certificate,proto3" json:"certificate,omitempty"`
+	ExpiresUnix int64                  `protobuf:"varint,5,opt,name=expires_unix,json=expiresUnix,proto3" json:"expires_unix,omitempty"`
+	Proof       []byte                 `protobuf:"bytes,6,opt,name=proof,proto3" json:"proof,omitempty"`
+	// Optional separate signature for accepting assistance requests on this endpoint.
+	AssistanceProof []byte `protobuf:"bytes,7,opt,name=assistance_proof,json=assistanceProof,proto3" json:"assistance_proof,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *FileTransferInfo) Reset() {
@@ -117,6 +119,13 @@ func (x *FileTransferInfo) GetExpiresUnix() int64 {
 func (x *FileTransferInfo) GetProof() []byte {
 	if x != nil {
 		return x.Proof
+	}
+	return nil
+}
+
+func (x *FileTransferInfo) GetAssistanceProof() []byte {
+	if x != nil {
+		return x.AssistanceProof
 	}
 	return nil
 }
@@ -3067,6 +3076,9 @@ func (x *PortRange) GetProto() string {
 
 type Peer struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
+	// Relative to the recipient; asserted by coord only for two attributed devices.
+	SameOwner            bool   `protobuf:"varint,12,opt,name=same_owner,json=sameOwner,proto3" json:"same_owner,omitempty"`
+	RdpCertificateSha256 []byte `protobuf:"bytes,13,opt,name=rdp_certificate_sha256,json=rdpCertificateSha256,proto3" json:"rdp_certificate_sha256,omitempty"` // online, same-owner Windows only
 	// Only present for a current, approved, online device's unexpired declaration.
 	FileTransfer *FileTransferInfo `protobuf:"bytes,11,opt,name=file_transfer,json=fileTransfer,proto3" json:"file_transfer,omitempty"`
 	NodeId       int64             `protobuf:"varint,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
@@ -3131,6 +3143,20 @@ func (x *Peer) ProtoReflect() protoreflect.Message {
 // Deprecated: Use Peer.ProtoReflect.Descriptor instead.
 func (*Peer) Descriptor() ([]byte, []int) {
 	return file_meshpb_coord_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *Peer) GetSameOwner() bool {
+	if x != nil {
+		return x.SameOwner
+	}
+	return false
+}
+
+func (x *Peer) GetRdpCertificateSha256() []byte {
+	if x != nil {
+		return x.RdpCertificateSha256
+	}
+	return nil
 }
 
 func (x *Peer) GetFileTransfer() *FileTransferInfo {
@@ -3503,6 +3529,94 @@ func (x *DERPNodeTLS) GetPins() []string {
 	return nil
 }
 
+type ReportRdpCertificateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionToken  string                 `protobuf:"bytes,1,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	Sha256        []byte                 `protobuf:"bytes,2,opt,name=sha256,proto3" json:"sha256,omitempty"` // empty withdraws the pin
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportRdpCertificateRequest) Reset() {
+	*x = ReportRdpCertificateRequest{}
+	mi := &file_meshpb_coord_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportRdpCertificateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportRdpCertificateRequest) ProtoMessage() {}
+
+func (x *ReportRdpCertificateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportRdpCertificateRequest.ProtoReflect.Descriptor instead.
+func (*ReportRdpCertificateRequest) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *ReportRdpCertificateRequest) GetSessionToken() string {
+	if x != nil {
+		return x.SessionToken
+	}
+	return ""
+}
+
+func (x *ReportRdpCertificateRequest) GetSha256() []byte {
+	if x != nil {
+		return x.Sha256
+	}
+	return nil
+}
+
+type ReportRdpCertificateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportRdpCertificateResponse) Reset() {
+	*x = ReportRdpCertificateResponse{}
+	mi := &file_meshpb_coord_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportRdpCertificateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportRdpCertificateResponse) ProtoMessage() {}
+
+func (x *ReportRdpCertificateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_coord_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportRdpCertificateResponse.ProtoReflect.Descriptor instead.
+func (*ReportRdpCertificateResponse) Descriptor() ([]byte, []int) {
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{48}
+}
+
 type ReportEndpointsRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	NodeId    int64                  `protobuf:"varint,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
@@ -3521,7 +3635,7 @@ type ReportEndpointsRequest struct {
 
 func (x *ReportEndpointsRequest) Reset() {
 	*x = ReportEndpointsRequest{}
-	mi := &file_meshpb_coord_proto_msgTypes[47]
+	mi := &file_meshpb_coord_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3533,7 +3647,7 @@ func (x *ReportEndpointsRequest) String() string {
 func (*ReportEndpointsRequest) ProtoMessage() {}
 
 func (x *ReportEndpointsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[47]
+	mi := &file_meshpb_coord_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3546,7 +3660,7 @@ func (x *ReportEndpointsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportEndpointsRequest.ProtoReflect.Descriptor instead.
 func (*ReportEndpointsRequest) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{47}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *ReportEndpointsRequest) GetNodeId() int64 {
@@ -3585,7 +3699,7 @@ type ReportEndpointsResponse struct {
 
 func (x *ReportEndpointsResponse) Reset() {
 	*x = ReportEndpointsResponse{}
-	mi := &file_meshpb_coord_proto_msgTypes[48]
+	mi := &file_meshpb_coord_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3597,7 +3711,7 @@ func (x *ReportEndpointsResponse) String() string {
 func (*ReportEndpointsResponse) ProtoMessage() {}
 
 func (x *ReportEndpointsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_coord_proto_msgTypes[48]
+	mi := &file_meshpb_coord_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3610,21 +3724,22 @@ func (x *ReportEndpointsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportEndpointsResponse.ProtoReflect.Descriptor instead.
 func (*ReportEndpointsResponse) Descriptor() ([]byte, []int) {
-	return file_meshpb_coord_proto_rawDescGZIP(), []int{48}
+	return file_meshpb_coord_proto_rawDescGZIP(), []int{50}
 }
 
 var File_meshpb_coord_proto protoreflect.FileDescriptor
 
 const file_meshpb_coord_proto_rawDesc = "" +
 	"\n" +
-	"\x12meshpb/coord.proto\x12\x0ecalabi.mesh.v1\"\xb9\x01\n" +
+	"\x12meshpb/coord.proto\x12\x0ecalabi.mesh.v1\"\xe4\x01\n" +
 	"\x10FileTransferInfo\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\rR\aversion\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\rR\x04port\x12\x1c\n" +
 	"\treceiving\x18\x03 \x01(\bR\treceiving\x12 \n" +
 	"\vcertificate\x18\x04 \x01(\fR\vcertificate\x12!\n" +
 	"\fexpires_unix\x18\x05 \x01(\x03R\vexpiresUnix\x12\x14\n" +
-	"\x05proof\x18\x06 \x01(\fR\x05proof\"v\n" +
+	"\x05proof\x18\x06 \x01(\fR\x05proof\x12)\n" +
+	"\x10assistance_proof\x18\a \x01(\fR\x0fassistanceProof\"v\n" +
 	"\x19UpdateFileTransferRequest\x12#\n" +
 	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x124\n" +
 	"\x04info\x18\x02 \x01(\v2 .calabi.mesh.v1.FileTransferInfoR\x04info\"\x1c\n" +
@@ -3837,8 +3952,11 @@ const file_meshpb_coord_proto_rawDesc = "" +
 	"\tPortRange\x12\x14\n" +
 	"\x05first\x18\x01 \x01(\rR\x05first\x12\x12\n" +
 	"\x04last\x18\x02 \x01(\rR\x04last\x12\x14\n" +
-	"\x05proto\x18\x03 \x01(\tR\x05proto\"\xfa\x02\n" +
-	"\x04Peer\x12E\n" +
+	"\x05proto\x18\x03 \x01(\tR\x05proto\"\xcf\x03\n" +
+	"\x04Peer\x12\x1d\n" +
+	"\n" +
+	"same_owner\x18\f \x01(\bR\tsameOwner\x124\n" +
+	"\x16rdp_certificate_sha256\x18\r \x01(\fR\x14rdpCertificateSha256\x12E\n" +
 	"\rfile_transfer\x18\v \x01(\v2 .calabi.mesh.v1.FileTransferInfoR\ffileTransfer\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\x03R\x06nodeId\x12\x19\n" +
 	"\bnode_key\x18\x02 \x01(\tR\anodeKey\x12\x1b\n" +
@@ -3869,15 +3987,20 @@ const file_meshpb_coord_proto_rawDesc = "" +
 	"\x03tls\x18\x04 \x01(\v2\x1b.calabi.mesh.v1.DERPNodeTLSR\x03tls\"7\n" +
 	"\vDERPNodeTLS\x12\x14\n" +
 	"\x05trust\x18\x01 \x01(\tR\x05trust\x12\x12\n" +
-	"\x04pins\x18\x02 \x03(\tR\x04pins\"\xb5\x01\n" +
+	"\x04pins\x18\x02 \x03(\tR\x04pins\"Z\n" +
+	"\x1bReportRdpCertificateRequest\x12#\n" +
+	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x12\x16\n" +
+	"\x06sha256\x18\x02 \x01(\fR\x06sha256\"\x1e\n" +
+	"\x1cReportRdpCertificateResponse\"\xb5\x01\n" +
 	"\x16ReportEndpointsRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\x03R\x06nodeId\x12\x1c\n" +
 	"\tendpoints\x18\x02 \x03(\tR\tendpoints\x12\x1f\n" +
 	"\vhome_region\x18\x03 \x01(\tR\n" +
 	"homeRegion\x12#\n" +
 	"\rsession_token\x18\x06 \x01(\tR\fsessionTokenJ\x04\b\x04\x10\x05J\x04\b\x05\x10\x06R\bauth_keyR\bnode_key\"\x19\n" +
-	"\x17ReportEndpointsResponse2\xaf\v\n" +
-	"\vCoordinator\x12k\n" +
+	"\x17ReportEndpointsResponse2\xa2\f\n" +
+	"\vCoordinator\x12q\n" +
+	"\x14ReportRdpCertificate\x12+.calabi.mesh.v1.ReportRdpCertificateRequest\x1a,.calabi.mesh.v1.ReportRdpCertificateResponse\x12k\n" +
 	"\x12UpdateFileTransfer\x12).calabi.mesh.v1.UpdateFileTransferRequest\x1a*.calabi.mesh.v1.UpdateFileTransferResponse\x12Y\n" +
 	"\fRegisterNode\x12#.calabi.mesh.v1.RegisterNodeRequest\x1a$.calabi.mesh.v1.RegisterNodeResponse\x12q\n" +
 	"\x14GetRegisterChallenge\x12+.calabi.mesh.v1.GetRegisterChallengeRequest\x1a,.calabi.mesh.v1.GetRegisterChallengeResponse\x12J\n" +
@@ -3907,7 +4030,7 @@ func file_meshpb_coord_proto_rawDescGZIP() []byte {
 	return file_meshpb_coord_proto_rawDescData
 }
 
-var file_meshpb_coord_proto_msgTypes = make([]protoimpl.MessageInfo, 49)
+var file_meshpb_coord_proto_msgTypes = make([]protoimpl.MessageInfo, 51)
 var file_meshpb_coord_proto_goTypes = []any{
 	(*FileTransferInfo)(nil),               // 0: calabi.mesh.v1.FileTransferInfo
 	(*UpdateFileTransferRequest)(nil),      // 1: calabi.mesh.v1.UpdateFileTransferRequest
@@ -3956,8 +4079,10 @@ var file_meshpb_coord_proto_goTypes = []any{
 	(*DERPRegion)(nil),                     // 44: calabi.mesh.v1.DERPRegion
 	(*DERPNode)(nil),                       // 45: calabi.mesh.v1.DERPNode
 	(*DERPNodeTLS)(nil),                    // 46: calabi.mesh.v1.DERPNodeTLS
-	(*ReportEndpointsRequest)(nil),         // 47: calabi.mesh.v1.ReportEndpointsRequest
-	(*ReportEndpointsResponse)(nil),        // 48: calabi.mesh.v1.ReportEndpointsResponse
+	(*ReportRdpCertificateRequest)(nil),    // 47: calabi.mesh.v1.ReportRdpCertificateRequest
+	(*ReportRdpCertificateResponse)(nil),   // 48: calabi.mesh.v1.ReportRdpCertificateResponse
+	(*ReportEndpointsRequest)(nil),         // 49: calabi.mesh.v1.ReportEndpointsRequest
+	(*ReportEndpointsResponse)(nil),        // 50: calabi.mesh.v1.ReportEndpointsResponse
 }
 var file_meshpb_coord_proto_depIdxs = []int32{
 	0,  // 0: calabi.mesh.v1.UpdateFileTransferRequest.info:type_name -> calabi.mesh.v1.FileTransferInfo
@@ -3984,38 +4109,40 @@ var file_meshpb_coord_proto_depIdxs = []int32{
 	44, // 21: calabi.mesh.v1.DERPMap.regions:type_name -> calabi.mesh.v1.DERPRegion
 	45, // 22: calabi.mesh.v1.DERPRegion.nodes:type_name -> calabi.mesh.v1.DERPNode
 	46, // 23: calabi.mesh.v1.DERPNode.tls:type_name -> calabi.mesh.v1.DERPNodeTLS
-	1,  // 24: calabi.mesh.v1.Coordinator.UpdateFileTransfer:input_type -> calabi.mesh.v1.UpdateFileTransferRequest
-	3,  // 25: calabi.mesh.v1.Coordinator.RegisterNode:input_type -> calabi.mesh.v1.RegisterNodeRequest
-	6,  // 26: calabi.mesh.v1.Coordinator.GetRegisterChallenge:input_type -> calabi.mesh.v1.GetRegisterChallengeRequest
-	7,  // 27: calabi.mesh.v1.Coordinator.SignOut:input_type -> calabi.mesh.v1.SignOutRequest
-	9,  // 28: calabi.mesh.v1.Coordinator.ListNodes:input_type -> calabi.mesh.v1.ListNodesRequest
-	13, // 29: calabi.mesh.v1.Coordinator.ReportTunnels:input_type -> calabi.mesh.v1.ReportTunnelsRequest
-	15, // 30: calabi.mesh.v1.Coordinator.ListTunnels:input_type -> calabi.mesh.v1.ListTunnelsRequest
-	18, // 31: calabi.mesh.v1.Coordinator.GetUsage:input_type -> calabi.mesh.v1.GetUsageRequest
-	22, // 32: calabi.mesh.v1.Coordinator.OpenViewSession:input_type -> calabi.mesh.v1.OpenViewSessionRequest
-	24, // 33: calabi.mesh.v1.Coordinator.GetEdgeAccess:input_type -> calabi.mesh.v1.GetEdgeAccessRequest
-	36, // 34: calabi.mesh.v1.Coordinator.PullNetMap:input_type -> calabi.mesh.v1.PullNetMapRequest
-	47, // 35: calabi.mesh.v1.Coordinator.ReportEndpoints:input_type -> calabi.mesh.v1.ReportEndpointsRequest
-	29, // 36: calabi.mesh.v1.Coordinator.UpdateNodeDeclarations:input_type -> calabi.mesh.v1.UpdateNodeDeclarationsRequest
-	34, // 37: calabi.mesh.v1.Coordinator.ReportServiceHealth:input_type -> calabi.mesh.v1.ReportServiceHealthRequest
-	32, // 38: calabi.mesh.v1.Coordinator.ReportConnections:input_type -> calabi.mesh.v1.ReportConnectionsRequest
-	2,  // 39: calabi.mesh.v1.Coordinator.UpdateFileTransfer:output_type -> calabi.mesh.v1.UpdateFileTransferResponse
-	5,  // 40: calabi.mesh.v1.Coordinator.RegisterNode:output_type -> calabi.mesh.v1.RegisterNodeResponse
-	27, // 41: calabi.mesh.v1.Coordinator.GetRegisterChallenge:output_type -> calabi.mesh.v1.GetRegisterChallengeResponse
-	8,  // 42: calabi.mesh.v1.Coordinator.SignOut:output_type -> calabi.mesh.v1.SignOutResponse
-	10, // 43: calabi.mesh.v1.Coordinator.ListNodes:output_type -> calabi.mesh.v1.ListNodesResponse
-	14, // 44: calabi.mesh.v1.Coordinator.ReportTunnels:output_type -> calabi.mesh.v1.ReportTunnelsResponse
-	16, // 45: calabi.mesh.v1.Coordinator.ListTunnels:output_type -> calabi.mesh.v1.ListTunnelsResponse
-	19, // 46: calabi.mesh.v1.Coordinator.GetUsage:output_type -> calabi.mesh.v1.GetUsageResponse
-	23, // 47: calabi.mesh.v1.Coordinator.OpenViewSession:output_type -> calabi.mesh.v1.OpenViewSessionResponse
-	25, // 48: calabi.mesh.v1.Coordinator.GetEdgeAccess:output_type -> calabi.mesh.v1.GetEdgeAccessResponse
-	37, // 49: calabi.mesh.v1.Coordinator.PullNetMap:output_type -> calabi.mesh.v1.NetMap
-	48, // 50: calabi.mesh.v1.Coordinator.ReportEndpoints:output_type -> calabi.mesh.v1.ReportEndpointsResponse
-	30, // 51: calabi.mesh.v1.Coordinator.UpdateNodeDeclarations:output_type -> calabi.mesh.v1.UpdateNodeDeclarationsResponse
-	35, // 52: calabi.mesh.v1.Coordinator.ReportServiceHealth:output_type -> calabi.mesh.v1.ReportServiceHealthResponse
-	33, // 53: calabi.mesh.v1.Coordinator.ReportConnections:output_type -> calabi.mesh.v1.ReportConnectionsResponse
-	39, // [39:54] is the sub-list for method output_type
-	24, // [24:39] is the sub-list for method input_type
+	47, // 24: calabi.mesh.v1.Coordinator.ReportRdpCertificate:input_type -> calabi.mesh.v1.ReportRdpCertificateRequest
+	1,  // 25: calabi.mesh.v1.Coordinator.UpdateFileTransfer:input_type -> calabi.mesh.v1.UpdateFileTransferRequest
+	3,  // 26: calabi.mesh.v1.Coordinator.RegisterNode:input_type -> calabi.mesh.v1.RegisterNodeRequest
+	6,  // 27: calabi.mesh.v1.Coordinator.GetRegisterChallenge:input_type -> calabi.mesh.v1.GetRegisterChallengeRequest
+	7,  // 28: calabi.mesh.v1.Coordinator.SignOut:input_type -> calabi.mesh.v1.SignOutRequest
+	9,  // 29: calabi.mesh.v1.Coordinator.ListNodes:input_type -> calabi.mesh.v1.ListNodesRequest
+	13, // 30: calabi.mesh.v1.Coordinator.ReportTunnels:input_type -> calabi.mesh.v1.ReportTunnelsRequest
+	15, // 31: calabi.mesh.v1.Coordinator.ListTunnels:input_type -> calabi.mesh.v1.ListTunnelsRequest
+	18, // 32: calabi.mesh.v1.Coordinator.GetUsage:input_type -> calabi.mesh.v1.GetUsageRequest
+	22, // 33: calabi.mesh.v1.Coordinator.OpenViewSession:input_type -> calabi.mesh.v1.OpenViewSessionRequest
+	24, // 34: calabi.mesh.v1.Coordinator.GetEdgeAccess:input_type -> calabi.mesh.v1.GetEdgeAccessRequest
+	36, // 35: calabi.mesh.v1.Coordinator.PullNetMap:input_type -> calabi.mesh.v1.PullNetMapRequest
+	49, // 36: calabi.mesh.v1.Coordinator.ReportEndpoints:input_type -> calabi.mesh.v1.ReportEndpointsRequest
+	29, // 37: calabi.mesh.v1.Coordinator.UpdateNodeDeclarations:input_type -> calabi.mesh.v1.UpdateNodeDeclarationsRequest
+	34, // 38: calabi.mesh.v1.Coordinator.ReportServiceHealth:input_type -> calabi.mesh.v1.ReportServiceHealthRequest
+	32, // 39: calabi.mesh.v1.Coordinator.ReportConnections:input_type -> calabi.mesh.v1.ReportConnectionsRequest
+	48, // 40: calabi.mesh.v1.Coordinator.ReportRdpCertificate:output_type -> calabi.mesh.v1.ReportRdpCertificateResponse
+	2,  // 41: calabi.mesh.v1.Coordinator.UpdateFileTransfer:output_type -> calabi.mesh.v1.UpdateFileTransferResponse
+	5,  // 42: calabi.mesh.v1.Coordinator.RegisterNode:output_type -> calabi.mesh.v1.RegisterNodeResponse
+	27, // 43: calabi.mesh.v1.Coordinator.GetRegisterChallenge:output_type -> calabi.mesh.v1.GetRegisterChallengeResponse
+	8,  // 44: calabi.mesh.v1.Coordinator.SignOut:output_type -> calabi.mesh.v1.SignOutResponse
+	10, // 45: calabi.mesh.v1.Coordinator.ListNodes:output_type -> calabi.mesh.v1.ListNodesResponse
+	14, // 46: calabi.mesh.v1.Coordinator.ReportTunnels:output_type -> calabi.mesh.v1.ReportTunnelsResponse
+	16, // 47: calabi.mesh.v1.Coordinator.ListTunnels:output_type -> calabi.mesh.v1.ListTunnelsResponse
+	19, // 48: calabi.mesh.v1.Coordinator.GetUsage:output_type -> calabi.mesh.v1.GetUsageResponse
+	23, // 49: calabi.mesh.v1.Coordinator.OpenViewSession:output_type -> calabi.mesh.v1.OpenViewSessionResponse
+	25, // 50: calabi.mesh.v1.Coordinator.GetEdgeAccess:output_type -> calabi.mesh.v1.GetEdgeAccessResponse
+	37, // 51: calabi.mesh.v1.Coordinator.PullNetMap:output_type -> calabi.mesh.v1.NetMap
+	50, // 52: calabi.mesh.v1.Coordinator.ReportEndpoints:output_type -> calabi.mesh.v1.ReportEndpointsResponse
+	30, // 53: calabi.mesh.v1.Coordinator.UpdateNodeDeclarations:output_type -> calabi.mesh.v1.UpdateNodeDeclarationsResponse
+	35, // 54: calabi.mesh.v1.Coordinator.ReportServiceHealth:output_type -> calabi.mesh.v1.ReportServiceHealthResponse
+	33, // 55: calabi.mesh.v1.Coordinator.ReportConnections:output_type -> calabi.mesh.v1.ReportConnectionsResponse
+	40, // [40:56] is the sub-list for method output_type
+	24, // [24:40] is the sub-list for method input_type
 	24, // [24:24] is the sub-list for extension type_name
 	24, // [24:24] is the sub-list for extension extendee
 	0,  // [0:24] is the sub-list for field type_name
@@ -4034,7 +4161,7 @@ func file_meshpb_coord_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meshpb_coord_proto_rawDesc), len(file_meshpb_coord_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   49,
+			NumMessages:   51,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

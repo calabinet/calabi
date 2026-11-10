@@ -18,9 +18,10 @@ const MaxBatchFiles = 32
 // Source is an already authorized, caller-owned stream. Paths and URI access
 // are owned by the ordinary user UI, never sent to a privileged daemon.
 type Source struct {
-	Reader io.ReadSeeker
-	Name   string
-	Size   int64
+	Clipboard bool
+	Reader    io.ReadSeeker
+	Name      string
+	Size      int64
 }
 
 // BatchTicket contains secrets. Checkpoints belong only in the user's private
@@ -140,7 +141,7 @@ func (s *BatchSender) SendBatch(ctx context.Context, sources []Source, ticket *B
 			return errors.New("source size changed")
 		}
 		reportHash(size)
-		offer := Offer{BatchCount: len(sources), Batch: ticket.ID, Name: src.Name, Size: src.Size, SHA256: hex.EncodeToString(h.Sum(nil))}
+		offer := Offer{Clipboard: src.Clipboard, BatchCount: len(sources), Batch: ticket.ID, Name: src.Name, Size: src.Size, SHA256: hex.EncodeToString(h.Sum(nil))}
 		if fresh {
 			offer.ClientID = randomID()
 			ticket.Files[n] = FileTicket{Offer: offer}
@@ -345,7 +346,7 @@ func validateTransfer(t Transfer, ft FileTicket) error {
 	if t.Kbps < 1 || t.Kbps > MaxKbps {
 		return errors.New("invalid receive rate ceiling")
 	}
-	if t.ID != ft.ID || t.BatchCount != ft.Offer.BatchCount || t.ClientID != ft.Offer.ClientID || t.Batch != ft.Offer.Batch || t.Name != ft.Offer.Name || t.Size != ft.Offer.Size || t.SHA256 != ft.Offer.SHA256 || t.Offset < 0 || t.Offset > t.Size || t.Kbps < 1 || t.Kbps > MaxKbps || t.MaxBlock < paceChunk || t.MaxBlock > BlockSize {
+	if t.Clipboard != ft.Offer.Clipboard || t.ID != ft.ID || t.BatchCount != ft.Offer.BatchCount || t.ClientID != ft.Offer.ClientID || t.Batch != ft.Offer.Batch || t.Name != ft.Offer.Name || t.Size != ft.Offer.Size || t.SHA256 != ft.Offer.SHA256 || t.Offset < 0 || t.Offset > t.Size || t.Kbps < 1 || t.Kbps > MaxKbps || t.MaxBlock < paceChunk || t.MaxBlock > BlockSize {
 		return errors.New("invalid receiver transfer state")
 	}
 	if t.State == "completed" && t.Offset != t.Size {
@@ -377,7 +378,7 @@ func (s *BatchSender) retry(ctx context.Context, call func() error) error {
 	return err
 }
 func validOfferReply(reply offerReply, offer Offer) bool {
-	return validID(reply.ID) && validID(reply.Token) && reply.BatchCount == offer.BatchCount && reply.ClientID == offer.ClientID && reply.Batch == offer.Batch && reply.Name == offer.Name && reply.Size == offer.Size && reply.SHA256 == offer.SHA256 && reply.Kbps >= 1 && reply.Kbps <= MaxKbps && reply.MaxBlock >= paceChunk && reply.MaxBlock <= BlockSize
+	return reply.Clipboard == offer.Clipboard && validID(reply.ID) && validID(reply.Token) && reply.BatchCount == offer.BatchCount && reply.ClientID == offer.ClientID && reply.Batch == offer.Batch && reply.Name == offer.Name && reply.Size == offer.Size && reply.SHA256 == offer.SHA256 && reply.Kbps >= 1 && reply.Kbps <= MaxKbps && reply.MaxBlock >= paceChunk && reply.MaxBlock <= BlockSize
 }
 
 func (s *BatchSender) CancelBatch(ctx context.Context, ticket BatchTicket) error {

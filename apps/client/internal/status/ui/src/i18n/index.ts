@@ -66,4 +66,12 @@ i18n.on("languageChanged", (lng) => {
 });
 document.documentElement.lang = i18n.language || "en";
 
+// A file receipt or assistance webview can stay open while the main window
+// changes language. Sync same-origin windows through the saved preference.
+window.addEventListener("storage", ({ key, newValue }) => {
+  if (key === "calabi_lang" && newValue && newValue !== i18n.language && LANGS.some(({ code }) => code === newValue)) {
+    void i18n.changeLanguage(newValue);
+  }
+});
+
 export default i18n;

@@ -18,6 +18,8 @@ func TestParsePortSpec(t *testing.T) {
 		"tcp:8000-8100": {proto: "tcp", first: 8000, last: 8100},
 		"svc:web":       {service: "web"},
 		"SVC:Web":       {service: "web"},
+		"icmp":          {proto: "icmp"},
+		"tcp:svc:web":   {proto: "tcp", service: "web"},
 	}
 	for in, want := range ok {
 		got, valid := parsePortSpec(in)
@@ -31,7 +33,7 @@ func TestParsePortSpec(t *testing.T) {
 	}
 
 	for _, bad := range []string{"", "  ", "http", "0", "65536", "900-800", "443-", "-443",
-		"svc:", "sctp:443", "tcp:", "1,2", "svc:bad name"} {
+		"svc:", "sctp:443", "icmp:22", "tcp:", "1,2", "svc:bad name"} {
 		if _, valid := parsePortSpec(bad); valid {
 			t.Errorf("parsePortSpec(%q) accepted an unusable spec", bad)
 		}

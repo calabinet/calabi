@@ -71,9 +71,13 @@ pub fn pending(snapshot: &Value) -> Vec<Request> {
     let mut groups: BTreeMap<String, Vec<&Value>> = BTreeMap::new();
     for row in snapshot["received"].as_array().into_iter().flatten() {
         let t = &row["transfer"];
+        if t["clipboard"] == true { continue; } // Acceptance belongs to the destination Shell paste.
         let batch = t["batch"].as_str().filter(|s| !s.is_empty()).or(t["id"].as_str()).unwrap_or("");
         let sender = row["device_key"].as_str().unwrap_or("");
         if sender.is_empty() || batch.is_empty() { continue; }
+        // This batch has a destination-session OLE clipboard owner. Its first
+        // paste is the local acceptance action; do not show a second prompt.
+        if snapshot["rdp_paste_marker"].as_str()==Some(format!("{sender}/{batch}").as_str()){continue;}
         groups.entry(format!("{sender}/{batch}")).or_default().push(row);
     }
     groups.into_iter().filter_map(|(key, rows)| {
@@ -114,6 +118,14 @@ mod tests {
             match field { "identity"=>changed["identity"]["fingerprint"]=json!("new"), "decision"=>changed["received"][0]["transfer"]["state"]=json!("cancelled"), "name"=>changed["received"][0]["transfer"]["name"]=json!("other"), _=>changed["available"]=json!(false) }
             assert!(!pending(&changed).contains(&request));
         }
+    }
+    #[test] fn clipboard_offer_never_opens_ordinary_receipt_even_before_marker() {
+        let mut value=snapshot(vec![row("clip","alice","waiting"),row("normal","bob","waiting")]);
+        value["received"][0]["transfer"]["clipboard"]=serde_json::json!(true);
+        for row in value["received"].as_array_mut().unwrap() { row["transfer"]["batch_count"]=json!(1); }
+        let requests=pending(&value);
+        assert_eq!(requests.len(),1);
+        assert_eq!(requests[0].ids,vec!["normal"]);
     }
     #[test] fn duplicate_ids_do_not_become_an_actionable_batch() {
         assert!(pending(&snapshot(vec![row("a","alice","waiting"),row("a","alice","waiting")])).is_empty());

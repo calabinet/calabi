@@ -118,6 +118,10 @@ type Node struct {
 	// that never wrote an ACL) — so clearing this here would not open a machine
 	// up, it would only make the console lie.
 	BlockIncoming *bool
+	// ACLPortless is the capability from the latest registration. A nil value
+	// leaves it untouched on declaration-only updates.
+	ACLPortless *bool
+	ACLICMP     *bool // nil preserves the last registered capability during device edits
 	// Approved is device approval: a node enrolled while the meshnet
 	// requires approval starts false and reaches nothing until an admin says yes.
 	// Defaults TRUE everywhere else, so turning the switch on never retroactively

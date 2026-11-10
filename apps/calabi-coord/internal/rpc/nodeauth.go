@@ -73,6 +73,7 @@ type pendingChallenge struct {
 }
 
 type nodeSession struct {
+	rdpPin       string                   // raw SHA-256; scoped to this registration
 	fileTransfer *meshpb.FileTransferInfo // ephemeral; never stored in the node DB
 	nodeID       int64
 	meshnet      core.MeshnetID
@@ -311,7 +312,7 @@ func (s *nodeSessions) startReplacing(node *core.Node) (string, bool, error) {
 	defer s.mu.Unlock()
 	withdrawn := false
 	if old, ok := s.byNode[node.ID]; ok {
-		withdrawn = s.byToken[old].fileTransfer != nil
+		withdrawn = s.byToken[old].fileTransfer != nil || s.byToken[old].rdpPin != ""
 		delete(s.byToken, old)
 	}
 	s.byToken[tok] = nodeSession{nodeID: node.ID, meshnet: node.Meshnet, nodeKey: node.NodeKey}

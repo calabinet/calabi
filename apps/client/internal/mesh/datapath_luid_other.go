@@ -2,6 +2,12 @@
 
 package mesh
 
+import "net/netip"
+
+func (r osRouting) ConfigureLink(overlay netip.Addr) error {
+	return configureLink(r.d.tunLUID(), r.d.ifname, overlay)
+}
+
 // tunLUID is Windows-only (a wintun concept); elsewhere link config keys off the
 // interface name instead, so this is always 0.
 func (d *WGDatapath) tunLUID() uint64 { return 0 }

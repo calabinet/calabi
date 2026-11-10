@@ -20,6 +20,9 @@
 !define CALABI_MAINTENANCE_FILE "${__FILEDIR__}\nsis-maintenance.nsh"
 !include "${__FILEDIR__}\nsis-layout.nsh"
 
+; Never let Ignore silently omit a locked binary and leave a mixed installation.
+AllowSkipFiles off
+
 ; Overridable ONLY so the test harness can point PREINSTALL at a fake service.
 ; The installer build defines none of these.
 !ifndef CALABI_SVC_ROOT
@@ -42,6 +45,28 @@
   nsExec::ExecToStack '"$INSTDIR\calabi.exe" mesh files firewall ${ACTION}'
   Pop $R0
   Pop $R1
+!macroend
+
+!macro CALABI_FILE_AGENT_STARTUP ACTION
+  !ifdef CALABI_NSIS_HOOK_FIXTURE
+    nsExec::ExecToStack '"$INSTDIR\calabi.exe" test-file-agent ${ACTION}'
+  !else
+    InitPluginsDir
+    File /oname=$PLUGINSDIR\calabi-close-desktop.ps1 "${CALABI_CLOSE_DESKTOP_SCRIPT}"
+    nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\calabi-close-desktop.ps1" -InstallDir "$INSTDIR" -Startup ${ACTION}'
+  !endif
+  Pop $R0
+  Pop $R1
+  ${If} $R0 != 0
+    DetailPrint "$R1"
+    FileOpen $R0 "$INSTDIR\file-agent-startup-error.log" w
+    FileWrite $R0 "${ACTION}: $R1$\r$\n"
+    FileClose $R0
+    MessageBox MB_OK|MB_ICONSTOP "$(calabiFileAgentSetupFailed)" /SD IDOK
+    SetErrorLevel 8
+    Abort
+  ${EndIf}
+  Delete "$INSTDIR\file-agent-startup-error.log"
 !macroend
 
 !macro NSIS_HOOK_PREINSTALL
@@ -106,6 +131,7 @@
   ; survivable by design: apply_windows.go starts the installer DETACHED and
   ; broken away from any job, so it outlives its parent.
   ${If} ${FileExists} "$INSTDIR\calabi.exe"
+  ${OrIf} ${FileExists} "$INSTDIR\calabi-desktop.exe"
     InitPluginsDir
     File /oname=$PLUGINSDIR\calabi-close-desktop.ps1 "${CALABI_CLOSE_DESKTOP_SCRIPT}"
     DetailPrint "$(calabiClosingDesktop)"
@@ -123,6 +149,9 @@
     Pop $R1
     StrCpy $R1 0
     ${Do}
+      ${IfNot} ${FileExists} "$INSTDIR\calabi.exe"
+        ${ExitDo}
+      ${EndIf}
       ClearErrors
       FileOpen $R2 "$INSTDIR\calabi.exe" a
       ${IfNot} ${Errors}
@@ -143,6 +172,33 @@
       ${EndIf}
       Sleep 500
     ${Loop}
+  ${EndIf}
+
+  ; Verify ALL replaceable images, not just the service image. A stopped
+  ; process or a successful taskkill is not sufficient proof of write access.
+  ${If} ${FileExists} "$INSTDIR\calabi.exe"
+  ${OrIf} ${FileExists} "$INSTDIR\calabi-desktop.exe"
+    InitPluginsDir
+    File /oname=$PLUGINSDIR\calabi-close-desktop.ps1 "${CALABI_CLOSE_DESKTOP_SCRIPT}"
+    nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\calabi-close-desktop.ps1" -InstallDir "$INSTDIR" -VerifyOnly'
+    Pop $R0
+    Pop $R1
+    ${If} $R0 != 0
+      FileOpen $R2 "$INSTDIR\upgrade-file-error.log" w
+      FileWrite $R2 "$R1$\r$\n"
+      FileClose $R2
+      DetailPrint "$R1"
+      ; Preserve the diagnostic while attempting to restore the old service.
+      Push $R1
+      nsExec::ExecToStack 'sc.exe start ${CALABI_SVC_NAME}'
+      Pop $R0
+      Pop $R1
+      Pop $R1
+      MessageBox MB_OK|MB_ICONSTOP "$(calabiFileBusyError)$\r$\n$\r$\n$R1" /SD IDOK
+      SetErrorLevel 7
+      Abort
+    ${EndIf}
+    Delete "$INSTDIR\upgrade-file-error.log"
   ${EndIf}
 
   Pop $R4
@@ -244,12 +300,18 @@
     Abort
   ${EndIf}
 
+  !insertmacro CALABI_FILE_AGENT_STARTUP Register
+
   Pop $R2
   Pop $R1
   Pop $R0
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
+  !ifndef CALABI_NSIS_HOOK_FIXTURE
+    DeleteRegKey HKCU "Software\Classes\Directory\Background\shell\Calabi.RemotePaste"
+    DeleteRegKey HKCU "Software\Classes\DesktopBackground\Shell\Calabi.RemotePaste"
+  !endif
   Push $R0
   Push $R1
   DetailPrint "$(calabiRemovingFirewall)"
@@ -259,6 +321,7 @@
     SetErrorLevel 5
     Abort
   ${EndIf}
+  !insertmacro CALABI_FILE_AGENT_STARTUP Remove
   Pop $R1
   Pop $R0
   Delete "$INSTDIR\file-firewall.ps1"

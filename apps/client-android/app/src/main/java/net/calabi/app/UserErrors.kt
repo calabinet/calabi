@@ -142,7 +142,8 @@ internal object UserErrors {
         return result ?: fallback
     }
 
-    fun stateError(raw: String): String {
+    fun stateError(raw: String, enrollmentError: String = ""): String {
+        if (enrollmentError == "device_limit") return CalabiApp.instance.getString(R.string.mesh_device_limit)
         if (raw.isBlank()) return ""
         val body = JSONObject().put("error", raw)
         matchBusiness(raw, "")?.let { body.put("error_key", it.first).put("error_args", it.second) }

@@ -30,10 +30,24 @@ func fileTransferMessage(node NodeKey, info *meshpb.FileTransferInfo) []byte {
 	return append(b, h[:]...)
 }
 
+// The independent proof leaves the v1 file signature verifiable by older peers.
+func assistanceMessage(node NodeKey, info *meshpb.FileTransferInfo) []byte {
+	return append([]byte("calabi/assistance/v1\x00"), fileTransferMessage(node, info)...)
+}
+
 // SignFileTransfer uses only the separate TLS key, never a WireGuard key.
 func SignFileTransfer(node NodeKey, info *meshpb.FileTransferInfo, key ed25519.PrivateKey) error {
+	return SignDesktopCapabilities(node, info, key, false)
+}
+
+// SignDesktopCapabilities publishes the two receiving choices with one endpoint identity.
+func SignDesktopCapabilities(node NodeKey, info *meshpb.FileTransferInfo, key ed25519.PrivateKey, assistance bool) error {
 	if info == nil || node.IsZero() || len(key) != ed25519.PrivateKeySize {
 		return errors.New("invalid file identity")
+	}
+	info.AssistanceProof = nil
+	if assistance {
+		info.AssistanceProof = ed25519.Sign(key, assistanceMessage(node, info))
 	}
 	info.Proof = ed25519.Sign(key, fileTransferMessage(node, info))
 	_, err := VerifyFileTransfer(node, info, time.Now())
@@ -66,6 +80,9 @@ func VerifyFileTransfer(node NodeKey, info *meshpb.FileTransferInfo, now time.Ti
 	}
 	if !client || !server || !ed25519.Verify(key, fileTransferMessage(node, info), info.Proof) {
 		return "", errors.New("invalid file transfer possession proof")
+	}
+	if len(info.AssistanceProof) > 0 && !ed25519.Verify(key, assistanceMessage(node, info), info.AssistanceProof) {
+		return "", errors.New("invalid assistance capability proof")
 	}
 	h := sha256.Sum256(cert.Raw)
 	return hex.EncodeToString(h[:]), nil

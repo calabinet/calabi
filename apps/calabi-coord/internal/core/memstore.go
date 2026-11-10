@@ -28,6 +28,12 @@ func (s *MemNodeStore) Upsert(_ context.Context, n *Node) (*Node, error) {
 	cp := *n
 	if old, ok := s.nodes[cp.ID]; ok {
 		cp.RealRoutes = append([]netip.Prefix(nil), old.RealRoutes...)
+		if cp.ACLPortless == nil {
+			cp.ACLPortless = old.ACLPortless
+		}
+		if cp.ACLICMP == nil {
+			cp.ACLICMP = old.ACLICMP
+		}
 	}
 	if cp.ID == 0 {
 		s.nextID++

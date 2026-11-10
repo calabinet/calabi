@@ -66,6 +66,7 @@ function Build($name, $instdir, $tries, $replacement = $newExe, [switch]$Post, [
         "/DTEST_INSTDIR=$instdir",
         "/DTEST_REPLACEMENT=$replacement",
         '/DCALABI_SVC_ROOT=HKCU',
+        '/DCALABI_NSIS_HOOK_FIXTURE=1',
         '/DCALABI_SVC_KEY=Software\CalabiNsisHookTest\svc',
         "/DCALABI_SVC_NAME=$svcName",
         "/DCALABI_UNLOCK_TRIES=$tries"
@@ -124,7 +125,7 @@ function UninstallScenario([bool]$fail, [bool]$deleteData = $false, [bool]$updat
     if ($fail) {
         if ($p.ExitCode -ne 5 -or $calls.Count -ne 1 -or -not (Test-Path -LiteralPath $fakeData)) { throw 'Failed firewall cleanup must stop uninstall before service/data removal.' }
     } else {
-        if ($p.ExitCode -ne 0 -or $calls.Count -ne 3 -or $calls[0] -ne 'mesh files firewall remove' -or $calls[1] -ne 'daemon stop' -or $calls[2] -ne 'daemon uninstall') { throw 'Uninstall must remove firewall and service.' }
+        if ($p.ExitCode -ne 0 -or $calls.Count -ne 4 -or $calls[0] -ne 'mesh files firewall remove' -or $calls[1] -ne 'test-file-agent Remove' -or $calls[2] -ne 'daemon stop' -or $calls[3] -ne 'daemon uninstall') { throw 'Uninstall must remove firewall and service.' }
     }
     $shouldKeep = $fail -or -not $deleteData -or $update
     if ((Test-Path -LiteralPath $legacyScript) -ne $fail) { throw 'Legacy script cleanup must follow successful embedded firewall removal.' }
@@ -234,7 +235,7 @@ function PostScenario {
         if (-not $afterPost) { $problems += 'hook aborted' }
         if ($p.ExitCode -ne 0) { $problems += "installer exited $($p.ExitCode)" }
         if (-not $registered) { $problems += 'service is NOT registered' }
-        if ($calls.Count -ne 4 -or $calls[1] -ne '--configure-installed-service' -or $calls[2] -ne 'mesh files firewall install' -or $calls[3] -ne 'daemon start') { $problems += "ran [$($calls -join ' | ')], want install then restart access then firewall then start" }
+        if ($calls.Count -ne 5 -or $calls[1] -ne '--configure-installed-service' -or $calls[2] -ne 'mesh files firewall install' -or $calls[3] -ne 'daemon start' -or $calls[4] -ne 'test-file-agent Register') { $problems += "ran [$($calls -join ' | ')], want install then restart access then firewall then service start then file agent startup" }
         if ($errLog) { $problems += 'left a service-install-error.log behind' }
     } else {
         if ($afterPost) { $problems += 'hook did NOT abort' }

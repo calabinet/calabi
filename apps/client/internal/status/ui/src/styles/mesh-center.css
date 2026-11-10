@@ -1,11 +1,35 @@
 .mesh-center { color:#e1e6f0; }
 .mesh-center > .ant-tabs > .ant-tabs-nav { margin-bottom:20px; }
+.mesh-remote-grid { display:grid; grid-template-columns:repeat(auto-fill,min(100%,224px)); gap:12px; margin-top:16px; }
+.mesh-remote-empty { padding:28px 0; text-align:center; }
+.mesh-remote-card { display:block; min-width:0; overflow:hidden; padding:0; border:1px solid #29364d; border-radius:12px;
+  background:var(--mesh-surface,#0c1325); color:#e1e6f0; font:inherit; text-align:left; cursor:pointer; }
+.mesh-remote-card:enabled:hover { border-color:#839ee2; }
+.mesh-remote-card:focus-visible { outline:2px solid #9bb4fa; outline-offset:3px; }
+.mesh-remote-card:disabled { cursor:default; }
+.mesh-remote-art { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:64px; padding:8px 12px; color:#b8c9fa;
+  background:radial-gradient(ellipse at 50% 70%,#223659,#111b2f 75%); }
+.mesh-remote-art > svg { flex:none; width:32px; height:32px; stroke-width:1.15; }
+.mesh-remote-action { padding:3px 8px; border:1px solid; border-radius:6px; font-size:12px; text-align:center; }
+.mesh-remote-card:enabled .mesh-remote-action { color:#8ae0b2; background:#142f2b; border-color:#4b9b76; }
+.mesh-remote-card:enabled:hover .mesh-remote-action { background:#1a3c34; border-color:#6fca9b; }
+.mesh-remote-card:disabled .mesh-remote-action { color:#ffc38c; background:#3b2a23; border-color:#b47748; }
+.mesh-remote-details { display:grid; gap:3px; padding:8px 12px; overflow-wrap:anywhere; }
+.mesh-remote-details strong { font-size:15px; }
+.mesh-remote-details > span { color:#abb9d0; font-size:12px; }
 .mesh-status-cards > .ant-col { display:flex; min-width:0; }
 .mesh-status-cards .ant-card { width:100%; }
 .mesh-status-cards .ant-statistic-content { font-size:26px; font-weight:600; line-height:1.4; overflow-wrap:anywhere; }
 .mesh-status-cards .mesh-status-identity .ant-statistic-content { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:20px; }
 .mesh-status-cards .mesh-status-up .ant-statistic-content { color:#34d3a4; }
 .mesh-status-cards .mesh-status-down .ant-statistic-content { color:#94a0b6; }
+.mesh-reception-link { color:#8eaaff; font-size:12px; overflow-wrap:anywhere; }
+.mesh-reception-link:hover, .mesh-reception-link:focus-visible { text-decoration:underline; }
+.mesh-status-cards .mesh-reception-link { display:inline-block; margin-top:4px; }
+.mesh-reception-settings { display:grid; gap:10px; }
+.mesh-reception-settings h5.ant-typography, .mesh-reception-network h5.ant-typography { margin:0; }
+.mesh-reception-network { border-top:1px solid #273652; padding-top:16px; }
+.mesh-reception-settings [tabindex="-1"]:focus { outline:2px solid #8eaaff; outline-offset:4px; }
 .mesh-peer-heading { margin-bottom:11px; }
 .mesh-peer-heading > .ant-typography { color:#9dacc6; font-size:12px; }
 .mesh-device-name { display:flex; align-items:center; gap:11px; min-width:0; }

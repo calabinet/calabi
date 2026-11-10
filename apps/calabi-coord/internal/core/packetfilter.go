@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // Compiling the meshnet's ACL into a per-node PACKET FILTER — the step
@@ -55,19 +57,45 @@ func allPorts() PortRange { return PortRange{First: 0, Last: 65535} }
 // router arrives with the LAN address as its source, so leaving those out would
 // silently break routing the moment a filter is applied.
 func CompilePacketFilter(self *Node, peers []*Node, p *ACLPolicy) []FilterRule {
+	out, _ := compileEffectiveFilter(self, peers, p)
+	// An oversized filter must never fall back to its positive rules.
+	return out
+}
+
+func compileEffectiveFilter(self *Node, peers []*Node, p *ACLPolicy) ([]FilterRule, error) {
+	var out []FilterRule
+	visitPacketFilterRules(self, peers, p, func(_ int, rule FilterRule) bool {
+		out = append(out, rule)
+		return true
+	})
+	return subtractDenyRules(out, self, peers, p)
+}
+
+// visitPacketFilterRules keeps the original ACL index available to the access
+// checker. Only the filter itself is sent to clients.
+func visitPacketFilterRules(self *Node, peers []*Node, p *ACLPolicy, yield func(int, FilterRule) bool) {
 	if self == nil {
-		return nil
+		return
 	}
 	if p == nil {
-		return []FilterRule{{SrcCIDRs: []string{"0.0.0.0/0", "::/0"}, DstPorts: []PortRange{allPorts()}}}
+		yield(-1, FilterRule{SrcCIDRs: []string{"0.0.0.0/0", "::/0"}, DstPorts: []PortRange{allPorts()}})
+		return
 	}
-	var out []FilterRule
-	for _, r := range p.ACLs {
-		if !strings.EqualFold(strings.TrimSpace(r.Action), "accept") {
+	visitACLRules(self, peers, p, "accept", yield)
+}
+
+func visitACLRules(self *Node, peers []*Node, p *ACLPolicy, action string, yield func(int, FilterRule) bool) {
+	for index, r := range p.ACLs {
+		if !isACLAction(r, action) {
 			continue
 		}
 		if len(r.Ports) > 0 {
-			out = appendIf(out, compileRule(r, self, peers, p.Groups))
+			if rule := compileRule(r, self, peers, p.Groups); rule != nil && !yield(index, *rule) {
+				return
+			}
+			continue
+		}
+		if action == "deny" {
 			continue
 		}
 		// Legacy document (no Ports field): each dst selector carried its own
@@ -86,10 +114,11 @@ func CompilePacketFilter(self *Node, peers []*Node, p *ACLPolicy) []FilterRule {
 			if len(srcs) == 0 {
 				continue // a rule whose sources match nobody grants nothing
 			}
-			out = append(out, FilterRule{SrcCIDRs: srcs, DstPorts: ports})
+			if !yield(index, FilterRule{SrcCIDRs: srcs, DstPorts: ports}) {
+				return
+			}
 		}
 	}
-	return out
 }
 
 // compileRule builds the one filter rule a current-format ACL rule contributes
@@ -122,13 +151,6 @@ func compileRule(r ACLRule, self *Node, peers []*Node, groups map[string][]strin
 	return &FilterRule{SrcCIDRs: srcs, DstPorts: ports}
 }
 
-func appendIf(out []FilterRule, r *FilterRule) []FilterRule {
-	if r == nil {
-		return out
-	}
-	return append(out, *r)
-}
-
 // resolvePorts turns a rule's port specs into concrete ranges ON self. Specs
 // that name a service resolve against self's own declarations, so one rule can
 // cover machines that each chose a different port.
@@ -154,7 +176,7 @@ func portsForSpec(spec string, self *Node) []PortRange {
 	}
 	var out []PortRange
 	for _, svc := range self.Services {
-		if svc.Name == s.service && svc.Port > 0 && svc.Port <= 65535 {
+		if svc.Name == s.service && svc.Port > 0 && svc.Port <= 65535 && (s.proto == "" || svc.Proto == s.proto) {
 			out = append(out, PortRange{First: uint16(svc.Port), Last: uint16(svc.Port), Proto: svc.Proto})
 		}
 	}
@@ -185,15 +207,8 @@ func parsePortSpec(spec string) (portSpec, bool) {
 	if s == "" {
 		return portSpec{}, false
 	}
-	if name, ok := strings.CutPrefix(s, "svc:"); ok {
-		// Service names are labels (ValidateService), so anything else could
-		// never match a declaration. Catching it here turns a typo into a save
-		// error instead of a rule that quietly opens no port.
-		name = NormalizeNodeName(name)
-		if ValidateNodeName(name) != nil {
-			return portSpec{}, false
-		}
-		return portSpec{service: name}, true
+	if s == meshproto.ACLICMP {
+		return portSpec{proto: meshproto.ACLICMP}, true
 	}
 	out := portSpec{}
 	for _, proto := range []string{"tcp", "udp"} {
@@ -202,6 +217,14 @@ func parsePortSpec(spec string) (portSpec, bool) {
 			s = strings.TrimSpace(rest)
 			break
 		}
+	}
+	if name, ok := strings.CutPrefix(s, "svc:"); ok {
+		name = NormalizeNodeName(name)
+		if ValidateNodeName(name) != nil {
+			return portSpec{}, false
+		}
+		out.service = name
+		return out, true
 	}
 	if s == "*" {
 		out.first, out.last = 0, 65535

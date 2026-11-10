@@ -32,6 +32,7 @@ type WGPeer struct {
 // WGConfig is the full desired tun/WireGuard state derived from a NetMap. The
 // datapath owns the private key; only the public identity travels here.
 type WGConfig struct {
+	RDPOwners   []netip.Addr
 	NodeKey     meshproto.NodeKey
 	OverlayAddr netip.Addr
 	Peers       []WGPeer
@@ -109,6 +110,11 @@ type WGConfig struct {
 // once endpoints are present the first is taken as the direct-path hint.
 func BuildWGConfig(nm NetMap) WGConfig {
 	cfg := WGConfig{NodeKey: nm.Self.NodeKey, OverlayAddr: nm.Self.Overlay}
+	for _, p := range nm.Peers {
+		if p.SameOwner && p.Overlay.Is4() {
+			cfg.RDPOwners = append(cfg.RDPOwners, p.Overlay)
+		}
+	}
 	cfg.Filter, cfg.FilterEnabled = nm.Filter, nm.FilterEnabled
 	cfg.RelayGrant = nm.RelayGrant
 	cfg.RelayBandwidthKbps, cfg.RelayBandwidthBurstKbps = nm.RelayBandwidthKbps, nm.RelayBandwidthBurstKbps

@@ -3,8 +3,144 @@ package core
 import (
 	"context"
 	"errors"
+	"net/netip"
+	"slices"
 	"testing"
 )
+
+func TestCheckPortAccessUsesInboundRules(t *testing.T) {
+	ctx := context.Background()
+	c := newTestCoord()
+	c.ACL = NewMemACLStore()
+	for i, name := range []string{"a", "b"} {
+		if _, err := c.Register(ctx, RegisterInput{Meshnet: 1, Name: name, NodeKey: key(byte(i + 1))}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	doc := &ACLPolicy{ACLs: []ACLRule{
+		{Action: "accept", Src: []string{"a"}, Dst: []string{"b"}, Ports: []string{"udp:5432"}},
+		{Action: "accept", Src: []string{"a"}, Dst: []string{"b"}, Ports: []string{"tcp:5400-5500"}},
+		{Action: "accept", Src: []string{"a"}, Dst: []string{"b:443"}},
+	}}
+	for _, tc := range []struct {
+		name, src, dst, proto string
+		port, rule            int
+	}{
+		{"tcp range skips udp rule", "a", "b", "tcp", 5432, 1},
+		{"udp matches earlier rule", "a", "b", "udp", 5432, 0},
+		{"reverse direction denied", "b", "a", "tcp", 5432, -1},
+		{"outside ranges denied", "a", "b", "tcp", 5501, -1},
+		{"legacy destination port", "a", "b", "udp", 443, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := c.CheckPortAccess(ctx, 1, tc.src, tc.dst, doc, tc.proto, tc.port)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Transport == nil || got.Transport.Rule != tc.rule || got.Transport.Allowed != (tc.rule >= 0) {
+				t.Fatalf("transport = %+v, want rule %d", got.Transport, tc.rule)
+			}
+		})
+	}
+}
+
+func TestPreviewACLReportsPortChangesWithUnchangedDevicePairs(t *testing.T) {
+	ctx := context.Background()
+	c := newTestCoord()
+	store := NewMemACLStore()
+	c.ACL = store
+	for i, name := range []string{"a", "b"} {
+		if _, err := c.Register(ctx, RegisterInput{Meshnet: 1, Name: name, NodeKey: key(byte(i + 1))}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := ACLPolicy{ACLs: []ACLRule{
+		{Action: "accept", Src: []string{"a"}, Dst: []string{"b"}, Ports: []string{"tcp:1-100", "tcp:90-110", "udp:53"}},
+	}}
+	if err := store.SetACL(ctx, 1, before); err != nil {
+		t.Fatal(err)
+	}
+	after := ACLPolicy{ACLs: []ACLRule{
+		{Action: "accept", Src: []string{"a"}, Dst: []string{"b"}, Ports: []string{"tcp:50-120"}},
+	}}
+	got, err := c.PreviewACL(ctx, 1, after)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantAdded := []AccessChange{{Src: "a", Dst: "b", PortRange: PortRange{First: 111, Last: 120, Proto: "tcp"}}}
+	wantRemoved := []AccessChange{
+		{Src: "a", Dst: "b", PortRange: PortRange{First: 1, Last: 49, Proto: "tcp"}},
+		{Src: "a", Dst: "b", PortRange: PortRange{First: 53, Last: 53, Proto: "udp"}},
+	}
+	if got.Unchanged != 1 || got.Traffic == nil ||
+		got.Traffic.AddedCount != len(wantAdded) || got.Traffic.RemovedCount != len(wantRemoved) ||
+		!slices.Equal(got.Traffic.Added, wantAdded) || !slices.Equal(got.Traffic.Removed, wantRemoved) {
+		t.Fatalf("preview = %+v, traffic = %+v", got, got.Traffic)
+	}
+}
+
+func TestCheckPortAccessOnlyResolvesConfirmedServices(t *testing.T) {
+	c, ctx := serviceCoord(t)
+	if _, err := c.Register(ctx, RegisterInput{Meshnet: 1, Name: "a", NodeKey: key(1)}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := c.Register(ctx, RegisterInput{Meshnet: 1, Name: "b", NodeKey: key(2),
+		DeclaredServices: []Service{{Name: "postgres", Proto: "tcp", Port: 5432}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := &ACLPolicy{ACLs: []ACLRule{
+		{Action: "accept", Src: []string{"a"}, Dst: []string{"b"}, Ports: []string{"svc:postgres"}},
+	}}
+	check := func(allowed bool, reason string) {
+		t.Helper()
+		got, err := c.CheckPortAccess(ctx, 1, "a", "b", doc, "tcp", 5432)
+		if err != nil || got.Transport == nil || got.Transport.Allowed != allowed || got.Transport.Reason != reason {
+			t.Fatalf("transport = %+v, err = %v, want allowed=%v reason=%s", got.Transport, err, allowed, reason)
+		}
+	}
+	check(false, "no_match")
+	svc, ok := svcNamed(t, c, 1, b.ID, "postgres")
+	if !ok {
+		t.Fatal("missing declared service")
+	}
+	if _, err := c.SetServiceApproved(ctx, 1, svc.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	check(true, "rule")
+	if _, err := c.SetNodeApproved(ctx, 1, b.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	check(false, "pending")
+}
+
+func TestPreviewACLCountsChangesBeyondTheSample(t *testing.T) {
+	nodes := make([]*Node, 10)
+	for i := range nodes {
+		nodes[i] = &Node{ID: int64(i + 1), Approved: true, Overlay: netip.AddrFrom4([4]byte{100, 64, 0, byte(i + 1)})}
+	}
+	after := &ACLPolicy{ACLs: []ACLRule{
+		{Action: "accept", Src: []string{"*"}, Dst: []string{"*"}, Ports: []string{"tcp:1-65534"}},
+	}}
+	got, err := diffACLTraffic(context.Background(), nodes, nil, after)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Every direction loses TCP/65535, all UDP, ICMP, and other IP protocols.
+	if got.RemovedCount != 360 || len(got.Removed) != maxAccessChanges || got.AddedCount != 0 {
+		t.Fatalf("removed count/sample = %d/%d, added = %d", got.RemovedCount, len(got.Removed), got.AddedCount)
+	}
+	for i, want := range []PortRange{
+		{First: 65535, Last: 65535, Proto: "tcp"},
+		{First: 1, Last: 65535, Proto: "udp"},
+		{Proto: "icmp"},
+		{Proto: "other"},
+	} {
+		if got.Removed[i].PortRange != want {
+			t.Fatalf("range %d = %+v, want %+v", i, got.Removed[i].PortRange, want)
+		}
+	}
+}
 
 func allowAllDoc() ACLPolicy {
 	return ACLPolicy{ACLs: []ACLRule{{Action: "accept", Src: []string{"*"}, Dst: []string{"*"}, Ports: []string{"*"}}}}

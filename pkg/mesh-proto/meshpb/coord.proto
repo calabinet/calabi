@@ -24,6 +24,8 @@ option go_package = "github.com/calabinet/calabi/pkg/mesh-proto/meshpb;meshpb";
 service Coordinator {
   // Dedicated metadata update: cannot replace service declarations or ACLs.
   // Absent info withdraws this session's file listener. Never carries file names.
+  // A machine may publish or withdraw only its own Windows listener pin.
+  rpc ReportRdpCertificate(ReportRdpCertificateRequest) returns (ReportRdpCertificateResponse);
   rpc UpdateFileTransfer(UpdateFileTransferRequest) returns (UpdateFileTransferResponse);
   // RegisterNode enrolls a node into its meshnet (= org): the coordinator
   // records its public keys, allocates an overlay IP (IPAM), and returns the
@@ -168,6 +170,8 @@ message FileTransferInfo {
   bytes certificate = 4;
   int64 expires_unix = 5;
   bytes proof = 6;
+  // Optional separate signature for accepting assistance requests on this endpoint.
+  bytes assistance_proof = 7;
 }
 message UpdateFileTransferRequest {
   string session_token = 1;
@@ -738,6 +742,9 @@ message PortRange {
 }
 
 message Peer {
+  // Relative to the recipient; asserted by coord only for two attributed devices.
+  bool same_owner = 12;
+  bytes rdp_certificate_sha256 = 13; // online, same-owner Windows only
   // Only present for a current, approved, online device's unexpired declaration.
   FileTransferInfo file_transfer = 11;
   int64 node_id = 1;
@@ -815,6 +822,12 @@ message DERPNodeTLS {
   // cutting its devices off.
   repeated string pins = 2;
 }
+
+message ReportRdpCertificateRequest {
+  string session_token = 1;
+  bytes sha256 = 2; // empty withdraws the pin
+}
+message ReportRdpCertificateResponse {}
 
 message ReportEndpointsRequest {
   int64 node_id = 1;

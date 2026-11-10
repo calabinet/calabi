@@ -250,6 +250,7 @@ type fakeCoord struct {
 	mu sync.Mutex
 	// failStreams makes that many netmap streams fail at once, as a coordinator
 	// connection dropped by the network does.
+	registerErr   error
 	failStreams   int
 	registrations int
 	pending       map[string]meshproto.RegisterChallenge
@@ -294,6 +295,9 @@ func (f *fakeCoord) RegisterNode(_ context.Context, req *meshpb.RegisterNodeRequ
 	key, err := meshproto.ParseNodeKey(req.GetNodeKey())
 	if !ok || err != nil || meshproto.OpenRegisterProof(ch, eph, key, req.GetRegisterProof()) != nil {
 		return nil, status.Error(codes.Unauthenticated, "fake: registration proof rejected")
+	}
+	if f.registerErr != nil {
+		return nil, f.registerErr
 	}
 	f.lastReg = req
 	f.registrations++

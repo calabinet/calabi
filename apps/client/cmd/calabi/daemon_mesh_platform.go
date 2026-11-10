@@ -819,6 +819,7 @@ func toStatusapiMesh(m localweb.MeshStatus) statusapi.MeshStatus {
 		PublishedRoutes:  append([]string(nil), m.PublishedRoutes...),
 		NetmapSeen:       m.NetmapSeen,
 		Datapath:         statusapi.MeshDatapath(m.Datapath),
+		EnrollmentError:  m.EnrollmentError,
 		Enabled:          m.Enabled,
 		Up:               m.Up,
 		Coord:            m.Coord,

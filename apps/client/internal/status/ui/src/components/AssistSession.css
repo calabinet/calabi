@@ -1,0 +1,13 @@
+/* The frame uses the whole WebView in full screen. Controls overlay it. */
+.assist-session { position: fixed; inset: 0; display: flex; flex-direction: column; background: #111; }
+.assist-toolbar { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 6px; background: var(--ant-color-bg-container, #181c26); z-index: 2; }
+.assist-ime { padding: 4px 8px; background: var(--ant-color-bg-container, #181c26); }
+.assist-fullscreen .assist-toolbar, .assist-fullscreen .assist-ime {
+  position: absolute; left: 50%; transform: translateX(-50%); max-width: 100%; width: max-content;
+  border-radius: 8px; transition: transform 120ms ease;
+}
+.assist-fullscreen .assist-toolbar { top: 0; transform: translate(-50%, calc(-100% + 6px)); }
+.assist-fullscreen .assist-ime { bottom: 0; width: min(440px, 90%); transform: translate(-50%, calc(100% - 6px)); }
+.assist-fullscreen .assist-toolbar:hover, .assist-fullscreen .assist-toolbar:focus-within,
+.assist-fullscreen .assist-ime:hover, .assist-fullscreen .assist-ime:focus-within { transform: translateX(-50%); }
+@media (prefers-reduced-motion: reduce) { .assist-fullscreen .assist-toolbar, .assist-fullscreen .assist-ime { transition: none; } }

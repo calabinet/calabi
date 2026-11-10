@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-remote-frame"
+description = "Enables the remote_frame command without any pre-configured scope."
+commands.allow = ["remote_frame"]
+
+[[permission]]
+identifier = "deny-remote-frame"
+description = "Denies the remote_frame command without any pre-configured scope."
+commands.deny = ["remote_frame"]

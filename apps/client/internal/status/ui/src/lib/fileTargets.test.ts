@@ -23,3 +23,15 @@ test("a reassigned IP cannot silently replace the selected device", () => {
 test("authenticated grants can populate the centre before mesh polling finishes", () => {
   assert.equal(fileTargets([], [grant("linux", "100.64.0.16")], 100)[0].key, "linux");
 });
+test("assistance and file reception use separate live capabilities", () => {
+  const deviceRow = device("windows", "100.64.0.16");
+  const entry = grant("windows", "100.64.0.16", false);
+  const assistOnly = { ...entry, grant: { ...entry.grant, assistance: true } };
+  const [target] = fileTargets([deviceRow], [assistOnly], 100);
+  assert.equal(target.status, "receivingOff");
+  assert.equal(target.assistance, true);
+  const [fileOnly] = fileTargets([deviceRow], [grant("windows", "100.64.0.16")], 100);
+  assert.equal(fileOnly.status, "ready");
+  assert.equal(fileOnly.assistance, false);
+  assert.ok(!fileTargets([deviceRow], [assistOnly], 201)[0].assistance);
+});

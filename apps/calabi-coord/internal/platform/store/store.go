@@ -95,6 +95,8 @@ func (s *Store) Upsert(ctx context.Context, n *core.Node) (*core.Node, error) {
 			// node said nothing, which is the "too old to say" state — distinct
 			// from a reported false.
 			SetNillableBlockIncoming(n.BlockIncoming).
+			SetNillableACLPortless(n.ACLPortless).
+			SetNillableACLIcmp(n.ACLICMP).
 			SetTagsPinned(n.TagsPinned).
 			SetApproved(n.Approved).
 			SetTagsJSON(tags).
@@ -138,6 +140,8 @@ func (s *Store) Upsert(ctx context.Context, n *core.Node) (*core.Node, error) {
 		// Same lesson as device_fingerprint above: a field the merge honours and
 		// the UPDATE drops can never actually change.
 		SetNillableBlockIncoming(n.BlockIncoming).
+		SetNillableACLPortless(n.ACLPortless).
+		SetNillableACLIcmp(n.ACLICMP).
 		SetTagsJSON(tags).
 		// Both decided by core.Register: an enrollment with an auth key sets who
 		// the node enrolled as and clears a sign-out; a re-registration by proof
@@ -701,6 +705,8 @@ func toNode(m *ent.MeshNode) (*core.Node, error) {
 	n.DeviceFingerprint = m.DeviceFingerprint
 	n.OS = m.Os
 	n.BlockIncoming = m.BlockIncoming
+	n.ACLPortless = &m.ACLPortless
+	n.ACLICMP = &m.ACLIcmp
 	n.TagsPinned = m.TagsPinned
 	n.Approved = m.Approved
 	n.EnrolledBy = m.EnrolledBy

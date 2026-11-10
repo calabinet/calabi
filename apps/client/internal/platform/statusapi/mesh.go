@@ -134,11 +134,12 @@ type MeshServiceDecl struct {
 // field-for-field (plus Paused) so one SPA type (api/types.ts MeshStatus) serves
 // both daemons.
 type MeshStatus struct {
-	Enabled bool   `json:"enabled"`
-	Up      bool   `json:"up"`
-	Paused  bool   `json:"paused,omitempty"` // stopped locally via MeshDown; Start re-enrolls
-	Coord   string `json:"coord,omitempty"`
-	Relay   string `json:"relay,omitempty"`
+	EnrollmentError string `json:"enrollment_error,omitempty"` // stable registration refusal code
+	Enabled         bool   `json:"enabled"`
+	Up              bool   `json:"up"`
+	Paused          bool   `json:"paused,omitempty"` // stopped locally via MeshDown; Start re-enrolls
+	Coord           string `json:"coord,omitempty"`
+	Relay           string `json:"relay,omitempty"`
 	// DerpHome is the region code this node is homed on ("self-…" = the org's own
 	// relay); Relay is the address. Lets the overview flag "中继节点：自建".
 	DerpHome string `json:"derp_home,omitempty"`

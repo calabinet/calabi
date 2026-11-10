@@ -173,6 +173,10 @@ func TestReceptionFirewallFollowsAuthenticatedLease(t *testing.T) {
 	if got := c.Handle(ctx, "userA", req); got.Error != "" {
 		t.Fatal(got.Error)
 	}
+	req.Info, _ = id.DesktopDeclaration(key, 17401, false, true)
+	if got := c.Handle(ctx, "userA", req); got.Error != "" || !c.receiving {
+		t.Fatalf("assist-only listener unavailable: %s", got.Error)
+	}
 	req.Info, _ = id.Declaration(key, 17401, false)
 	if got := c.Handle(ctx, "userA", req); got.Error != "" || c.receiving {
 		t.Fatalf("receive off failed: %s", got.Error)

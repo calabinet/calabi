@@ -143,6 +143,8 @@ var (
 		{Name: "os", Type: field.TypeString, Default: ""},
 		{Name: "block_incoming", Type: field.TypeBool, Nullable: true},
 		{Name: "tags_pinned", Type: field.TypeBool, Default: false},
+		{Name: "acl_portless", Type: field.TypeBool, Default: false},
+		{Name: "acl_icmp", Type: field.TypeBool, Default: false},
 		{Name: "tags_json", Type: field.TypeString, Default: "[]"},
 		{Name: "approved", Type: field.TypeBool, Default: true},
 		{Name: "disabled", Type: field.TypeBool, Default: false},

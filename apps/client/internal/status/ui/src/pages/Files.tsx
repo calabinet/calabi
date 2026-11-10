@@ -3,6 +3,7 @@ import { Alert, Button, Drawer, Input, Modal, Progress, Segmented, Select, Space
 import ListSearch from "../components/ListSearch";
 import { matchesListSearch } from "../lib/listSearch";
 import MeshGlyph, { deviceGlyph, fileGlyph } from "../components/MeshGlyph";
+import MeshReceptionLink, { fileReceptionState } from "../components/MeshReceptionLink";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -17,12 +18,12 @@ import FileBrowser from "./FileBrowser";
 const bytes = (n: number) => n >= 2 ** 30 ? `${(n / 2 ** 30).toFixed(2)} GiB` : n >= 2 ** 20 ? `${(n / 2 ** 20).toFixed(1)} MiB` : n >= 1024 ? `${(n / 1024).toFixed(1)} KiB` : `${n} B`;
 const percent = (offset: number, size: number) => size > 0 ? Math.min(100, Math.floor(offset * 100 / size)) : 100;
 
-export default function Files() {
+export default function Files({ blockIncoming }: { blockIncoming?: boolean }) {
   if (!hasNativeFiles()) return <FileBrowser embedded />;
-  return <FileTransfers />;
+  return <FileTransfers blockIncoming={blockIncoming} />;
 }
 
-export function FileTransfers() {
+export function FileTransfers({ blockIncoming }: { blockIncoming?: boolean }) {
   const context = useContext(FileWebContext);
   const web = context !== null || hasBrowserFiles();
   const fileAction = <T = FileSnapshot,>(a: Record<string, unknown>) => dispatchFileAction<T>(a, context?.base, context?.session);
@@ -203,7 +204,13 @@ export function FileTransfers() {
       <Input aria-label={t("files.web.filename")} value={serverSave?.name||""} onChange={e=>setServerSave(old=>old?{...old,name:e.target.value}:null)} />
     </Modal>
     <div className="files-toolbar">
-      <Space size={7}><Switch size="small" aria-label={t("files.receiving")} checked={data?.service?.receiving_requested ?? data?.receiving ?? false} disabled={(!data?.available && (!data?.service || !data.service.receiving_requested)) || busy} loading={busy} onChange={enabled => run("receiving", { enabled })} /><Typography.Text type="secondary">{t("files.receivingShort")}</Typography.Text></Space>
+      {web
+        ? <Space size={7}><Switch size="small" aria-label={t("files.receiving")} checked={data?.service?.receiving_requested ?? data?.receiving ?? false} disabled={(!data?.available && (!data?.service || !data.service.receiving_requested)) || busy} loading={busy} onChange={enabled => run("receiving", { enabled })} /><Typography.Text type="secondary">{t("files.receivingShort")}</Typography.Text></Space>
+        : data
+          ? <MeshReceptionLink kind="files" state={fileReceptionState(data, blockIncoming)} />
+          : <Typography.Text type="secondary">{t("mesh.reception.files")} · {
+            t(support.data === false || support.isError || query.isError ? "mesh.reception.unavailable" : "mesh.reception.waiting")
+          }</Typography.Text>}
       <Space wrap size="middle"><Tooltip title={t("files.settings")}><Button type="text" icon={<MeshGlyph name="settings" />} aria-label={t("files.settings")} onClick={() => setSettings(true)} /></Tooltip>
       <Button type="primary" icon={<MeshGlyph name="plus" />} disabled={!data?.available} onClick={() => setComposing(true)}>{t("files.send")}</Button>
     </Space></div>

@@ -20,8 +20,7 @@ const bytes = (n: number) => n >= 2 ** 30 ? `${(n / 2 ** 30).toFixed(2)} GiB` : 
 // Only the native receipt command is used here. This route has no console API
 // or account credentials and is useful only in the dedicated native window.
 export default function FileReceipt() {
-  const { i18n, t } = useTranslation();
-  const zh = i18n.language.startsWith("zh");
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -66,19 +65,19 @@ export default function FileReceipt() {
     finally { setBusy(false); }
   };
   return <main ref={panel} className="file-receipt">
-    <header ref={header}><span className="file-receipt-mark"><MeshGlyph name="inbox" /></span><div><strong>{zh ? "收到文件" : "Incoming files"}</strong><small>Calabi · {zh ? "文件传送" : "File transfers"}</small></div></header>
+    <header ref={header}><span className="file-receipt-mark"><MeshGlyph name="inbox" /></span><div><strong>{t("files.receipt.title")}</strong><small>Calabi · {t("files.title")}</small></div></header>
     <section className="file-receipt-list" aria-live="polite">
       <div ref={content}>
       {(error || query.error || query.data?.error) && <Alert type="error" showIcon message={t(`files.errors.${fileErrorKey(error || query.error?.message || query.data?.error || "")}`)} />}
       {query.isPending && <Spin />}
-      {!query.isPending && !query.error && !query.data?.requests.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={zh ? "没有待确认的文件" : "No pending files"} />}
+      {!query.isPending && !query.error && !query.data?.requests.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("files.emptyRequests")} />}
       {!query.error && query.data?.requests.map(request => <article key={request.stamp}>
         <div className="file-receipt-request-heading">
           <div className="file-receipt-sender"><div className="file-receipt-peer" title={request.peer}>{request.peer}</div>
-          <div className="file-receipt-meta">{request.names.length} {zh ? "个文件" : "file(s)"} · {bytes(request.bytes)}</div></div>
+          <div className="file-receipt-meta">{t("files.receipt.fileCount", { count: request.names.length })} · {bytes(request.bytes)}</div></div>
         <div className="file-receipt-actions">
-          <Button disabled={busy} onClick={() => void decide(request, false)}>{zh ? "拒绝" : "Reject"}</Button>
-          <Button type="primary" disabled={busy} onClick={() => void decide(request, true)}>{zh ? "接收" : "Accept"}</Button>
+          <Button disabled={busy} onClick={() => void decide(request, false)}>{t("files.decline")}</Button>
+          <Button type="primary" disabled={busy} onClick={() => void decide(request, true)}>{t("files.acceptShort")}</Button>
         </div>
         </div>
         <ul>{request.names.map((name, index) => <li key={index} title={name}>{name}</li>)}</ul>

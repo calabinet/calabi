@@ -2,7 +2,7 @@ import type { FilePeer } from "../api/files";
 import type { MeshPeer } from "../api/types";
 import { peerAddresses } from "./peerAddresses.ts";
 
-export type FileTarget = { key: string; name: string; ip: string; status: "ready" | "receivingOff" | "notReady" };
+export type FileTarget = { key: string; name: string; ip: string; assistance?: boolean; status: "ready" | "receivingOff" | "notReady" };
 
 // Device identity comes from the mesh list; a live file grant only authorizes
 // sending to that same key/address. Missing grants must not hide the device.
@@ -17,7 +17,7 @@ export function fileTargets(devices: MeshPeer[], grants: FilePeer[], now = Date.
     const target = targets.get(key);
     // Never send to a newly assigned address using an old grant.
     if (target && target.ip !== peer.grant.peer.IP) continue;
-    targets.set(key, { key, name: target?.name || peer.name, ip: peer.grant.peer.IP, status: peer.grant.receiving ? "ready" : "receivingOff" });
+    targets.set(key, { key, name: target?.name || peer.name, ip: peer.grant.peer.IP, assistance: peer.grant.assistance === true, status: peer.grant.receiving ? "ready" : "receivingOff" });
   }
   return [...targets.values()];
 }

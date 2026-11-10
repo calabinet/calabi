@@ -82,6 +82,8 @@ func (MeshNode) Fields() []ent.Field {
 		field.Bool("tags_pinned").
 			Default(false).
 			Comment("an admin set the tags in the console; re-registration must not overwrite them from the auth key"),
+		field.Bool("acl_portless").Default(false),
+		field.Bool("acl_icmp").Default(false),
 		field.String("tags_json").
 			Default("[]").
 			Comment("JSON array of ACL tags resolved from the auth key"),

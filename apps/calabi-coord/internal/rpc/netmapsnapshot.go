@@ -286,7 +286,7 @@ func (s *Server) sendNetMap(stream meshpb.Coordinator_PullNetMapServer, self *co
 			out := toProtoNetMapWithPeers(nm, wire.peer)
 			out.Peers = make([]*meshpb.Peer, 0, len(peers))
 			for _, peer := range peers {
-				out.Peers = append(out.Peers, wire.peer(peer))
+				out.Peers = append(out.Peers, peerForOwner(nm.Self.OwnerUserID, peer, wire.peer(peer)))
 			}
 			s.addFileTransfers(out)
 			if mapChanged(changed) {

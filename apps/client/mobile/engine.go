@@ -80,9 +80,10 @@ type engine struct {
 	// a burst of changes is one retry.
 	kick chan struct{}
 
-	mu      sync.Mutex
-	state   string
-	lastErr string
+	mu              sync.Mutex
+	state           string
+	lastErr         string
+	enrollmentError string
 	// presented is the fingerprint the server showed instead of the trusted
 	// one, while the state is stateCertChanged.
 	presented string
@@ -147,6 +148,7 @@ func (e *engine) setState(state string, err error) {
 	defer e.mu.Unlock()
 	e.state = state
 	e.lastErr = ""
+	e.enrollmentError = mesh.EnrollmentError(err)
 	if err != nil {
 		e.lastErr = err.Error()
 	}
@@ -434,7 +436,7 @@ func (e *engine) session(ctx context.Context, enr meshenroll.Enrollment, priv me
 				e.c.rememberSelf(e.selfKey(enr.OrgID), overlay)
 				e.mu.Lock()
 				if e.ctrl == ctrl && e.state == stateConnecting {
-					e.state, e.lastErr = stateConnected, ""
+					e.state, e.lastErr, e.enrollmentError = stateConnected, "", ""
 				}
 				e.mu.Unlock()
 				return
@@ -476,9 +478,10 @@ func isDenied(err error) bool {
 
 // meshStatus is GET /v1/mesh: this phone's connection and what it can reach.
 type meshStatus struct {
-	Datapath *mesh.DatapathStats `json:"datapath,omitempty"`
-	State    string              `json:"state"`
-	Error    string              `json:"error,omitempty"`
+	EnrollmentError string              `json:"enrollment_error,omitempty"`
+	Datapath        *mesh.DatapathStats `json:"datapath,omitempty"`
+	State           string              `json:"state"`
+	Error           string              `json:"error,omitempty"`
 	// Name is the name this phone joined with; Overlay its mesh address while
 	// connected. SelfOverlay is its address in this organization's meshnet
 	// whether or not it is connected — the org's device list includes the
@@ -526,7 +529,7 @@ type meshPeerService struct {
 func (e *engine) status() meshStatus {
 	e.mu.Lock()
 	st := meshStatus{
-		State: e.state, Error: e.lastErr,
+		State: e.state, Error: e.lastErr, EnrollmentError: e.enrollmentError,
 		Name: e.settings.DeviceName, ExitNode: e.settings.ExitNode, AcceptRoutes: e.settings.AcceptRoutes,
 		Relay: e.enr.RelayAddr, Peers: []meshPeer{},
 	}

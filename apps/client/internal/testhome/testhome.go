@@ -28,12 +28,12 @@ import (
 // dirVars maps each variable a per-user directory resolves from to its place
 // in the sandbox.
 var dirVars = map[string]string{
-	"LOCALAPPDATA":    "localappdata", // Windows: creds.DataDir, logs, os.UserCacheDir
-	"APPDATA":         "appdata",      // Windows: os.UserConfigDir
-	"USERPROFILE":     "home",         // Windows: os.UserHomeDir
-	"HOME":            "home",         // Unix: ~/.config, ~/.cache, ~/Library
-	"XDG_CONFIG_HOME": "xdg-config",   // Linux: creds.DataDir, os.UserConfigDir
-	"XDG_CACHE_HOME":  "xdg-cache",    // Linux: os.UserCacheDir
+	"LOCALAPPDATA":    "localappdata",         // Windows: creds.DataDir, logs, os.UserCacheDir
+	"APPDATA":         "home/AppData/Roaming", // Windows: os.UserConfigDir and PowerShell profile directories
+	"USERPROFILE":     "home",                 // Windows: os.UserHomeDir
+	"HOME":            "home",                 // Unix: ~/.config, ~/.cache, ~/Library
+	"XDG_CONFIG_HOME": "xdg-config",           // Linux: creds.DataDir, os.UserConfigDir
+	"XDG_CACHE_HOME":  "xdg-cache",            // Linux: os.UserCacheDir
 }
 
 // clearedVars override the data dir or a data file outright. Inherited from the
@@ -118,7 +118,7 @@ func writtenUnder(root string) ([]string, error) {
 		if err != nil {
 			return err
 		}
-		if rel == "." || created[rel] {
+		if rel == "." || (d.IsDir() && created[filepath.ToSlash(rel)]) {
 			return nil
 		}
 		if d.IsDir() {
