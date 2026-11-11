@@ -12,10 +12,12 @@ verification instructions on the releases page, but no written changelog.
 
 ## 2.7.0 — 2026-11-10
 
-### Local console
+### Desktop client (Windows and macOS)
 
-- **Added** — Connect to your own Windows desktop from Calabi on Windows or macOS. Choose a recent device to reconnect and optionally save its login credentials on this computer.
-- **Added** — Open an SSH terminal for a Linux device from the desktop client. Use the SFTP panel to upload, download, and manage remote files.
+Install the Calabi desktop app for Windows or macOS to use the features below. Remote assistance lets you help another user on a Windows PC running the Calabi desktop app. They approve screen sharing and grant keyboard and mouse control separately.
+
+- **Added** — Sign in to your own Windows desktop. Choose a recent device to reconnect and optionally save its login credentials on this computer.
+- **Added** — Open an SSH terminal for a Linux device. Use the SFTP panel to upload, download, and manage remote files.
 - **Added** — Switch between SSH and remote desktop sessions in a shared workspace.
 - **Changed** — Windows remote desktop sessions use native rendering by default, with Canvas as a fallback. On Windows, the main Calabi window stays visible while the remote login dialog is open.
 - **Changed** — The device and file transfer pages link to their respective switches in the local receiving settings. Assistance and file reception take effect immediately. Inbound connection and subnet settings take effect on save.
