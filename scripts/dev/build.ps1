@@ -20,7 +20,7 @@ try {
         $Command=[string]$forward[0]
         $nativeArgs=@();if($forward.Count -gt 1){$nativeArgs=@($forward[1..($forward.Count-1)])}
         if ($Command -eq 'git-bash') {
-            $git=(Get-Command git.exe -ErrorAction Stop).Source
+            $git=(Get-Command git.exe -ErrorAction Stop | Select-Object -First 1).Source
             $directory=Split-Path $git -Parent
             $Command=$null
             while($directory) {
@@ -30,7 +30,7 @@ try {
             }
             if(-not $Command){throw 'Cannot locate Git for Windows bash.exe; WSL bash is not supported by this Windows guard'}
         }
-        $application=Get-Command $Command -CommandType Application -ErrorAction Stop
+        $application=Get-Command $Command -CommandType Application -ErrorAction Stop | Select-Object -First 1
         if ($PSVersionTable.PSVersion.Major -lt 7 -and $application.Source -match '\.exe$') {
             # 5.1's native invocation drops embedded quotes. Use the Windows CRT
             # quoting rules. Read both streams asynchronously to avoid deadlocks;
