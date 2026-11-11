@@ -241,16 +241,12 @@ was published — see [the README](README.md#releases-and-checking-them-yourself
 
 ## The Android app and the desktop shell
 
-Neither is built by CI; build them by hand when you change them.
+These applications have independent repositories, versions and Windows build CI:
 
-- **Android** — JDK 17, Android SDK platform 35, NDK r27, gomobile. The Go core
-  becomes an `.aar` via `scripts/mobile/build-core-android.ps1`, then Gradle
-  builds the app. See
-  [apps/client-android/README.md](apps/client-android/README.md).
-- **Desktop shell** — Rust and the platform WebView; `cargo tauri build`. See
-  [apps/client-desktop/README.md](apps/client-desktop/README.md).
+- [Calabi for Android](https://github.com/calabinet/calabi-android) — Kotlin/Gradle and a gomobile AAR built from a fixed public core commit.
+- [Calabi Desktop](https://github.com/calabinet/calabi-desktop) — Tauri, native remote components and a daemon built from a fixed public core commit.
 
-The Go code both of them run is `apps/client`, which CI does cover.
+Use each repository's root README and `core-source.json` for the exact source and toolchain. The shared Go core and mobile interface stay in this repository. This repository's CI covers the core on Linux, macOS and Windows; native macOS application packaging is verified separately.
 
 ## Questions
 

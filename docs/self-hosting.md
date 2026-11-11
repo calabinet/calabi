@@ -31,8 +31,10 @@ switched off on a device while its endpoints keep running.
 ```
 
 A self-hosted server needs no account and connects to no service of ours. The
-Android app (`apps/client-android`) and the client's console join it too — see
+[Android app](https://github.com/calabinet/calabi-android) and the client's console join it too — see
 [Phones and the desktop console](#phones-and-the-desktop-console).
+
+Official clients keep their own core or desktop product update channel when joining a self-hosted server. The self-hosted daemon does not send platform update reports or load an organization update policy.
 
 ## Contents
 
