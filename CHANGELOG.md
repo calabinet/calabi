@@ -10,11 +10,28 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
-## 2.8.0 (unreleased)
+## 2.8.0 — 2026-11-11
 
-- Added: Separate desktop product and running core versions in the local console, with version labels in ten languages.
-- Changed: Core update checks use their own channel and state; desktop package updates retain the existing desktop channel.
-- Changed: Desktop and Android applications have independent public source repositories and release versions; the shared Go core remains here.
+## Changes
+
+- **Added:** Product-aware update and version diagnostics for the local console and shared mobile interface. Version labels are available in ten languages.
+- **Added:** Update checks in self-hosted mode, with local configuration and no platform update reporting.
+- **Changed:** Core updates use a dedicated channel and update state. Desktop package updates retain their existing channel and policy history.
+- **Changed:** Desktop and Android applications have independent repositories and release versions. The shared daemon, local browser console, mobile core, edge and coordinator sources remain in this core repository.
+- **Fixed:** Desktop update requests select the desktop updater consistently. An unavailable desktop updater no longer falls back to updating the core.
+
+## Packages and upgrades
+
+This core release contains CLI/daemon, edge and coordinator archives for Windows x64/ARM64, macOS Intel/Apple Silicon, and Linux amd64/arm64/armv7. Native desktop installers and the Android APK are published separately as version 3.0.0.
+
+The local browser console reports the running core version, 2.8.0. A daemon owned by a desktop installation is upgraded with that desktop package. Package-manager installations continue to use their package manager. Existing standalone Linux installations can upgrade through their established installation method before using the new core update channel.
+
+## Verify downloads
+
+Verify the client archives with SHA256SUMS, edge archives with SHA256SUMS.edge, and coordinator archives with SHA256SUMS.coord. The signed build-manifest.json records the public source commit, toolchain, production public CA and every archive and binary hash. Compare binary hashes when reproducing a build; archive timestamps can change archive hashes.
+
+Source repository: https://github.com/calabinet/calabi
+Source commit: `26260f97adebe7e38ca10daf8a35bb412128832a`.
 
 ## 2.7.0 — 2026-11-10
 
