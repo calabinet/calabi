@@ -10,6 +10,12 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## 2.8.0 (unreleased)
+
+- Added: Separate desktop product and running core versions in the local console, with version labels in ten languages.
+- Changed: Core update checks use their own channel and state; desktop package updates retain the existing desktop channel.
+- Changed: Desktop and Android applications have independent public source repositories and release versions; the shared Go core remains here.
+
 ## 2.7.0 — 2026-11-10
 
 ### Desktop client (Windows and macOS)

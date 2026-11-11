@@ -1,3 +1,4 @@
+const updatePath = (path: string) => path + ("__TAURI_INTERNALS__" in window ? "?product=desktop" : "");
 import i18n from "../i18n";
 import { revokeUserFiles } from "./files";
 import { formatError } from "./userError";
@@ -514,7 +515,7 @@ export const api = {
   // updates disabled, or any client older than the endpoint (all 404). Callers
   // render nothing rather than an error — "we don't know" is not a failure.
   updateInfo: async (): Promise<UpdateInfo | null> => {
-    const r = await fetchResponse("/v1/update");
+    const r = await fetchResponse(updatePath("/v1/update"));
     if (r.status === 404) return null;
     return jsonOrThrow<UpdateInfo>(r);
   },
@@ -522,7 +523,7 @@ export const api = {
   // updateCheck re-checks now. A failed check answers 502 WITH the snapshot, so
   // the card can keep showing the last known version next to the error.
   updateCheck: async (): Promise<UpdateInfo> => {
-    const r = await writeRequest("POST", "/v1/update/check");
+    const r = await writeRequest("POST", updatePath("/v1/update/check"));
     if (r.status === 502) return (await r.json()) as UpdateInfo;
     return jsonOrThrow<UpdateInfo>(r);
   },
@@ -531,13 +532,13 @@ export const api = {
   // only what changed. Returns the fresh snapshot, already re-decided against
   // the new policy.
   setUpdatePolicy: async (body: Partial<UpdatePolicy>): Promise<UpdateInfo> =>
-    jsonOrThrow<UpdateInfo>(await writeRequest("PUT", "/v1/update/policy", body)),
+    jsonOrThrow<UpdateInfo>(await writeRequest("PUT", updatePath("/v1/update/policy"), body)),
 
   // updateApply installs it. 409 = this machine cannot (see reason); the body is
   // still the snapshot. The daemon restarts itself on success, so the request
   // may simply never come back — the caller must not treat that as a failure.
   updateApply: async (): Promise<UpdateInfo> =>
-    jsonOrThrow<UpdateInfo>(await writeRequest("POST", "/v1/update/apply")),
+    jsonOrThrow<UpdateInfo>(await writeRequest("POST", updatePath("/v1/update/apply"))),
 
   // ---- remote access: the console's unlock secret --------------------------
 

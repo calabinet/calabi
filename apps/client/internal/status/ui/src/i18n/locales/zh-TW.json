@@ -1418,5 +1418,12 @@
   },
   "errorDiagnostics": {
     "details": "技術詳細資料（疑難排解用）"
-  }
+  },
+  "product": {
+    "desktopVersion": "桌面版版本",
+    "androidVersion": "Android 版本",
+    "coreVersion": "執行中的核心版本",
+    "bundledCore": "隨附核心版本",
+    "coreCommit": "隨附核心提交"
+}
 }

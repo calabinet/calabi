@@ -1418,5 +1418,12 @@
   },
   "errorDiagnostics": {
     "details": "技術的な詳細（トラブルシューティング用）"
-  }
+  },
+  "product": {
+    "desktopVersion": "デスクトップ版バージョン",
+    "androidVersion": "Android 版バージョン",
+    "coreVersion": "実行中のコアバージョン",
+    "bundledCore": "同梱コアバージョン",
+    "coreCommit": "同梱コアコミット"
+}
 }

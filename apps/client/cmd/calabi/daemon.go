@@ -435,12 +435,18 @@ func runPlatformDaemon(args []string) int {
 	// Assigned through a nil check ON PURPOSE. A typed nil pointer stored in an
 	// interface field is NOT == nil, so `Update: updateAgent` would make the
 	// handlers believe an agent exists and then call through it.
+	desktopAgent := newDesktopUpdateAgent(logger, bffConsoleURL, func() bool { return traffic.busy(time.Now()) })
+	var desktopSrc statusapi.UpdateSource
+	if desktopAgent != nil {
+		desktopSrc = desktopAgent
+	}
 	var updateSrc statusapi.UpdateSource
 	if updateAgent != nil {
 		updateSrc = updateAgent
 	}
 	apiServer := statusapi.New(logger, statusapi.Config{
 		Update:        updateSrc,
+		DesktopUpdate: desktopSrc,
 		BFFConsoleURL: bffConsoleURL,
 		ConsoleWebURL: consoleWebURL,
 		AgentMode:     agentMode,
@@ -496,6 +502,9 @@ func runPlatformDaemon(args []string) int {
 			// A different account may belong to an org with update rules.
 			if updateAgent != nil {
 				go updateAgent.RefreshOrgPolicy(context.Background())
+			}
+			if desktopAgent != nil {
+				go desktopAgent.RefreshOrgPolicy(context.Background())
 			}
 		},
 		// Same kick when the SPA flips to a different Org. The new
@@ -554,6 +563,9 @@ func runPlatformDaemon(args []string) int {
 			if updateAgent != nil {
 				go updateAgent.RefreshOrgPolicy(context.Background())
 			}
+			if desktopAgent != nil {
+				go desktopAgent.RefreshOrgPolicy(context.Background())
+			}
 		},
 		// SPA logout: same teardown shape as Org switch. The handler
 		// has already wiped the bearer + APIKey from creds, so the
@@ -579,6 +591,9 @@ func runPlatformDaemon(args []string) int {
 			// No org any more, so no org's update rules either.
 			if updateAgent != nil {
 				go updateAgent.RefreshOrgPolicy(context.Background())
+			}
+			if desktopAgent != nil {
+				go desktopAgent.RefreshOrgPolicy(context.Background())
 			}
 		},
 		// SPA dismissed the edge-switch banner — clear the state
@@ -649,8 +664,13 @@ func runPlatformDaemon(args []string) int {
 	// Self-update: poll the signed manifest. Every daemon records what it finds
 	// (the :7400 console renders it); only the machine-wide system service
 	// applies. Nil for a dev build or when updates are disabled.
-	if updateAgent != nil {
-		go updateAgent.Run(ctx, updateCheckInterval)
+	if desktopAgent != nil {
+		go desktopAgent.Run(ctx, updateCheckInterval)
+	}
+	if updateAgent != nil || desktopAgent != nil {
+		if updateAgent != nil {
+			go updateAgent.Run(ctx, updateCheckInterval)
+		}
 		// Tunnels AND mesh: a machine relaying for a peer is in use just as much
 		// as one serving a tunnel, and restarting it cuts the same transfer.
 		go traffic.run(ctx, 30*time.Second, func() int64 {

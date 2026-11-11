@@ -1418,5 +1418,12 @@
   },
   "errorDiagnostics": {
     "details": "Détails techniques (diagnostic)"
-  }
+  },
+  "product": {
+    "desktopVersion": "Version de bureau",
+    "androidVersion": "Version Android",
+    "coreVersion": "Version du cœur actif",
+    "bundledCore": "Version du cœur inclus",
+    "coreCommit": "Commit du cœur inclus"
+}
 }

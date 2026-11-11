@@ -25,6 +25,7 @@ import {
 import type { UploadFile } from "antd";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { useProductInfo } from "../hooks/use-product-info";
 import { api } from "../api/client";
 import { UpdatePanel, useUpdateInfo } from "../components/UpdateNotice";
 import { SelfHostedCard } from "../components/SelfHosted";
@@ -36,6 +37,7 @@ import { useTranslation } from "react-i18next";
 const { Title, Text, Paragraph } = Typography;
 
 export default function Settings() {
+  const product = useProductInfo();
   const { t } = useTranslation();
   const [importOpen, setImportOpen] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
@@ -48,6 +50,7 @@ export default function Settings() {
   const { data: health } = useQuery<Healthz>({
     queryKey: ["healthz"],
     queryFn: api.healthz,
+    refetchInterval: 10_000,
   });
 
   const logout = useLogout();
@@ -123,8 +126,13 @@ export default function Settings() {
 
       <Card title={t("settings.daemonCard")} size="small">
         <Space direction="vertical" size={4} style={{ width: "100%" }}>
+          {product.desktop && <>
+            <div><Text type="secondary">{t("product.desktopVersion")}</Text>{" "}<code>{product.info?.version || "—"}</code></div>
+            <div><Text type="secondary">{t("product.bundledCore")}</Text>{" "}<code>{product.info?.bundled_core_version || "—"}</code></div>
+            <div><Text type="secondary">{t("product.coreCommit")}</Text>{" "}<code>{product.info?.bundled_core_commit || "—"}</code></div>
+          </>}
           <div>
-            <Text type="secondary">{t("settings.clientVersion")}</Text>{" "}
+            <Text type="secondary">{t("product.coreVersion")}</Text>{" "}
             <code>{health?.version || "—"}</code>
           </div>
           <div>

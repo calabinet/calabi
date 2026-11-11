@@ -84,7 +84,8 @@ type Config struct {
 	// check/apply buttons. Nil = the endpoints 404 and the console shows no
 	// version card — a dev build, updates disabled, or any client older than
 	// this.
-	Update UpdateSource
+	Update        UpdateSource
+	DesktopUpdate UpdateSource
 	// LocalAddrFor returns the local_addr for a given proxy_id (used
 	// by the replay endpoint to know where to POST). Nil disables replay.
 	LocalAddrFor func(proxyID string) string
@@ -324,10 +325,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	// NOT agentBlock'd: updating the machine is a machine operation, not an
 	// identity one, and an unattended agent install is exactly the population
 	// that most needs a way to be updated on purpose.
-	mux.HandleFunc("GET /v1/update", s.handleUpdateGet)
-	mux.HandleFunc("POST /v1/update/check", s.requireLocalToken(s.handleUpdateCheck))
-	mux.HandleFunc("POST /v1/update/apply", s.requireLocalToken(s.handleUpdateApply))
-	mux.HandleFunc("PUT /v1/update/policy", s.requireLocalToken(s.handleUpdatePolicy))
+	s.RegisterUpdates(mux)
 	mux.HandleFunc("GET /v1/inspect/connections", s.handleInspectConnections)
 	mux.HandleFunc("GET /v1/inspect/captures", s.handleInspectCaptures)
 	mux.HandleFunc("POST /v1/inspect/replay", s.requireLocalToken(s.handleInspectReplay))

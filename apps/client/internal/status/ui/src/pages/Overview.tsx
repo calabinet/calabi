@@ -14,6 +14,7 @@ import {
 } from "antd";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { useProductInfo } from "../hooks/use-product-info";
 import { api } from "../api/client";
 import type {
   AccountMe,
@@ -99,6 +100,7 @@ const infoTag: React.CSSProperties = {
 };
 
 export default function Overview() {
+  const product = useProductInfo();
   const { t } = useTranslation();
 
   const { data: snap, dataUpdatedAt: snapAt } = useQuery<Snapshot>({
@@ -635,12 +637,12 @@ export default function Overview() {
           >
             <Row gutter={[12, 8]}>
               <Col span={24}>
-                <Text type="secondary" style={infoLabel}>{t("overview.clientVersion")}</Text>
+                <Text type="secondary" style={infoLabel}>{t(product.desktop ? "product.desktopVersion" : "product.coreVersion")}</Text>
                 {/* A signal, not a control: this card is 320px and a button here
                     could not explain itself on a machine that cannot self-install.
                     The controls live in Settings. */}
                 <div>
-                  <code style={{ fontSize: 12 }}>{snap?.client_version || "—"}</code>
+                  <code style={{ fontSize: 12 }}>{(product.desktop ? product.info?.version : health?.version || snap?.client_version) || "—"}</code>
                   <UpdateTag />
                 </div>
               </Col>

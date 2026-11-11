@@ -73,8 +73,7 @@ Calabi 做两件事，都跑在你自己的服务器上：
 数据面：`calabi` 客户端、`calabi-edge` 数据节点、`calabi-coord` 协调器。
 在自己的机器上跑端点和组网所需要的东西，这里都有。自建时不需要账号，也不连我们的任何服务。
 
-仓库里还有 Android App：用邀请加入你自己的服务器，或者登录 calabi.net、加入那个
-组织的组网。
+桌面版与 Android 分别在 [calabi-desktop](https://github.com/calabinet/calabi-desktop) 和 [calabi-android](https://github.com/calabinet/calabi-android) 维护，使用独立版本和 Release。
 
 托管平台 [calabi.net](https://calabi.net) 跑的是同一份数据面，在它外面加上控制面：
 账号与组织、托管在多个地域的边缘节点、团队权限、用量与计费，以及网页控制台。
@@ -89,7 +88,7 @@ Calabi 做两件事，都跑在你自己的服务器上：
 
 ---
 
-## 三个程序和一个 Android App
+## 核心组件与应用
 
 | 组件 | 是什么 | 跑在哪 |
 |---|---|---|
@@ -101,8 +100,7 @@ Calabi 做两件事，都跑在你自己的服务器上：
 三个程序都是纯 Go、`CGO_ENABLED=0`、无运行时依赖。`calabi-coord` 和 `calabi-edge` 合起来是你的
 服务器，客户端跑在每台设备上。
 
-Android App（`apps/client-android`）是 Kotlin 写的界面，里面是同一份 Go 客户端代码，
-用 gomobile 绑定进来（`apps/client/mobile`）。
+Android App 是 Kotlin 界面，通过 gomobile 绑定这里的共享移动核心接口（`apps/client/mobile`）。桌面版和 Android 分别在 [calabi-desktop](https://github.com/calabinet/calabi-desktop) 和 [calabi-android](https://github.com/calabinet/calabi-android) 发布，并固定依赖核心提交。
 
 ---
 
@@ -189,12 +187,9 @@ make build          # → bin/calabi, bin/calabi-edge, bin/calabi-coord
 Docker 镜像：`calabinet/calabi`、`calabinet/calabi-edge`、`calabinet/calabi-coord`。它们都从这个仓库
 编译，见[下文](#发布产物以及怎么自己验证它)。
 
-### Android App
+### 桌面版与 Android
 
-需要 JDK 17、Android SDK（platform 35）和 NDK r27，以及 gomobile。先用
-`scripts/mobile/build-core-android.ps1`（PowerShell 脚本，按 Windows 写的）把 Go 核心编成
-`.aar`，再用 Gradle 编 App。步骤见
-[apps/client-android/README.md](apps/client-android/README.md)。
+构建和安装说明分别见 [桌面仓](https://github.com/calabinet/calabi-desktop) 和 [Android 仓](https://github.com/calabinet/calabi-android)。它们拥有独立版本和 Release；核心的移动接口仍在本仓。
 
 ---
 
@@ -249,16 +244,9 @@ bash scripts/verify-reproducible-build.sh build-manifest.json
 
 它比对的是二进制，不是压缩包（[为什么](#为什么比对二进制而不是压缩包)）。下载的压缩包用 `SHA256SUMS` 校验。
 
-**manifest 没覆盖的**（manifest 里也列着）：
+**manifest 没覆盖的**：Docker 镜像层，以及直接提交进本仓库的本地控制台前端包和 `wintun.dll`。对应二进制或源码仍由 manifest 的公开提交固定。
 
-- Windows 安装包和 macOS `.pkg`（用 Rust 和 Tauri 构建）；
-- Docker 镜像；
-- 两个直接提交进仓库、不在这里编译的文件：本地控制台编译好的前端包，和 `wintun.dll`；
-- Android APK（[为什么](#为什么-android-apk-不可复现)）。每个版本的发布说明里都印着它的签名证书，安装前可以核对：
-
-```bash
-apksigner verify --print-certs calabi-android.apk
-```
+桌面安装包和 Android APK 在各自产品仓独立发布，使用各自的版本、校验和与来源记录；APK 签名证书的核对方法见 [Android 仓](https://github.com/calabinet/calabi-android)。
 
 ---
 
@@ -284,7 +272,7 @@ apksigner verify --print-certs calabi-android.apk
 
 ## 参与贡献
 
-欢迎给边缘节点、客户端、协调器、本地控制台和 Android App 提 issue 和补丁。每个 commit 都要带
+欢迎给边缘节点、客户端、协调器和本地控制台提 issue 和补丁。桌面与 Android 应用的改动请提交到对应产品仓。每个 commit 都要带
 **DCO** 签名（开发者原创声明），不需要签 CLA：
 
 ```bash

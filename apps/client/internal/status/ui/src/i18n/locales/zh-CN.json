@@ -1244,5 +1244,12 @@
   },
   "errorDiagnostics": {
     "details": "技术详情（用于排查问题）"
-  }
+  },
+  "product": {
+    "desktopVersion": "桌面版版本",
+    "androidVersion": "Android 版本",
+    "coreVersion": "运行核心版本",
+    "bundledCore": "随包核心版本",
+    "coreCommit": "随包核心提交"
+}
 }

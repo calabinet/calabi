@@ -1,8 +1,0 @@
-{
-  "identifier": "ssh-session",
-  "description": "The remote workspace may manage its sessions and exchange data with their OpenSSH processes.",
-  "windows": ["ssh-session-workspace"],
-  "platforms": ["windows", "macOS"],
-  "remote": { "urls": ["http://127.0.0.1:*"] },
-  "permissions": ["allow-ssh-session", "allow-ssh-read", "allow-remote-workspace", "allow-remote-frame"]
-}

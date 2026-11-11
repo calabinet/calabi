@@ -1244,5 +1244,12 @@
   },
   "errorDiagnostics": {
     "details": "Technical details (for troubleshooting)"
-  }
+  },
+  "product": {
+    "desktopVersion": "Desktop version",
+    "androidVersion": "Android version",
+    "coreVersion": "Running core version",
+    "bundledCore": "Bundled core version",
+    "coreCommit": "Bundled core commit"
+}
 }

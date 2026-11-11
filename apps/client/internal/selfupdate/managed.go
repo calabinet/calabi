@@ -80,3 +80,14 @@ func siblingOf(exe, name string) string {
 	}
 	return exe[:i+1] + name
 }
+
+// DesktopManaged reports whether this is the daemon owned by the desktop installer.
+func DesktopManaged() bool {
+	if runtime.GOOS != "windows" && runtime.GOOS != "darwin" {
+		return false
+	}
+	return (&Updater{}).installerManaged()
+}
+
+// CoreManaged reports whether the core updater can replace this installation.
+func CoreManaged() bool { return (&Updater{}).installerManaged() }

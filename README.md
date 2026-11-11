@@ -75,8 +75,7 @@ The data plane: the `calabi` client, the `calabi-edge` data node, and the
 your own machines is here. Self-hosted, it needs no account and connects to no
 service of ours.
 
-It also holds the Android app, which joins your own server with an invite, or
-signs in to calabi.net and joins that organization's mesh.
+Desktop and Android applications are maintained in [calabi-desktop](https://github.com/calabinet/calabi-desktop) and [calabi-android](https://github.com/calabinet/calabi-android), with independently versioned releases.
 
 The hosted platform at [calabi.net](https://calabi.net) runs this same data
 plane and adds the control plane around it: accounts and organizations, a
@@ -92,7 +91,7 @@ a web console. That part is a separate product and is not in this repository.
 
 ---
 
-## Three binaries and an Android app
+## Core components and applications
 
 | component | what it is | where it runs |
 |---|---|---|
@@ -105,8 +104,7 @@ The three binaries are pure Go, `CGO_ENABLED=0`, no runtime dependencies.
 `calabi-coord` and `calabi-edge` together are your server; the client runs on
 each device.
 
-The Android app (`apps/client-android`) is Kotlin around the same Go client
-code, bound in with gomobile (`apps/client/mobile`).
+The Android app is Kotlin around the shared Go mobile interface (`apps/client/mobile`), pinned to an explicit core commit.
 
 ---
 
@@ -212,12 +210,9 @@ from 1.13 — and each as a docker image: `calabinet/calabi`,
 `calabinet/calabi-edge` and `calabinet/calabi-coord`. They are built from this
 repository; see [below](#releases-and-checking-them-yourself).
 
-### The Android app
+### Desktop and Android applications
 
-Needs JDK 17, the Android SDK (platform 35) with NDK r27, and gomobile. The Go
-core is built into an `.aar` by `scripts/mobile/build-core-android.ps1`
-(PowerShell, written for Windows), then the app by Gradle. Steps are in
-[apps/client-android/README.md](apps/client-android/README.md).
+Build and installation instructions live in [calabi-desktop](https://github.com/calabinet/calabi-desktop) and [calabi-android](https://github.com/calabinet/calabi-android). Each application has its own version and releases and pins its shared core dependency to a complete public commit.
 
 ---
 
@@ -284,19 +279,9 @@ It compares binaries, not archives
 ([why](#why-compare-binaries-and-not-the-archives)). To check a downloaded
 archive, use `SHA256SUMS`.
 
-**Not covered by the manifest** (the manifest lists them too):
+**Not covered by the manifest**: Docker image layers and the local console bundle and `wintun.dll` committed to this repository. The public source commit still fixes the corresponding binaries and source.
 
-- the Windows installer and the macOS `.pkg` (built with Rust and Tauri);
-- the docker images;
-- two files committed here rather than built: the local console's compiled web
-  bundle and `wintun.dll`;
-- the Android APK ([why](#why-is-the-android-apk-not-reproducible)). Each
-  release's notes print the certificate it is signed with; check it before
-  installing:
-
-```bash
-apksigner verify --print-certs calabi-android.apk
-```
+Desktop installers and Android APKs are released independently in their product repositories, with separate versions, checksums and provenance. See [Calabi for Android](https://github.com/calabinet/calabi-android) for APK certificate verification.
 
 ---
 
@@ -327,8 +312,8 @@ another directory gives a different library.
 
 ## Contributing
 
-Issues and patches to the edge, the client, the coordinator, the local console
-and the Android app are welcome. Every commit needs a **DCO** sign-off (Developer
+Issues and patches to the edge, the client, the coordinator and the local console
+are welcome. Desktop and Android application changes belong in their product repositories. Every commit needs a **DCO** sign-off (Developer
 Certificate of Origin); there is no CLA:
 
 ```bash

@@ -25,23 +25,25 @@ type UpdateSource interface {
 
 // handleUpdateGet reports the last check. Never touches the network: the SPA
 // polls this alongside everything else on the overview.
-func (s *Server) handleUpdateGet(w http.ResponseWriter, _ *http.Request) {
-	if s.cfg.Update == nil {
+func (s *Server) handleUpdateGet(w http.ResponseWriter, r *http.Request) {
+	source := s.updateSource(r)
+	if source == nil {
 		writeError(w, http.StatusNotFound, "self-update is not configured on this daemon")
 		return
 	}
-	writeJSON(w, http.StatusOK, s.cfg.Update.Snapshot())
+	writeJSON(w, http.StatusOK, source.Snapshot())
 }
 
 // handleUpdateCheck re-checks now. The body is the same snapshot shape either
 // way — 200 when the check ran, 502 when it could not — so the console can
 // render the card from one response instead of following up with a GET.
 func (s *Server) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
-	if s.cfg.Update == nil {
+	source := s.updateSource(r)
+	if source == nil {
 		writeError(w, http.StatusNotFound, "self-update is not configured on this daemon")
 		return
 	}
-	snap, err := s.cfg.Update.Check(r.Context())
+	snap, err := source.Check(r.Context())
 	switch {
 	case errors.Is(err, selfupdate.ErrBusy):
 		writeError(w, http.StatusConflict, err.Error())
@@ -60,21 +62,22 @@ func (s *Server) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
 // published) and the console turns it into "请手动更新" with a download link.
 // Returning 500 would make a correct, expected state look like a malfunction.
 func (s *Server) handleUpdateApply(w http.ResponseWriter, r *http.Request) {
-	if s.cfg.Update == nil {
+	source := s.updateSource(r)
+	if source == nil {
 		writeError(w, http.StatusNotFound, "self-update is not configured on this daemon")
 		return
 	}
 	// Deliberately NOT r.Context(): the installer stops and restarts this very
 	// service, so the browser's connection dies partway through by design. Tying
 	// the apply to the request would cancel it the moment that happens.
-	err := s.cfg.Update.Apply(context.WithoutCancel(r.Context()))
+	err := source.Apply(context.WithoutCancel(r.Context()))
 	switch {
 	case errors.Is(err, selfupdate.ErrCannotApply), errors.Is(err, selfupdate.ErrBusy):
-		writeJSON(w, http.StatusConflict, s.cfg.Update.Snapshot())
+		writeJSON(w, http.StatusConflict, source.Snapshot())
 	case err != nil:
-		writeJSON(w, http.StatusBadGateway, s.cfg.Update.Snapshot())
+		writeJSON(w, http.StatusBadGateway, source.Snapshot())
 	default:
-		writeJSON(w, http.StatusOK, s.cfg.Update.Snapshot())
+		writeJSON(w, http.StatusOK, source.Snapshot())
 	}
 }
 
@@ -91,7 +94,8 @@ func (s *Server) handleUpdateApply(w http.ResponseWriter, r *http.Request) {
 // "never check again" is how a fleet ends up permanently on a version with a
 // known hole. The mode switch decides who INSTALLS, not whether we look.
 func (s *Server) handleUpdatePolicy(w http.ResponseWriter, r *http.Request) {
-	if s.cfg.Update == nil {
+	source := s.updateSource(r)
+	if source == nil {
 		writeError(w, http.StatusNotFound, "self-update is not configured on this daemon")
 		return
 	}
@@ -110,7 +114,7 @@ func (s *Server) handleUpdatePolicy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "parse: "+err.Error())
 		return
 	}
-	p := s.cfg.Update.Policy()
+	p := source.Policy()
 	if in.Mode != nil {
 		p.Mode = *in.Mode
 	}
@@ -123,7 +127,7 @@ func (s *Server) handleUpdatePolicy(w http.ResponseWriter, r *http.Request) {
 	if in.MaxDeferDays != nil {
 		p.MaxDeferDays = *in.MaxDeferDays
 	}
-	snap, err := s.cfg.Update.SetPolicy(p)
+	snap, err := source.SetPolicy(p)
 	if err != nil {
 		// Validation rejects rather than repairs: a 400 naming the problem beats
 		// quietly storing something the caller did not ask for.
@@ -131,4 +135,19 @@ func (s *Server) handleUpdatePolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, snap)
+}
+
+func (s *Server) updateSource(r *http.Request) UpdateSource {
+	if r.URL.Query().Get("product") == "desktop" {
+		return s.cfg.DesktopUpdate
+	}
+	return s.cfg.Update
+}
+
+// RegisterUpdates also serves the standalone daemon without registering platform APIs.
+func (s *Server) RegisterUpdates(mux *http.ServeMux) {
+	mux.HandleFunc("GET /v1/update", s.handleUpdateGet)
+	mux.HandleFunc("POST /v1/update/check", s.requireLocalToken(s.handleUpdateCheck))
+	mux.HandleFunc("POST /v1/update/apply", s.requireLocalToken(s.handleUpdateApply))
+	mux.HandleFunc("PUT /v1/update/policy", s.requireLocalToken(s.handleUpdatePolicy))
 }

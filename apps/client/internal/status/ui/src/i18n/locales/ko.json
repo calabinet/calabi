@@ -1418,5 +1418,12 @@
   },
   "errorDiagnostics": {
     "details": "기술 세부 정보 (문제 해결용)"
-  }
+  },
+  "product": {
+    "desktopVersion": "데스크톱 버전",
+    "androidVersion": "Android 버전",
+    "coreVersion": "실행 중인 코어 버전",
+    "bundledCore": "포함된 코어 버전",
+    "coreCommit": "포함된 코어 커밋"
+}
 }

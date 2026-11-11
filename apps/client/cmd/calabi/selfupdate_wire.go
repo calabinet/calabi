@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/base64"
 	"fmt"
@@ -25,7 +26,11 @@ const updatePubKeyB64 = "+Un1Ssse7lflEeEPsr382+j7WduOrY8K7f4xZPMZ5fs="
 // defaultUpdateManifest is the signed update manifest URL. Overridable via
 // -ldflags "-X main.defaultUpdateManifest=…" or $CALABI_UPDATE_MANIFEST; empty
 // ⇒ disabled.
-var defaultUpdateManifest = "https://download.calabi.net/desktop/latest.json"
+var defaultUpdateManifest = "https://download.calabi.net/core/latest.json"
+
+// Set only on daemons built for a desktop installer. It is not the core version.
+var desktopProductVersion = ""
+var desktopUpdateManifest = "https://download.calabi.net/desktop/latest.json"
 
 const updateCheckInterval = 6 * time.Hour
 
@@ -52,7 +57,23 @@ const updateCheckInterval = 6 * time.Hour
 // "older" than a release, so the check could only ever be a pointless request to
 // the CDN from every developer's machine.
 func newUpdateAgent(logger *slog.Logger, version, bffConsoleURL string, busy func() bool) *selfupdate.Agent {
+	return newProductUpdateAgent(logger, version, bffConsoleURL, busy, false)
+}
+
+func newDesktopUpdateAgent(logger *slog.Logger, bffConsoleURL string, busy func() bool) *selfupdate.Agent {
+	if desktopProductVersion == "" || !selfupdate.DesktopManaged() {
+		return nil
+	}
+	return newProductUpdateAgent(logger, desktopProductVersion, bffConsoleURL, busy, true)
+}
+
+func newProductUpdateAgent(logger *slog.Logger, version, bffConsoleURL string, busy func() bool, desktop bool) *selfupdate.Agent {
 	manifest := envOr("CALABI_UPDATE_MANIFEST", defaultUpdateManifest)
+	stateDir := "updates-core"
+	if desktop {
+		manifest = envOr("CALABI_DESKTOP_UPDATE_MANIFEST", desktopUpdateManifest)
+		stateDir = "updates" // retain the old desktop rollback floor and policy
+	}
 	if manifest == "" || updatePubKeyB64 == "" {
 		return nil
 	}
@@ -78,16 +99,30 @@ func newUpdateAgent(logger *slog.Logger, version, bffConsoleURL string, busy fun
 		ManifestURL:    manifest,
 		CurrentVersion: version,
 		PubKey:         ed25519.PublicKey(pub),
-		DownloadDir:    filepath.Join(dir, "updates"),
+		DownloadDir:    filepath.Join(dir, stateDir),
 		Privileged:     privileged,
-		Container:      container,
-		Logf:           func(f string, a ...any) { logger.Info(fmt.Sprintf(f, a...)) },
+		Managed: func() bool {
+			if desktop {
+				return selfupdate.DesktopManaged()
+			}
+			return !selfupdate.DesktopManaged() && selfupdate.CoreManaged()
+		},
+		Container: container,
+		Logf:      func(f string, a ...any) { logger.Info(fmt.Sprintf(f, a...)) },
 		// results go to the platform this daemon is logged into.
 		Report: newUpdateReporter(bffConsoleURL),
 		// the org's requirement, merged with this machine's own setting.
 		OrgPolicy: newOrgPolicyFetcher(bffConsoleURL),
 	}
+	if bffConsoleURL == "" {
+		// Standalone installs do not report to or inherit policy from a platform.
+		u.Report = nil
+		u.OrgPolicy = func(context.Context) (*selfupdate.OrgPolicy, error) { return nil, selfupdate.ErrNoOrg }
+	}
 	agent := selfupdate.NewAgent(u, busy)
+	if bffConsoleURL == "" {
+		agent.RefreshOrgPolicy(context.Background())
+	}
 	p := agent.Policy()
 	logger.Info("selfupdate enabled",
 		"manifest", manifest, "interval", updateCheckInterval.String(),

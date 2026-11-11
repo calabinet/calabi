@@ -30,6 +30,7 @@ import (
 	"github.com/calabinet/calabi/apps/client/internal/creds"
 	"github.com/calabinet/calabi/apps/client/internal/localweb"
 	"github.com/calabinet/calabi/apps/client/internal/mesh"
+	"github.com/calabinet/calabi/apps/client/internal/platform/statusapi"
 	"github.com/calabinet/calabi/apps/client/internal/probe"
 	cruntime "github.com/calabinet/calabi/apps/client/internal/runtime"
 	"github.com/calabinet/calabi/apps/client/internal/session"
@@ -322,10 +323,23 @@ func runLocalDaemon(args []string) int {
 		Mesh:      meshL,
 		EdgeAddr:  sv.edgeAddr,
 	})
+	traffic := newTrafficWatch()
+	busy := func() bool { return traffic.busy(time.Now()) }
+	updateAgent := newUpdateAgent(logger, version, "", busy)
+	desktopAgent := newDesktopUpdateAgent(logger, "", busy)
+	updateConfig := statusapi.Config{}
+	if updateAgent != nil {
+		updateConfig.Update = updateAgent
+	}
+	if desktopAgent != nil {
+		updateConfig.DesktopUpdate = desktopAgent
+	}
+	updates := statusapi.New(logger, updateConfig)
 	ctx, cancel := withSignalContext()
 	defer cancel()
 	console, consoleDone := startDaemonConsole(ctx, logger, state, func(mux *http.ServeMux) {
 		lw.Register(mux)
+		updates.RegisterUpdates(mux)
 		mux.HandleFunc("/v1/usage/mesh", meshMeter.handleMeshUsage)
 		sh.register(mux)
 	})
@@ -341,6 +355,24 @@ func runLocalDaemon(args []string) int {
 		console = "http://" + envOr("CALABI_STATUS_ADDR", defaultStatusAddr)
 	}
 
+	if updateAgent != nil {
+		go updateAgent.Run(ctx, updateCheckInterval)
+	}
+	if desktopAgent != nil {
+		go desktopAgent.Run(ctx, updateCheckInterval)
+	}
+	if updateAgent != nil || desktopAgent != nil {
+		go traffic.run(ctx, 30*time.Second, func() int64 {
+			var total int64
+			for _, t := range state.SnapshotNow().Tunnels {
+				total += t.BytesIn + t.BytesOut
+			}
+			for _, p := range meshL.MeshStatus().Peers {
+				total += p.RxBytes + p.TxBytes
+			}
+			return total
+		})
+	}
 	go meter.run(ctx, state, 5*time.Second)
 	go meshMeter.run(ctx, func() []meshPeerBytes {
 		st := meshL.MeshStatus()

@@ -214,3 +214,54 @@ func TestUpdatePolicyPutRejectsNonsense(t *testing.T) {
 		t.Errorf("a rejected body still changed the stored policy: %+v", f.policy)
 	}
 }
+
+// The same daemon serves the native desktop and a plain browser. Product query
+// selection must affect reads, checks, policies and installs consistently.
+func TestUpdateRoutesKeepProductsSeparate(t *testing.T) {
+	tok := isolateCreds(t)
+	core := &fakeUpdate{snap: selfupdate.Snapshot{Status: selfupdate.Status{Current: "2.7.0"}}, policy: selfupdate.DefaultPolicy()}
+	desktop := &fakeUpdate{snap: selfupdate.Snapshot{Status: selfupdate.Status{Current: "3.0.0"}}, policy: selfupdate.DefaultPolicy()}
+	server := New(nil, Config{Update: core, DesktopUpdate: desktop})
+	mux := http.NewServeMux()
+	server.Register(mux)
+	for _, suffix := range []string{"", "?product=desktop"} {
+		want := "2.7.0"
+		if suffix != "" {
+			want = "3.0.0"
+		}
+		for _, op := range []struct{ method, path, body string }{
+			{"GET", "/v1/update", ""},
+			{"POST", "/v1/update/check", ""},
+			{"POST", "/v1/update/apply", ""},
+			{"PUT", "/v1/update/policy", `{"mode":"notify"}`},
+		} {
+			req := httptest.NewRequest(op.method, op.path+suffix, strings.NewReader(op.body))
+			req.Header.Set("X-Local-Token", tok)
+			rr := httptest.NewRecorder()
+			mux.ServeHTTP(rr, req)
+			if rr.Code != http.StatusOK {
+				t.Fatalf("%s %s: %d %s", op.method, req.URL, rr.Code, rr.Body.String())
+			}
+			var got selfupdate.Snapshot
+			if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.Current != want {
+				t.Fatalf("%s %s: current=%s want=%s", op.method, req.URL, got.Current, want)
+			}
+		}
+	}
+	if core.applied != 1 || desktop.applied != 1 || core.policySet != 1 || desktop.policySet != 1 {
+		t.Fatalf("cross-product mutation: core=%+v desktop=%+v", core, desktop)
+	}
+}
+
+func TestDesktopUpdateDoesNotFallBackToCore(t *testing.T) {
+	core := &fakeUpdate{snap: selfupdate.Snapshot{Status: selfupdate.Status{Current: "2.7.0"}}}
+	h := updateTestServer(t, core)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest("GET", "/v1/update?product=desktop", nil))
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("desktop without its own agent: %d %s", rr.Code, rr.Body.String())
+	}
+}

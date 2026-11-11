@@ -25,6 +25,10 @@ import (
 // connection.
 func (c *Core) routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"version": CoreVersion, "commit": CoreCommit})
+	})
 	mux.HandleFunc("GET /v1/state", c.handleState)
 	mux.HandleFunc("POST /v1/auth/login", c.handleLogin)
 	mux.HandleFunc("POST /v1/auth/logout", c.handleLogout)
