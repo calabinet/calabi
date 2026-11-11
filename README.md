@@ -103,8 +103,6 @@ The three binaries are pure Go, `CGO_ENABLED=0`, no runtime dependencies.
 `calabi-coord` and `calabi-edge` together are your server; the client runs on
 each device.
 
-The shared Go mobile interface (`apps/client/mobile`) is part of this core repository. The Kotlin application is maintained and released separately in [Calabi for Android](https://github.com/calabinet/calabi-android), which pins an explicit core commit. Native desktop applications are maintained in [Calabi Desktop](https://github.com/calabinet/calabi-desktop).
-
 ---
 
 ## Your server

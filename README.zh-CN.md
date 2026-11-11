@@ -99,8 +99,6 @@ Calabi 做两件事，都跑在你自己的服务器上：
 三个程序都是纯 Go、`CGO_ENABLED=0`、无运行时依赖。`calabi-coord` 和 `calabi-edge` 合起来是你的
 服务器，客户端跑在每台设备上。
 
-共享 Go 移动接口（`apps/client/mobile`）仍在核心仓维护。Kotlin 应用在独立的 [Calabi for Android](https://github.com/calabinet/calabi-android) 仓库维护和发布，并固定依赖核心提交；原生桌面应用在 [Calabi Desktop](https://github.com/calabinet/calabi-desktop) 维护。
-
 ---
 
 ## 你的服务器
