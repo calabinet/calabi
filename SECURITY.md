@@ -17,7 +17,7 @@ the advisory all the way to publication.
 
 - What the flaw is, and what an attacker gets from it.
 - Which component: the client (`calabi`), the edge (`calabi-edge`), the
-  coordinator (`calabi-coord`), or the Android app.
+  coordinator (`calabi-coord`), the shared mobile core, or a desktop/Android application. For an application, include its repository and product version.
 - The version (`calabi version`, `calabi-edge -version`, `calabi-coord
   -version`) or the commit.
 - Whether it applies to a self-hosted server, to `calabi.net`, or to both.
@@ -44,8 +44,10 @@ We do not run a paid bug bounty.
 ## Scope
 
 **In scope** — everything in this repository: the client and its local console,
-the edge, the coordinator, the Android app, and the release artifacts and their
+the edge, the coordinator, the shared Go mobile interface, and the core release artifacts and their
 signatures.
+
+The independently maintained [desktop application](https://github.com/calabinet/calabi-desktop) and [Android application](https://github.com/calabinet/calabi-android) are also covered by this reporting policy. Include the affected repository when reporting an application issue.
 
 **Also in scope** — the hosted platform at `calabi.net`, `console.calabi.net`,
 `*.calabi.online` and `download.calabi.net`. Its server code is not in this
@@ -62,7 +64,7 @@ server of your own ([DEVELOPMENT.md](DEVELOPMENT.md) or
 
 ## Supported versions
 
-The latest release. Fixes go into the next release from `main`; we do not
+The latest stable release of each affected product. Core, desktop and Android versions are independent. Fixes go into the next release from `main`; we do not
 backport to older lines.
 
 ## Questions

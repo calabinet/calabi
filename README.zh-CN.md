@@ -7,7 +7,7 @@
 <p align="center">
   <img alt="Go" src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go&logoColor=white">
   <img alt="WireGuard" src="https://img.shields.io/badge/WireGuard-mesh-88171A?style=flat-square&logo=wireguard&logoColor=white">
-  <img alt="Platforms" src="https://img.shields.io/badge/Linux%20%C2%B7%20macOS%20%C2%B7%20Windows%20%C2%B7%20Android-amd64%20%C2%B7%20arm64%20%C2%B7%20armv7-4c8bf5?style=flat-square">
+  <img alt="Platforms" src="https://img.shields.io/badge/Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-amd64%20%C2%B7%20arm64%20%C2%B7%20armv7-4c8bf5?style=flat-square">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-3da639?style=flat-square"></a>
   <a href="https://github.com/calabinet/calabi/releases"><img alt="Release" src="https://img.shields.io/github/v/release/calabinet/calabi?style=flat-square&color=22d3ee&label=release"></a>
 </p>
@@ -88,19 +88,18 @@ Calabi 做两件事，都跑在你自己的服务器上：
 
 ---
 
-## 核心组件与应用
+## 核心组件
 
 | 组件 | 是什么 | 跑在哪 |
 |---|---|---|
 | `calabi` | 客户端——开端点、加入组网、提供本地 Web 控制台 | 你的笔记本、服务器、树莓派 |
 | `calabi-edge` | 数据面。`role: tunnel` 接收发往端点的请求；`role: mesh` 是组网中继 + STUN 探测；`role: both` 两者都做 | 你的设备和调用方都能连到的主机 |
 | `calabi-coord` | 协调器——每台设备的身份：邀请、设备登记、地址分配、ACL；告诉设备边缘节点在哪、签发边缘节点认的凭证 | 一台你的设备能连到的主机 |
-| Android App | 把手机作为一台设备加入组网（你自己服务器的，或你在 calabi.net 上的组织的），支持快捷设置磁贴；端点和用量只读 | Android 8.0 及以上的手机（arm64、armv7） |
 
 三个程序都是纯 Go、`CGO_ENABLED=0`、无运行时依赖。`calabi-coord` 和 `calabi-edge` 合起来是你的
 服务器，客户端跑在每台设备上。
 
-Android App 是 Kotlin 界面，通过 gomobile 绑定这里的共享移动核心接口（`apps/client/mobile`）。桌面版和 Android 分别在 [calabi-desktop](https://github.com/calabinet/calabi-desktop) 和 [calabi-android](https://github.com/calabinet/calabi-android) 发布，并固定依赖核心提交。
+共享 Go 移动接口（`apps/client/mobile`）仍在核心仓维护。Kotlin 应用在独立的 [Calabi for Android](https://github.com/calabinet/calabi-android) 仓库维护和发布，并固定依赖核心提交；原生桌面应用在 [Calabi Desktop](https://github.com/calabinet/calabi-desktop) 维护。
 
 ---
 
@@ -172,7 +171,7 @@ Android App 是 Kotlin 界面，通过 gomobile 绑定这里的共享移动核�
 make build          # → bin/calabi, bin/calabi-edge, bin/calabi-coord
 ```
 
-或者直接编（Windows 上把输出名写成 `*.exe`）：
+Linux/macOS 也可以直接编：
 
 ```bash
 ( cd apps/client       && go build -o calabi       ./cmd/calabi )
@@ -181,7 +180,15 @@ make build          # → bin/calabi, bin/calabi-edge, bin/calabi-coord
 ```
 
 `make build` 在 Windows 上会自动加 `.exe`。交叉编译：
-`GOOS=windows GOARCH=amd64 go build -o calabi-edge.exe ./cmd/calabi-edge`。
+`GOOS=windows GOARCH=amd64 go build -o bin/calabi-edge.exe ./apps/calabi-edge/cmd/calabi-edge`。
+
+Windows 上在仓库根目录使用 PowerShell 7 的构建保护入口：
+
+```powershell
+pwsh -NoProfile -File scripts/dev/build.ps1 go build -o bin/calabi.exe ./apps/client/cmd/calabi
+pwsh -NoProfile -File scripts/dev/build.ps1 go build -o bin/calabi-edge.exe ./apps/calabi-edge/cmd/calabi-edge
+pwsh -NoProfile -File scripts/dev/build.ps1 go build -o bin/calabi-coord.exe ./apps/calabi-coord/cmd/calabi-coord
+```
 
 每个版本也提供这三个程序的现成二进制，各 7 个平台（`calabi-coord` 从 1.13 起），三个程序也各有
 Docker 镜像：`calabinet/calabi`、`calabinet/calabi-edge`、`calabinet/calabi-coord`。它们都从这个仓库

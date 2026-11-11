@@ -7,7 +7,7 @@
 <p align="center">
   <img alt="Go" src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go&logoColor=white">
   <img alt="WireGuard" src="https://img.shields.io/badge/WireGuard-mesh-88171A?style=flat-square&logo=wireguard&logoColor=white">
-  <img alt="Platforms" src="https://img.shields.io/badge/Linux%20%C2%B7%20macOS%20%C2%B7%20Windows%20%C2%B7%20Android-amd64%20%C2%B7%20arm64%20%C2%B7%20armv7-4c8bf5?style=flat-square">
+  <img alt="Platforms" src="https://img.shields.io/badge/Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-amd64%20%C2%B7%20arm64%20%C2%B7%20armv7-4c8bf5?style=flat-square">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-3da639?style=flat-square"></a>
   <a href="https://github.com/calabinet/calabi/releases"><img alt="Release" src="https://img.shields.io/github/v/release/calabinet/calabi?style=flat-square&color=22d3ee&label=release"></a>
 </p>
@@ -91,20 +91,19 @@ a web console. That part is a separate product and is not in this repository.
 
 ---
 
-## Core components and applications
+## Core components
 
 | component | what it is | where it runs |
 |---|---|---|
 | `calabi` | the client — opens endpoints, joins the mesh, serves the local web console | your laptop, a server, a Pi |
 | `calabi-edge` | the data plane. `role: tunnel` receives the requests for endpoints; `role: mesh` is a mesh relay + STUN responder; `role: both` does both | a host your devices and callers can reach |
 | `calabi-coord` | the coordinator — every device's identity: invites, device registry, IP allocation, ACLs; names the edge and signs the grants it accepts | one host, reachable by your devices |
-| Android app | puts the phone in a mesh as a device — your own server's or a calabi.net organization's — with a Quick Settings tile; endpoints and usage read-only | an Android 8.0+ phone (arm64, armv7) |
 
 The three binaries are pure Go, `CGO_ENABLED=0`, no runtime dependencies.
 `calabi-coord` and `calabi-edge` together are your server; the client runs on
 each device.
 
-The Android app is Kotlin around the shared Go mobile interface (`apps/client/mobile`), pinned to an explicit core commit.
+The shared Go mobile interface (`apps/client/mobile`) is part of this core repository. The Kotlin application is maintained and released separately in [Calabi for Android](https://github.com/calabinet/calabi-android), which pins an explicit core commit. Native desktop applications are maintained in [Calabi Desktop](https://github.com/calabinet/calabi-desktop).
 
 ---
 
@@ -194,7 +193,7 @@ Requires Go 1.25+.
 make build          # → bin/calabi, bin/calabi-edge, bin/calabi-coord
 ```
 
-Or directly (on Windows, name the outputs `*.exe`):
+Or directly on Linux/macOS:
 
 ```bash
 ( cd apps/client       && go build -o calabi       ./cmd/calabi )
@@ -203,7 +202,15 @@ Or directly (on Windows, name the outputs `*.exe`):
 ```
 
 `make build` adds the `.exe` suffix automatically on Windows. To cross-compile:
-`GOOS=windows GOARCH=amd64 go build -o calabi-edge.exe ./cmd/calabi-edge`.
+`GOOS=windows GOARCH=amd64 go build -o bin/calabi-edge.exe ./apps/calabi-edge/cmd/calabi-edge`.
+
+On Windows, use the guarded PowerShell 7 build entry point from the repository root:
+
+```powershell
+pwsh -NoProfile -File scripts/dev/build.ps1 go build -o bin/calabi.exe ./apps/client/cmd/calabi
+pwsh -NoProfile -File scripts/dev/build.ps1 go build -o bin/calabi-edge.exe ./apps/calabi-edge/cmd/calabi-edge
+pwsh -NoProfile -File scripts/dev/build.ps1 go build -o bin/calabi-coord.exe ./apps/calabi-coord/cmd/calabi-coord
+```
 
 Every release also has all three prebuilt, for 7 platforms each — `calabi-coord`
 from 1.13 — and each as a docker image: `calabinet/calabi`,

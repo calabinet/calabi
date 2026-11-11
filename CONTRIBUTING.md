@@ -1,8 +1,8 @@
 # Contributing
 
 This repository is the open-source part of Calabi — the client, the edge, the
-coordinator and the Android app — under **Apache-2.0** (see `LICENSE`).
-Contributions are welcome.
+coordinator, local console and shared Go mobile interface — under **Apache-2.0** (see `LICENSE`).
+Contributions are welcome. Desktop application changes belong in [calabi-desktop](https://github.com/calabinet/calabi-desktop); Android application changes belong in [calabi-android](https://github.com/calabinet/calabi-android).
 
 To build and run the three programs against each other on one machine, see
 **[DEVELOPMENT.md](DEVELOPMENT.md)**. To report a vulnerability, see

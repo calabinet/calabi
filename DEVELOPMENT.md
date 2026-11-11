@@ -30,6 +30,16 @@ Or one at a time:
 ( cd apps/calabi-coord && go build -o ../../bin/calabi-coord ./cmd/calabi-coord )
 ```
 
+On Windows, use PowerShell 7 and the shared build runner instead of direct Go compilation:
+
+```powershell
+pwsh -NoProfile -File scripts/dev/build.ps1 go build -o bin/calabi.exe ./apps/client/cmd/calabi
+pwsh -NoProfile -File scripts/dev/build.ps1 go build -o bin/calabi-edge.exe ./apps/calabi-edge/cmd/calabi-edge
+pwsh -NoProfile -File scripts/dev/build.ps1 go build -o bin/calabi-coord.exe ./apps/calabi-coord/cmd/calabi-coord
+```
+
+Use the same runner for `go vet` and `go test` on Windows. The runtime examples below can be run in Git Bash with the `.exe` binary names.
+
 ## Run all three on one machine
 
 The coordinator hands out identities, the edge serves endpoints, the client joins
