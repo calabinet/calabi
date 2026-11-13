@@ -31,6 +31,7 @@ type rdpTicket struct {
 	engine                         *engine
 	context, key, local, peer, pin string
 	expires                        time.Time
+	port                           int
 }
 
 func (c *Core) rdpPeers() (*engine, string, []mesh.Peer, error) {
@@ -106,7 +107,7 @@ func (c *Core) handleRDPTargets(w http.ResponseWriter, r *http.Request) {
 
 func decodeRDP(r *http.Request, out any) error {
 	d := json.NewDecoder(io.LimitReader(r.Body, 4096))
-	d.DisallowUnknownFields() // Windows passwords, arbitrary host/port and trust overrides are forbidden.
+	d.DisallowUnknownFields() // Windows passwords, arbitrary hosts and trust overrides are forbidden.
 	if err := d.Decode(out); err != nil {
 		return err
 	}
@@ -119,10 +120,19 @@ func decodeRDP(r *http.Request, out any) error {
 
 func (c *Core) handleRDPPrepare(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Key string `json:"device_key"`
+		Key  string `json:"device_key"`
+		Port *int   `json:"port"`
 	}
 	if err := decodeRDP(r, &in); err != nil {
 		writeError(w, 400, "invalid RDP request")
+		return
+	}
+	port := 3389
+	if in.Port != nil {
+		port = *in.Port
+	}
+	if port < 1 || port > 65535 {
+		writeError(w, 400, "invalid RDP port")
 		return
 	}
 	ticket, err := c.resolveRDP(in.Key)
@@ -136,6 +146,7 @@ func (c *Core) handleRDPPrepare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := hex.EncodeToString(b)
+	ticket.port = port
 	ticket.expires = time.Now().Add(2 * time.Minute)
 	c.rdpMu.Lock()
 	if c.rdpTickets == nil {
@@ -153,13 +164,14 @@ func (c *Core) handleRDPPrepare(w http.ResponseWriter, r *http.Request) {
 	}
 	c.rdpTickets[token] = ticket
 	c.rdpMu.Unlock()
-	writeJSON(w, 200, map[string]any{"token": token, "host": ticket.peer, "local": ticket.local, "port": 3389, "certificate_sha256": ticket.pin})
+	writeJSON(w, 200, map[string]any{"token": token, "host": ticket.peer, "local": ticket.local, "port": ticket.port, "certificate_sha256": ticket.pin})
 }
 
 func (c *Core) handleRDPVerify(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Token string `json:"token"`
 		Pin   string `json:"certificate_sha256"`
+		Port  *int   `json:"port"`
 	}
 	if err := decodeRDP(r, &in); err != nil {
 		writeError(w, 400, "invalid RDP verification")
@@ -170,6 +182,14 @@ func (c *Core) handleRDPVerify(w http.ResponseWriter, r *http.Request) {
 	c.rdpMu.Unlock()
 	if !exists || time.Now().After(ticket.expires) {
 		writeError(w, 403, "session_expired")
+		return
+	}
+	port := 3389
+	if in.Port != nil {
+		port = *in.Port
+	}
+	if port != ticket.port {
+		writeError(w, 403, "remote_identity_changed")
 		return
 	}
 	// A temporary coordinator reconnect is not a new authority. Retain the ticket

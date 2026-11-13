@@ -59,6 +59,22 @@ func TestRDPPreparationUsesAuthenticatedMeshIdentity(t *testing.T) {
 	if code != 200 || prepared["host"] != "100.64.0.8" || prepared["local"] != "100.64.0.7" || prepared["port"] != float64(3389) || prepared["certificate_sha256"] != strings.Repeat("ab", 32) {
 		t.Fatalf("prepared = %d %v", code, prepared)
 	}
+	for _, invalidPort := range []any{0, -1, 65536, 3390.5, "3390"} {
+		if code, _ := post("prepare", map[string]any{"device_key": key.String(), "port": invalidPort}); code != 400 {
+			t.Errorf("invalid port %v = %d", invalidPort, code)
+		}
+	}
+	customCode, custom := post("prepare", map[string]any{"device_key": key.String(), "port": 3390})
+	if customCode != 200 || custom["port"] != float64(3390) || custom["host"] != "100.64.0.8" {
+		t.Fatalf("custom endpoint = %d %v", customCode, custom)
+	}
+	if code, _ := post("verify", map[string]any{"token": custom["token"], "certificate_sha256": custom["certificate_sha256"]}); code != 403 {
+		t.Fatal("custom ticket accepted a different/default port")
+	}
+	if code, _ := post("verify", map[string]any{"token": custom["token"], "certificate_sha256": custom["certificate_sha256"], "port": 3390}); code != 200 {
+		t.Fatal("custom ticket rejected its port")
+	}
+	post("close", map[string]any{"token": custom["token"]})
 	token := prepared["token"]
 	if code, _ := post("verify", map[string]any{"token": token, "certificate_sha256": strings.Repeat("0", 64)}); code != 403 {
 		t.Fatalf("wrong certificate accepted: %d", code)
