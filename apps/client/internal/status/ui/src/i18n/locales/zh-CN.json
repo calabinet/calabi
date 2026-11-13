@@ -78,7 +78,7 @@
     "busy": "请等待当前文件操作结束。",
     "failed": "文件操作失败，请检查权限、磁盘空间和网络后重试。"
   },
-  "remoteWorkspace": {"sessions": "远程会话", "failed": "无法更新远程会话。", "close": "断开「{{name}}」？", "desktop": "远程桌面"},
+  "remoteWorkspace": {"sessions": "远程会话", "failed": "无法更新远程会话。", "close": "断开「{{name}}」？", "desktop": "远程桌面", "controls": "远程桌面控制", "minimize": "最小化", "endRemote": "结束远程"},
   "ssh": {
     "invalidPassword": "密码不能包含换行，UTF-8 编码不得超过 1000 字节。",
     "authFailed": "SSH 认证失败，请检查用户名和密码或 SSH 密钥。",
@@ -101,7 +101,7 @@
     "failed": "无法打开 SSH 会话。请检查设备后重试。",
     "inputFailed": "无法发送终端输入。"
   },
-  "remote": {"tab":"远程","title":"最近远程登录","description":"成功登录过的设备会显示在这里。","unavailable":"连接组网后即可查看远程设备。","empty":"暂无登录记录。请在设备的「更多」菜单选择「远程登录」。","loadFailed":"无法读取远程记录","retry":"重试","connectDevice":"远程登录 {{name}}","deviceUnavailable":"暂不可用"},
+  "remote": {"tab":"远程","title":"最近远程登录","description":"成功登录过的设备会显示在这里。","unavailable":"连接组网后即可查看远程设备。","empty":"暂无登录记录。请在设备的「更多」菜单选择「远程登录」。","loadFailed":"无法读取远程记录","retry":"重试","connectDevice":"远程登录 {{name}}","deviceUnavailable":"暂不可用","opening":"正在打开远程登录…","agentBusy":"本地文件操作正在处理中，请完成当前操作后重试远程登录。","agentTimeout":"本地代理响应超时，请重试远程登录。","windowBusy":"远程窗口暂未响应，请稍后重试。"},
   "assist": {"secureConnectionHint": "未能与对方建立安全连接。请稍后重新发起协助，等待对方同意。", "retryHint": "请确认两台设备都已连接组网，再重新发起协助。", "technicalDetails": "技术详情","recovering": "等待设备恢复", "restored": "设备已恢复", "recoveringHint": "正在等待对方重新上线，键鼠控制已停止。", "restoredHint": "对方已可接收协助请求。继续需要对方重新同意。", "requestAgain": "重新发起协助", "peerUnavailable": "对方设备暂未恢复协助服务","declined":"已拒绝","stopped":"已结束","declinedMessage":"对方已拒绝本次协助","stoppedMessage":"对方已结束桌面共享","closeWindow":"关闭窗口","requestFailed":"未能建立协助连接","sessionInterrupted":"协助会话已中断","fullscreen":"全屏","exitFullscreen":"退出全屏","fullscreenError":"无法切换全屏，请重试。","ime":"使用本机中文输入法，选词后发送到远端","receiveRequests":"允许此设备接收协助请求","request":"协助对方","login":"远程登录","title":"远程协助","pending":"等待同意","view":"仅查看","control":"可操作键鼠","ended":"已结束","end":"结束协助","preview":"对方共享的桌面","wait":"正在等待对方同意共享主屏幕。","unavailable":"会话已结束，或对方设备暂不支持协助。"},
   "listSearch": {"endpoints": "搜索名称或地址", "devices": "搜索设备、IP 或用户", "files": "搜索文件名或设备", "noMatches": "没有匹配的结果"},
   "files": {
@@ -1251,5 +1251,13 @@
     "coreVersion": "运行核心版本",
     "bundledCore": "随包核心版本",
     "coreCommit": "随包核心提交"
-}
+},
+  "appearance": {
+    "title": "外观",
+    "mode": "配色模式",
+    "system": "跟随系统",
+    "light": "浅色",
+    "dark": "深色",
+    "description": "沿用用户后台默认配色，切换立即生效，并在此设备上记住你的选择。"
+  }
 }

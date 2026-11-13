@@ -24,14 +24,9 @@
 .ssh-terminal { min-width: 0; min-height: 0; flex: 1; overflow: hidden; padding: 12px 16px; background: #080c16; }
 .ssh-terminal .xterm-viewport {
   color-scheme: dark;
-  scrollbar-color: auto;
-  scrollbar-width: auto;
+  --c-scroll: #34445f;
+  --c-scroll-hover: #526784;
 }
-.ssh-terminal .xterm-viewport::-webkit-scrollbar,
-.ssh-terminal .xterm-viewport::-webkit-scrollbar-track,
-.ssh-terminal .xterm-viewport::-webkit-scrollbar-corner { background: #080c16; }
-.ssh-terminal .xterm-viewport::-webkit-scrollbar-thumb { background: #34445f; }
-.ssh-terminal .xterm-viewport::-webkit-scrollbar-thumb:hover { background: #526784; }
 
 .ssh-workspace {
   display: flex;

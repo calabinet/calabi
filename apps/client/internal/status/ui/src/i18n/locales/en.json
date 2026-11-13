@@ -78,7 +78,7 @@
     "busy": "Wait for the current file operation to finish.",
     "failed": "File operation failed. Check permissions, disk space and the network, then retry."
   },
-  "remoteWorkspace": {"sessions": "Remote sessions", "failed": "Could not update the remote session.", "close": "Disconnect {{name}}?", "desktop": "Remote desktop"},
+  "remoteWorkspace": {"sessions": "Remote sessions", "failed": "Could not update the remote session.", "close": "Disconnect {{name}}?", "desktop": "Remote desktop", "controls": "Remote desktop controls", "minimize": "Minimize", "endRemote": "End remote session"},
   "ssh": {
     "invalidPassword": "Enter a password without line breaks, up to 1000 UTF-8 bytes.",
     "authFailed": "SSH authentication failed. Check the username and password or SSH key.",
@@ -101,7 +101,7 @@
     "failed": "Could not open the SSH session. Check the device and try again.",
     "inputFailed": "Terminal input could not be sent."
   },
-  "remote": {"tab":"Remote","title":"Recent remote logins","description":"Devices you’ve successfully signed in to appear here.","unavailable":"Connect to your mesh to view remote devices.","empty":"No recent logins. Use Remote login from a device’s More menu.","loadFailed":"Could not load recent remote logins","retry":"Retry","connectDevice":"Sign in to {{name}}","deviceUnavailable":"Unavailable"},
+  "remote": {"tab":"Remote","title":"Recent remote logins","description":"Devices you’ve successfully signed in to appear here.","unavailable":"Connect to your mesh to view remote devices.","empty":"No recent logins. Use Remote login from a device’s More menu.","loadFailed":"Could not load recent remote logins","retry":"Retry","connectDevice":"Sign in to {{name}}","deviceUnavailable":"Unavailable","opening":"Opening remote login…","agentBusy":"The local file agent is busy. Finish the current file operation and try again.","agentTimeout":"The local agent did not respond in time. Try remote login again.","windowBusy":"The remote window is not responding yet. Try again shortly."},
   "assist": {"secureConnectionHint": "A secure connection to the other device could not be established. Try again shortly and wait for their approval.", "retryHint": "Check that both devices are connected to the mesh, then request assistance again.", "technicalDetails": "Technical details","recovering": "Reconnecting", "restored": "Available again", "recoveringHint": "Waiting for the device. Remote input has stopped.", "restoredHint": "The device is available. Continuing requires fresh consent.", "requestAgain": "Request a new session", "peerUnavailable": "The device is not available for assistance yet","declined":"Declined","stopped":"Ended","declinedMessage":"The other person declined assistance","stoppedMessage":"The other person ended screen sharing","closeWindow":"Close window","requestFailed":"Could not start the assistance request","sessionInterrupted":"The assistance session was interrupted","fullscreen":"Full screen","exitFullscreen":"Exit full screen","fullscreenError":"Could not switch full screen. Please try again.","ime":"Chinese input method · select a candidate to send","receiveRequests":"Allow assistance requests on this device","request":"Offer assistance","login":"Remote login","title":"Remote assistance","pending":"Awaiting consent","view":"View only","control":"Keyboard and mouse enabled","ended":"Ended","end":"End session","preview":"Shared desktop","wait":"Waiting for the other device to allow screen sharing.","unavailable":"Session ended or the other device does not support assistance."},
   "listSearch": {"endpoints": "Search name or address", "devices": "Search device, IP or user", "files": "Search file name or device", "noMatches": "No matching results"},
   "files": {
@@ -1251,5 +1251,13 @@
     "coreVersion": "Running core version",
     "bundledCore": "Bundled core version",
     "coreCommit": "Bundled core commit"
-}
+},
+  "appearance": {
+    "title": "Appearance",
+    "mode": "Theme",
+    "system": "Follow system",
+    "light": "Light",
+    "dark": "Dark",
+    "description": "Uses the default console palette. Changes apply immediately and are remembered on this device."
+  }
 }

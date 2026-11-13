@@ -5,6 +5,7 @@
 import {
   AppstoreOutlined,
   BarsOutlined,
+  BgColorsOutlined,
   CheckOutlined,
   CloudServerOutlined,
   DeploymentUnitOutlined,
@@ -39,6 +40,7 @@ import { useMemo } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import Logo from "./Logo";
+import { useAppearance } from "../theme/appearance";
 import { SelfHostedBanners, serverHost, useLeaveSelfHosted, useSelfHosted } from "./SelfHosted";
 import type {
   AccountMe,
@@ -73,6 +75,7 @@ const lifecycleColor: Record<Lifecycle, string> = {
 export default function Layout() {
   const { t, i18n } = useTranslation();
   const currentLang: LangCode = resolveLang(i18n.language);
+  const { mode: appearanceMode, setMode: setAppearanceMode } = useAppearance();
   const location = useLocation();
   const qc = useQueryClient();
   const active = location.pathname.split("/")[1] || "overview";
@@ -194,7 +197,7 @@ export default function Layout() {
         key: "_header",
         disabled: true,
         label: (
-          <span style={{ color: "#8c8c8c", fontSize: 12 }}>
+          <span style={{ color: "var(--c-muted)", fontSize: 12 }}>
             {t("topbar.switchOrg")}
           </span>
         ),
@@ -210,7 +213,7 @@ export default function Layout() {
               gap: 8,
               minWidth: 220,
               fontWeight: o.id === activeOrgID ? 600 : 400,
-              color: o.id === activeOrgID ? "#5e7fff" : "inherit",
+              color: o.id === activeOrgID ? "var(--c-brand)" : "inherit",
             }}
           >
             {o.id === activeOrgID ? (
@@ -242,7 +245,7 @@ export default function Layout() {
                 <p style={{ marginTop: 0 }}>
                   {t("orgSwitch.body1", { name: orgDisplay(o) })}
                 </p>
-                <p style={{ marginBottom: 0, color: "#8c8c8c" }}>
+                <p style={{ marginBottom: 0, color: "var(--c-muted)" }}>
                   {t("orgSwitch.body2", {
                     name: activeOrg ? orgDisplay(activeOrg) : "",
                   })}
@@ -446,7 +449,7 @@ export default function Layout() {
           <p style={{ marginTop: 0 }}>
             {t("region.switchBody1", { region })}
           </p>
-          <p style={{ marginBottom: 0, color: "#8c8c8c" }}>
+          <p style={{ marginBottom: 0, color: "var(--c-muted)" }}>
             {t("region.switchBody2")}
           </p>
         </div>
@@ -484,7 +487,7 @@ export default function Layout() {
           <p style={{ marginTop: 0 }}>
             {a === "own" ? t("affinity.toOwnBody") : t("affinity.toPlatformBody")}
           </p>
-          <p style={{ marginBottom: 0, color: "#8c8c8c" }}>
+          <p style={{ marginBottom: 0, color: "var(--c-muted)" }}>
             {t("affinity.bodyNote")}
           </p>
         </div>
@@ -502,7 +505,7 @@ export default function Layout() {
         gap: 8,
         minWidth: 180,
         fontWeight: active ? 600 : 400,
-        color: active ? "#5e7fff" : "inherit",
+        color: active ? "var(--c-brand)" : "inherit",
       }}
     >
       {active ? <CheckOutlined /> : <span style={{ width: 14 }} />}
@@ -515,7 +518,7 @@ export default function Layout() {
         key: "_aff_header",
         disabled: true,
         label: (
-          <span style={{ color: "#8c8c8c", fontSize: 12 }}>
+          <span style={{ color: "var(--c-muted)", fontSize: 12 }}>
             {t("affinity.header")}
           </span>
         ),
@@ -540,7 +543,7 @@ export default function Layout() {
         key: "_region_header",
         disabled: true,
         label: (
-          <span style={{ color: "#8c8c8c", fontSize: 12 }}>
+          <span style={{ color: "var(--c-muted)", fontSize: 12 }}>
             {hasOwnEdge && !preferPlatform
               ? t("region.switchOwnNode")
               : t("region.switchRegion")}
@@ -558,7 +561,7 @@ export default function Layout() {
               key: "_region_empty",
               disabled: true,
               label: (
-                <span style={{ color: "#bfbfbf", fontSize: 12 }}>
+                <span style={{ color: "var(--c-muted)", fontSize: 12 }}>
                   {t("region.noOwnNodeOnline")}
                 </span>
               ),
@@ -577,7 +580,7 @@ export default function Layout() {
                 gap: 8,
                 minWidth: 220,
                 fontWeight: rg === currentRegion ? 600 : 400,
-                color: rg === currentRegion ? "#5e7fff" : "inherit",
+                color: rg === currentRegion ? "var(--c-brand)" : "inherit",
               }}
             >
               {rg === currentRegion ? (
@@ -599,7 +602,7 @@ export default function Layout() {
                   !h ? "default" : h.healthy > 0 ? "success" : "error"
                 }
                 text={
-                  <span style={{ fontSize: 11, color: "#8c8c8c" }}>
+                  <span style={{ fontSize: 11, color: "var(--c-muted)" }}>
                     {t("region.tunnelCount", {
                       count: regionTunnelCount.get(rg) ?? 0,
                     })}
@@ -621,11 +624,10 @@ export default function Layout() {
     // inside the content area — feels more like a native desktop app
     // and stops the "this is a web page" giveaway when the page
     // (Overview, Logs) is taller than the window.
-    <AntLayout style={{ height: "100vh", overflow: "hidden" }}>
+    <AntLayout className="client-shell" style={{ height: "100vh", overflow: "hidden" }}>
       <Sider
         width={200}
-        theme="dark"
-        style={{ borderRight: "1px solid rgba(255,255,255,0.08)" }}
+        theme="light"
       >
         {/* Full-height flex column INSIDE the sider-children wrapper. Putting
             flex on <Sider> styles the outer <aside>, NOT the inner
@@ -634,7 +636,7 @@ export default function Layout() {
             pin it to the very bottom. */}
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
         {/* Brand lockup — mirrors the marketing site (web/www Header): the
-            #2742f0 mark + the "calabi" wordmark with a brand-blue "b". */}
+            var(--c-brand) mark + the "calabi" wordmark with a brand-blue "b". */}
         <div
           style={{
             padding: "16px 20px",
@@ -650,10 +652,10 @@ export default function Layout() {
               fontWeight: 700,
               letterSpacing: "-0.02em",
               lineHeight: 1,
-              color: "#fff",
+              color: "var(--c-ink)",
             }}
           >
-            cala<span style={{ color: "#22d3ee" }}>b</span>i
+            cala<span style={{ color: "var(--c-link)" }}>b</span>i
           </span>
         </div>
         <Menu
@@ -706,15 +708,15 @@ export default function Layout() {
             <div style={{ padding: 12 }}>
               <div
                 style={{
-                  background: "rgba(255,77,79,0.12)",
-                  border: "1px solid rgba(255,77,79,0.3)",
+                  background: "var(--c-err-soft)",
+                  border: "1px solid var(--c-err-soft)",
                   borderRadius: 8,
                   padding: "10px 12px",
                 }}
               >
                 <div
                   style={{
-                    color: "#ff7875",
+                    color: "var(--c-err-ink)",
                     fontWeight: 600,
                     fontSize: 13,
                     display: "flex",
@@ -725,7 +727,7 @@ export default function Layout() {
                   <ExclamationCircleOutlined />
                   {t("lifecycle.unavailable")}
                 </div>
-                <div style={{ color: "#8c8c8c", fontSize: 12, marginTop: 6 }}>
+                <div style={{ color: "var(--c-muted)", fontSize: 12, marginTop: 6 }}>
                   {t("region.parkedNote")}
                 </div>
               </div>
@@ -764,7 +766,7 @@ export default function Layout() {
                 gap: 8,
                 minWidth: 120,
                 fontWeight: currentLang === k ? 600 : 400,
-                color: currentLang === k ? "#5e7fff" : "inherit",
+                color: currentLang === k ? "var(--c-brand)" : "inherit",
               });
               return (
                 <Dropdown
@@ -779,7 +781,7 @@ export default function Layout() {
                             {
                               key: "server",
                               label: (
-                                <span style={{ color: "#64748b", fontSize: 12 }}>
+                                <span style={{ color: "var(--c-muted)", fontSize: 12 }}>
                                   {serverHost(selfHosted)
                                     ? t("selfHosted.connectedTo", { server: serverHost(selfHosted) })
                                     : t("selfHosted.notConnectedTitle")}
@@ -795,7 +797,7 @@ export default function Layout() {
                       {
                         key: "email",
                         label: (
-                          <span style={{ color: "#64748b", fontSize: 12 }}>
+                          <span style={{ color: "var(--c-muted)", fontSize: 12 }}>
                             {agentMode
                               ? email
                                 ? t("topbar.keyOwner", { email })
@@ -818,7 +820,7 @@ export default function Layout() {
                       {
                         key: "org",
                         label: (
-                          <span style={{ color: "#64748b", fontSize: 12 }}>
+                          <span style={{ color: "var(--c-muted)", fontSize: 12 }}>
                             {t("topbar.orgId")} {me.org?.id ?? "—"}
                             {me.org?.name ? ` (${me.org.name})` : ""}
                             {me.plan?.read_only && (
@@ -832,6 +834,19 @@ export default function Layout() {
                       },
                           ]),
                       { type: "divider" as const },
+                      {
+                        key: "appearance",
+                        icon: <BgColorsOutlined />,
+                        label: t("appearance.title"),
+                        children: (["system", "light", "dark"] as const).map(mode => ({
+                          key: `theme-${mode}`,
+                          label: <span className="appearance-menu-pick" style={{ color: appearanceMode === mode ? "var(--c-brand-ink)" : "inherit", fontWeight: appearanceMode === mode ? 600 : 400 }}>
+                            {appearanceMode === mode ? <CheckOutlined /> : <span style={{ width: 14 }} />}
+                            {t(`appearance.${mode}`)}
+                          </span>,
+                          onClick: () => setAppearanceMode(mode),
+                        })),
+                      },
                       {
                         key: "language",
                         icon: <TranslationOutlined />,
@@ -880,10 +895,16 @@ export default function Layout() {
                     ],
                   }}
                 >
-                  <div
+                  <button type="button" className="client-account-menu" aria-label={username}
                     style={{
+                      width: "100%",
+                      border: 0,
+                      background: "transparent",
+                      color: "inherit",
+                      font: "inherit",
+                      textAlign: "left",
                       cursor: "pointer",
-                      borderTop: "1px solid rgba(255,255,255,0.08)",
+                      borderTop: "1px solid var(--c-line)",
                       padding: "10px 12px",
                       display: "flex",
                       alignItems: "center",
@@ -893,7 +914,7 @@ export default function Layout() {
                     <Avatar
                       size="small"
                       style={{
-                        backgroundColor: "#5e7fff",
+                        backgroundColor: "var(--c-brand)",
                         flexShrink: 0,
                         fontSize: 12,
                       }}
@@ -903,22 +924,24 @@ export default function Layout() {
                     <Text ellipsis style={{ flex: 1, minWidth: 0, fontSize: 13 }}>
                       {username}
                       {planName && (
-                        <span style={{ color: "#8c8c8c" }}>{` · ${planName}`}</span>
+                        <span style={{ color: "var(--c-muted)" }}>{` · ${planName}`}</span>
                       )}
                     </Text>
-                    <DownOutlined style={{ fontSize: 10, color: "#94a3b8" }} />
-                  </div>
+                    <DownOutlined style={{ fontSize: 10, color: "var(--c-muted)" }} />
+                  </button>
                 </Dropdown>
               );
             })()}
         </div>
         </div>
       </Sider>
-      <AntLayout>
+      <AntLayout className="client-sheet" style={{ background: "var(--c-sheet)" }}>
         <Header
           style={{
-            background: "#0b1022",
-            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            height: 44,
+            lineHeight: "normal",
+            background: "var(--c-sheet)",
+            borderBottom: "1px solid var(--c-line)",
             padding: "0 16px",
             display: "flex",
             alignItems: "center",
@@ -952,15 +975,15 @@ export default function Layout() {
                     cursor: "pointer",
                     padding: "2px 10px",
                     borderRadius: 6,
-                    background: "rgba(255,255,255,0.06)",
+                    background: "var(--c-fill)",
                     fontSize: 13,
                   }}
                 >
-                  <TeamOutlined style={{ color: "#5e7fff" }} />
+                  <TeamOutlined style={{ color: "var(--c-brand)" }} />
                   <Text style={{ fontSize: 13, fontWeight: 500 }}>
                     {orgDisplay(activeOrg)}
                   </Text>
-                  <DownOutlined style={{ fontSize: 10, color: "#94a3b8" }} />
+                  <DownOutlined style={{ fontSize: 10, color: "var(--c-muted)" }} />
                 </Space>
               </Dropdown>
             )}
@@ -1041,19 +1064,19 @@ export default function Layout() {
                       padding: "2px 10px",
                       borderRadius: 6,
                       background: ownEdgeOffline
-                        ? "rgba(245,158,11,0.15)"
+                        ? "var(--c-warn-soft)"
                         : preferPlatform
-                          ? "rgba(255,255,255,0.06)"
-                          : "rgba(16,185,129,0.15)",
+                          ? "var(--c-fill)"
+                          : "var(--c-ok-soft)",
                       fontSize: 13,
                     }}
                   >
                     {ownEdgeOffline ? (
-                      <ExclamationCircleOutlined style={{ color: "#d48806" }} />
+                      <ExclamationCircleOutlined style={{ color: "var(--c-warn-ink)" }} />
                     ) : preferPlatform ? (
-                      <CloudServerOutlined style={{ color: "#5e7fff" }} />
+                      <CloudServerOutlined style={{ color: "var(--c-brand)" }} />
                     ) : (
-                      <HddOutlined style={{ color: "#059669" }} />
+                      <HddOutlined style={{ color: "var(--c-ok)" }} />
                     )}
                     <Text style={{ fontSize: 13 }}>
                       {t("topbar.egress")}{" "}
@@ -1062,7 +1085,7 @@ export default function Layout() {
                         : t("topbar.egressOwn")}
                       {ownEdgeOffline ? t("topbar.egressOfflineSuffix") : ""}
                     </Text>
-                    <DownOutlined style={{ fontSize: 10, color: "#94a3b8" }} />
+                    <DownOutlined style={{ fontSize: 10, color: "var(--c-muted)" }} />
                   </Space>
                 </Dropdown>
               </Tooltip>
@@ -1079,15 +1102,15 @@ export default function Layout() {
                     cursor: "pointer",
                     padding: "2px 10px",
                     borderRadius: 6,
-                    background: "rgba(255,255,255,0.06)",
+                    background: "var(--c-fill)",
                     fontSize: 13,
                   }}
                 >
-                  <GlobalOutlined style={{ color: "#5e7fff" }} />
+                  <GlobalOutlined style={{ color: "var(--c-brand)" }} />
                   <Text style={{ fontSize: 13 }}>
                     {currentRegion || health.server_addr}
                   </Text>
-                  <DownOutlined style={{ fontSize: 10, color: "#94a3b8" }} />
+                  <DownOutlined style={{ fontSize: 10, color: "var(--c-muted)" }} />
                 </Space>
               </Dropdown>
             )}
@@ -1100,7 +1123,7 @@ export default function Layout() {
           </Space>
         </Header>
         <Content
-          className="calabi-content"
+          className={`calabi-content${active === "overview" ? " overview-content" : ""}`}
           style={{
             margin: 0,
             padding: 24,

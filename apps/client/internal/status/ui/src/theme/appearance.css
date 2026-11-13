@@ -1,0 +1,33 @@
+/* Default console palette; align with web/console/src/styles/index.css. */
+:root {
+  color-scheme:light;
+  --c-canvas:#eceef4;--c-sheet:#ffffff;--c-raised:#ffffff;
+  --c-ink:#161a2b;--c-ink-2:#474c61;--c-muted:#6b7086;--c-faint:#8a8fa3;
+  --c-line:#e1e4ec;--c-line-soft:#eef0f4;--c-fill:#f7f8fb;--c-fill-2:#eef0f5;
+  --c-brand:#2742f0;--c-brand-soft:#eef1ff;--c-brand-ink:#2742f0;--c-link:#2742f0;
+  --c-ok:#12a36f;--c-ok-ink:#287650;--c-ok-soft:#eaf6ee;
+  --c-warn:#e08a14;--c-warn-ink:#a35d00;--c-warn-soft:#fdf1e2;
+  --c-err:#e5483e;--c-err-ink:#cf1322;--c-err-soft:#fff0ee;
+  --c-nav-sel:#ffffff;--c-scroll:#b3b7c6;--c-scroll-hover:#8a8fa3;
+  --c-shadow:0 1px 2px #161a2b0a;--c-on-brand:#ffffff;
+  --c-auth-bg:radial-gradient(ellipse at top,#eef1ff,transparent 60%),linear-gradient(135deg,#ffffff,#eceef4);
+  --c-art-start:#e5eaff;--c-art-end:#f7f8fb;
+}
+:root[data-theme="dark"] {
+  color-scheme:dark;
+  --c-canvas:#0b0f1a;--c-sheet:#111624;--c-raised:#151b2b;
+  --c-ink:#e7eaf3;--c-ink-2:#c3c8d8;--c-muted:#9aa1b8;--c-faint:#7b839c;
+  --c-line:#262d40;--c-line-soft:#1c2232;--c-fill:#171d2c;--c-fill-2:#1d2436;
+  --c-brand:#5b77ff;--c-brand-soft:#5b77ff29;--c-brand-ink:#9db0ff;--c-link:#8ea2ff;
+  --c-ok:#34c38f;--c-ok-ink:#5fd9a9;--c-ok-soft:#15332c;
+  --c-warn:#f0a53a;--c-warn-ink:#f5bd6b;--c-warn-soft:#34281d;
+  --c-err:#ff6b62;--c-err-ink:#ff8f88;--c-err-soft:#38212a;
+  --c-nav-sel:#161c2c;--c-scroll:#586079;--c-scroll-hover:#7b839c;
+  --c-shadow:0 1px 2px #00000059;
+  --c-auth-bg:radial-gradient(ellipse at top,#5b77ff20,transparent 60%),linear-gradient(135deg,#111624,#0b0f1a);
+  --c-art-start:#223659;--c-art-end:#111b2f;
+}
+.client-shell .ant-layout-sider { background:var(--c-canvas); }
+.client-shell .ant-menu-item-selected { box-shadow:inset 0 0 0 1px var(--c-line),var(--c-shadow); }
+.client-sheet { margin:8px 8px 8px 0; border:1px solid var(--c-line); border-radius:12px; overflow:hidden; }
+.appearance-menu-pick { display:inline-flex; align-items:center; gap:8px; min-width:120px; white-space:nowrap; }

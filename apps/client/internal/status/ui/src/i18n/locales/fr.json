@@ -78,7 +78,7 @@
     "busy": "Attendez la fin de l’opération en cours.",
     "failed": "Échec de l’opération. Vérifiez les droits, l’espace disque et le réseau."
   },
-  "remoteWorkspace": {"sessions": "Sessions à distance", "failed": "Impossible de mettre à jour la session à distance.", "close": "Déconnecter {{name}} ?", "desktop": "Bureau à distance"},
+  "remoteWorkspace": {"sessions": "Sessions à distance", "failed": "Impossible de mettre à jour la session à distance.", "close": "Déconnecter {{name}} ?", "desktop": "Bureau à distance", "controls": "Commandes du Bureau à distance", "minimize": "Réduire", "endRemote": "Terminer la session"},
   "ssh": {
     "invalidPassword": "Le mot de passe est limité à 1000 octets UTF-8, sans saut de ligne.",
     "authFailed": "L’authentification SSH a échoué. Vérifiez le nom d’utilisateur et le mot de passe ou la clé SSH.",
@@ -110,7 +110,11 @@
     "loadFailed": "Impossible de charger les connexions à distance récentes",
     "retry": "Réessayer",
     "connectDevice": "Se connecter à {{name}}",
-    "deviceUnavailable": "Indisponible"
+    "deviceUnavailable": "Indisponible",
+    "opening": "Ouverture de la connexion distante…",
+    "agentBusy": "L’agent de fichiers local est occupé. Terminez l’opération en cours, puis réessayez.",
+    "agentTimeout": "L’agent local n’a pas répondu à temps. Réessayez la connexion distante.",
+    "windowBusy": "La fenêtre distante ne répond pas encore. Réessayez dans un instant."
   },
   "assist": {
     "secureConnectionHint": "Impossible d’établir une connexion sécurisée avec l’autre appareil. Réessayez dans un instant et attendez son accord.",
@@ -1425,5 +1429,13 @@
     "coreVersion": "Version du cœur actif",
     "bundledCore": "Version du cœur inclus",
     "coreCommit": "Commit du cœur inclus"
-}
+},
+  "appearance": {
+    "title": "Apparence",
+    "mode": "Thème",
+    "system": "Suivre le système",
+    "light": "Clair",
+    "dark": "Sombre",
+    "description": "Utilise les couleurs par défaut de la console. Les changements sont immédiats et mémorisés sur cet appareil."
+  }
 }

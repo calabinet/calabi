@@ -55,6 +55,12 @@ func (c *Core) routes() http.Handler {
 	mux.HandleFunc("GET /v1/settings", c.handleGetSettings)
 	mux.HandleFunc("PUT /v1/settings", c.handlePutSettings)
 	mux.HandleFunc("GET /v1/logs", c.handleLogs)
+	if c.cfg.RemoteDesktopP0 {
+		mux.HandleFunc("GET /v1/remote/rdp/targets", c.handleRDPTargets)
+		mux.HandleFunc("POST /v1/remote/rdp/prepare", c.handleRDPPrepare)
+		mux.HandleFunc("POST /v1/remote/rdp/verify", c.handleRDPVerify)
+		mux.HandleFunc("POST /v1/remote/rdp/close", c.handleRDPClose)
+	}
 	if c.cfg.FileTransferV1 {
 		mux.HandleFunc("GET /v1/files", c.handleFiles)
 		mux.HandleFunc("POST /v1/files/action", c.handleFileAction)

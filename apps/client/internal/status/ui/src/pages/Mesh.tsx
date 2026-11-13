@@ -346,8 +346,22 @@ export default function Mesh() {
     refetchInterval: tab === "remote" ? 2000 : false,
     retry: false,
   });
-  const openRemote = (peer: string, name: string) =>
-    void fileAction({ action: "rdp_open", peer, name }).catch(e => message.error(e.message));
+  const remoteOpening = useRef(new Set<string>());
+  const openRemote = (peer: string, name: string) => {
+    if (remoteOpening.current.has(peer)) return;
+    remoteOpening.current.add(peer);
+    const dismiss = message.loading(t("remote.opening"), 0);
+    void fileAction({ action: "rdp_open", peer, name }).catch(error => {
+      const text = error instanceof Error ? error.message : String(error);
+      const messages: Record<string,string> = {
+        "Local file agent is busy; try again shortly": "remote.agentBusy",
+        "Local file agent response timed out; retry the operation": "remote.agentTimeout",
+        "Timed out connecting to the Windows file agent": "remote.agentTimeout",
+        "Remote window is not responding; try again shortly": "remote.windowBusy",
+      };
+      message.error(messages[text] ? t(messages[text]) : text);
+    }).finally(() => { remoteOpening.current.delete(peer); dismiss(); });
+  };
 
   const remoteRecords = [
     ...(rdpAvailable ? history.data ?? [] : []).map(record => ({ kind: "rdp" as const, record })),
@@ -1113,7 +1127,7 @@ function CidrListEditor({
                 padding: "4px 8px",
                 marginBottom: 4,
                 borderRadius: 6,
-                background: "rgba(255,255,255,0.04)",
+                background: "var(--c-fill)",
               }}
             >
               <Text style={{ fontFamily: "monospace", fontSize: 13, flex: 1, minWidth: 0 }}>
@@ -1381,7 +1395,7 @@ function MeshAdvertiseCard({ snapshot, assistSupported, receptionPending, onRece
               borderRadius: 3,
               marginLeft: 6,
               verticalAlign: "middle",
-              background: "#faad14",
+              background: "var(--c-warn)",
             }}
           />
         </Tooltip>

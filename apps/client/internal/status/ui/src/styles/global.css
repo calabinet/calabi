@@ -6,11 +6,11 @@ html, body, #root {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: #05070f;
+  background: var(--c-canvas);
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC",
     "Microsoft YaHei", "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--c-ink);
   /* The Tauri shell embeds Edge WebView2 — disabling overflow on the
      document keeps the window-level scrollbar from appearing alongside
      our inner Content scrollbar, which would look like two scrollbars
@@ -18,24 +18,39 @@ html, body, #root {
   overflow: hidden;
 }
 
-/* Thin, neutral, hover-darken scrollbars wherever scrolling happens.
-   Mimics native desktop chrome (Windows 11 / macOS overlay style) so
-   the calabi window doesn't read as a browser tab. Applies to the
-   inner Content area, the Logs viewer, the inspector drawer, etc. */
+/* Windows text scaling also reduces the WebView's effective CSS viewport.
+   Spend less space on chrome before asking enlarged text/charts to scroll.
+   Keep the chart's readable minimum and the Content scroll fallback. */
+@media (max-height: 700px) {
+  .overview-content { padding: 10px !important; }
+  .overview-page, .overview-chart-stack { gap: 8px !important; }
+  .overview-page .ant-card-body { padding: 8px !important; }
+  .overview-info > .ant-card-body > .ant-row { row-gap: 4px !important; }
+}
+
+/* Paint only the actively scrolled pane; never change gutter size on reveal. */
 * {
-  scrollbar-width: thin;                         /* Firefox */
-  scrollbar-color: rgba(255,255,255,.18) transparent;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+*.scrollbar-active { scrollbar-color: var(--c-scroll) transparent; }
+/* Modern Chromium otherwise lets scrollbar-width/color override the exact
+   WebKit dimensions. Safari and WebView2 use a consistent 4px thumb. */
+@supports selector(::-webkit-scrollbar) {
+  *, *.scrollbar-active { scrollbar-width: auto; scrollbar-color: auto; }
 }
 *::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 4px;
+  height: 4px;
 }
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,.18);
+  background: transparent;
   border-radius: 4px;
 }
-*::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.32); }
+*.scrollbar-active::-webkit-scrollbar-thumb { background: var(--c-scroll); }
+*.scrollbar-active::-webkit-scrollbar-thumb:hover { background: var(--c-scroll-hover); }
+*::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
 *::-webkit-scrollbar-corner { background: transparent; }
 
 /* Sidebar + topbar are non-interactive chrome — keep them unselectable
@@ -48,7 +63,7 @@ html, body, #root {
   -webkit-user-select: none;
 }
 
-a { color: #22d3ee; text-decoration: none; }
+a { color: var(--c-link); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 code, pre {
@@ -62,11 +77,11 @@ code, pre {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #52c41a;
+  background: var(--c-ok);
   animation: pulse 2s infinite;
 }
-.live-dot.bad { background: #ff4d4f; }
-.live-dot.warn { background: #faad14; }
+.live-dot.bad { background: var(--c-err); }
+.live-dot.warn { background: var(--c-warn); }
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
@@ -81,8 +96,8 @@ code, pre {
  * content's intrinsic size and break inner overflow scrolling.
  */
 .log-viewer {
-  background: #0f172a;
-  color: #d1d5db;
+  background: var(--c-fill);
+  color: var(--c-ink-2);
   font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 12.5px;
   line-height: 1.5;
@@ -94,10 +109,10 @@ code, pre {
   white-space: pre-wrap;
   word-break: break-all;
 }
-.log-viewer .lvl-warn { color: #fbbf24; }
-.log-viewer .lvl-error { color: #f87171; }
-.log-viewer .lvl-debug { color: #94a3b8; }
-.log-viewer .lvl-info { color: #d1d5db; }
+.log-viewer .lvl-warn { color: var(--c-warn-ink); }
+.log-viewer .lvl-error { color: var(--c-err-ink); }
+.log-viewer .lvl-debug { color: var(--c-muted); }
+.log-viewer .lvl-info { color: var(--c-ink-2); }
 
 /* Small chip used in tunnel rows. */
 .chip {
@@ -106,10 +121,10 @@ code, pre {
   border-radius: 10px;
   font-size: 11.5px;
   font-weight: 500;
-  background: rgba(94, 127, 255, 0.16);
-  color: #9bb4ff;
+  background: var(--c-brand-soft);
+  color: var(--c-link);
 }
-.chip.ok { background: rgba(16, 185, 129, 0.16); color: #6ee7b7; }
-.chip.warn { background: rgba(245, 158, 11, 0.16); color: #fcd34d; }
-.chip.bad { background: rgba(244, 63, 94, 0.16); color: #fca5a5; }
-.chip.muted { background: rgba(255, 255, 255, 0.08); color: #94a3b8; }
+.chip.ok { background: var(--c-ok-soft); color: var(--c-ok-ink); }
+.chip.warn { background: var(--c-warn-soft); color: var(--c-warn-ink); }
+.chip.bad { background: var(--c-err-soft); color: var(--c-err-ink); }
+.chip.muted { background: var(--c-line); color: var(--c-muted); }

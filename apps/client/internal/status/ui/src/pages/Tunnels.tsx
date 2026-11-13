@@ -586,13 +586,13 @@ export default function Tunnels() {
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 11, color: "#9ca3af", width: 42, flexShrink: 0, display: "inline-block", whiteSpace: "nowrap" }}>
+              <span style={{ fontSize: 11, color: "var(--c-muted)", width: 42, flexShrink: 0, display: "inline-block", whiteSpace: "nowrap" }}>
                 {t("tunnels.public")}
               </span>
               {pub}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 11, color: "#9ca3af", width: 42, flexShrink: 0, display: "inline-block", whiteSpace: "nowrap" }}>
+              <span style={{ fontSize: 11, color: "var(--c-muted)", width: 42, flexShrink: 0, display: "inline-block", whiteSpace: "nowrap" }}>
                 {t("tunnels.local")}
               </span>
               {r.local_addr ? (
@@ -1711,7 +1711,7 @@ function SecurityDrawer({
           <Space direction="vertical" style={{ width: "100%" }} size="small">
             {policies.length > 0 && (
               <div>
-                <div style={{ fontSize: 12, color: "#8c8c8c", marginBottom: 4 }}>
+                <div style={{ fontSize: 12, color: "var(--c-muted)", marginBottom: 4 }}>
                   {t("tunnels.ipPolicy.source")}
                 </div>
                 <Select
@@ -1727,7 +1727,7 @@ function SecurityDrawer({
                   ]}
                 />
                 {fromPolicy && (
-                  <div style={{ fontSize: 12, color: "#8c8c8c", marginTop: 4 }}>
+                  <div style={{ fontSize: 12, color: "var(--c-muted)", marginTop: 4 }}>
                     {t("tunnels.ipPolicy.sourceFollowHint", { name: fromPolicy })}
                   </div>
                 )}
@@ -1737,7 +1737,7 @@ function SecurityDrawer({
                 here would be edited-then-overwritten the next time anybody
                 saves the policy — the confusion the stamp exists to prevent. */}
             <div>
-              <div style={{ fontSize: 12, color: "#8c8c8c", marginBottom: 4 }}>{t("tunnels.ipPolicy.allow")}</div>
+              <div style={{ fontSize: 12, color: "var(--c-muted)", marginBottom: 4 }}>{t("tunnels.ipPolicy.allow")}</div>
               <Input.TextArea
                 value={fromPolicy ? (policies.find((p) => p.name === fromPolicy)?.allow || []).join("\n") : allow}
                 onChange={(e) => setAllow(e.target.value)}
@@ -1747,7 +1747,7 @@ function SecurityDrawer({
               />
             </div>
             <div>
-              <div style={{ fontSize: 12, color: "#8c8c8c", marginBottom: 4 }}>{t("tunnels.ipPolicy.deny")}</div>
+              <div style={{ fontSize: 12, color: "var(--c-muted)", marginBottom: 4 }}>{t("tunnels.ipPolicy.deny")}</div>
               <Input.TextArea
                 value={fromPolicy ? (policies.find((p) => p.name === fromPolicy)?.deny || []).join("\n") : deny}
                 onChange={(e) => setDeny(e.target.value)}
@@ -1810,7 +1810,7 @@ function SecurityDrawer({
                 onChange={(v) => setRate(typeof v === "number" ? v : null)}
                 placeholder={t("tunnels.rateLimit.placeholder")}
               />
-              <span style={{ fontSize: 12, color: "#8c8c8c" }}>{t("tunnels.rateLimit.unitTotal")}</span>
+              <span style={{ fontSize: 12, color: "var(--c-muted)" }}>{t("tunnels.rateLimit.unitTotal")}</span>
             </Space>
             {/* The per-visitor cap. Without it the aggregate limit is also the
                 lever an abuser pulls: one address drains the shared bucket and
@@ -1824,10 +1824,10 @@ function SecurityDrawer({
                 onChange={(v) => setRatePerIP(typeof v === "number" ? v : null)}
                 placeholder={t("tunnels.rateLimit.placeholder")}
               />
-              <span style={{ fontSize: 12, color: "#8c8c8c" }}>{t("tunnels.rateLimit.unitPerIP")}</span>
+              <span style={{ fontSize: 12, color: "var(--c-muted)" }}>{t("tunnels.rateLimit.unitPerIP")}</span>
             </Space>
             {rate !== null && rate > 0 && !ratePerIP && (
-              <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+              <div style={{ fontSize: 12, color: "var(--c-muted)" }}>
                 {t("tunnels.rateLimit.perIPSuggest")}
               </div>
             )}
@@ -1843,7 +1843,7 @@ function SecurityDrawer({
             {t("tunnels.headers.hint")}
           </Typography.Paragraph>
           <Space direction="vertical" style={{ width: "100%" }} size="small">
-              <div style={{ fontSize: 12, color: "#8c8c8c" }}>{t("tunnels.headers.set")}</div>
+              <div style={{ fontSize: 12, color: "var(--c-muted)" }}>{t("tunnels.headers.set")}</div>
               {hdrSet.map((h, i) => (
                 <Space key={i} style={{ width: "100%" }} align="start">
                   <Input
@@ -1866,7 +1866,7 @@ function SecurityDrawer({
               <Button onClick={() => setHdrSet((hs) => [...hs, { name: "", value: "" }])}>
                 + {t("tunnels.headers.addHeader")}
               </Button>
-              <div style={{ fontSize: 12, color: "#8c8c8c", marginTop: 8 }}>{t("tunnels.headers.remove")}</div>
+              <div style={{ fontSize: 12, color: "var(--c-muted)", marginTop: 8 }}>{t("tunnels.headers.remove")}</div>
               <Input.TextArea
                 value={hdrRemove}
                 onChange={(e) => setHdrRemove(e.target.value)}
@@ -1922,7 +1922,7 @@ function SecurityDrawer({
                 />
               )}
               {oaFromPolicy ? (
-                <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+                <div style={{ fontSize: 12, color: "var(--c-muted)" }}>
                   {t("tunnels.oauth.fromPolicyHint", { name: oaFromPolicy })}
                 </div>
               ) : (
@@ -1933,9 +1933,9 @@ function SecurityDrawer({
                 value={oaSecret}
                 onChange={(e) => setOaSecret(e.target.value)}
               />
-              <div style={{ fontSize: 12, color: "#8c8c8c" }}>{t("tunnels.oauth.allowEmails")}</div>
+              <div style={{ fontSize: 12, color: "var(--c-muted)" }}>{t("tunnels.oauth.allowEmails")}</div>
               <Input.TextArea value={oaEmails} onChange={(e) => setOaEmails(e.target.value)} rows={2} placeholder={"alice@acme.com"} />
-              <div style={{ fontSize: 12, color: "#8c8c8c" }}>{t("tunnels.oauth.allowDomains")}</div>
+              <div style={{ fontSize: 12, color: "var(--c-muted)" }}>{t("tunnels.oauth.allowDomains")}</div>
               <Input.TextArea value={oaDomains} onChange={(e) => setOaDomains(e.target.value)} rows={2} placeholder={"acme.com"} />
                 </>
               )}

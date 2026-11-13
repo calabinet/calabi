@@ -40,47 +40,54 @@ func readRDPPin(ctx context.Context) ([]byte, error) {
 	return pin, nil
 }
 
-func startRDPCertificateReporter(ctx context.Context, coord *CoordClient, logger *slog.Logger) {
-	token := coord.sessionToken()
-	if token == "" {
+func startRDPCertificateReporter(ctx context.Context, coord *CoordClient, logger *slog.Logger, refresh <-chan struct{}) {
+	if coord.sessionToken() == "" {
 		return
 	}
-	go func() {
-		var previous string
-		reported := false
-		for ctx.Err() == nil {
-			read, cancel := context.WithTimeout(ctx, 10*time.Second)
-			pin, err := readRDPPin(read)
-			cancel()
-			if ctx.Err() != nil {
+	go runRDPCertificateReporter(ctx, coord, logger, refresh, readRDPPin)
+}
+
+func runRDPCertificateReporter(ctx context.Context, coord *CoordClient, logger *slog.Logger, refresh <-chan struct{}, readPin func(context.Context) ([]byte, error)) {
+	var previous string
+	var previousToken string
+	reported := false
+	for ctx.Err() == nil {
+		read, cancel := context.WithTimeout(ctx, 10*time.Second)
+		pin, err := readPin(read)
+		cancel()
+		if ctx.Err() != nil {
+			return
+		}
+		if err != nil {
+			pin = nil
+		}
+		// Pins belong to a registration, not just a device. Recovery can
+		// replace the token without restarting this transport or goroutine.
+		token := coord.sessionToken()
+		if !reported || token != previousToken || string(pin) != previous {
+			call, stop := context.WithTimeout(ctx, 5*time.Second)
+			_, err = coord.rpc.ReportRdpCertificate(call, &meshpb.ReportRdpCertificateRequest{SessionToken: token, Sha256: pin})
+			stop()
+			if status.Code(err) == codes.Unimplemented {
 				return
 			}
-			if err != nil {
-				pin = nil
-			}
-			if !reported || string(pin) != previous {
-				call, stop := context.WithTimeout(ctx, 5*time.Second)
-				_, err = coord.rpc.ReportRdpCertificate(call, &meshpb.ReportRdpCertificateRequest{SessionToken: token, Sha256: pin})
-				stop()
-				if status.Code(err) == codes.Unimplemented {
-					return
-				}
-				if err == nil {
-					previous = string(pin)
-					reported = true
-				} else if ctx.Err() == nil {
-					logger.Debug("mesh: unable to publish RDP listener fingerprint", "err", err)
-				}
-			}
-			interval := time.Minute
-			if len(pin) == 0 || err != nil {
-				interval = 15 * time.Second
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(interval):
+			if err == nil {
+				previous = string(pin)
+				previousToken = token
+				reported = true
+			} else if ctx.Err() == nil {
+				logger.Debug("mesh: unable to publish RDP listener fingerprint", "err", err)
 			}
 		}
-	}()
+		interval := time.Minute
+		if len(pin) == 0 || err != nil {
+			interval = 15 * time.Second
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-refresh:
+		case <-time.After(interval):
+		}
+	}
 }

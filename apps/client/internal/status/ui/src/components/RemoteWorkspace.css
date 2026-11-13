@@ -118,3 +118,61 @@ html.remote-native-backdrop,
 .remote-close { right: 7px; display: grid; place-items: center; }
 .remote-close svg { width: 13px; height: 13px; }
 .remote-gallery-error { padding: 6px 8px; color: #ffb4a5; font-size: 12px; }
+.remote-fullscreen-edge {
+  position: absolute;
+  z-index: 5;
+  inset: 0 0 auto;
+  height: 6px;
+}
+.remote-fullscreen-toolbar {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  border: 1px solid #405777;
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  background: #111c2e;
+  box-shadow: 0 4px 12px #050a15a0;
+  transform: translate(-50%, calc(-100% - 16px));
+  /* Give the pointer time to travel from either screen corner to the controls. */
+  transition: transform 160ms ease 1s;
+}
+.remote-fullscreen-edge:hover .remote-fullscreen-toolbar,
+.remote-fullscreen-edge:has(:focus-visible) .remote-fullscreen-toolbar {
+  transform: translate(-50%, 0);
+  transition-delay: 0s;
+}
+.remote-fullscreen-actions { display: flex; align-items: center; gap: 4px; padding: 5px; }
+.remote-fullscreen-actions strong {
+  min-width: 0;
+  max-width: 180px;
+  margin: 0 12px 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.remote-fullscreen-actions button {
+  flex: none;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.remote-fullscreen-actions button:hover { background: #2c4267; }
+.remote-fullscreen-actions .remote-end { color: #ffb4a5; }
+.remote-fullscreen-actions .remote-end:hover { background: #673039; color: #fff1ee; }
+@media (max-width: 640px) {
+  .remote-fullscreen-actions strong { display: none; }
+  .remote-fullscreen-actions { flex-wrap: wrap; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .remote-fullscreen-toolbar { transition-duration: 0s; }
+}

@@ -96,7 +96,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
           alignItems: "center",
           justifyContent: "center",
           gap: 12,
-          color: "#94a3b8",
+          color: "var(--c-muted)",
           fontSize: 14,
         }}
       >

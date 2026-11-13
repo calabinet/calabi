@@ -81,23 +81,23 @@ export default function TrafficChart({ rate, sampleAt, title }: Props) {
         <AreaChart data={points}>
           <defs>
             <linearGradient id="trafficGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.45} />
-              <stop offset="95%" stopColor="#22d3ee" stopOpacity={0} />
+              <stop offset="5%" stopColor="var(--c-link)" stopOpacity={0.45} />
+              <stop offset="95%" stopColor="var(--c-link)" stopOpacity={0} />
             </linearGradient>
           </defs>
           <XAxis dataKey="t" hide />
-          <YAxis tickFormatter={(v) => fmtRate(v)} width={70} tick={{ fontSize: 11, fill: "#94a3b8" }} />
+          <YAxis tickFormatter={(v) => fmtRate(v)} width={70} tick={{ fontSize: 11, fill: "var(--c-muted)" }} />
           <Tooltip
             labelFormatter={(t) => new Date(t as number).toLocaleTimeString()}
             formatter={(v: number) => [fmtRate(v), t("trafficChart.rate")]}
-            contentStyle={{ background: "#0b1022", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8 }}
-            labelStyle={{ color: "#94a3b8" }}
-            itemStyle={{ color: "#e2e8f0" }}
+            contentStyle={{ background: "var(--c-sheet)", border: "1px solid var(--c-line)", borderRadius: 8 }}
+            labelStyle={{ color: "var(--c-muted)" }}
+            itemStyle={{ color: "var(--c-ink)" }}
           />
           <Area
             type="monotone"
             dataKey="bps"
-            stroke="#22d3ee"
+            stroke="var(--c-link)"
             strokeWidth={2}
             fill="url(#trafficGradient)"
             isAnimationActive={false}

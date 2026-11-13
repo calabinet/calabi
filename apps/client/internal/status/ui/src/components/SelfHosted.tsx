@@ -390,7 +390,7 @@ export function SelfHostedTunnelsCard({ search = "" }: { search?: string }) {
                       width: 8,
                       height: 8,
                       borderRadius: 4,
-                      background: r.node_online ? "#10b981" : "#94a3b8",
+                      background: r.node_online ? "var(--c-ok)" : "var(--c-muted)",
                     }}
                   />
                   {r.node_name}
@@ -524,21 +524,21 @@ export function SelfHostedUsageChart({ data }: { data?: SelfHostedUsage }) {
                 mount with their ticks; the non-breaking space leaves a label
                 nowhere to break whatever the measurement says. */}
             <BarChart key={rows.length ? "days" : "empty"} data={rows} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.08)" />
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#94a3b8" }} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--c-line)" />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--c-muted)" }} />
               <YAxis
                 tickFormatter={(v: number) => fmtBytes(v).replace(" ", " ")}
                 width={72}
-                tick={{ fontSize: 11, fill: "#94a3b8" }}
+                tick={{ fontSize: 11, fill: "var(--c-muted)" }}
               />
               <ChartTooltip
-                cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                cursor={{ fill: "var(--c-fill)" }}
                 formatter={(v: number) => [fmtBytes(Number(v)), t("dailyChart.total")]}
-                contentStyle={{ background: "#0b1022", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8 }}
-                labelStyle={{ color: "#94a3b8" }}
-                itemStyle={{ color: "#e2e8f0" }}
+                contentStyle={{ background: "var(--c-sheet)", border: "1px solid var(--c-line)", borderRadius: 8 }}
+                labelStyle={{ color: "var(--c-muted)" }}
+                itemStyle={{ color: "var(--c-ink)" }}
               />
-              <Bar dataKey="bytes" fill="#3a5cff" radius={[3, 3, 0, 0]} maxBarSize={40} />
+              <Bar dataKey="bytes" fill="var(--c-brand)" radius={[3, 3, 0, 0]} maxBarSize={40} />
             </BarChart>
           </ChartFrame>
         </div>

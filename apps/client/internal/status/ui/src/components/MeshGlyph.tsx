@@ -23,7 +23,7 @@ const paths: Record<string, ReactNode> = {
   more: <><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
   info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7h.01" /></>,
   trash: <><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" /></>,
-  settings: <><path d="M4 6h16M4 12h16M4 18h16" /><circle cx="9" cy="6" r="2" fill="var(--mesh-surface, #0c1325)" /><circle cx="15" cy="12" r="2" fill="var(--mesh-surface, #0c1325)" /><circle cx="9" cy="18" r="2" fill="var(--mesh-surface, #0c1325)" /></>,
+  settings: <><path d="M4 6h16M4 12h16M4 18h16" /><circle cx="9" cy="6" r="2" fill="var(--mesh-surface, var(--c-sheet))" /><circle cx="15" cy="12" r="2" fill="var(--mesh-surface, var(--c-sheet))" /><circle cx="9" cy="18" r="2" fill="var(--mesh-surface, var(--c-sheet))" /></>,
   power: <path d="M12 2v10M5.6 5.6a9 9 0 1 0 12.8 0" />,
   transfer: <path d="M7 3v18m-4-4 4 4 4-4M17 21V3m-4 4 4-4 4 4" />,
   network: <><rect x="8" y="2" width="8" height="6" rx="1" /><path d="M12 8v5M5 17v-4h14v4" /><rect x="2" y="17" width="6" height="5" rx="1" /><rect x="16" y="17" width="6" height="5" rx="1" /></>,

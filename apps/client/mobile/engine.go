@@ -233,6 +233,7 @@ func (e *engine) run(ctx context.Context) {
 		return
 	}
 	defer dp.Close()
+	dp.ConfigureReceiveSimulation(e.c.cfg.MeshReceiveDelayMs, e.c.cfg.MeshReceiveDropEvery)
 	e.mu.Lock()
 	e.enr, e.settings, e.dp = enr, st, dp
 	e.mu.Unlock()
@@ -395,9 +396,10 @@ func (e *engine) session(ctx context.Context, enr meshenroll.Enrollment, priv me
 	defer conn.Close()
 	timing := phoneTiming
 	ctrl := &mesh.Controller{
-		Coord:    mesh.NewCoordClient(conn),
-		Datapath: dp,
-		Reauth:   e.reauth,
+		RelayOnly: e.c.cfg.MeshRelayOnly,
+		Coord:     mesh.NewCoordClient(conn),
+		Datapath:  dp,
+		Reauth:    e.reauth,
 		Params: mesh.RegisterParams{
 			AuthKey:     authKey,
 			NodeKey:     priv.Public(),

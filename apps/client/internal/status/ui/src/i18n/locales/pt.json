@@ -78,7 +78,7 @@
     "busy": "Aguarde a conclusão da operação atual.",
     "failed": "A operação falhou. Verifique as permissões, o espaço em disco e a rede."
   },
-  "remoteWorkspace": {"sessions": "Sessões remotas", "failed": "Não foi possível atualizar a sessão remota.", "close": "Desconectar {{name}}?", "desktop": "Área de trabalho remota"},
+  "remoteWorkspace": {"sessions": "Sessões remotas", "failed": "Não foi possível atualizar a sessão remota.", "close": "Desconectar {{name}}?", "desktop": "Área de trabalho remota", "controls": "Controles da área de trabalho remota", "minimize": "Minimizar", "endRemote": "Encerrar sessão remota"},
   "ssh": {
     "invalidPassword": "A senha deve ter até 1000 bytes em UTF-8, sem quebras de linha.",
     "authFailed": "A autenticação SSH falhou. Confira o usuário e a senha ou a chave SSH.",
@@ -110,7 +110,11 @@
     "loadFailed": "Não foi possível carregar os logins remotos recentes",
     "retry": "Tentar novamente",
     "connectDevice": "Entrar em {{name}}",
-    "deviceUnavailable": "Indisponível"
+    "deviceUnavailable": "Indisponível",
+    "opening": "Abrindo acesso remoto…",
+    "agentBusy": "O agente de arquivos local está ocupado. Conclua a operação atual e tente novamente.",
+    "agentTimeout": "O agente local não respondeu a tempo. Tente o acesso remoto novamente.",
+    "windowBusy": "A janela remota ainda não responde. Tente novamente em instantes."
   },
   "assist": {
     "secureConnectionHint": "Não foi possível estabelecer uma conexão segura com o outro dispositivo. Tente novamente em instantes e aguarde a aprovação.",
@@ -1425,5 +1429,13 @@
     "coreVersion": "Versão do núcleo em execução",
     "bundledCore": "Versão do núcleo incluído",
     "coreCommit": "Commit do núcleo incluído"
-}
+},
+  "appearance": {
+    "title": "Aparência",
+    "mode": "Tema",
+    "system": "Seguir o sistema",
+    "light": "Claro",
+    "dark": "Escuro",
+    "description": "Usa as cores padrão do console. As alterações são imediatas e ficam salvas neste dispositivo."
+  }
 }

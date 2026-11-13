@@ -78,7 +78,7 @@
     "busy": "Espera a que termine la operación en curso.",
     "failed": "La operación ha fallado. Comprueba los permisos, el espacio en disco y la red."
   },
-  "remoteWorkspace": {"sessions": "Sesiones remotas", "failed": "No se pudo actualizar la sesión remota.", "close": "¿Desconectar {{name}}?", "desktop": "Escritorio remoto"},
+  "remoteWorkspace": {"sessions": "Sesiones remotas", "failed": "No se pudo actualizar la sesión remota.", "close": "¿Desconectar {{name}}?", "desktop": "Escritorio remoto", "controls": "Controles del escritorio remoto", "minimize": "Minimizar", "endRemote": "Finalizar sesión remota"},
   "ssh": {
     "invalidPassword": "La contraseña no debe contener saltos de línea ni superar 1000 bytes UTF-8.",
     "authFailed": "Error de autenticación SSH. Comprueba el usuario y la contraseña o la clave SSH.",
@@ -110,7 +110,11 @@
     "loadFailed": "No se pudieron cargar las conexiones remotas recientes",
     "retry": "Reintentar",
     "connectDevice": "Iniciar sesión en {{name}}",
-    "deviceUnavailable": "No disponible"
+    "deviceUnavailable": "No disponible",
+    "opening": "Abriendo inicio de sesión remoto…",
+    "agentBusy": "El agente de archivos local está ocupado. Finaliza la operación actual e inténtalo de nuevo.",
+    "agentTimeout": "El agente local no respondió a tiempo. Intenta iniciar sesión de nuevo.",
+    "windowBusy": "La ventana remota aún no responde. Vuelve a intentarlo en breve."
   },
   "assist": {
     "secureConnectionHint": "No se pudo establecer una conexión segura con el otro dispositivo. Vuelve a intentarlo en breve y espera su aprobación.",
@@ -1425,5 +1429,13 @@
     "coreVersion": "Versión del núcleo en ejecución",
     "bundledCore": "Versión del núcleo incluido",
     "coreCommit": "Commit del núcleo incluido"
-}
+},
+  "appearance": {
+    "title": "Apariencia",
+    "mode": "Tema",
+    "system": "Seguir el sistema",
+    "light": "Claro",
+    "dark": "Oscuro",
+    "description": "Usa los colores predeterminados de la consola. Los cambios se aplican al instante y se guardan en este dispositivo."
+  }
 }

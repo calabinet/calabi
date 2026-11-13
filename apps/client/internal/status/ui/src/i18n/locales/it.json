@@ -78,7 +78,7 @@
     "busy": "Attendi il completamento dell’operazione in corso.",
     "failed": "Operazione non riuscita. Controlla permessi, spazio su disco e rete."
   },
-  "remoteWorkspace": {"sessions": "Sessioni remote", "failed": "Impossibile aggiornare la sessione remota.", "close": "Disconnettere {{name}}?", "desktop": "Desktop remoto"},
+  "remoteWorkspace": {"sessions": "Sessioni remote", "failed": "Impossibile aggiornare la sessione remota.", "close": "Disconnettere {{name}}?", "desktop": "Desktop remoto", "controls": "Controlli desktop remoto", "minimize": "Riduci a icona", "endRemote": "Termina sessione"},
   "ssh": {
     "invalidPassword": "La password non può contenere ritorni a capo né superare 1000 byte UTF-8.",
     "authFailed": "Autenticazione SSH non riuscita. Controlla nome utente e password o chiave SSH.",
@@ -110,7 +110,11 @@
     "loadFailed": "Impossibile caricare gli accessi remoti recenti",
     "retry": "Riprova",
     "connectDevice": "Accedi a {{name}}",
-    "deviceUnavailable": "Non disponibile"
+    "deviceUnavailable": "Non disponibile",
+    "opening": "Apertura dell’accesso remoto…",
+    "agentBusy": "L’agente file locale è occupato. Completa l’operazione in corso e riprova.",
+    "agentTimeout": "L’agente locale non ha risposto in tempo. Riprova l’accesso remoto.",
+    "windowBusy": "La finestra remota non risponde ancora. Riprova tra poco."
   },
   "assist": {
     "secureConnectionHint": "Impossibile stabilire una connessione sicura con l’altro dispositivo. Riprova tra poco e attendi il suo consenso.",
@@ -1425,5 +1429,13 @@
     "coreVersion": "Versione del core in esecuzione",
     "bundledCore": "Versione del core incluso",
     "coreCommit": "Commit del core incluso"
-}
+},
+  "appearance": {
+    "title": "Aspetto",
+    "mode": "Tema",
+    "system": "Segui il sistema",
+    "light": "Chiaro",
+    "dark": "Scuro",
+    "description": "Usa i colori predefiniti della console. Le modifiche sono immediate e vengono salvate su questo dispositivo."
+  }
 }

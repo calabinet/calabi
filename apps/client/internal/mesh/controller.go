@@ -48,10 +48,13 @@ type DNSSink interface {
 // A superseded map reauthenticates within the live discovery transport. Other
 // stream failures return to the daemon lifecycle so it can rebuild the session.
 type Controller struct {
-	Coord    *CoordClient
-	Datapath Datapath
-	DNS      DNSSink // optional MagicDNS record sink
-	Params   RegisterParams
+	// RelayOnly disables UDP discovery/transport for controlled network diagnostics.
+	// The authenticated relay and all ordinary identity checks remain in use.
+	RelayOnly bool
+	Coord     *CoordClient
+	Datapath  Datapath
+	DNS       DNSSink // optional MagicDNS record sink
+	Params    RegisterParams
 	// Reauth, if set, lets this session come back by proof of the node key
 	// alone when an earlier one learned it may, and records what this one
 	// learns. It outlives the Controller (see ReauthState). nil = always enroll
@@ -141,6 +144,7 @@ type Controller struct {
 	// re-pings on its periodic tick (between netmap pushes).
 	peersMu                sync.Mutex
 	curPeers               []Peer
+	membershipReady        atomic.Bool
 	fileTransferNegotiated atomic.Bool
 	fileTransferMap        atomic.Bool
 	fileRelayLimit         atomic.Uint32
@@ -270,6 +274,8 @@ func (c *Controller) Run(ctx context.Context) error {
 	}
 	c.Reauth.record(reg)
 	c.fileTransferMap.Store(false)
+	c.membershipReady.Store(false)
+	defer c.membershipReady.Store(false)
 	defer c.fileTransferMap.Store(false)
 	c.fileNodeID.Store(reg.NodeID)
 	c.fileGeneration.Store(time.Now().UnixNano())
@@ -284,7 +290,7 @@ func (c *Controller) Run(ctx context.Context) error {
 	// — the existing relay datapath is untouched by this.
 	var ms *magicSock
 	var prober *discoProber
-	if !c.disco.IsZero() {
+	if !c.disco.IsZero() && !c.RelayOnly {
 		if s, err := newMagicSock(c.disco, c.Logger); err != nil {
 			c.Logger.Warn("mesh: direct-path socket unavailable; relay-only this session", "err", err)
 		} else {
@@ -330,7 +336,8 @@ func (c *Controller) Run(ctx context.Context) error {
 	// Self-check the declared services and report what this machine actually
 	// observes. No-op when nothing is declared.
 	go c.serviceHealthLoop(ctx, reg.NodeID)
-	startRDPCertificateReporter(ctx, c.Coord, c.Logger)
+	rdpCertificateRefresh := make(chan struct{}, 1)
+	startRDPCertificateReporter(ctx, c.Coord, c.Logger, rdpCertificateRefresh)
 	// The tunnels this daemon serves, for a self-hosted coordinator's phones.
 	// Relay-only sessions too: it needs the coordinator, not a direct path.
 	go c.tunnelReportLoop(ctx)
@@ -366,6 +373,7 @@ func (c *Controller) Run(ctx context.Context) error {
 	}
 	return c.Coord.watchReauthenticated(ctx, reg.NodeID, watchRecovery{wake: c.watchWake, onTimeout: func() { c.Logger.Warn("mesh: initial netmap timed out; reauthenticating") }, interrupted: func() {
 		c.fileTransferMap.Store(false)
+		c.membershipReady.Store(false)
 		c.fileTransferNegotiated.Store(false)
 		// Keep the old stream-end alias cleanup. The next authoritative map
 		// reinstalls only aliases still granted, and can retry a failed install.
@@ -389,6 +397,12 @@ func (c *Controller) Run(ctx context.Context) error {
 		c.Reauth.record(fresh)
 		c.fileTransferNegotiated.Store(fresh.Capabilities.Supports(meshproto.CapFileTransfer))
 		c.registered.Store(true)
+		// The replacement registration withdrew the old RDP pin. Republish
+		// immediately even when the listener certificate itself is unchanged.
+		select {
+		case rdpCertificateRefresh <- struct{}{}:
+		default:
+		}
 		return nil
 	}}, func(nm NetMap) {
 		if prober != nil && prober.scheduler != nil {
@@ -508,10 +522,10 @@ func (c *Controller) Run(ctx context.Context) error {
 		}
 		// Probe peers' endpoints immediately on a fresh netmap (new peers / new
 		// endpoints), in addition to the prober's periodic tick.
+		c.setPeers(nm.Peers)
 		if prober != nil {
 			c.fileTransferMap.Store(nm.FileTransferSupported)
 			c.fileRelayLimit.Store(nm.RelayBandwidthKbps)
-			c.setPeers(nm.Peers)
 			if prober.scheduler == nil {
 				prober.Probe(nm.Peers)
 			}
@@ -522,6 +536,7 @@ func (c *Controller) Run(ctx context.Context) error {
 func (c *Controller) setPeers(peers []Peer) {
 	c.peersMu.Lock()
 	c.curPeers = peers
+	c.membershipReady.Store(true)
 	c.peersMu.Unlock()
 }
 
@@ -626,6 +641,10 @@ func (c *Controller) HomeRegion() string { return c.getHome() }
 // Registered reports whether this session got as far as the coordinator
 // accepting its registration, so Coord can be read over.
 func (c *Controller) Registered() bool { return c.registered.Load() }
+
+// MembershipReady distinguishes a new registration awaiting its first map from
+// an authoritative empty member set. Registration alone cannot authorize RDP.
+func (c *Controller) MembershipReady() bool { return c.membershipReady.Load() }
 
 // setHome records a newly measured home, returning true if it changed.
 func (c *Controller) setHome(region string) bool {

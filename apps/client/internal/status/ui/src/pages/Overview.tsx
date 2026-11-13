@@ -64,14 +64,14 @@ const pillStyle: React.CSSProperties = {
   alignItems: "center",
   gap: 6,
   padding: "2px 10px",
-  background: "rgba(94,127,255,0.16)",
-  color: "#9bb4ff",
+  background: "var(--c-brand-soft)",
+  color: "var(--c-link)",
   borderRadius: 10,
   fontSize: 12,
   fontWeight: 500,
   lineHeight: "18px",
 };
-const pillDot: React.CSSProperties = { color: "#5e7fff", fontSize: 11 };
+const pillDot: React.CSSProperties = { color: "var(--c-brand)", fontSize: 11 };
 
 // A field label in the 本机信息 card. A block with its own line-height: as a bare
 // inline span it sat in a 22px line box sized for the 14px text around it, 4px
@@ -419,6 +419,7 @@ export default function Overview() {
   // carry no quota bar and no pill, 134px at their tallest against 182px.
   return (
     <div
+      className="overview-page"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -480,7 +481,7 @@ export default function Overview() {
                 more tunnels than just this machine's. In a personal Org or
                 a 1-member team the two numbers match and the hint is
                 pure noise → hide it.
-                Pulled the styling up a notch — earlier #8c8c8c/12px on a
+                Pulled the styling up a notch — earlier var(--c-muted)/12px on a
                 light card background was getting lost; the user couldn't
                 tell at a glance which slice of the 10/10 belonged to
                 this machine. Now it reads as a labeled pill so the
@@ -532,9 +533,9 @@ export default function Overview() {
               value={usage ? fmtBytes(monthTotal) : "—"}
               valueStyle={
                 showCap && quotaErr
-                  ? { color: "#ff4d4f" }
+                  ? { color: "var(--c-err)" }
                   : showCap && quotaWarn
-                    ? { color: "#faad14" }
+                    ? { color: "var(--c-warn)" }
                     : undefined
               }
             />
@@ -570,9 +571,9 @@ export default function Overview() {
                   display: "inline-flex",
                   alignItems: "center",
                   padding: "2px 10px",
-                  background: "rgba(34,197,94,0.12)",
-                  color: "#86efac",
-                  border: "1px solid rgba(34,197,94,0.32)",
+                  background: "var(--c-ok-soft)",
+                  color: "var(--c-ok-ink)",
+                  border: "1px solid var(--c-ok-soft)",
                   borderRadius: 10,
                   fontSize: 11,
                   lineHeight: "18px",
@@ -600,6 +601,7 @@ export default function Overview() {
       <Row gutter={[12, 12]} style={{ flex: 1, margin: 0 }} wrap={false}>
         <Col
           flex="auto"
+          className="overview-chart-stack"
           style={{
             display: "flex",
             flexDirection: "column",
@@ -630,6 +632,7 @@ export default function Overview() {
         </Col>
         <Col flex="320px" style={{ display: "flex", minHeight: 0, paddingRight: 0 }}>
           <Card
+            className="overview-info"
             title={t("overview.localInfo")}
             size="small"
             style={{ width: "100%", display: "flex", flexDirection: "column" }}

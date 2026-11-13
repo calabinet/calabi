@@ -708,7 +708,7 @@ export default function TunnelNew() {
             content: (
               <div>
                 <p style={{ marginTop: 0 }}>{probeMessage(t, res)}</p>
-                <p style={{ marginBottom: 0, color: "#8c8c8c" }}>{t("wizard.preflightBody")}</p>
+                <p style={{ marginBottom: 0, color: "var(--c-muted)" }}>{t("wizard.preflightBody")}</p>
               </div>
             ),
             okText: t("wizard.preflightCreateAnyway"),
@@ -1418,7 +1418,7 @@ export default function TunnelNew() {
                         whose only entry is 0.0.0.0/0 looks like a rule and
                         admits everyone. */}
                     {ipEntries.length > 0 && !allowListCloses(ipEntries) && (
-                      <div style={{ fontSize: 12, color: "#d46b08", marginTop: 4 }}>
+                      <div style={{ fontSize: 12, color: "var(--c-warn-ink)", marginTop: 4 }}>
                         {t("wizard.protOpenList")}
                       </div>
                     )}

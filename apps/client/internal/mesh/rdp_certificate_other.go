@@ -7,4 +7,4 @@ import (
 	"log/slog"
 )
 
-func startRDPCertificateReporter(context.Context, *CoordClient, *slog.Logger) {}
+func startRDPCertificateReporter(context.Context, *CoordClient, *slog.Logger, <-chan struct{}) {}

@@ -41,9 +41,10 @@ export type RemoteWorkspace = {
   nativeRdp?: boolean;
   rdpCompare?: boolean;
   frameWait?: boolean;
+  canMinimize?: boolean;
 };
 type WorkspaceRequest =
-  | { op: "snapshot" }
+  | { op: "snapshot" | "minimize" }
   | { op: "select" | "close"; id: string }
   | { op: "rdp_input"; id: string; kind: number; a: number; b: number; delta: number }
   | { op: "rdp_canvas_stats"; id: string; width: number; height: number; elapsed_ms: number; received: number; submitted: number; max_gap_ms: number }

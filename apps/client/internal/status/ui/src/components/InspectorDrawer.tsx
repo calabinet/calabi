@@ -150,7 +150,7 @@ export default function InspectorDrawer({ open, onClose, proxyID, tunnelName }: 
                   children: (
                     <pre
                       style={{
-                        background: "rgba(255,255,255,0.04)",
+                        background: "var(--c-fill)",
                         padding: 10,
                         borderRadius: 4,
                         maxHeight: 360,
@@ -276,8 +276,8 @@ function CaptureDetail({ row }: { row: HTTPCaptureRow }) {
 }
 
 const preStyle: React.CSSProperties = {
-  background: "#0f172a",
-  color: "#d1d5db",
+  background: "var(--c-fill)",
+  color: "var(--c-ink-2)",
   padding: 10,
   borderRadius: 4,
   maxHeight: 280,
@@ -297,7 +297,7 @@ function KVTable({ title, rows }: { title: string; rows?: Record<string, string>
         <tbody>
           {Object.entries(rows).map(([k, v]) => (
             <tr key={k}>
-              <td style={{ padding: "2px 8px", color: "#64748b", verticalAlign: "top" }}>
+              <td style={{ padding: "2px 8px", color: "var(--c-muted)", verticalAlign: "top" }}>
                 {k}
               </td>
               <td style={{ padding: "2px 8px", wordBreak: "break-all" }}>

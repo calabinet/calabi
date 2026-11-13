@@ -78,7 +78,7 @@
     "busy": "Warten Sie, bis der aktuelle Dateivorgang abgeschlossen ist.",
     "failed": "Dateivorgang fehlgeschlagen. Prüfen Sie Rechte, Speicherplatz und Netzwerk."
   },
-  "remoteWorkspace": {"sessions": "Remotesitzungen", "failed": "Die Remotesitzung konnte nicht aktualisiert werden.", "close": "Verbindung zu {{name}} trennen?", "desktop": "Remotedesktop"},
+  "remoteWorkspace": {"sessions": "Remotesitzungen", "failed": "Die Remotesitzung konnte nicht aktualisiert werden.", "close": "Verbindung zu {{name}} trennen?", "desktop": "Remotedesktop", "controls": "Remotedesktop-Steuerung", "minimize": "Minimieren", "endRemote": "Verbindung trennen"},
   "ssh": {
     "invalidPassword": "Das Passwort darf keinen Zeilenumbruch enthalten und höchstens 1000 UTF-8-Bytes lang sein.",
     "authFailed": "SSH-Authentifizierung fehlgeschlagen. Prüfen Sie Benutzername und Passwort oder SSH-Schlüssel.",
@@ -110,7 +110,11 @@
     "loadFailed": "Letzte Remote-Anmeldungen konnten nicht geladen werden",
     "retry": "Erneut versuchen",
     "connectDevice": "Bei {{name}} anmelden",
-    "deviceUnavailable": "Nicht verfügbar"
+    "deviceUnavailable": "Nicht verfügbar",
+    "opening": "Remote-Anmeldung wird geöffnet…",
+    "agentBusy": "Der lokale Dateiagent ist beschäftigt. Schließen Sie den aktuellen Dateivorgang ab und versuchen Sie es erneut.",
+    "agentTimeout": "Der lokale Agent hat nicht rechtzeitig geantwortet. Versuchen Sie die Remote-Anmeldung erneut.",
+    "windowBusy": "Das Remote-Fenster antwortet noch nicht. Versuchen Sie es gleich erneut."
   },
   "assist": {
     "secureConnectionHint": "Eine sichere Verbindung zum anderen Gerät konnte nicht hergestellt werden. Versuchen Sie es später erneut und warten Sie auf die Zustimmung.",
@@ -1425,5 +1429,13 @@
     "coreVersion": "Laufende Core-Version",
     "bundledCore": "Mitgelieferte Core-Version",
     "coreCommit": "Mitgelieferter Core-Commit"
-}
+},
+  "appearance": {
+    "title": "Darstellung",
+    "mode": "Farbschema",
+    "system": "Systemeinstellung",
+    "light": "Hell",
+    "dark": "Dunkel",
+    "description": "Verwendet die Standardfarben der Konsole. Änderungen gelten sofort und werden auf diesem Gerät gespeichert."
+  }
 }

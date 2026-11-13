@@ -78,7 +78,7 @@
     "busy": "請等待目前的檔案操作完成。",
     "failed": "檔案操作失敗，請檢查權限、磁碟空間和網路後重試。"
   },
-  "remoteWorkspace": {"sessions": "遠端工作階段", "failed": "無法更新遠端工作階段。", "close": "中斷「{{name}}」？", "desktop": "遠端桌面"},
+  "remoteWorkspace": {"sessions": "遠端工作階段", "failed": "無法更新遠端工作階段。", "close": "中斷「{{name}}」？", "desktop": "遠端桌面", "controls": "遠端桌面控制", "minimize": "最小化", "endRemote": "結束遠端連線"},
   "ssh": {
     "invalidPassword": "密碼不可包含換行，UTF-8 編碼不得超過 1000 位元組。",
     "authFailed": "SSH 驗證失敗，請檢查使用者名稱和密碼或 SSH 金鑰。",
@@ -110,7 +110,11 @@
     "loadFailed": "無法載入最近的遠端登入",
     "retry": "重試",
     "connectDevice": "登入 {{name}}",
-    "deviceUnavailable": "無法使用"
+    "deviceUnavailable": "無法使用",
+    "opening": "正在開啟遠端登入…",
+    "agentBusy": "本機檔案操作正在處理中，請完成目前操作後重試遠端登入。",
+    "agentTimeout": "本機代理回應逾時，請重試遠端登入。",
+    "windowBusy": "遠端視窗尚未回應，請稍後重試。"
   },
   "assist": {
     "secureConnectionHint": "無法與對方裝置建立安全連線。請稍後重試，並等待對方同意。",
@@ -1425,5 +1429,13 @@
     "coreVersion": "執行中的核心版本",
     "bundledCore": "隨附核心版本",
     "coreCommit": "隨附核心提交"
-}
+},
+  "appearance": {
+    "title": "外觀",
+    "mode": "配色模式",
+    "system": "跟隨系統",
+    "light": "淺色",
+    "dark": "深色",
+    "description": "沿用使用者後台預設配色，切換立即生效，並在此裝置記住你的選擇。"
+  }
 }

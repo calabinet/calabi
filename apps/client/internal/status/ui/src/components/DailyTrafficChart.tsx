@@ -134,34 +134,34 @@ export default function DailyTrafficChart({
     >
       <ChartFrame>
         <BarChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.08)" />
-          <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#94a3b8" }} />
-          <YAxis tickFormatter={fmtBytes} width={64} tick={{ fontSize: 11, fill: "#94a3b8" }} />
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--c-line)" />
+          <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--c-muted)" }} />
+          <YAxis tickFormatter={fmtBytes} width={64} tick={{ fontSize: 11, fill: "var(--c-muted)" }} />
           <Tooltip
-            cursor={{ fill: "rgba(255,255,255,0.05)" }}
+            cursor={{ fill: "var(--c-fill)" }}
             formatter={(v: number) => fmtBytes(Number(v))}
-            contentStyle={{ background: "#0b1022", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8 }}
-            labelStyle={{ color: "#94a3b8" }}
-            itemStyle={{ color: "#e2e8f0" }}
+            contentStyle={{ background: "var(--c-sheet)", border: "1px solid var(--c-line)", borderRadius: 8 }}
+            labelStyle={{ color: "var(--c-muted)" }}
+            itemStyle={{ color: "var(--c-ink)" }}
           />
           <Legend
             verticalAlign="top"
             height={20}
             iconSize={8}
-            wrapperStyle={{ fontSize: 11, color: "#94a3b8" }}
+            wrapperStyle={{ fontSize: 11, color: "var(--c-muted)" }}
           />
           <Bar
             dataKey="tunnel"
             stackId="a"
             name={t("dailyChart.tunnel")}
-            fill="#3a5cff"
+            fill="var(--c-brand)"
             maxBarSize={40}
           />
           <Bar
             dataKey="relay"
             stackId="a"
             name={t("dailyChart.relay")}
-            fill="#22c1a4"
+            fill="var(--c-ok)"
             radius={[3, 3, 0, 0]}
             maxBarSize={40}
           />

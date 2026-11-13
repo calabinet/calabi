@@ -189,7 +189,7 @@ export default function Connect() {
               </Paragraph>
             )}
             <Form.Item name="meshServer" label={t("selfHosted.meshServer")} extra={t("selfHosted.meshHint")}>
-              <Input prefix={<LinkOutlined style={{ color: "#94a3b8" }} />} placeholder={t("selfHosted.meshServerPlaceholder")} autoFocus />
+              <Input prefix={<LinkOutlined style={{ color: "var(--c-muted)" }} />} placeholder={t("selfHosted.meshServerPlaceholder")} autoFocus />
             </Form.Item>
             {!isLink(meshServer) && (meshServer ?? "").trim() !== "" && (
               <>
@@ -277,7 +277,7 @@ function Centered({ children }: { children: React.ReactNode }) {
         justifyContent: "center",
         padding: 16,
         background:
-          "radial-gradient(ellipse at top, rgba(58,92,255,0.18), transparent 60%), linear-gradient(135deg, #0b1022 0%, #05070f 100%)",
+          "var(--c-auth-bg)",
       }}
     >
       {children}

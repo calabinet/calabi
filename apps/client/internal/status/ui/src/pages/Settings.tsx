@@ -265,10 +265,10 @@ export default function Settings() {
             fileList={importFile ? [importFile] : []}
           >
             <p>
-              <ImportOutlined style={{ fontSize: 28, color: "#5e7fff" }} />
+              <ImportOutlined style={{ fontSize: 28, color: "var(--c-brand)" }} />
             </p>
             <p>{t("settings.dragHint")}</p>
-            <p style={{ color: "#999", fontSize: 12 }}>
+            <p style={{ color: "var(--c-muted)", fontSize: 12 }}>
               {t("settings.formatHint")}
             </p>
           </Upload.Dragger>
@@ -292,7 +292,7 @@ export default function Settings() {
                     total: importResult.total,
                   })}
                   {importResult.skipped > 0 && (
-                    <span style={{ marginLeft: 8, color: "#8c8c8c" }}>
+                    <span style={{ marginLeft: 8, color: "var(--c-muted)" }}>
                       · {t("settings.skippedSummary", { n: importResult.skipped })}
                     </span>
                   )}
@@ -305,11 +305,11 @@ export default function Settings() {
                       {it.skipped ? "⏭️" : it.error ? "❌" : "✅"}{" "}
                       {it.name || t("settings.noName")}{" "}
                       {it.skipped && (
-                        <span style={{ color: "#8c8c8c" }}>
+                        <span style={{ color: "var(--c-muted)" }}>
                           {t("settings.alreadyExists")}
                         </span>
                       )}
-                      {it.error && <span style={{ color: "#ff4d4f" }}>{displayError(it.error, t)}</span>}
+                      {it.error && <span style={{ color: "var(--c-err)" }}>{displayError(it.error, t)}</span>}
                     </div>
                   ))}
                 </div>

@@ -23,8 +23,10 @@ import { HashRouter } from "react-router-dom";
 import i18n from "./i18n";
 import AntdConfig from "./i18n/AntdConfig";
 import App from "./App";
+import { installAutoScrollbars } from "./lib/autoScrollbars";
 import { isConsoleLocked } from "./api/client";
 import { CONSOLE_STATE_KEY } from "./components/ConsoleLockGate";
+import "./theme/appearance.css";
 import "./styles/global.css";
 
 // A visitor from another machine whose unlock lapsed (12 h, or the daemon
@@ -49,6 +51,8 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+installAutoScrollbars();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

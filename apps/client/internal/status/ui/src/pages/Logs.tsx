@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ListSearch from "../components/ListSearch";
 import { api } from "../api/client";
 import { fileAction, hasBrowserFiles, hasNativeFiles } from "../api/files";
-import { mergeFileDiagnostics, type FileDiagnostic } from "../lib/fileDiagnostics";
+import { localLogTime, mergeFileDiagnostics, type FileDiagnostic } from "../lib/fileDiagnostics";
 import { useTranslation } from "react-i18next";
 
 const { Title, Text } = Typography;
@@ -113,7 +113,7 @@ export default function Logs() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `calabi-${new Date().toISOString().slice(0, 10)}.log`;
+    a.download = `calabi-${localLogTime(new Date()).slice(0, 10)}.log`;
     a.click();
     URL.revokeObjectURL(url);
     message.success(t("common.downloaded"));

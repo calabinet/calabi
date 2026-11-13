@@ -10,6 +10,14 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## Unreleased
+
+- **Added:** Light, dark and system appearance options in the local console, with more compact navigation and an overview that adapts to larger Windows text settings.
+- **Changed:** Console scrollbars are thinner and appear while scrolling.
+- **Fixed:** Re-registering a device republishes its remote desktop certificate so peers can discover it again.
+
+These source changes are bundled with Desktop 3.0.1. The standalone core release remains 2.8.0.
+
 ## 2.8.0 — 2026-11-11
 
 ## Changes

@@ -39,8 +39,11 @@ import (
 // path is exercised over loopback sockets in tests but a real NAT traversal needs
 // two machines on different networks.
 type meshBind struct {
-	self   meshproto.NodeKey
-	client relaySender // set via attach() before Open
+	simulatedDelayMs   atomic.Uint32
+	simulatedDropEvery atomic.Uint32
+	simulatedPackets   atomic.Uint64
+	self               meshproto.NodeKey
+	client             relaySender // set via attach() before Open
 	// meter charges relayed ciphertext against the client's self-imposed rate
 	// limit. nil until a coordinator sends an allowance; charge() is nil-safe.
 	// The brake itself is in the tun reader — see relayrate.go for why the two
@@ -484,6 +487,22 @@ func (b *meshBind) enqueue(ep conn.Endpoint, pkt []byte) {
 	b.mu.Lock()
 	closed := b.closed
 	b.mu.Unlock()
+	// Local diagnostic impairment operates on complete encrypted WireGuard
+	// datagrams, so inner TCP retransmission remains real. Never discard TCP
+	// stream bytes or bypass its certificate/authorization path.
+	if every := b.simulatedDropEvery.Load(); every >= 2 && b.simulatedPackets.Add(1)%uint64(every) == 0 {
+		b.rxDropped.Add(1)
+		return
+	}
+	if delay := b.simulatedDelayMs.Load(); delay > 0 {
+		timer := time.NewTimer(time.Duration(delay) * time.Millisecond)
+		select {
+		case <-closed:
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+	}
 	cp := append([]byte(nil), pkt...)
 	select {
 	case b.recv <- inbound{ep: ep, pkt: cp}:

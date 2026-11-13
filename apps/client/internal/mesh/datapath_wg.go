@@ -254,6 +254,19 @@ func (d *WGDatapath) Snapshot() Status {
 	return st
 }
 
+// ConfigureReceiveSimulation is a bounded local diagnostic, disabled by default.
+// Delay serializes receive processing (a low-throughput link), not a fixed RTT.
+func (d *WGDatapath) ConfigureReceiveSimulation(delayMs, dropEvery uint32) {
+	if delayMs > 100 {
+		delayMs = 100
+	}
+	if dropEvery < 2 {
+		dropEvery = 0
+	}
+	d.bind.simulatedDelayMs.Store(delayMs)
+	d.bind.simulatedDropEvery.Store(dropEvery)
+}
+
 // sortPeersByOverlay puts the peer list in a STABLE, human-readable order:
 // ascending overlay IP (100.64.0.4 before 100.64.0.5). WireGuard's IpcGet dumps
 // peers in an internal order that reshuffles — especially right after a

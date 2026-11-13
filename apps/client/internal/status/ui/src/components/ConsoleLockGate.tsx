@@ -73,7 +73,7 @@ function UnlockPage({ available }: { available: boolean }) {
         alignItems: "center",
         justifyContent: "center",
         background:
-          "radial-gradient(ellipse at top, rgba(58,92,255,0.18), transparent 60%), linear-gradient(135deg, #0b1022 0%, #05070f 100%)",
+          "var(--c-auth-bg)",
       }}
     >
       <Card
@@ -105,7 +105,7 @@ function UnlockPage({ available }: { available: boolean }) {
                   rules={[{ required: true, message: t("consoleLock.secretRequired") }]}
                 >
                   <Input.Password
-                    prefix={<KeyOutlined style={{ color: "#94a3b8" }} />}
+                    prefix={<KeyOutlined style={{ color: "var(--c-muted)" }} />}
                     placeholder="xxxxxx-xxxxxx-xxxxxx-xxxxxx"
                     autoComplete="current-password"
                     autoFocus

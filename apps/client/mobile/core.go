@@ -66,18 +66,24 @@ type config struct {
 	// only, never a release build.
 	CoordPlaintext bool `json:"coord_plaintext"`
 	// FileTransferP0 exposes the manual-pairing development experiment only.
-	FileTransferP0 bool `json:"file_transfer_p0"`
-	FileTransferV1 bool `json:"file_transfer_v1"`
+	FileTransferP0       bool   `json:"file_transfer_p0"`
+	FileTransferV1       bool   `json:"file_transfer_v1"`
+	RemoteDesktopP0      bool   `json:"remote_desktop_p0"`
+	MeshRelayOnly        bool   `json:"mesh_relay_only"`
+	MeshReceiveDelayMs   uint32 `json:"mesh_receive_delay_ms"`
+	MeshReceiveDropEvery uint32 `json:"mesh_receive_drop_every"`
 }
 
 // Core is one phone client. Create it once per process with New.
 type Core struct {
-	cfg      config
-	platform Platform
-	logger   *slog.Logger
-	logs     *logRing
-	hc       *http.Client
-	api      http.Handler
+	rdpMu      sync.Mutex
+	rdpTickets map[string]rdpTicket
+	cfg        config
+	platform   Platform
+	logger     *slog.Logger
+	logs       *logRing
+	hc         *http.Client
+	api        http.Handler
 
 	mu     sync.Mutex
 	engine *engine

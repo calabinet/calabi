@@ -146,7 +146,7 @@ export default function Login() {
         alignItems: "center",
         justifyContent: "center",
         background:
-          "radial-gradient(ellipse at top, rgba(58,92,255,0.18), transparent 60%), linear-gradient(135deg, #0b1022 0%, #05070f 100%)",
+          "var(--c-auth-bg)",
       }}
     >
       <Card
@@ -186,7 +186,7 @@ export default function Login() {
               rules={[{ required: true, message: t("login.emailRequired") }]}
             >
               <Input
-                prefix={<UserOutlined style={{ color: "#94a3b8" }} />}
+                prefix={<UserOutlined style={{ color: "var(--c-muted)" }} />}
                 placeholder="me@example.com"
                 autoComplete="email"
                 autoFocus
@@ -199,7 +199,7 @@ export default function Login() {
               rules={[{ required: true, message: t("login.passwordRequired") }]}
             >
               <Input.Password
-                prefix={<LockOutlined style={{ color: "#94a3b8" }} />}
+                prefix={<LockOutlined style={{ color: "var(--c-muted)" }} />}
                 placeholder="••••••••"
                 autoComplete="current-password"
               />

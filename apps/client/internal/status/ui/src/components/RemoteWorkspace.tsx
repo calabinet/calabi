@@ -63,7 +63,7 @@ export default function RemoteWorkspace() {
       revision.current++;
       await refresh();
       dismiss();
-      requestAnimationFrame(() => document.querySelector<HTMLElement>(
+      if (request.op !== "minimize") requestAnimationFrame(() => document.querySelector<HTMLElement>(
         ".remote-session:not([hidden]) :is([data-remote-keyboard], .xterm-helper-textarea)"
       )?.focus({ preventScroll: true }));
     } catch {
@@ -72,6 +72,7 @@ export default function RemoteWorkspace() {
   }, [dismiss, refresh]);
 
   const hasSessions = !!state?.sessions.length;
+  const activeSession = state?.sessions.find(session => session.id === state.active);
   const nativeDesktop = !!state?.nativeRdp && state.sessions.some(session =>
     session.id === state.active && session.protocol === "rdp");
   useLayoutEffect(() => {
@@ -153,5 +154,25 @@ export default function RemoteWorkspace() {
         </ul>
       </section>
     </div>}
+    {state?.fullscreen && state.canMinimize && activeSession?.protocol === "rdp" &&
+      <div className="remote-fullscreen-edge">
+        <section className="remote-fullscreen-toolbar" role="toolbar" aria-label={t("remoteWorkspace.controls")}>
+          <div className="remote-fullscreen-actions">
+            <strong title={activeSession.name}>{activeSession.name}</strong>
+            <button type="button" aria-keyshortcuts="F11" onClick={() => void act({ op: "fullscreen", enabled: false })}>
+              {t("assist.exitFullscreen")}
+            </button>
+            <button type="button" onClick={() => void act({ op: "minimize" })}>
+              {t("remoteWorkspace.minimize")}
+            </button>
+            <button type="button" className="remote-end" onClick={() => {
+              if (window.confirm(t("remoteWorkspace.close", { name: activeSession.name }))) {
+                void act({ op: "close", id: activeSession.id });
+              }
+            }}>{t("remoteWorkspace.endRemote")}</button>
+          </div>
+          {error && <div className="remote-gallery-error" role="alert">{t("remoteWorkspace.failed")}</div>}
+        </section>
+      </div>}
   </main>;
 }
