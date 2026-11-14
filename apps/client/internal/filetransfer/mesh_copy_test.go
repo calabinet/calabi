@@ -263,3 +263,28 @@ func TestMeshCopyChangedSourceAndNewOffer(t *testing.T) {
 	}
 	t.Fatal("changed source check timeout")
 }
+
+func TestIdentityRenewalWaitsForRemoteCopySession(t *testing.T) {
+	a, b := meshCopyPair(t)
+	ctx := context.Background()
+	id, err := a.CopyStart(ctx, b.cfg.LocalIP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, agent := range []*Agent{a, b} {
+		w := &Workspace{Agent: agent}
+		if w.RetireForIdentityRenewal() {
+			t.Fatal("renewal interrupted a live remote file-copy session")
+		}
+		if agent.CopySnapshot().Session != id {
+			t.Fatal("renewal revoked the copy session")
+		}
+	}
+	a.CopyClose(ctx, id)
+	for _, agent := range []*Agent{a, b} {
+		w := &Workspace{Agent: agent}
+		if !w.RetireForIdentityRenewal() {
+			t.Fatal("closed copy session blocked idle renewal")
+		}
+	}
+}

@@ -60,7 +60,7 @@ func (d *desktopFileAgent) renewIdentityWhenIdle() {
 	d.wMu.RUnlock()
 	var receiving, assisting, clipboard bool
 	if w != nil {
-		if d.assistActive() || d.shellPasteLive.Load() || !w.RetireForIdentityRenewal() {
+		if d.assistActive() || d.shellPasteMarker != "" || !w.RetireForIdentityRenewal() {
 			return
 		}
 		receiving, assisting, clipboard = w.Agent.Receiving(), w.Agent.Assisting(), w.Agent.ClipboardReceiving()

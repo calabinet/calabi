@@ -94,6 +94,12 @@ func (w *Workspace) RetireForIdentityRenewal() bool {
 		return false
 	}
 	defer w.Agent.maintenance.Unlock()
+	// A remote file-copy lease may be idle between offers but still owns
+	// sources and peer identity pins. Preserve it until explicitly closed
+	// or expired, even when ordinary reception has no unfinished jobs.
+	if w.Agent.CopySnapshot().Session != "" {
+		return false
+	}
 	cert, _ := x509.ParseCertificate(w.Agent.cfg.Identity.Certificate.Certificate[0])
 	urgent := cert != nil && !time.Now().Add(meshproto.FileTransferLease).Before(cert.NotAfter)
 	for _, j := range w.jobs {

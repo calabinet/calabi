@@ -80,6 +80,17 @@ func TestDesktopAutomaticRenewalPreservesReceptionAndIdentity(t *testing.T) {
 	}
 	d.identity = &short
 	d.renewAfter = time.Time{}
+	// An idle clipboard broker stays online for the lifetime of the app.
+	d.shellPasteLive.Store(true)
+	d.shellPasteMarker = "pending-shell-paste"
+	d.opMu.Unlock()
+	d.renewIdentityWhenIdle()
+	d.opMu.Lock()
+	if d.identity.Fingerprint != short.Fingerprint || d.w == nil {
+		d.opMu.Unlock()
+		t.Fatal("renewal interrupted a pending shell paste")
+	}
+	d.shellPasteMarker = ""
 	d.opMu.Unlock()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
