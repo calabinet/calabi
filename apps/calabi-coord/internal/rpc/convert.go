@@ -14,6 +14,10 @@ func toProtoNetMap(nm *core.NetMap) *meshpb.NetMap {
 }
 
 func toProtoNetMapWithPeers(nm *core.NetMap, peer func(*core.Node) *meshpb.Peer) *meshpb.NetMap {
+	return toProtoNetMapWithRDP(nm, peer, false)
+}
+
+func toProtoNetMapWithRDP(nm *core.NetMap, peer func(*core.Node) *meshpb.Peer, selfHosted bool) *meshpb.NetMap {
 	out := &meshpb.NetMap{
 		Self:    toProtoPeer(&nm.Self),
 		DerpMap: toProtoDERPMap(nm.DERP),
@@ -27,7 +31,7 @@ func toProtoNetMapWithPeers(nm *core.NetMap, peer func(*core.Node) *meshpb.Peer)
 		out.Peers = make([]*meshpb.Peer, 0, len(nm.Peers))
 	}
 	for i := range nm.Peers {
-		out.Peers = append(out.Peers, peerForOwner(nm.Self.OwnerUserID, &nm.Peers[i], peer(&nm.Peers[i])))
+		out.Peers = append(out.Peers, peerForRDP(&nm.Self, &nm.Peers[i], peer(&nm.Peers[i]), selfHosted))
 	}
 	for _, r := range nm.PacketFilter {
 		fr := &meshpb.FilterRule{SrcCidrs: r.SrcCIDRs}
@@ -84,6 +88,21 @@ func peerForOwner(owner int64, node *core.Node, base *meshpb.Peer) *meshpb.Peer 
 	result := proto.Clone(base).(*meshpb.Peer)
 	result.SameOwner = true
 	return result
+}
+
+// Preserve SameOwner as an identity assertion. A self-hosted operator separately
+// authorizes approved, unattributed members of the same mesh for RDP access.
+func peerForRDP(self, node *core.Node, base *meshpb.Peer, selfHosted bool) *meshpb.Peer {
+	peer := peerForOwner(self.OwnerUserID, node, base)
+	active := func(n *core.Node) bool { return n.Approved && !n.Disabled && !n.SignedOut }
+	allowed := self.Meshnet > 0 && self.ID != node.ID && self.Meshnet == node.Meshnet && active(self) && active(node) &&
+		(peer.SameOwner || selfHosted && self.OwnerUserID == 0 && node.OwnerUserID == 0)
+	if !allowed {
+		return peer
+	}
+	peer = proto.Clone(peer).(*meshpb.Peer)
+	peer.RdpAccessAllowed = true
+	return peer
 }
 
 func toProtoPeer(n *core.Node) *meshpb.Peer {

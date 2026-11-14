@@ -545,7 +545,7 @@ func (s *Server) sendLegacyNetMap(stream meshpb.Coordinator_PullNetMapServer, no
 		}
 		return status.Errorf(codes.Internal, "compute netmap: %v", err)
 	}
-	out := toProtoNetMap(nm)
+	out := toProtoNetMapWithRDP(nm, toProtoPeer, s.selfHostedRDP())
 	s.addFileTransfers(out)
 	return s.sendNetMapPayload(stream, out, nil)
 }

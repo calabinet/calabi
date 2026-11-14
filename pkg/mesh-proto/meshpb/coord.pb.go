@@ -3077,8 +3077,13 @@ func (x *PortRange) GetProto() string {
 type Peer struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Relative to the recipient; asserted by coord only for two attributed devices.
-	SameOwner            bool   `protobuf:"varint,12,opt,name=same_owner,json=sameOwner,proto3" json:"same_owner,omitempty"`
-	RdpCertificateSha256 []byte `protobuf:"bytes,13,opt,name=rdp_certificate_sha256,json=rdpCertificateSha256,proto3" json:"rdp_certificate_sha256,omitempty"` // online, same-owner Windows only
+	SameOwner bool `protobuf:"varint,12,opt,name=same_owner,json=sameOwner,proto3" json:"same_owner,omitempty"`
+	// Recipient-specific RDP authorization, separate from attributed ownership.
+	// Self-hosted key-auth coordinators may allow approved devices in one mesh.
+	// Windows credentials and packet-filter rules are still required.
+	// This does not assert ownership or grant owner-only clipboard-file access.
+	RdpAccessAllowed     bool   `protobuf:"varint,14,opt,name=rdp_access_allowed,json=rdpAccessAllowed,proto3" json:"rdp_access_allowed,omitempty"`
+	RdpCertificateSha256 []byte `protobuf:"bytes,13,opt,name=rdp_certificate_sha256,json=rdpCertificateSha256,proto3" json:"rdp_certificate_sha256,omitempty"` // online, authorized Windows only
 	// Only present for a current, approved, online device's unexpired declaration.
 	FileTransfer *FileTransferInfo `protobuf:"bytes,11,opt,name=file_transfer,json=fileTransfer,proto3" json:"file_transfer,omitempty"`
 	NodeId       int64             `protobuf:"varint,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
@@ -3148,6 +3153,13 @@ func (*Peer) Descriptor() ([]byte, []int) {
 func (x *Peer) GetSameOwner() bool {
 	if x != nil {
 		return x.SameOwner
+	}
+	return false
+}
+
+func (x *Peer) GetRdpAccessAllowed() bool {
+	if x != nil {
+		return x.RdpAccessAllowed
 	}
 	return false
 }
@@ -3952,10 +3964,11 @@ const file_meshpb_coord_proto_rawDesc = "" +
 	"\tPortRange\x12\x14\n" +
 	"\x05first\x18\x01 \x01(\rR\x05first\x12\x12\n" +
 	"\x04last\x18\x02 \x01(\rR\x04last\x12\x14\n" +
-	"\x05proto\x18\x03 \x01(\tR\x05proto\"\xcf\x03\n" +
+	"\x05proto\x18\x03 \x01(\tR\x05proto\"\xfd\x03\n" +
 	"\x04Peer\x12\x1d\n" +
 	"\n" +
-	"same_owner\x18\f \x01(\bR\tsameOwner\x124\n" +
+	"same_owner\x18\f \x01(\bR\tsameOwner\x12,\n" +
+	"\x12rdp_access_allowed\x18\x0e \x01(\bR\x10rdpAccessAllowed\x124\n" +
 	"\x16rdp_certificate_sha256\x18\r \x01(\fR\x14rdpCertificateSha256\x12E\n" +
 	"\rfile_transfer\x18\v \x01(\v2 .calabi.mesh.v1.FileTransferInfoR\ffileTransfer\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\x03R\x06nodeId\x12\x19\n" +

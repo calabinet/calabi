@@ -203,10 +203,10 @@
       "filename": "Nom du fichier",
       "saved": "Enregistré sur Linux"
     },
-    "errors": {
+    "errors": {"clock": "Vérifiez la date et l’heure du système, puis réessayez.",
       "sourceInUse": "Ce fichier est encore utilisé par un envoi. Supprimez d’abord l’envoi associé dans les transferts de fichiers. S’il est en cours, mettez-le en pause ou annulez-le au préalable.",
       "authorization": "Le transfert n’est pas autorisé pour le moment. Vérifiez que les deux appareils sont connectés et que la réception est activée.",
-      "identity": "L’identité de transfert a changé ou son certificat est indisponible. Vérifiez le certificat dans les paramètres.",
+      "identity": "Impossible de vérifier l’autre appareil. Actualisez la liste et réessayez.",
       "source": "Le fichier d’origine a été déplacé, supprimé ou modifié. Sélectionnez-le à nouveau.",
       "integrity": "La vérification du fichier a échoué. Renvoyez le fichier.",
       "storage": "Espace de stockage insuffisant. Libérez de l’espace, puis réessayez.",
@@ -268,7 +268,7 @@
     "maxBatch": "Jusqu’à 32 fichiers par lot",
     "confirmHint": "Le destinataire doit confirmer la réception.",
     "cancelPreparation": "Annuler la préparation",
-    "identityUnavailable": "Les informations d’identité de transfert sont indisponibles.",
+    "identityUnavailable": "Les transferts sont indisponibles. Essayez de les réparer.",
     "bridgeUnavailable": "L’interface de fichiers du client n’est pas prête. Fermez l’ancienne application et ouvrez la version d’essai à jour.",
     "sendTo": "Envoyer à : {{device}}",
     "backToDevices": "Retour aux appareils",
@@ -284,7 +284,7 @@
     "identityExpires": "Expiration du certificat : {{date}}",
     "identityDue": "Le certificat expire dans moins de 30 jours. Renouvelez-le quand aucun transfert n’est en cours.",
     "identityRenew": "Renouveler le certificat",
-    "identityReset": "Réinitialiser la clé de transfert",
+    "identityReset": "Réparer les transferts",
     "identityConfirm": "La réception s’arrêtera et les transferts inachevés de tous les comptes et organisations de cet utilisateur du système seront annulés. Les fichiers terminés, les fichiers préparés et l’historique seront conservés. L’identité de l’appareil sur le réseau maillé restera la même. Réactivez la réception quand vous serez prêt.",
     "title": "Transferts de fichiers",
     "hint": "Envoyez des fichiers aux appareils en ligne sur votre réseau. La réception nécessite une confirmation et utilise la connexion directe ou relayée existante.",
@@ -900,6 +900,10 @@
     "agentManageBannerDesc": "Ce client s'exécute en tant que service sous une identité à clé API fixe avec droit d'écriture. Vous pouvez gérer les endpoints de cette organisation ici, comme dans la console web. La connexion et le changement d'organisation restent désactivés."
   },
   "login": {
+    "totpTitle": "Authentification à deux facteurs",
+    "totpSub": "Ouvrez votre application d'authentification et saisissez le code à 6 chiffres de {{account}}.",
+    "totpSubmit": "Vérifier et se connecter",
+    "back": "Retour",
     "title": "Se connecter à Calabi",
     "subtitle": "Console du client local",
     "failed": "Échec de la connexion",

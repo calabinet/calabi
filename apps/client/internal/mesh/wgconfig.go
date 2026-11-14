@@ -32,6 +32,8 @@ type WGPeer struct {
 // WGConfig is the full desired tun/WireGuard state derived from a NetMap. The
 // datapath owns the private key; only the public identity travels here.
 type WGConfig struct {
+	// Legacy name: this is the 3389 source allow-set, including explicit
+	// self-hosted RDP grants. It must not be used as an ownership assertion.
 	RDPOwners   []netip.Addr
 	NodeKey     meshproto.NodeKey
 	OverlayAddr netip.Addr
@@ -111,7 +113,7 @@ type WGConfig struct {
 func BuildWGConfig(nm NetMap) WGConfig {
 	cfg := WGConfig{NodeKey: nm.Self.NodeKey, OverlayAddr: nm.Self.Overlay}
 	for _, p := range nm.Peers {
-		if p.SameOwner && p.Overlay.Is4() {
+		if (p.SameOwner || p.RDPAccessAllowed) && p.Overlay.Is4() {
 			cfg.RDPOwners = append(cfg.RDPOwners, p.Overlay)
 		}
 	}

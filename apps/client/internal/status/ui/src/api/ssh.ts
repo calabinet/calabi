@@ -24,6 +24,7 @@ export type SshRequest =
   | { op: "info" }
   | { op: "start" | "resize"; rows: number; cols: number }
   | { op: "input"; data: string }
+  | { op: "preview"; pixels: string }
   | { op: "clipboard_read" }
   | { op: "clipboard_write"; text: string }
   | { op: "files"; action: SshFileAction };

@@ -41,7 +41,6 @@ export function FileTransfers({ blockIncoming }: { blockIncoming?: boolean }) {
   const [peer, setPeer] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [composing, setComposing] = useState(!!deviceKey);
-  const [settings, setSettings] = useState(false);
   const [search, setSearch] = useState("");
   const [direction, setDirection] = useState("all");
   const [catalog, setCatalog] = useState<{directory: string; files: {name: string; size: number}[]} | null>(null);
@@ -92,7 +91,7 @@ export function FileTransfers({ blockIncoming }: { blockIncoming?: boolean }) {
   const selectedBytes = selectedFiles.reduce((sum, source) => sum + source.size, 0);
 
   useEffect(() => {
-    if (location.pathname !== "/mesh/files") { setComposing(false); setSettings(false); }
+    if (location.pathname !== "/mesh/files") { setComposing(false); }
     else if (deviceKey) setComposing(true);
   }, [deviceKey, location.key, location.pathname]);
 
@@ -211,9 +210,8 @@ export function FileTransfers({ blockIncoming }: { blockIncoming?: boolean }) {
           : <Typography.Text type="secondary">{t("mesh.reception.files")} · {
             t(support.data === false || support.isError || query.isError ? "mesh.reception.unavailable" : "mesh.reception.waiting")
           }</Typography.Text>}
-      <Space wrap size="middle"><Tooltip title={t("files.settings")}><Button type="text" icon={<MeshGlyph name="settings" />} aria-label={t("files.settings")} onClick={() => setSettings(true)} /></Tooltip>
       <Button type="primary" icon={<MeshGlyph name="plus" />} disabled={!data?.available} onClick={() => setComposing(true)}>{t("files.send")}</Button>
-    </Space></div>
+    </div>
     {data?.service?.receiving_requested && !data.receiving && !data.unavailable_reason && <Alert type="info" message={t("files.service.waiting")} />}
     {data?.service?.error && !data.unavailable_reason && <Alert type="warning" message={t(data.service.managed ? "files.service.issue" : "files.receivingRestoreError")} />}
     {support.isPending && <Spin />}
@@ -221,9 +219,9 @@ export function FileTransfers({ blockIncoming }: { blockIncoming?: boolean }) {
     {support.error && <Alert type="warning" message={t("files.bridgeUnavailable")} description={errorText(support.error.message)} action={<Button onClick={() => support.refetch()}>{t("files.retry")}</Button>} />}
     {query.isPending && support.data === true && <Spin />}
     {query.error && <Alert type="error" message={errorText(query.error.message)} action={<Button onClick={() => query.refetch()}>{t("files.retry")}</Button>} />}
-    {data?.unavailable_reason && <Alert type="warning" message={data.service?.managed ? t("files.service.offline") : errorText(data.unavailable_reason)} />}
+    {data?.unavailable_reason && !data.identity?.needs_repair && <Alert type="warning" message={data.service?.managed ? t("files.service.offline") : errorText(data.unavailable_reason)} />}
     {mesh.error && !data?.unavailable_reason && <Alert type="warning" message={t("files.devicesError")} action={<Button onClick={() => mesh.refetch()}>{t("files.retry")}</Button>} />}
-    {(data?.identity?.error || data?.identity?.needs_renewal) && <Alert type="warning" message={data.identity.error ? errorText(data.identity.error) : t("files.identityDue")} action={<Button onClick={() => setSettings(true)}>{t("files.settings")}</Button>} />}
+    {data?.identity?.needs_repair && <Alert type="warning" message={t("files.identityUnavailable")} action={!web && <Button onClick={() => maintain("reset")}>{t("files.identityReset")}</Button>} />}
     {data && <>
       <div className="list-toolbar"><Segmented aria-label={t("files.direction")} value={direction} onChange={value => setDirection(String(value))} options={[{ value: "all", label: t("files.filters.all") }, { value: "incoming", label: t("files.incoming"), icon: <MeshGlyph name="inbox" /> }, { value: "outgoing", label: t("files.outgoing"), icon: <MeshGlyph name="upload" /> }]} /><ListSearch placeholder={t("listSearch.files")} value={search} onChange={setSearch} /></div>
       <Table className="files-records" tableLayout="fixed" size="middle" rowKey="key" dataSource={[...rows].sort((a, b) => (b.created || 0) - (a.created || 0) || a.key.localeCompare(b.key))} pagination={{ pageSize: 20, showSizeChanger: false }} locale={{ emptyText: t(search.trim() ? "listSearch.noMatches" : "files.emptyRecords") }} columns={[
@@ -248,20 +246,6 @@ export function FileTransfers({ blockIncoming }: { blockIncoming?: boolean }) {
 
       </Space>
     </Drawer>
-    <Drawer title={t("files.settings")} open={settings} onClose={() => setSettings(false)} width={400}>
-      {data?.service?.managed && <Space direction="vertical" size="middle" style={{width:"100%",marginBottom:24}}>
-        <Typography.Text strong>{t("files.service.directory")}</Typography.Text><Typography.Text copyable>{data.service.directory}</Typography.Text>
-        <Space><Switch checked={data.service.auto_save} disabled={busy} onChange={auto_save => run("service_settings", {auto_save})} /><Typography.Text>{t("files.service.autoSave")}</Typography.Text></Space>
-        <Typography.Text type="secondary">{t("files.service.autoSaveHint")}</Typography.Text>
-      </Space>}
-      <Typography.Paragraph type="secondary">{t("files.hint")}</Typography.Paragraph>
-      <Typography.Title level={5}>{t("files.identity")}</Typography.Title>
-      {data?.identity ? <Space direction="vertical" size="middle">
-        {!!data.identity.expires_unix && <Typography.Text>{t("files.identityExpires", { date: new Date(data.identity.expires_unix * 1000).toLocaleString() })}</Typography.Text>}
-        {data.identity.error && <Alert type="error" message={errorText(data.identity.error)} />}
-        {data.identity.needs_renewal && !data.identity.error && <Alert type="warning" message={t("files.identityDue")} />}
-        {!web && <Space wrap><Button disabled={busy || !data.identity.fingerprint} onClick={() => maintain("renew")}>{t("files.identityRenew")}</Button><Button danger disabled={busy || !data.identity.exists} onClick={() => maintain("reset")}>{t("files.identityReset")}</Button></Space>}
-      </Space> : <Typography.Text type="secondary">{t("files.identityUnavailable")}</Typography.Text>}
-    </Drawer>
+
   </div>;
 }

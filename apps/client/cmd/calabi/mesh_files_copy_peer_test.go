@@ -41,3 +41,20 @@ func TestClipboardPeerOwnedMac(t *testing.T) {
 		t.Fatal("disabled adapter accepted")
 	}
 }
+
+func TestClipboardPeerSelfHostedRDPDoesNotGrantFileAccess(t *testing.T) {
+	d := &desktopFileAgent{ctx: context.Background(), updated: time.Now(), view: filecontrol.Snapshot{Ready: true, Overlay: "100.64.0.36", Members: []filecontrol.Member{{IP: "100.64.0.18", DeviceKey: "mac", RDPAccessAllowed: true}}}}
+	d.shellPasteLive.Store(true)
+	grant := filetransfer.Grant{DeviceKey: "mac", Peer: filetransfer.Peer{IP: netip.MustParseAddr("100.64.0.18")}}
+	if d.clipboardPeer(grant) {
+		t.Fatal("RDP network permission granted owner-only clipboard-file access")
+	}
+	d.view.Members[0].SameOwner = true
+	if !d.clipboardPeer(grant) {
+		t.Fatal("existing same-owner clipboard permission lost")
+	}
+	d.shellPasteLive.Store(false)
+	if d.clipboardPeer(grant) {
+		t.Fatal("clipboard switch bypassed")
+	}
+}

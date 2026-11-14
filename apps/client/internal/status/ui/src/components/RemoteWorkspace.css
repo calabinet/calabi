@@ -15,7 +15,6 @@ html.remote-native-backdrop,
 .remote-desktop canvas { display: block; width: 100%; height: 100%; object-fit: contain; touch-action: none; }
 .remote-desktop canvas:focus { outline: none; }
 .remote-desktop > p { position: absolute; inset: 45% 0 auto; margin: 0; text-align: center; }
-.remote-desktop-input { position: absolute; left: 8px; bottom: 8px; width: 1px; height: 1px; opacity: 0; padding: 0; pointer-events: none; }
 .remote-switcher {
   position: absolute;
   z-index: 4;

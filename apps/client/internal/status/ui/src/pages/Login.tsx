@@ -1,9 +1,9 @@
 // Login.tsx — in-window login form. It replaces the "open a terminal
 // and run calabi login" instruction with a proper email/password +
-// optional TOTP form.
+// separate TOTP verification step.
 //
 // Flow:
-//   1. User types email + password (+ TOTP if their account requires it)
+//   1. User types email + password, then a separate TOTP step if required
 //   2. POST /v1/auth/login → daemon proxies to bff-console + persists
 //      access/refresh tokens to creds file
 //   3. After 200, invalidate /v1/me + nav to /overview. The daemon's
@@ -14,13 +14,14 @@
 // console. The link below is built from the console origin the daemon reports
 // (/v1/service-mode → console_web), NOT a hardcoded host, so self-hosted
 // deployments point at their own console.
-import { CloudServerOutlined, LockOutlined, UserOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, CloudServerOutlined, LockOutlined, SafetyOutlined, UserOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Form, Input, Space, Typography } from "antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import type { AccountMe, SelfHostedStatus } from "../api/types";
+import { useLoginWindow } from "../hooks/use-login-window";
 import Logo from "../components/Logo";
 import { useServiceMode } from "../hooks/use-service-mode";
 import { useTranslation } from "react-i18next";
@@ -66,7 +67,7 @@ function classifyLoginError(
 export default function Login() {
   const { t } = useTranslation();
   const [form] = Form.useForm<LoginForm>();
-  const [needsTotp, setNeedsTotp] = useState(false);
+  const [credentials, setCredentials] = useState<LoginForm | null>(null);
   const qc = useQueryClient();
   const navigate = useNavigate();
   // Agent mode pins one identity and the daemon 403s login — there's nothing to
@@ -85,9 +86,13 @@ export default function Login() {
     refetchOnWindowFocus: true,
   });
 
+  useLoginWindow(me.isError && !agentMode);
+
   const login = useMutation({
     mutationFn: (body: LoginForm) => api.login(body),
     onSuccess: async () => {
+      setCredentials(null);
+      form.resetFields();
       // Why refetchQueries here, not invalidateQueries:
       //
       // The app's first render fired AuthGate's useQuery(["me"]) BEFORE
@@ -113,10 +118,10 @@ export default function Login() {
       await qc.invalidateQueries();
       navigate("/overview", { replace: true });
     },
-    onError: (e: any) => {
+    onError: (e: any, submitted: LoginForm) => {
       const msg = (e as ApiError)?.message || t("login.failed");
-      if (["business.totpRequired", "business.totpInvalid"].includes((e as ApiError).body?.error_key) || msg.toLowerCase().includes("totp")) {
-        setNeedsTotp(true);
+      if (["business.totpRequired", "business.totpInvalid"].includes((e as ApiError).body?.error_key) || /(?:totp required|invalid totp)/i.test(msg)) {
+        setCredentials({ email: submitted.email, password: submitted.password });
       }
     },
   });
@@ -145,6 +150,8 @@ export default function Login() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        padding: 16,
+        boxSizing: "border-box",
         background:
           "var(--c-auth-bg)",
       }}
@@ -152,6 +159,9 @@ export default function Login() {
       <Card
         style={{
           width: 380,
+          maxWidth: "100%",
+          flexShrink: 0,
+          margin: "auto",
           boxShadow: "0 4px 24px rgba(0, 0, 0, 0.08)",
           borderRadius: 12,
         }}
@@ -160,21 +170,38 @@ export default function Login() {
         <Space direction="vertical" size="middle" style={{ width: "100%" }}>
           <div style={{ textAlign: "center", marginBottom: 8 }}>
             <div style={{ margin: "0 auto 12px", lineHeight: 0 }}>
-              <Logo size={48} />
+              {credentials ? <SafetyOutlined style={{ fontSize: 40, color: "var(--c-primary)" }} /> : <Logo size={48} />}
             </div>
             <Title level={4} style={{ margin: 0 }}>
-              {t("login.title")}
+              {t(credentials ? "login.totpTitle" : "login.title")}
             </Title>
             <Text type="secondary" style={{ fontSize: 13 }}>
-              {t("login.subtitle")}
+              {credentials ? t("login.totpSub", { account: credentials.email }) : t("login.subtitle")}
             </Text>
           </div>
 
-          {errInfo && (
+          {errInfo?.severity === "error" && (
             <Alert type={errInfo.severity} showIcon message={errInfo.message} />
           )}
 
-          <Form
+          {credentials ? <Form<{ totp_code: string }>
+            key="totp"
+            layout="vertical"
+            requiredMark={false}
+            onFinish={({ totp_code }) => { if (!login.isPending) login.mutate({ ...credentials, totp_code }); }}
+          >
+            <Form.Item label={t("login.totp")} name="totp_code"
+              rules={[{ required: true, pattern: /^[0-9]{6}$/, message: t("login.totpRequired") }]}>
+              <Input autoFocus placeholder="123456" maxLength={6} inputMode="numeric" autoComplete="one-time-code"
+                disabled={login.isPending} style={{ textAlign: "center", letterSpacing: 8, fontSize: 24 }} />
+            </Form.Item>
+            <Form.Item style={{ marginBottom: 12 }}>
+              <Button type="primary" htmlType="submit" block size="large" loading={login.isPending}>{t("login.totpSubmit")}</Button>
+            </Form.Item>
+            <Button block type="text" icon={<ArrowLeftOutlined />} disabled={login.isPending}
+              onClick={() => { setCredentials(null); login.reset(); }}>{t("login.back")}</Button>
+          </Form> : <Form
+            key="credentials"
             form={form}
             layout="vertical"
             onFinish={(v) => login.mutate(v)}
@@ -205,21 +232,6 @@ export default function Login() {
               />
             </Form.Item>
 
-            {needsTotp && (
-              <Form.Item
-                label={t("login.totp")}
-                name="totp_code"
-                rules={[{ required: true, message: t("login.totpRequired") }]}
-              >
-                <Input
-                  placeholder="123456"
-                  maxLength={6}
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                />
-              </Form.Item>
-            )}
-
             <Form.Item style={{ marginBottom: 0 }}>
               <Button
                 type="primary"
@@ -231,9 +243,9 @@ export default function Login() {
                 {t("login.submit")}
               </Button>
             </Form.Item>
-          </Form>
+          </Form>}
 
-          {selfHosted?.mode === "platform" && selfHosted.can_join && (
+          {!credentials && selfHosted?.mode === "platform" && selfHosted.can_join && (
             <Button block icon={<CloudServerOutlined />} onClick={() => navigate("/connect")}>
               {t("selfHosted.entry")}
             </Button>
@@ -246,7 +258,7 @@ export default function Login() {
               or deliberately unset) we drop the link entirely — this used to be a
               hardcoded https://calabi.example.com/register placeholder that went
               nowhere. ?mode=register lands on the console's register tab. */}
-          {consoleWebUrl && (
+          {!credentials && consoleWebUrl && (
             <Paragraph
               type="secondary"
               style={{ fontSize: 12, margin: 0, textAlign: "center" }}

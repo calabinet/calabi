@@ -2,6 +2,7 @@
 //
 // The healthz query polls every 5s so the top-of-screen badge stays
 // honest about whether the daemon is still talking to the edge.
+import { setLoginWindow } from "../hooks/use-login-window";
 import {
   AppstoreOutlined,
   BarsOutlined,
@@ -36,7 +37,7 @@ import {
   message,
 } from "antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import Logo from "./Logo";
@@ -73,6 +74,7 @@ const lifecycleColor: Record<Lifecycle, string> = {
 };
 
 export default function Layout() {
+  useEffect(() => { void setLoginWindow(false); }, []);
   const { t, i18n } = useTranslation();
   const currentLang: LangCode = resolveLang(i18n.language);
   const { mode: appearanceMode, setMode: setAppearanceMode } = useAppearance();

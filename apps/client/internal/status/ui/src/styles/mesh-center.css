@@ -7,10 +7,11 @@
 .mesh-remote-card:enabled:hover { border-color:var(--c-link); }
 .mesh-remote-card:focus-visible { outline:2px solid var(--c-link); outline-offset:3px; }
 .mesh-remote-card:disabled { cursor:default; }
-.mesh-remote-art { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:64px; padding:8px 12px; color:var(--c-link);
+.mesh-remote-art { position:relative; aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; gap:8px; min-height:126px; padding:8px 12px; color:var(--c-link);
   background:radial-gradient(ellipse at 50% 70%,var(--c-art-start),var(--c-art-end) 75%); }
 .mesh-remote-art > svg { flex:none; width:32px; height:32px; stroke-width:1.15; }
-.mesh-remote-action { padding:3px 8px; border:1px solid; border-radius:6px; font-size:12px; text-align:center; }
+.mesh-remote-art > img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:#080c16; }
+.mesh-remote-action { position:absolute; right:8px; bottom:8px; z-index:1; padding:3px 8px; border:1px solid; border-radius:6px; font-size:12px; text-align:center; }
 .mesh-remote-card:enabled .mesh-remote-action { color:var(--c-ok-ink); background:var(--c-ok-soft); border-color:var(--c-ok-ink); }
 .mesh-remote-card:enabled:hover .mesh-remote-action { background:var(--c-ok-soft); border-color:var(--c-ok-ink); }
 .mesh-remote-card:disabled .mesh-remote-action { color:var(--c-warn-ink); background:var(--c-warn-soft); border-color:var(--c-warn-ink); }

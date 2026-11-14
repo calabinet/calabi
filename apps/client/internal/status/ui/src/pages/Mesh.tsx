@@ -88,7 +88,7 @@ import type {
 
 const { Title, Text } = Typography;
 
-type RemoteRecent = { peer: string; name: string; ip: string; account: string; used_at?: number };
+type RemoteRecent = { thumbnail?: string; peer: string; name: string; ip: string; account: string; used_at?: number };
 type SshRecent = RemoteRecent & { port: number };
 
 // A direct path's round-trip. Sub-millisecond IS the interesting case — that is
@@ -327,6 +327,7 @@ export default function Mesh() {
     queryKey: ["ssh-history", me?.user.id, meshOrgID, data?.overlay],
     queryFn: () => fileAction<SshRecent[]>({ action: "ssh_history" }),
     enabled: sshAvailable && !!data?.up && !orgMismatch && tab === "remote",
+    refetchInterval: tab === "remote" ? 2000 : false,
     retry: false,
   });
   const beginSshLogin = (peer: MeshPeer, recent?: SshRecent) => {
@@ -890,6 +891,9 @@ export default function Mesh() {
                         }}>
                         <span className="mesh-remote-art">
                           <MeshGlyph name={kind === "ssh" ? "terminal" : "monitor"} />
+                            {record.thumbnail?.startsWith("data:image/png;base64,") && <img src={record.thumbnail} alt=""
+                              onLoad={event => { event.currentTarget.style.visibility = "visible"; }}
+                              onError={event => { event.currentTarget.style.visibility = "hidden"; }} />}
                           <span className="mesh-remote-action">{allowed ? t("assist.login") : t("remote.deviceUnavailable")}</span>
                         </span>
                         <span className="mesh-remote-details">

@@ -78,7 +78,7 @@ func startFileControl(ctx context.Context, logger *slog.Logger, source any, cons
 		for _, p := range ctrl.FileMembers() {
 			// Describe presence and validate the certificate from the same netmap snapshot.
 			incoming := r.IncomingTCPAllowed(p.Overlay, 17401)
-			member := filecontrol.Member{OS: p.OS, RDPPin: p.RDPPin, SameOwner: p.SameOwner, OwnWindows: p.SameOwner && p.OS == "windows", IP: p.Overlay.String(), DeviceKey: p.NodeKey.String(), Incoming: incoming}
+			member := filecontrol.Member{OS: p.OS, RDPPin: p.RDPPin, SameOwner: p.SameOwner, OwnWindows: p.SameOwner && p.OS == "windows", RDPAccessAllowed: p.RDPAccessAllowed, IP: p.Overlay.String(), DeviceKey: p.NodeKey.String(), Incoming: incoming}
 			pin, err := meshproto.VerifyFileTransfer(p.NodeKey, p.FileTransfer, time.Now())
 			if p.DeclarationError != "" {
 				member.DeclarationError = p.DeclarationError

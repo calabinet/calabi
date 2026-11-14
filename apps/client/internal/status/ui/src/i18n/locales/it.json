@@ -203,10 +203,10 @@
       "filename": "Nome del file",
       "saved": "Salvato su Linux"
     },
-    "errors": {
+    "errors": {"clock": "Controlla data e ora del sistema e riprova.",
       "sourceInUse": "Il file è ancora usato da un invio. Rimuovi prima la voce associata in Trasferimenti di file. Se l’invio è ancora in corso, mettilo in pausa o annullalo.",
       "authorization": "Il trasferimento non è autorizzato. Verifica che entrambi i dispositivi siano connessi e che la ricezione sia attiva.",
-      "identity": "L’identità di trasferimento è cambiata o il certificato non è disponibile. Controlla il certificato nelle impostazioni.",
+      "identity": "Impossibile verificare l’altro dispositivo. Aggiorna l’elenco e riprova.",
       "source": "Il file originale è stato spostato, eliminato o modificato. Selezionalo di nuovo.",
       "integrity": "Verifica del file non riuscita. Invia di nuovo il file.",
       "storage": "Spazio insufficiente. Libera spazio e riprova.",
@@ -268,7 +268,7 @@
     "maxBatch": "Fino a 32 file per gruppo",
     "confirmHint": "Il destinatario deve confermare la ricezione.",
     "cancelPreparation": "Annulla preparazione",
-    "identityUnavailable": "Le informazioni sull’identità di trasferimento non sono disponibili.",
+    "identityUnavailable": "I trasferimenti non sono disponibili. Prova a ripararli.",
     "bridgeUnavailable": "L’interfaccia file del client non è pronta. Chiudi la vecchia app e apri l’anteprima aggiornata.",
     "sendTo": "Invia a: {{device}}",
     "backToDevices": "Torna ai dispositivi",
@@ -284,7 +284,7 @@
     "identityExpires": "Scadenza del certificato: {{date}}",
     "identityDue": "Il certificato scade entro 30 giorni. Rinnovalo quando non ci sono trasferimenti in corso.",
     "identityRenew": "Rinnova certificato",
-    "identityReset": "Reimposta la chiave dei file",
+    "identityReset": "Ripara trasferimenti",
     "identityConfirm": "La ricezione verrà interrotta e i trasferimenti incompleti di tutti gli account e organizzazioni di questo utente del sistema verranno annullati. I file completati, quelli preparati per l’invio e la cronologia verranno conservati. L’identità del dispositivo nella rete mesh resta invariata. Riattiva la ricezione quando vuoi.",
     "title": "Trasferimenti di file",
     "hint": "Invia file ai dispositivi online della rete. La ricezione richiede conferma e usa la connessione diretta o tramite relay già disponibile.",
@@ -900,6 +900,10 @@
     "agentManageBannerDesc": "Questo client è in esecuzione come servizio con un'identità a chiave API fissa con permesso di scrittura. Puoi gestire gli endpoint di questa organizzazione qui, come dalla console web. L'accesso e il cambio di organizzazione restano disabilitati."
   },
   "login": {
+    "totpTitle": "Autenticazione a due fattori",
+    "totpSub": "Apri l'app di autenticazione e inserisci il codice a 6 cifre per {{account}}.",
+    "totpSubmit": "Verifica e accedi",
+    "back": "Indietro",
     "title": "Accedi a Calabi",
     "subtitle": "Console client locale",
     "failed": "Accesso fallito",

@@ -2,6 +2,7 @@
 // Match established errors from older agents too, including nested HTTP errors.
 export function fileErrorKey(error: string): string {
   const text = error.toLowerCase();
+  if (/system clock/.test(text)) return "clock";
   if (/source is referenced by a task/.test(text)) return "sourceInUse";
   // A changed receipt is stale metadata, not a moved local source file.
   if (/request changed/.test(text)) return "stale";

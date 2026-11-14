@@ -51,11 +51,19 @@ type Member struct {
 	RDPPin           string `json:"rdp_pin,omitempty"`
 	SameOwner        bool   `json:"same_owner,omitempty"`
 	OwnWindows       bool   `json:"own_windows,omitempty"`
+	RDPAccessAllowed bool   `json:"rdp_access_allowed,omitempty"`
 	DeclarationError string `json:"declaration_error,omitempty"`
 	IP               string `json:"ip"`
 	DeviceKey        string `json:"device_key"`
 	Incoming         bool   `json:"incoming"`
 }
+
+// CanRDPLogin accepts existing attributed targets and the coordinator's explicit
+// self-hosted authorization without changing the device's ownership assertion.
+func (m Member) CanRDPLogin() bool {
+	return m.OwnWindows || m.OS == "windows" && m.RDPAccessAllowed
+}
+
 type Request struct {
 	// Private authenticated IPC only; never changes the advertised file or
 	// assistance permissions. Uses the same fixed, mesh-only listener rule.

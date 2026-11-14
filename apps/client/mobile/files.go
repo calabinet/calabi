@@ -34,6 +34,7 @@ type mobileFiles struct {
 	done       chan struct{}
 	mu         sync.Mutex
 	err        string
+	renewedAt  time.Time
 }
 
 // Caller holds fileMu. Private files and keys stay inside Android's app UID.
@@ -60,6 +61,10 @@ func (c *Core) ensureFiles() (*mobileFiles, error) {
 		return c.filesHistory()
 	}
 	if f := c.files; f != nil && f.e == e && f.ctrl == ctrl && f.contextKey == c.fileContext() && f.w.Agent.Alive() && !f.failed.Load() {
+		if f.id.RenewalDue() && time.Since(f.renewedAt) >= time.Hour && f.w.RetireForIdentityRenewal() {
+			c.closeFilesLocked(false)
+			return c.ensureFiles()
+		}
 		paths := map[string]string{}
 		for _, p := range st.Peers {
 			paths[p.PublicKey] = p.Path
@@ -78,7 +83,7 @@ func (c *Core) ensureFiles() (*mobileFiles, error) {
 	if err := os.MkdirAll(base, 0700); err != nil {
 		return nil, err
 	}
-	id, err := filetransfer.LoadIdentity(base)
+	id, err := filetransfer.LoadManagedIdentity(base)
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +137,9 @@ func (c *Core) ensureFiles() (*mobileFiles, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	f := &mobileFiles{w: w, e: e, ctrl: ctrl, id: id, cancel: cancel, done: make(chan struct{})}
+	if id.RenewalDue() {
+		f.renewedAt = time.Now()
+	}
 	f.scope = scope
 	f.contextKey = contextKey
 	f.paths = paths

@@ -134,9 +134,8 @@ export default function RemoteWorkspace() {
               <button type="button" className="remote-card" aria-pressed={active}
                 onClick={() => void act({ op: "select", id: session.id })}>
                 <div className="remote-thumbnail" aria-hidden="true">
-                  {session.protocol === "rdp"
-                    ? previews[session.id] ? <img src={previews[session.id]} alt="" /> : <MeshGlyph name="monitor" />
-                    : previews[session.id] ? <pre>{previews[session.id]}</pre> : <MeshGlyph name="terminal" />}
+                  {previews[session.id] ? <img src={previews[session.id]} alt="" />
+                    : <MeshGlyph name={session.protocol === "rdp" ? "monitor" : "terminal"} />}
                 </div>
                 <span className="remote-card-label"><strong title={session.name}>{session.name}</strong><small>{session.protocol.toUpperCase()}</small></span>
               </button>
@@ -154,7 +153,7 @@ export default function RemoteWorkspace() {
         </ul>
       </section>
     </div>}
-    {state?.fullscreen && state.canMinimize && activeSession?.protocol === "rdp" &&
+    {state?.fullscreen && state.canMinimize && activeSession &&
       <div className="remote-fullscreen-edge">
         <section className="remote-fullscreen-toolbar" role="toolbar" aria-label={t("remoteWorkspace.controls")}>
           <div className="remote-fullscreen-actions">

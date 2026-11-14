@@ -203,10 +203,10 @@
       "filename": "Dateiname",
       "saved": "Unter Linux gespeichert"
     },
-    "errors": {
+    "errors": {"clock": "Prüfen Sie Datum und Uhrzeit des Systems und versuchen Sie es erneut.",
       "sourceInUse": "Diese Datei wird noch von einem Sendevorgang verwendet. Entfernen Sie zuerst den zugehörigen Eintrag unter „Dateiübertragungen“. Laufende Vorgänge müssen Sie zuvor pausieren oder abbrechen.",
       "authorization": "Die Dateiübertragung ist derzeit nicht autorisiert. Prüfen Sie die Verbindung beider Geräte und ob der Empfang aktiviert ist.",
-      "identity": "Die Dateiübertragungsidentität wurde geändert oder das Zertifikat ist nicht verfügbar. Prüfen Sie das Zertifikat in den Einstellungen.",
+      "identity": "Das andere Gerät konnte nicht verifiziert werden. Aktualisieren Sie die Geräteliste und versuchen Sie es erneut.",
       "source": "Die Originaldatei wurde verschoben, gelöscht oder geändert. Wählen Sie sie erneut aus.",
       "integrity": "Dateiprüfung fehlgeschlagen. Senden Sie die Datei erneut.",
       "storage": "Nicht genügend Speicherplatz. Geben Sie Speicherplatz frei und versuchen Sie es erneut.",
@@ -268,7 +268,7 @@
     "maxBatch": "Bis zu 32 Dateien pro Stapel",
     "confirmHint": "Der Empfänger muss den Empfang bestätigen.",
     "cancelPreparation": "Vorbereitung abbrechen",
-    "identityUnavailable": "Die Dateiübertragungsidentität ist derzeit nicht verfügbar.",
+    "identityUnavailable": "Die Dateiübertragung ist nicht verfügbar. Versuchen Sie eine Reparatur.",
     "bridgeUnavailable": "Die Desktop-Dateischnittstelle ist noch nicht bereit. Beenden Sie die alte App und öffnen Sie die aktualisierte Vorschau.",
     "sendTo": "Senden an: {{device}}",
     "backToDevices": "Zurück zu den Geräten",
@@ -284,7 +284,7 @@
     "identityExpires": "Zertifikat läuft ab: {{date}}",
     "identityDue": "Das Zertifikat läuft innerhalb von 30 Tagen ab. Erneuern Sie es, wenn keine Übertragungen laufen.",
     "identityRenew": "Zertifikat erneuern",
-    "identityReset": "Dateischlüssel zurücksetzen",
+    "identityReset": "Dateiübertragung reparieren",
     "identityConfirm": "Dadurch wird der Empfang gestoppt und offene Übertragungen aller Konten und Organisationen dieses Betriebssystembenutzers werden abgebrochen. Fertige Dateien, bereitgestellte Dateien und der Verlauf bleiben erhalten. Die Mesh-Geräteidentität bleibt gleich. Aktivieren Sie den Empfang wieder, wenn Sie bereit sind.",
     "title": "Dateiübertragungen",
     "hint": "Senden Sie Dateien an Online-Geräte im Mesh. Der Empfang muss bestätigt werden und nutzt die vorhandene Direkt- oder Relay-Verbindung.",
@@ -900,6 +900,10 @@
     "agentManageBannerDesc": "Dieser Client läuft als Dienst unter einer festen API-Schlüssel-Identität mit Schreibrecht. Sie können die Endpunkte dieser Organisation hier wie in der Web-Konsole verwalten. Anmeldung und Org-Wechsel bleiben deaktiviert."
   },
   "login": {
+    "totpTitle": "Zwei-Faktor-Authentifizierung",
+    "totpSub": "Öffne deine Authenticator-App und gib den 6-stelligen Code für {{account}} ein.",
+    "totpSubmit": "Bestätigen und anmelden",
+    "back": "Zurück",
     "title": "Bei Calabi anmelden",
     "subtitle": "Lokale Client-Konsole",
     "failed": "Anmeldung fehlgeschlagen",

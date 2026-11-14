@@ -6,6 +6,7 @@ import { fileErrorKey, fileJobErrorKey } from "./fileErrors.ts";
 
 test("legacy errors become safe localized summaries in every supported language", () => {
   const cases = [
+    ["file certificate is not yet valid; check the system clock", "clock"],
     ["cancelled locally; awaiting peer cancellation: file transfer is no longer authorized", "authorization"],
     ['Post "https://100.64.0.26:17401/file/v1/offers": dial tcp 100.64.0.18:0->100.64.0.26:17401: i/o timeout', "connection"],
     ['open \\\\.\\pipe\\Calabi.FileControl.v1.7400: Access is denied.', "authorization"],

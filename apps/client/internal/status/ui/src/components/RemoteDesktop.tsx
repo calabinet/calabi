@@ -40,11 +40,9 @@ export default function RemoteDesktop({ id, active, native, compare, frameWait, 
   const { t } = useTranslation();
   const [ready, setReady] = useState(false);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const entry = useRef<HTMLTextAreaElement>(null);
   const revision = useRef(0);
   const dimensions = useRef<[number, number]>([0, 0]);
   const cursorRevision = useRef(0);
-  const composing = useRef(false);
   const pressed = useRef(new Set<number>());
   const suspendedControl = useRef(new Set<number>());
   const buttons = useRef(new Map<number, boolean>());
@@ -219,11 +217,11 @@ export default function RemoteDesktop({ id, active, native, compare, frameWait, 
       send(Input.Refresh, 0);
       void poll();
     }
-    (mac ? canvas.current : entry.current)?.focus({ preventScroll:true });
+    canvas.current?.focus({ preventScroll:true });
     void poll();
     document.addEventListener("visibilitychange", refreshView);
     window.addEventListener("focus", refreshView);
-    if (mac) window.addEventListener("blur", release);
+    window.addEventListener("blur", release);
     return () => {
       stopped = true;
       resize.disconnect();
@@ -233,7 +231,7 @@ export default function RemoteDesktop({ id, active, native, compare, frameWait, 
       window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", refreshView);
       window.removeEventListener("focus", refreshView);
-      if (mac) window.removeEventListener("blur", release);
+      window.removeEventListener("blur", release);
     };
   }, [active, compare, frameWait, id, mac, native, onPreview]);
 
@@ -251,11 +249,7 @@ export default function RemoteDesktop({ id, active, native, compare, frameWait, 
     pressed.current.clear();
     suspendedControl.current.clear();
     buttons.current.clear();
-    composing.current = false;
     send(Input.Release, 3);
-  }
-  function text(value: string) {
-    for (let i = 0; i < Math.min(value.length, 128); i++) send(Input.Text, value.charCodeAt(i));
   }
   function syncShift(held: boolean) {
     if (held) {
@@ -272,7 +266,7 @@ export default function RemoteDesktop({ id, active, native, compare, frameWait, 
     const code = scan.get(event.code);
     if (code === undefined) return;
     if (!down) {
-      if (mac && (code === leftShift || code === rightShift) && !event.shiftKey) {
+      if ((code === leftShift || code === rightShift) && !event.shiftKey) {
         event.preventDefault();
         syncShift(false);
         return;
@@ -285,7 +279,6 @@ export default function RemoteDesktop({ id, active, native, compare, frameWait, 
       }
       return;
     }
-    if (!mac && (event.nativeEvent.isComposing || event.keyCode === 229 || composing.current)) return;
     if (suspendedControl.current.has(code)) {
       event.preventDefault();
       return;
@@ -301,19 +294,21 @@ export default function RemoteDesktop({ id, active, native, compare, frameWait, 
     }
     if (mac && (event.code === "MetaLeft" || event.code === "MetaRight")) return;
     event.preventDefault();
+    // IMEs may consume Shift transitions; retain the physical side when known.
+    if (code !== leftShift && code !== rightShift) syncShift(event.shiftKey);
     pressed.current.add(code);
     send(Input.KeyDown, code & 255, code >> 8);
   }
   function pointer(event: PointerEvent<HTMLCanvasElement>, phase: "move" | "down" | "up") {
     if (phase === "down") {
       event.preventDefault();
-      (mac ? canvas.current : entry.current)?.focus({ preventScroll:true });
+      canvas.current?.focus({ preventScroll:true });
     }
     if (!ready || (phase === "down" && event.button !== 0 && event.button !== 2)) return;
     const [x, y] = point(event.currentTarget, ...dimensions.current, event.clientX, event.clientY);
     if (phase === "move") { send(Input.Move, x, y); return; }
     // A Shift press may have started outside the focused remote desktop.
-    if (mac) syncShift(event.shiftKey);
+    syncShift(event.shiftKey);
     if (phase === "down") {
       const secondary = event.button === 2 || (mac && event.ctrlKey);
       if (mac && secondary && event.ctrlKey) {
@@ -343,11 +338,11 @@ export default function RemoteDesktop({ id, active, native, compare, frameWait, 
 
   return <section className="remote-session remote-desktop" hidden={!active} onContextMenu={e => e.preventDefault()}>
     {!ready && <p role="status">{t("ssh.opening")}</p>}
-    {/* A non-editable focus target leaves text composition to Windows on Mac. */}
-    <canvas ref={canvas} tabIndex={mac ? 0 : undefined} data-remote-keyboard={mac || undefined}
+    {/* Physical keys go to the remote Windows IME; never compose in a local text field. */}
+    <canvas ref={canvas} tabIndex={0} data-remote-keyboard
       aria-label={t("remoteWorkspace.desktop")}
-      onKeyDown={mac ? e => key(e, true) : undefined} onKeyUp={mac ? e => key(e, false) : undefined}
-      onBlur={mac ? release : undefined}
+      onKeyDown={e => key(e, true)} onKeyUp={e => key(e, false)}
+      onBlur={release}
       onPointerMove={e => pointer(e, "move")} onPointerDown={e => pointer(e, "down")} onPointerUp={e => pointer(e, "up")}
       onPointerCancel={release} onLostPointerCapture={e => {
         if (buttons.current.has(e.pointerId)) release();
@@ -358,16 +353,6 @@ export default function RemoteDesktop({ id, active, native, compare, frameWait, 
         if (e.deltaY) send(Input.Wheel, x, y, delta(-e.deltaY));
         if (e.deltaX) send(Input.HWheel, x, y, delta(e.deltaX));
       }} />
-    {!mac && <textarea ref={entry} className="remote-desktop-input" data-remote-keyboard aria-label={t("remoteWorkspace.desktop")}
-      autoComplete="off" autoCorrect="off" spellCheck={false} onBlur={release}
-      onKeyDown={e => key(e, true)} onKeyUp={e => key(e, false)}
-      onCompositionStart={() => { composing.current = true; }}
-      onCompositionEnd={e => { composing.current = false; text(e.data); e.currentTarget.value = ""; }}
-      onInput={e => {
-        if (composing.current || (e.nativeEvent as InputEvent).isComposing) return;
-        const data = e.currentTarget.value;
-        e.currentTarget.value = "";
-        if (data) text(data);
-      }} />}
+
   </section>;
 }

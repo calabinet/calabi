@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import SshFilePanel from "./SshFilePanel";
+import { sshPreview } from "./sshPreview";
 import { sshErrorKey, sshRead, sshSession, type SshInfo } from "../api/ssh";
 import "@xterm/xterm/css/xterm.css";
 import "./SshSession.css";
@@ -66,7 +67,36 @@ export default function SshSession({ id, active, filesOpen, onCloseFiles, onPrev
     let nativeClipboard = false;
     let generation = 0;
     let inputQueue = Promise.resolve();
-    let lastPreview = 0;
+    let previewDirty = false;
+    let latestPixels = "";
+    let savedPixels = "";
+    let savedAt = 0;
+    let saving = false;
+    function capturePreview() {
+      if (!previewDirty || disposed) return;
+      const preview = sshPreview(terminal);
+      if (!preview) return;
+      previewDirty = false;
+      latestPixels = preview.pixels;
+      onPreview(id, preview.image);
+    }
+    async function savePreview(final = false) {
+      if (saving || !latestPixels || latestPixels === savedPixels || (!final && Date.now() - savedAt < 10000)) return;
+      saving = true;
+      savedAt = Date.now();
+      const pixels = latestPixels;
+      try {
+        await sshSession(id, { op: "preview", pixels });
+        savedPixels = pixels;
+      } catch { /* Preserve the previous preview if the session or authorization ended. */ }
+      finally { saving = false; }
+    }
+    const previewRender = terminal.onRender(() => { if (acceptingInput) previewDirty = true; });
+    const previewScroll = terminal.onScroll(() => { if (acceptingInput) previewDirty = true; });
+    const previewTimer = window.setInterval(() => {
+      capturePreview();
+      void savePreview();
+    }, 700);
     const observer = new ResizeObserver(() => { if (selected.current) fit.fit(); });
     observer.observe(node);
     activate.current = () => {
@@ -134,19 +164,13 @@ export default function SshSession({ id, active, filesOpen, onCloseFiles, onPrev
           const bytes = result instanceof ArrayBuffer ? new Uint8Array(result) : Uint8Array.from(result);
           if (bytes.length === 0) break;
           await new Promise<void>(done => terminal.write(bytes, done));
-          if (!disposed && Date.now() - lastPreview >= 600) {
-            lastPreview = Date.now();
-            const buffer = terminal.buffer.active;
-            const end = buffer.baseY + buffer.cursorY;
-            const lines = [];
-            for (let y = Math.max(0, end - 5); y <= end; y++)
-              lines.push(buffer.getLine(y)?.translateToString(true).slice(0, 72) || "");
-            onPreview(id, lines.join("\n"));
-          }
+          previewDirty = true;
         }
       } catch (reason) {
         if (!disposed) setError(sshErrorKey(reason));
       } finally {
+        capturePreview();
+        void savePreview(true);
         running = false;
         acceptingInput = false;
         if (!disposed) setStatus("ended");
@@ -156,8 +180,13 @@ export default function SshSession({ id, active, filesOpen, onCloseFiles, onPrev
     // React's first development StrictMode mount is cleaned up before SSH starts.
     const initial = window.setTimeout(reconnect.current, 0);
     return () => {
+      capturePreview();
+      void savePreview(true);
       disposed = true;
       acceptingInput = false;
+      window.clearInterval(previewTimer);
+      previewRender.dispose();
+      previewScroll.dispose();
       window.clearTimeout(initial);
       reconnect.current = () => {};
       activate.current = () => {};

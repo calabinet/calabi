@@ -283,10 +283,10 @@ func (s *Server) sendNetMap(stream meshpb.Coordinator_PullNetMapServer, self *co
 				return status.Error(codes.Unauthenticated, "node identity changed; register again")
 			}
 			wire := e.wirePeers(snap)
-			out := toProtoNetMapWithPeers(nm, wire.peer)
+			out := toProtoNetMapWithRDP(nm, wire.peer, s.selfHostedRDP())
 			out.Peers = make([]*meshpb.Peer, 0, len(peers))
 			for _, peer := range peers {
-				out.Peers = append(out.Peers, peerForOwner(nm.Self.OwnerUserID, peer, wire.peer(peer)))
+				out.Peers = append(out.Peers, peerForRDP(&nm.Self, peer, wire.peer(peer), s.selfHostedRDP()))
 			}
 			s.addFileTransfers(out)
 			if mapChanged(changed) {

@@ -2,7 +2,10 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode"
@@ -25,7 +28,29 @@ func (d *desktopFileAgent) sshAction(a fileAction) (any, error) {
 	switch a.Action {
 	case "ssh_history":
 		records, err := readRemoteRecent(d.dir, file)
+		if err == nil {
+			for i := range records {
+				records[i].Thumbnail = readRDPPreview(d.dir, "ssh-"+profile, sshPreviewID(records[i]))
+			}
+		}
 		return map[string]any{"records": records, "profile": profile}, err
+	case "ssh_preview":
+		if _, err := sshTarget(v, a.Peer); err != nil {
+			return nil, err
+		}
+		if a.RDPProfile != profile {
+			return nil, errors.New("SSH login profile changed")
+		}
+		records, err := readRemoteRecent(d.dir, file)
+		if err != nil {
+			return nil, err
+		}
+		for _, record := range records {
+			if record.Peer == a.Peer && record.Account == a.RDPAccount && record.Port == a.SSHPort {
+				return nil, writeRDPPreview(d.dir, "ssh-"+profile, sshPreviewID(record), a.SSHPreview)
+			}
+		}
+		return nil, errors.New("SSH login record no longer exists")
 	case "ssh_record":
 		target, err := sshTarget(v, a.Peer)
 		if err != nil {
@@ -49,7 +74,22 @@ func (d *desktopFileAgent) sshAction(a fileAction) (any, error) {
 				updated = append(updated, record)
 			}
 		}
-		return nil, writeRemoteRecent(d.dir, file, updated)
+		if err := writeRemoteRecent(d.dir, file, updated); err != nil {
+			return nil, err
+		}
+		for _, record := range records {
+			keep := false
+			for _, retained := range updated {
+				if sshPreviewID(record) == sshPreviewID(retained) {
+					keep = true
+					break
+				}
+			}
+			if !keep {
+				_ = os.Remove(filepath.Join(d.dir, rdpPreviewName("ssh-"+profile, sshPreviewID(record))))
+			}
+		}
+		return nil, nil
 	default:
 		return sshTarget(v, a.Peer)
 	}
@@ -74,4 +114,8 @@ func sshTarget(view filecontrol.Snapshot, peer string) (map[string]string, error
 		}
 	}
 	return nil, errors.New("Linux SSH target is no longer available in this mesh")
+}
+
+func sshPreviewID(record remoteRecent) string {
+	return rdpHash(fmt.Sprintf("%s\x00%s\x00%d", record.Peer, record.Account, record.Port))
 }

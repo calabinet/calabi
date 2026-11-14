@@ -29,6 +29,7 @@ type IdentityStatus struct {
 	Fingerprint  string `json:"fingerprint,omitempty"`
 	ExpiresUnix  int64  `json:"expires_unix,omitempty"`
 	NeedsRenewal bool   `json:"needs_renewal"`
+	NeedsRepair  bool   `json:"needs_repair,omitempty"`
 	Error        string `json:"error,omitempty"`
 }
 
@@ -165,10 +166,10 @@ func ReadIdentityStatus(directory string) IdentityStatus {
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			if b, e := root.ReadFile("file-history-id"); e == nil && validID(string(b)) {
-				return IdentityStatus{Exists: true, Error: "file identity is missing; explicit reset required"}
+				return IdentityStatus{Exists: true, NeedsRepair: true, Error: "file identity is missing; explicit reset required"}
 			}
 		}
-		return IdentityStatus{Exists: !errors.Is(err, os.ErrNotExist), Error: err.Error()}
+		return IdentityStatus{Exists: !errors.Is(err, os.ErrNotExist), NeedsRepair: strings.Contains(err.Error(), "explicit reset required") || strings.Contains(err.Error(), "invalid private file history identity"), Error: err.Error()}
 	}
 	cert, _ := x509.ParseCertificate(id.Certificate.Certificate[0])
 	status := IdentityStatus{Exists: true, Fingerprint: id.Fingerprint, ExpiresUnix: cert.NotAfter.Unix(), NeedsRenewal: time.Now().Add(30 * 24 * time.Hour).After(cert.NotAfter)}

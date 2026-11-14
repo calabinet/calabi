@@ -55,6 +55,8 @@ type desktopFileAgent struct {
 	dir                   string
 	identity              *filetransfer.Identity
 	identityError         error
+	renewAfter            time.Time            // protected by opMu
+	renewRestore          *renewReceptionModes // protected by opMu
 	lease                 string
 	mu                    sync.RWMutex // live metadata only, never held during disk IO or HTTP
 	view                  filecontrol.Snapshot
@@ -74,6 +76,8 @@ type desktopFileAgent struct {
 	stageError            string
 }
 type fileAction struct {
+	SSHPreview  string             `json:"ssh_preview,omitempty"`
+	RDPPreview  string             `json:"rdp_preview,omitempty"`
 	SSHPort     uint16             `json:"ssh_port,omitempty"`
 	RDPPort     uint16             `json:"rdp_port,omitempty"`
 	RDPProfile  string             `json:"rdp_profile,omitempty"`
@@ -112,7 +116,7 @@ func newDesktopFileAgent(ctx context.Context, console string) (*desktopFileAgent
 	if err := filetransfer.PrivateDirectory(dir); err != nil {
 		return nil, err
 	}
-	id, identityErr := filetransfer.LoadIdentity(dir)
+	id, identityErr := filetransfer.LoadManagedIdentity(dir)
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		return nil, err
@@ -231,6 +235,7 @@ func (d *desktopFileAgent) loop() {
 		case <-d.ctx.Done():
 			return
 		case <-ticker.C:
+			d.renewIdentityWhenIdle()
 			d.maintainSnapshot()
 			d.reconcileManaged()
 			d.reconcileClipboard()
@@ -524,6 +529,9 @@ func (d *desktopFileAgent) handle(a fileAction) (any, error) {
 
 	d.opMu.Lock()
 	defer d.opMu.Unlock()
+	if a.Action == "receiving" || a.Action == "assist_receiving" || a.Action == "clipboard_receiving" || a.Action == "service_settings" || a.Action == "identity_reset" || a.Action == "identity_renew" || a.Action == "revoke" {
+		d.renewRestore = nil
+	}
 	if a.Action == "assist" && a.Assist.Op == "availability" {
 		v, err := d.metadata()
 		if err == nil {
@@ -535,10 +543,10 @@ func (d *desktopFileAgent) handle(a fileAction) (any, error) {
 		}
 		return assistance.Reply{State: "unavailable"}, nil
 	}
-	if a.Action == "rdp_target" || a.Action == "rdp_history" || a.Action == "rdp_record" {
+	if a.Action == "rdp_target" || a.Action == "rdp_history" || a.Action == "rdp_record" || a.Action == "rdp_preview" {
 		return d.rdpProfileAction(a)
 	}
-	if (runtime.GOOS == "windows" || runtime.GOOS == "darwin") && (a.Action == "ssh_target" || a.Action == "ssh_history" || a.Action == "ssh_record") {
+	if (runtime.GOOS == "windows" || runtime.GOOS == "darwin") && (a.Action == "ssh_target" || a.Action == "ssh_history" || a.Action == "ssh_record" || a.Action == "ssh_preview") {
 		return d.sshAction(a)
 	}
 	if a.Action == "handshake_diagnostics" {
@@ -626,7 +634,7 @@ func (d *desktopFileAgent) handle(a fileAction) (any, error) {
 		var owned []string
 		if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 			for _, m := range v.Members {
-				if m.OwnWindows && m.IP != v.Overlay {
+				if m.CanRDPLogin() && m.IP != v.Overlay {
 					owned = append(owned, m.DeviceKey)
 				}
 			}
@@ -1054,13 +1062,17 @@ func runMeshFiles(args []string) int {
 // dialogs and file operations run in the logged-in user's file agent.
 func serveFileActions(input io.Reader, output io.Writer, handle func(fileAction) (any, error)) int {
 	scanner := bufio.NewScanner(input)
-	scanner.Buffer(make([]byte, 8192), 16<<10)
+	scanner.Buffer(make([]byte, 8192), 256<<10)
 	writer := json.NewEncoder(output)
 	for scanner.Scan() {
 		var action fileAction
 		dec := json.NewDecoder(strings.NewReader(scanner.Text()))
 		dec.DisallowUnknownFields()
 		if err := dec.Decode(&action); err != nil {
+			_ = writer.Encode(map[string]any{"error": "invalid file action"})
+			continue
+		}
+		if len(scanner.Bytes()) > 16<<10 && action.Action != "rdp_preview" && action.Action != "ssh_preview" {
 			_ = writer.Encode(map[string]any{"error": "invalid file action"})
 			continue
 		}

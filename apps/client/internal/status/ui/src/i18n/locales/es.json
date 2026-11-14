@@ -203,10 +203,10 @@
       "filename": "Nombre del archivo",
       "saved": "Guardado en Linux"
     },
-    "errors": {
+    "errors": {"clock": "Compruebe la fecha y hora del sistema e inténtelo de nuevo.",
       "sourceInUse": "Una tarea de envío aún usa este archivo. Elimina primero el registro asociado en Transferencias de archivos. Si la tarea sigue en curso, páusala o cancélala antes.",
       "authorization": "La transferencia no está autorizada. Comprueba que ambos dispositivos estén conectados y que la recepción esté activada.",
-      "identity": "La identidad de transferencia cambió o su certificado no está disponible. Comprueba el certificado en Ajustes.",
+      "identity": "No se pudo verificar el otro dispositivo. Actualice la lista e inténtelo de nuevo.",
       "source": "El archivo original se movió, eliminó o modificó. Selecciónalo de nuevo.",
       "integrity": "No se pudo verificar el archivo. Vuelve a enviarlo.",
       "storage": "No hay suficiente espacio. Libera espacio y vuelve a intentarlo.",
@@ -268,7 +268,7 @@
     "maxBatch": "Hasta 32 archivos por lote",
     "confirmHint": "El destinatario debe confirmar la recepción.",
     "cancelPreparation": "Cancelar la preparación",
-    "identityUnavailable": "La información de identidad de transferencia no está disponible.",
+    "identityUnavailable": "Las transferencias no están disponibles. Intente repararlas.",
     "bridgeUnavailable": "La interfaz de archivos no está lista. Cierra la aplicación anterior y abre la versión preliminar actualizada.",
     "sendTo": "Enviar a: {{device}}",
     "backToDevices": "Volver a los dispositivos",
@@ -284,7 +284,7 @@
     "identityExpires": "El certificado caduca el {{date}}",
     "identityDue": "El certificado caduca en menos de 30 días. Renuévalo cuando no haya transferencias en curso.",
     "identityRenew": "Renovar certificado",
-    "identityReset": "Restablecer la clave de archivos",
+    "identityReset": "Reparar transferencias",
     "identityConfirm": "Se detendrá la recepción y se cancelarán las transferencias pendientes de todas las cuentas y organizaciones de este usuario del sistema. Se conservarán los archivos completados, los preparados para enviar y el historial. La identidad del dispositivo en la red mallada no cambiará. Vuelve a activar la recepción cuando quieras.",
     "title": "Transferencias de archivos",
     "hint": "Envía archivos a los dispositivos en línea de tu red. La recepción requiere confirmación y utiliza la conexión directa o por relé que ya existe.",
@@ -900,6 +900,10 @@
     "agentManageBannerDesc": "Este cliente se ejecuta como servicio con una identidad de clave API fija con permiso de escritura. Puedes gestionar los endpoints de esta organización aquí, igual que en la consola web. El inicio de sesión y el cambio de organización siguen desactivados."
   },
   "login": {
+    "totpTitle": "Verificación en dos pasos",
+    "totpSub": "Abre tu app de autenticación e introduce el código de 6 dígitos de {{account}}.",
+    "totpSubmit": "Verificar e iniciar sesión",
+    "back": "Atrás",
     "title": "Iniciar sesión en Calabi",
     "subtitle": "Consola del cliente local",
     "failed": "Error al iniciar sesión",

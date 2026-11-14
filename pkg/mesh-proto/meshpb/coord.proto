@@ -744,7 +744,12 @@ message PortRange {
 message Peer {
   // Relative to the recipient; asserted by coord only for two attributed devices.
   bool same_owner = 12;
-  bytes rdp_certificate_sha256 = 13; // online, same-owner Windows only
+  // Recipient-specific RDP authorization, separate from attributed ownership.
+  // Self-hosted key-auth coordinators may allow approved devices in one mesh.
+  // Windows credentials and packet-filter rules are still required.
+  // This does not assert ownership or grant owner-only clipboard-file access.
+  bool rdp_access_allowed = 14;
+  bytes rdp_certificate_sha256 = 13; // online, authorized Windows only
   // Only present for a current, approved, online device's unexpired declaration.
   FileTransferInfo file_transfer = 11;
   int64 node_id = 1;

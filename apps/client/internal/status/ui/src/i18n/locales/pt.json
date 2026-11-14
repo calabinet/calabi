@@ -203,10 +203,10 @@
       "filename": "Nome do arquivo",
       "saved": "Salvo no Linux"
     },
-    "errors": {
+    "errors": {"clock": "Verifique a data e hora do sistema e tente novamente.",
       "sourceInUse": "Este arquivo ainda é usado por um envio. Primeiro, remova o registro correspondente em Transferências de arquivos. Se o envio estiver em andamento, pause ou cancele antes.",
       "authorization": "A transferência não está autorizada no momento. Verifique se os dois dispositivos estão conectados e se o recebimento está ativado.",
-      "identity": "A identidade de transferência mudou ou o certificado está indisponível. Verifique o certificado nas configurações.",
+      "identity": "Não foi possível verificar o outro dispositivo. Atualize a lista e tente novamente.",
       "source": "O arquivo original foi movido, excluído ou alterado. Selecione-o novamente.",
       "integrity": "A verificação do arquivo falhou. Envie o arquivo novamente.",
       "storage": "Espaço insuficiente. Libere espaço e tente novamente.",
@@ -268,7 +268,7 @@
     "maxBatch": "Até 32 arquivos por lote",
     "confirmHint": "O destinatário precisa confirmar o recebimento.",
     "cancelPreparation": "Cancelar preparação",
-    "identityUnavailable": "As informações de identidade de transferência estão indisponíveis.",
+    "identityUnavailable": "As transferências não estão disponíveis. Tente repará-las.",
     "bridgeUnavailable": "A interface de arquivos não está pronta. Feche o aplicativo antigo e abra a versão de prévia atualizada.",
     "sendTo": "Enviar para: {{device}}",
     "backToDevices": "Voltar aos dispositivos",
@@ -284,7 +284,7 @@
     "identityExpires": "O certificado expira em {{date}}",
     "identityDue": "O certificado expira em até 30 dias. Renove quando não houver transferências em andamento.",
     "identityRenew": "Renovar certificado",
-    "identityReset": "Redefinir chave de arquivos",
+    "identityReset": "Reparar transferências",
     "identityConfirm": "O recebimento será interrompido e as transferências pendentes de todas as contas e organizações deste usuário do sistema serão canceladas. Os arquivos concluídos, os preparados para envio e o histórico serão mantidos. A identidade do dispositivo na rede mesh permanece a mesma. Ative o recebimento novamente quando quiser.",
     "title": "Transferências de arquivos",
     "hint": "Envie arquivos para dispositivos online da sua rede. O recebimento exige confirmação e usa a conexão direta ou via retransmissor existente.",
@@ -900,6 +900,10 @@
     "agentManageBannerDesc": "Este cliente é executado como serviço sob uma identidade de chave de API fixa com permissão de escrita. Você pode gerenciar os endpoints desta organização aqui, como no console web. O login e a troca de organização permanecem desativados."
   },
   "login": {
+    "totpTitle": "Verificação em duas etapas",
+    "totpSub": "Abra seu aplicativo autenticador e insira o código de 6 dígitos de {{account}}.",
+    "totpSubmit": "Verificar e entrar",
+    "back": "Voltar",
     "title": "Entrar no Calabi",
     "subtitle": "Console do cliente local",
     "failed": "Falha ao entrar",

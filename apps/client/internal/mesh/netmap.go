@@ -32,6 +32,7 @@ type PeerService struct {
 type Peer struct {
 	RDPPin           string
 	SameOwner        bool
+	RDPAccessAllowed bool
 	DeclarationError string `json:"-"`
 	FileTransfer     *meshpb.FileTransferInfo
 	NodeID           int64
@@ -334,8 +335,8 @@ func peerFromProto(pp *meshpb.Peer) (Peer, error) {
 	if err != nil {
 		return Peer{}, fmt.Errorf("node_key: %w", err)
 	}
-	p := Peer{SameOwner: pp.GetSameOwner(), NodeID: pp.GetNodeId(), Name: pp.GetName(), NodeKey: nk, DERPHome: pp.GetDerpHome(), OS: pp.GetOs()}
-	if p.SameOwner && p.OS == "windows" && len(pp.GetRdpCertificateSha256()) == 32 {
+	p := Peer{SameOwner: pp.GetSameOwner(), RDPAccessAllowed: pp.GetRdpAccessAllowed(), NodeID: pp.GetNodeId(), Name: pp.GetName(), NodeKey: nk, DERPHome: pp.GetDerpHome(), OS: pp.GetOs()}
+	if (p.SameOwner || p.RDPAccessAllowed) && p.OS == "windows" && len(pp.GetRdpCertificateSha256()) == 32 {
 		p.RDPPin = hex.EncodeToString(pp.GetRdpCertificateSha256())
 	}
 	// A malformed optional declaration disables only file transfer, never mesh.

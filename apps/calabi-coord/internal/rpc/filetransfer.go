@@ -4,12 +4,21 @@ import (
 	"context"
 	"time"
 
+	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
+
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 	"github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
+
+// This policy is selected by the server's authenticator, never by a client's
+// claimed mode, zero user ID, key prefix or the presence of a platform token.
+func (s *Server) selfHostedRDP() bool {
+	auth, ok := s.auth.(*core.KeyAuth)
+	return ok && auth != nil
+}
 
 func (s *Server) UpdateFileTransfer(ctx context.Context, req *meshpb.UpdateFileTransferRequest) (*meshpb.UpdateFileTransferResponse, error) {
 	self, err := s.authorizeNode(ctx, req.GetSessionToken(), 0)
@@ -47,7 +56,8 @@ func (s *Server) ReportRdpCertificate(ctx context.Context, req *meshpb.ReportRdp
 	if err != nil {
 		return nil, err
 	}
-	if node.OS != "windows" || !node.Approved || node.SignedOut || node.OwnerUserID <= 0 {
+	if node.OS != "windows" || !node.Approved || node.SignedOut ||
+		!(node.OwnerUserID > 0 || node.OwnerUserID == 0 && s.selfHostedRDP()) {
 		return nil, status.Error(codes.PermissionDenied, "owned Windows device required")
 	}
 	pin := string(req.GetSha256())
@@ -92,7 +102,7 @@ func (s *Server) addFileTransfers(out *meshpb.NetMap) {
 		if err != nil || key != sess.nodeKey {
 			return peer
 		}
-		if peer.SameOwner && peer.Os == "windows" && sess.rdpPin != "" {
+		if (peer.SameOwner || peer.RdpAccessAllowed) && peer.Os == "windows" && sess.rdpPin != "" {
 			peer = proto.Clone(peer).(*meshpb.Peer)
 			peer.RdpCertificateSha256 = []byte(sess.rdpPin)
 		}

@@ -74,7 +74,7 @@ func (c *Core) filesHistory() (*mobileFiles, error) {
 	if _, err = os.Stat(filepath.Join(base, "file-identity.json")); err != nil {
 		return nil, err
 	}
-	id, err := filetransfer.LoadIdentity(base)
+	id, err := filetransfer.LoadManagedIdentity(base)
 	if err != nil {
 		return nil, err
 	}

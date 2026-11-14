@@ -12,6 +12,12 @@ verification instructions on the releases page, but no written changelog.
 
 ## Unreleased
 
+### Changes after Desktop 3.0.1
+
+- **Added:** Self-hosted RDP access for approved devices in the same mesh, independently of platform user ownership. Upgrade the self-hosted coordinator and both desktop endpoints; Windows credentials, listener certificate verification and access rules still apply.
+
+### Bundled with Desktop 3.0.1
+
 - **Added:** Light, dark and system appearance options in the local console, with more compact navigation and an overview that adapts to larger Windows text settings.
 - **Changed:** Console scrollbars are thinner and appear while scrolling.
 - **Fixed:** Re-registering a device republishes its remote desktop certificate so peers can discover it again.

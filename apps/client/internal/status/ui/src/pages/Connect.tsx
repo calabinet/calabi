@@ -1,3 +1,4 @@
+import { setLoginWindow } from "../hooks/use-login-window";
 // Connect.tsx — join this computer to a self-hosted server instead of
 // calabi.net, from the sign-in
 // page's secondary entry, or from a self-hosted console to change servers.
@@ -26,7 +27,7 @@ import {
   Typography,
 } from "antd";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../api/client";
@@ -54,6 +55,7 @@ interface Unconfirmed {
 const isLink = (s?: string) => (s ?? "").trim().toLowerCase().startsWith("calabi://");
 
 export default function Connect() {
+  useEffect(() => { void setLoginWindow(false); }, []);
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [form] = Form.useForm<ConnectForm>();

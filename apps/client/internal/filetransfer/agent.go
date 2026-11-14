@@ -83,6 +83,8 @@ type Agent struct {
 	clipboardReceiving atomic.Bool
 	receiving          atomic.Bool
 	closed             atomic.Bool
+	retiring           atomic.Bool
+	maintenance        sync.RWMutex
 	server             *http.Server
 	ctx                context.Context
 	cancel             context.CancelFunc
@@ -261,6 +263,8 @@ func (a *Agent) checkQuota(extra int64, adding bool) error {
 
 func (a *Agent) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		a.maintenance.RLock()
+		defer a.maintenance.RUnlock()
 		addr, err := netip.ParseAddrPort(req.RemoteAddr)
 		if err != nil {
 			fail(w, 403, "invalid source")
@@ -274,7 +278,7 @@ func (a *Agent) Handler() http.Handler {
 			}
 			fail(w, 403, reason)
 		}
-		if a.closed.Load() || (a.cfg.Authority != nil && !a.cfg.Authority()) {
+		if a.closed.Load() || a.retiring.Load() || (a.cfg.Authority != nil && !a.cfg.Authority()) {
 			deny("local session unavailable")
 			return
 		}
