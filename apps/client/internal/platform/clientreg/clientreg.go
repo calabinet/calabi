@@ -45,6 +45,20 @@ type registerRequest struct {
 	DisplayName   string `json:"display_name,omitempty"`
 	OsInfo        string `json:"os_info,omitempty"`
 	ClientVersion string `json:"client_version,omitempty"`
+	ClientType    string `json:"client_type,omitempty"`
+	AppVersion    string `json:"app_version,omitempty"`
+	CoreVersion   string `json:"core_version,omitempty"`
+}
+
+// DesktopVersion is set by the desktop-bundled entry point. Standalone CLI
+// builds leave it empty; the core version never identifies an app release.
+var DesktopVersion string
+
+func productType() string {
+	if DesktopVersion != "" {
+		return "desktop"
+	}
+	return "cli"
 }
 
 // registerResponse mirrors the JSON returned by bff-console.
@@ -88,6 +102,9 @@ func Ensure(cfg *creds.Config, bffConsoleURL, version string) error {
 		DisplayName:   label,
 		OsInfo:        runtime.GOOS + "/" + runtime.GOARCH,
 		ClientVersion: version,
+		ClientType:    productType(),
+		AppVersion:    DesktopVersion,
+		CoreVersion:   version,
 	})
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -172,6 +189,8 @@ func EnsureAgent(cfg *creds.Config, bffConsoleURL, version, apiKey string) error
 		DisplayName:   label,
 		OsInfo:        runtime.GOOS + "/" + runtime.GOARCH,
 		ClientVersion: version,
+		ClientType:    "agent",
+		CoreVersion:   version,
 	})
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)

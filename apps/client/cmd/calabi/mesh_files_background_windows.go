@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -81,27 +82,70 @@ func fileAgentSessionActive(session uint32) bool {
 }
 
 func runInteractiveFileAgent(ctx context.Context, path, sid string, session uint32, console string) error {
-	ticker := time.NewTicker(time.Second)
+	return runFileAgentSession(ctx, path, sid, session, time.Second, fileAgentSessionActive, func(active context.Context) error {
+		return serveBackgroundFileAgent(active, path, sid, session, console)
+	})
+}
+
+// The pipe exists only while this session is active. Hold a separate lifetime
+// claim BEFORE waiting, otherwise every failed desktop poll can leave another
+// process waiting for the same disconnected session. Local scope lets another
+// Windows session become active; the SID-scoped pipe still arbitrates serving.
+func claimFileAgentSession(path, sid string, session uint32) (release func(), claimed bool, err error) {
+	digest := sha256.Sum256([]byte(path))
+	name, err := windows.UTF16PtrFromString(fmt.Sprintf(`Local\Calabi.FileAgent.v1.%d.%x`, session, digest))
+	if err != nil {
+		return nil, false, err
+	}
+	sd, err := windows.SecurityDescriptorFromString("D:P(A;;GA;;;SY)(A;;GA;;;" + sid + ")")
+	if err != nil {
+		return nil, false, err
+	}
+	attributes := windows.SecurityAttributes{SecurityDescriptor: sd}
+	attributes.Length = uint32(unsafe.Sizeof(attributes))
+	handle, err := windows.CreateMutex(&attributes, false, name)
+	if errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
+		if handle != 0 {
+			_ = windows.CloseHandle(handle)
+		}
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	// No thread owns the mutex: only the named object's handle lifetime matters.
+	// Windows also releases the claim if the agent crashes.
+	return func() { _ = windows.CloseHandle(handle) }, true, nil
+}
+
+func runFileAgentSession(ctx context.Context, path, sid string, session uint32, interval time.Duration,
+	isActive func(uint32) bool, serve func(context.Context) error) error {
+	release, claimed, err := claimFileAgentSession(path, sid, session)
+	if err != nil || !claimed {
+		return err
+	}
+	defer release()
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
-		if fileAgentSessionActive(session) {
+		if isActive(session) {
 			active, cancel := context.WithCancel(ctx)
 			go func() {
-				check := time.NewTicker(time.Second)
+				check := time.NewTicker(interval)
 				defer check.Stop()
 				for {
 					select {
 					case <-active.Done():
 						return
 					case <-check.C:
-						if !fileAgentSessionActive(session) {
+						if !isActive(session) {
 							cancel()
 							return
 						}
 					}
 				}
 			}()
-			err := serveBackgroundFileAgent(active, path, sid, session, console)
+			err := serve(active)
 			interrupted := active.Err() != nil
 			cancel()
 			if !interrupted {

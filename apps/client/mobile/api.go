@@ -189,6 +189,7 @@ func (c *Core) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c.logger.Info("signed in", "user_id", out.UserID)
+	c.reportCatalog(r.Context())
 	// A session running under the previous identity must not keep going.
 	c.reconnect()
 	writeJSON(w, http.StatusOK, map[string]any{"user_id": out.UserID, "email": out.Email, "active_org_id": out.ActiveOrgID})
@@ -281,6 +282,7 @@ func (c *Core) handleOrgSwitch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "save session: "+err.Error())
 		return
 	}
+	c.reportCatalog(r.Context())
 	c.reconnect()
 	writeJSON(w, http.StatusOK, map[string]int64{"active_org_id": cfg.ActiveOrgID})
 }

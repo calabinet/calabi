@@ -62,6 +62,7 @@ type config struct {
 	// DeviceName is the default mesh name (the phone's model) until the user
 	// picks one.
 	DeviceName string `json:"device_name"`
+	AppVersion string `json:"app_version"`
 	// CoordPlaintext dials the coordinator without TLS: a development stack
 	// only, never a release build.
 	CoordPlaintext bool `json:"coord_plaintext"`
@@ -139,6 +140,8 @@ func New(configJSON string, p Platform) (*Core, error) {
 	}
 	c.hc = &http.Client{Timeout: 20 * time.Second, Transport: transport}
 	c.api = c.routes()
+	// Covers an app upgrade with an existing login, even before joining mesh.
+	c.reportCatalog(context.Background())
 	return c, nil
 }
 

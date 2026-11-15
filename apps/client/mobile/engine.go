@@ -373,6 +373,7 @@ func (e *engine) enroll(ctx context.Context) (meshenroll.Enrollment, bool) {
 				return meshenroll.Enrollment{}, false
 			}
 		default:
+			e.c.reportCatalog(ctx)
 			return enr, true
 		}
 	}
@@ -401,10 +402,11 @@ func (e *engine) session(ctx context.Context, enr meshenroll.Enrollment, priv me
 		Datapath:  dp,
 		Reauth:    e.reauth,
 		Params: mesh.RegisterParams{
-			AuthKey:     authKey,
-			NodeKey:     priv.Public(),
-			NodePrivate: priv,
-			Name:        st.DeviceName,
+			AuthKey:           authKey,
+			NodeKey:           priv.Public(),
+			NodePrivate:       priv,
+			Name:              st.DeviceName,
+			DeviceFingerprint: e.c.catalogFingerprint(),
 		},
 		ExitNode: st.ExitNode,
 		Routes:   mesh.RoutePolicy{Accept: st.AcceptRoutes},

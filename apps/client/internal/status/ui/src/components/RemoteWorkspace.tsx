@@ -1,17 +1,17 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { remoteWorkspace, type RemoteWorkspace as WorkspaceState } from "../api/ssh";
 import MeshGlyph from "./MeshGlyph";
 import RemoteDesktop from "./RemoteDesktop";
 import SshSession from "./SshSession";
+import { emptyWorkspaceCache, workspaceCache } from "../lib/workspaceCache";
 import "./RemoteWorkspace.css";
 
 export default function RemoteWorkspace() {
   const { t } = useTranslation();
   const [state, setState] = useState<WorkspaceState>();
   const [gallery, setGallery] = useState(false);
-  const [files, setFiles] = useState<Record<string, boolean>>({});
-  const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [{ files, previews }, updateCache] = useReducer(workspaceCache, undefined, emptyWorkspaceCache);
   const [error, setError] = useState(false);
   const switcher = useRef<HTMLDivElement>(null);
   const handle = useRef<HTMLButtonElement>(null);
@@ -22,7 +22,10 @@ export default function RemoteWorkspace() {
   const refresh = useCallback(async () => {
     const observed = revision.current;
     const snapshot = await remoteWorkspace<WorkspaceState>({ op: "snapshot" });
-    if (observed === revision.current) setState(snapshot);
+    if (observed === revision.current) {
+      updateCache({ type: "sessions", ids: snapshot.sessions.map(session => session.id) });
+      setState(snapshot);
+    }
   }, []);
   useEffect(() => {
     let stopped = false;
@@ -40,9 +43,9 @@ export default function RemoteWorkspace() {
   }, [refresh]);
 
   const onPreview = useCallback((id: string, text: string) => {
-    setPreviews(previous => previous[id] === text ? previous : { ...previous, [id]: text });
+    updateCache({ type: "preview", id, text });
   }, []);
-  const closeFiles = (id: string) => setFiles(previous => ({ ...previous, [id]: false }));
+  const closeFiles = (id: string) => updateCache({ type: "files", id, open: false });
   const reveal = () => { window.clearTimeout(hideTimer.current); setGallery(true); };
   const dismiss = useCallback(() => {
     window.clearTimeout(hideTimer.current);
@@ -141,7 +144,7 @@ export default function RemoteWorkspace() {
               </button>
               {active && session.protocol === "ssh" && <button type="button" className="remote-files-toggle" aria-expanded={!!files[session.id]}
                 onClick={() => {
-                  setFiles(previous => ({ ...previous, [session.id]: !previous[session.id] }));
+                  updateCache({ type: "files", id: session.id });
                   dismiss();
                 }}>{t("sshFiles.title")}</button>}
               <button type="button" className="remote-close" aria-label={t("remoteWorkspace.close", { name: session.name })}
