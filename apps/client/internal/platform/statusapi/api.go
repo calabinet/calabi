@@ -145,6 +145,10 @@ type Config struct {
 	// boot from the resolved credential kind — stable for the process.
 	AgentMode bool
 
+	// DisableInteractiveAuth is used by the socket-managed daemon while it
+	// awaits provisioning as well as after a platform key has been installed.
+	DisableInteractiveAuth bool
+
 	// Container: this daemon runs inside a container, where the container runtime
 	// is the supervisor. Surfaced to the SPA via /v1/service-mode because half the
 	// console's advice is otherwise wrong there: "install the service", "reinstall
@@ -249,11 +253,11 @@ func (s *Server) Register(mux *http.ServeMux) {
 	// identity-rebinding endpoints (login/logout/org-switch), which stay
 	// agent-blocked because a pinned agent has no interactive session to swap.
 	mux.HandleFunc("POST /v1/tunnels", s.requireLocalToken(s.handleCreateTunnel))
-	mux.HandleFunc("DELETE /v1/tunnels/{id}", s.requireLocalToken(s.proxyDeletePath("/v1/tunnels/", "id")))
-	mux.HandleFunc("PUT /v1/tunnels/{id}", s.requireLocalToken(s.proxyBodyPath("PUT", "/v1/tunnels/", "id")))
-	// IP access-control policy edit — proxyBodyPath can't append a suffix, so
-	// a tiny dedicated handler forwards to /v1/tunnels/{id}/security.
-	mux.HandleFunc("POST /v1/tunnels/{id}/security", s.requireLocalToken(s.handleTunnelSecurity))
+	mux.HandleFunc("DELETE /v1/tunnels/{id}", s.requireLocalToken(s.requireLocalTunnel(s.handleDeleteTunnel)))
+	mux.HandleFunc("PUT /v1/tunnels/{id}", s.requireLocalToken(s.requireLocalTunnel(s.handleEditTunnel)))
+	mux.HandleFunc("POST /v1/tunnels/{id}/status", s.requireLocalToken(s.requireLocalTunnel(s.handleTunnelStatus)))
+	// Access-control changes have the same device binding gate as edits.
+	mux.HandleFunc("POST /v1/tunnels/{id}/security", s.requireLocalToken(s.requireLocalTunnel(s.handleTunnelSecurity)))
 	// Takeover: re-bind a tunnel created on / running on another client to THIS
 	// machine. Tunnel management (not identity), so allowed for a management key
 	// too — bff-console enforces the tunnel.write scope upstream.
@@ -565,6 +569,10 @@ func (s *Server) handleEdgeSwitchDismiss(w http.ResponseWriter, _ *http.Request)
 // blocked in agent mode.
 func (s *Server) agentBlock(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if s.cfg.DisableInteractiveAuth {
+			writeError(w, http.StatusForbidden, "interactive account management is disabled for this daemon")
+			return
+		}
 		if s.cfg.AgentMode {
 			// Say how to change it, not where: the web console cannot re-bind a
 			// running agent either — only reinstalling the service with another
@@ -606,7 +614,7 @@ func (s *Server) handleServiceMode(w http.ResponseWriter, _ *http.Request) {
 		// read_only retained for one release as an alias of agent so a stale
 		// cached SPA bundle doesn't mis-render; new SPA reads "agent".
 		"read_only":     s.cfg.AgentMode,
-		"login_enabled": !s.cfg.AgentMode,
+		"login_enabled": !s.cfg.AgentMode && !s.cfg.DisableInteractiveAuth,
 		// Where the login page sends people to register. Baked at build time
 		// (main.defaultConsoleWeb), overridable via $CALABI_CONSOLE_WEB so a
 		// self-hosted deployment points at its own console. Empty → the SPA
@@ -1087,6 +1095,8 @@ type captureWriter struct {
 	hdr    http.Header
 }
 
+type expectedTunnelDeviceKey struct{}
+
 func (c *captureWriter) Header() http.Header         { return c.hdr }
 func (c *captureWriter) WriteHeader(code int)        { c.status = code }
 func (c *captureWriter) Write(b []byte) (int, error) { return c.body.Write(b) }
@@ -1121,27 +1131,72 @@ func (s *Server) proxyBody(method, path string) http.HandlerFunc {
 	}
 }
 
-func (s *Server) proxyBodyPath(method, prefix, param string) http.HandlerFunc {
+// requireLocalTunnel checks the current binding without using the list cache.
+// The dedicated takeover route keeps its own authorization at bff-console.
+func (s *Server) requireLocalTunnel(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		v := r.PathValue(param)
-		if v == "" {
-			writeError(w, http.StatusBadRequest, "missing "+param)
+		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil || id <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid id")
 			return
 		}
-		body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-		s.proxy(w, r, method, prefix+v, body)
+		device, err := creds.Load()
+		if err != nil || device == nil || device.DeviceID <= 0 {
+			writeError(w, http.StatusConflict, "this client is not registered")
+			return
+		}
+		idText := strconv.FormatInt(id, 10)
+		r.SetPathValue("id", idText)
+		check := &captureWriter{body: &bytes.Buffer{}, hdr: make(http.Header)}
+		s.proxy(check, r, http.MethodGet, "/v1/tunnels/"+idText, nil)
+		if check.status != http.StatusOK {
+			for key, values := range check.Header() {
+				w.Header()[key] = values
+			}
+			w.WriteHeader(check.status)
+			_, _ = w.Write(check.body.Bytes())
+			return
+		}
+		var row struct {
+			ClientID int64 `json:"client_id"`
+		}
+		if err := json.Unmarshal(check.body.Bytes(), &row); err != nil {
+			writeError(w, http.StatusBadGateway, "could not verify endpoint binding")
+			return
+		}
+		if row.ClientID != device.DeviceID {
+			writeJSON(w, http.StatusForbidden, map[string]string{
+				"code": "endpoint_not_local", "error": "This endpoint is not bound to this device. Manage it in the web console or take it over first.",
+			})
+			return
+		}
+		ctx := context.WithValue(r.Context(), expectedTunnelDeviceKey{}, device.DeviceID)
+		next(w, r.WithContext(ctx))
 	}
 }
 
-func (s *Server) proxyDeletePath(prefix, param string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		v := r.PathValue(param)
-		if v == "" {
-			writeError(w, http.StatusBadRequest, "missing "+param)
-			return
-		}
-		s.proxy(w, r, "DELETE", prefix+v, nil)
+func (s *Server) handleEditTunnel(w http.ResponseWriter, r *http.Request) {
+	var patch struct {
+		Name          *string         `json:"name,omitempty"`
+		LocalAddr     *string         `json:"local_addr,omitempty"`
+		NotifyOffline *bool           `json:"notify_offline,omitempty"`
+		ClientID      json.RawMessage `json:"client_id,omitempty"`
 	}
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+	if err != nil || json.Unmarshal(raw, &patch) != nil {
+		writeError(w, http.StatusBadRequest, "invalid endpoint edit")
+		return
+	}
+	if patch.ClientID != nil {
+		writeError(w, http.StatusBadRequest, "change the device through the takeover endpoint")
+		return
+	}
+	body, _ := json.Marshal(patch)
+	s.proxy(w, r, http.MethodPut, "/v1/tunnels/"+r.PathValue("id"), body)
+}
+
+func (s *Server) handleDeleteTunnel(w http.ResponseWriter, r *http.Request) {
+	s.proxy(w, r, http.MethodDelete, "/v1/tunnels/"+r.PathValue("id"), nil)
 }
 
 // handleCreateTunnel forwards POST /v1/tunnels, but first binds the new tunnel
@@ -1241,8 +1296,7 @@ func (s *Server) handleMemberQuotas(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleTunnelSecurity forwards a per-tunnel IP-policy edit to bff-console
-// POST /v1/tunnels/{id}/security. A dedicated handler (vs proxyBodyPath)
-// because the upstream path has a /security suffix after the id.
+// POST /v1/tunnels/{id}/security.
 func (s *Server) handleTunnelSecurity(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
@@ -1251,6 +1305,23 @@ func (s *Server) handleTunnelSecurity(w http.ResponseWriter, r *http.Request) {
 	}
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	s.proxy(w, r, "POST", "/v1/tunnels/"+id+"/security", body)
+}
+
+func (s *Server) handleTunnelStatus(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1024))
+	var in struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if err != nil || json.Unmarshal(body, &in) != nil || in.Enabled == nil {
+		writeError(w, http.StatusBadRequest, "enabled must be a boolean")
+		return
+	}
+	s.proxy(w, r, http.MethodPost, fmt.Sprintf("/v1/tunnels/%d/status", id), body)
 }
 
 // proxy is the workhorse: build the upstream URL, attach the bearer
@@ -1422,6 +1493,9 @@ func (s *Server) doUpstreamAs(ctx context.Context, method, u string, body []byte
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "calabi-daemon/0.1")
+	if deviceID, ok := ctx.Value(expectedTunnelDeviceKey{}).(int64); ok {
+		req.Header.Set("X-Calabi-Expected-Device-ID", strconv.FormatInt(deviceID, 10))
+	}
 	return s.httpClient.Do(req)
 }
 

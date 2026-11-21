@@ -13,7 +13,7 @@ import {
   Typography,
 } from "antd";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useProductInfo } from "../hooks/use-product-info";
 import { api } from "../api/client";
 import type {
@@ -30,6 +30,7 @@ import TrafficChart from "../components/TrafficChart";
 import { freshRate, useCounterRate } from "../hooks/use-counter-rate";
 import { useMemberQuota } from "../lib/memberQuota";
 import DailyTrafficChart from "../components/DailyTrafficChart";
+import { WIDE_HISTORY_DAYS } from "../lib/usageDays";
 import {
   SelfHostedUsageChart,
   SelfHostedUsageNote,
@@ -141,6 +142,17 @@ export default function Overview() {
   // page shows it (in the chart slot, or as one line) — see the layout note
   // above the return. Asks nothing of a calabi.net daemon.
   const networkUsage = useSelfHostedUsage(standalone);
+  const chartStack = useRef<HTMLDivElement>(null);
+  const [historyDays, setHistoryDays] = useState(7);
+  useEffect(() => {
+    const stack = chartStack.current;
+    if (!stack) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setHistoryDays(entry.contentRect.width >= 680 ? WIDE_HISTORY_DAYS : 7);
+    });
+    observer.observe(stack);
+    return () => observer.disconnect();
+  }, []);
   // Count the organization's registered mesh devices, including offline ones.
   // Never substitute this machine's reachable peer count for the org total.
   const deviceScope = snap?.active_org_id || me?.org?.id || 0;
@@ -174,7 +186,7 @@ export default function Overview() {
   // here. retry:false so a daemon without the endpoint just leaves them at 0.
   const { data: meshUsage } = useQuery<MeshUsage>({
     queryKey: ["usage-mesh"],
-    queryFn: () => api.meshUsage(7),
+    queryFn: () => api.meshUsage(WIDE_HISTORY_DAYS),
     refetchInterval: 30_000,
     retry: false,
   });
@@ -399,8 +411,7 @@ export default function Overview() {
   // so nothing in the bottom row may take its height from an earlier measurement
   // of itself — see ChartFrame, which exists for that reason.
   //
-  // The floor is budgeted against the desktop shell: a fixed 1100×720 window
-  // (client-desktop main.rs) that nobody can make taller. That is 608px of
+  // The floor is budgeted against the desktop shell's 1100×720 layout. That is 608px of
   // content; the title and the stat cards at their tallest (the split wrapped
   // onto two lines, plus the quota bar or the self-hosted pill — 182px) leave
   // 374px for the bottom row. Both things that set the row's minimum have to
@@ -412,7 +423,7 @@ export default function Overview() {
   // its coordinator keeps it — and no room for it as a block of its own: a card
   // between the stat cards and the bottom row put the page 78px over (100px in
   // the languages whose split wraps). So it goes INTO the row: the usage card
-  // takes the seven-day chart's slot and draws the network's seven days there
+  // takes the daily chart's slot and draws the network's history there
   // (see SelfHosted.tsx), at the same floor as the chart card it replaces. Only
   // when the coordinator has no figures to chart does anything sit above the row
   // — one line, 36px, which the self-hosted stat cards leave room for: they
@@ -592,45 +603,25 @@ export default function Overview() {
         <SelfHostedUsageNote data={networkUsage.data} error={networkUsage.error} />
       )}
 
-      {/* Bottom row takes the remaining height, and gives it back when the stat
-          cards above grow — their extra lines arrive with the data, after the
-          first layout. No minHeight on the row or on the chart slots: the floor
-          is the content's own (the chart cards at ChartFrame's minimum, or the
-          fixed-width info card when that is taller), so there is no row-level
-          figure to keep in step with them. */}
-      <Row gutter={[12, 12]} style={{ flex: 1, margin: 0 }} wrap={false}>
-        <Col
-          flex="auto"
-          className="overview-chart-stack"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            minHeight: 0,
-            paddingLeft: 0,
-          }}
-        >
-          {/* Last-7-days daily bars (history) on top, live throughput below.
-              Each takes half the remaining height. On a self-hosted server the
-              seven days drawn are the NETWORK's, with its month beside them;
-              this machine's own today and month stay in the stat cards. */}
-          <div style={{ flex: 1, display: "flex" }}>
+      <div className="overview-detail">
+        <div className="overview-chart-stack" ref={chartStack}>
+          <div className="overview-chart-slot">
             {networkUsage.view === "chart" ? (
-              <SelfHostedUsageChart data={networkUsage.data} />
+              <SelfHostedUsageChart data={networkUsage.data} days={historyDays} />
             ) : (
               <DailyTrafficChart
-                days={7}
+                days={historyDays}
                 selfHostedEdge={onSelfHostedEdge}
                 selfHostedRelay={relayIsSelfHosted}
                 localRelay={standalone ? meshUsage?.daily : undefined}
               />
             )}
           </div>
-          <div style={{ flex: 1, display: "flex" }}>
+          <div className="overview-chart-slot">
             <TrafficChart rate={throughput} sampleAt={snapAt} />
           </div>
-        </Col>
-        <Col flex="320px" style={{ display: "flex", minHeight: 0, paddingRight: 0 }}>
+        </div>
+        <div className="overview-info-slot">
           <Card
             className="overview-info"
             title={t("overview.localInfo")}
@@ -751,8 +742,8 @@ export default function Overview() {
                   从本机信息卡片移除让概览更干净。 */}
             </Row>
           </Card>
-        </Col>
-      </Row>
+        </div>
+      </div>
     </div>
   );
 }

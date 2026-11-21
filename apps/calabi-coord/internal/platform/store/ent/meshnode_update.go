@@ -203,6 +203,34 @@ func (mnu *MeshNodeUpdate) SetNillableRealRoutesJSON(s *string) *MeshNodeUpdate 
 	return mnu
 }
 
+// SetHostAliasRequestsJSON sets the "host_alias_requests_json" field.
+func (mnu *MeshNodeUpdate) SetHostAliasRequestsJSON(s string) *MeshNodeUpdate {
+	mnu.mutation.SetHostAliasRequestsJSON(s)
+	return mnu
+}
+
+// SetNillableHostAliasRequestsJSON sets the "host_alias_requests_json" field if the given value is not nil.
+func (mnu *MeshNodeUpdate) SetNillableHostAliasRequestsJSON(s *string) *MeshNodeUpdate {
+	if s != nil {
+		mnu.SetHostAliasRequestsJSON(*s)
+	}
+	return mnu
+}
+
+// SetApprovedAliasHostsJSON sets the "approved_alias_hosts_json" field.
+func (mnu *MeshNodeUpdate) SetApprovedAliasHostsJSON(s string) *MeshNodeUpdate {
+	mnu.mutation.SetApprovedAliasHostsJSON(s)
+	return mnu
+}
+
+// SetNillableApprovedAliasHostsJSON sets the "approved_alias_hosts_json" field if the given value is not nil.
+func (mnu *MeshNodeUpdate) SetNillableApprovedAliasHostsJSON(s *string) *MeshNodeUpdate {
+	if s != nil {
+		mnu.SetApprovedAliasHostsJSON(*s)
+	}
+	return mnu
+}
+
 // SetAliasedRoutesJSON sets the "aliased_routes_json" field.
 func (mnu *MeshNodeUpdate) SetAliasedRoutesJSON(s string) *MeshNodeUpdate {
 	mnu.mutation.SetAliasedRoutesJSON(s)
@@ -534,6 +562,12 @@ func (mnu *MeshNodeUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := mnu.mutation.RealRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldRealRoutesJSON, field.TypeString, value)
 	}
+	if value, ok := mnu.mutation.HostAliasRequestsJSON(); ok {
+		_spec.SetField(meshnode.FieldHostAliasRequestsJSON, field.TypeString, value)
+	}
+	if value, ok := mnu.mutation.ApprovedAliasHostsJSON(); ok {
+		_spec.SetField(meshnode.FieldApprovedAliasHostsJSON, field.TypeString, value)
+	}
 	if value, ok := mnu.mutation.AliasedRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldAliasedRoutesJSON, field.TypeString, value)
 	}
@@ -779,6 +813,34 @@ func (mnuo *MeshNodeUpdateOne) SetRealRoutesJSON(s string) *MeshNodeUpdateOne {
 func (mnuo *MeshNodeUpdateOne) SetNillableRealRoutesJSON(s *string) *MeshNodeUpdateOne {
 	if s != nil {
 		mnuo.SetRealRoutesJSON(*s)
+	}
+	return mnuo
+}
+
+// SetHostAliasRequestsJSON sets the "host_alias_requests_json" field.
+func (mnuo *MeshNodeUpdateOne) SetHostAliasRequestsJSON(s string) *MeshNodeUpdateOne {
+	mnuo.mutation.SetHostAliasRequestsJSON(s)
+	return mnuo
+}
+
+// SetNillableHostAliasRequestsJSON sets the "host_alias_requests_json" field if the given value is not nil.
+func (mnuo *MeshNodeUpdateOne) SetNillableHostAliasRequestsJSON(s *string) *MeshNodeUpdateOne {
+	if s != nil {
+		mnuo.SetHostAliasRequestsJSON(*s)
+	}
+	return mnuo
+}
+
+// SetApprovedAliasHostsJSON sets the "approved_alias_hosts_json" field.
+func (mnuo *MeshNodeUpdateOne) SetApprovedAliasHostsJSON(s string) *MeshNodeUpdateOne {
+	mnuo.mutation.SetApprovedAliasHostsJSON(s)
+	return mnuo
+}
+
+// SetNillableApprovedAliasHostsJSON sets the "approved_alias_hosts_json" field if the given value is not nil.
+func (mnuo *MeshNodeUpdateOne) SetNillableApprovedAliasHostsJSON(s *string) *MeshNodeUpdateOne {
+	if s != nil {
+		mnuo.SetApprovedAliasHostsJSON(*s)
 	}
 	return mnuo
 }
@@ -1143,6 +1205,12 @@ func (mnuo *MeshNodeUpdateOne) sqlSave(ctx context.Context) (_node *MeshNode, er
 	}
 	if value, ok := mnuo.mutation.RealRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldRealRoutesJSON, field.TypeString, value)
+	}
+	if value, ok := mnuo.mutation.HostAliasRequestsJSON(); ok {
+		_spec.SetField(meshnode.FieldHostAliasRequestsJSON, field.TypeString, value)
+	}
+	if value, ok := mnuo.mutation.ApprovedAliasHostsJSON(); ok {
+		_spec.SetField(meshnode.FieldApprovedAliasHostsJSON, field.TypeString, value)
 	}
 	if value, ok := mnuo.mutation.AliasedRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldAliasedRoutesJSON, field.TypeString, value)

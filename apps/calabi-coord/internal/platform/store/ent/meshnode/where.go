@@ -114,6 +114,16 @@ func RealRoutesJSON(v string) predicate.MeshNode {
 	return predicate.MeshNode(sql.FieldEQ(FieldRealRoutesJSON, v))
 }
 
+// HostAliasRequestsJSON applies equality check predicate on the "host_alias_requests_json" field. It's identical to HostAliasRequestsJSONEQ.
+func HostAliasRequestsJSON(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldHostAliasRequestsJSON, v))
+}
+
+// ApprovedAliasHostsJSON applies equality check predicate on the "approved_alias_hosts_json" field. It's identical to ApprovedAliasHostsJSONEQ.
+func ApprovedAliasHostsJSON(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldApprovedAliasHostsJSON, v))
+}
+
 // AliasedRoutesJSON applies equality check predicate on the "aliased_routes_json" field. It's identical to AliasedRoutesJSONEQ.
 func AliasedRoutesJSON(v string) predicate.MeshNode {
 	return predicate.MeshNode(sql.FieldEQ(FieldAliasedRoutesJSON, v))
@@ -897,6 +907,136 @@ func RealRoutesJSONEqualFold(v string) predicate.MeshNode {
 // RealRoutesJSONContainsFold applies the ContainsFold predicate on the "real_routes_json" field.
 func RealRoutesJSONContainsFold(v string) predicate.MeshNode {
 	return predicate.MeshNode(sql.FieldContainsFold(FieldRealRoutesJSON, v))
+}
+
+// HostAliasRequestsJSONEQ applies the EQ predicate on the "host_alias_requests_json" field.
+func HostAliasRequestsJSONEQ(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldHostAliasRequestsJSON, v))
+}
+
+// HostAliasRequestsJSONNEQ applies the NEQ predicate on the "host_alias_requests_json" field.
+func HostAliasRequestsJSONNEQ(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNEQ(FieldHostAliasRequestsJSON, v))
+}
+
+// HostAliasRequestsJSONIn applies the In predicate on the "host_alias_requests_json" field.
+func HostAliasRequestsJSONIn(vs ...string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldIn(FieldHostAliasRequestsJSON, vs...))
+}
+
+// HostAliasRequestsJSONNotIn applies the NotIn predicate on the "host_alias_requests_json" field.
+func HostAliasRequestsJSONNotIn(vs ...string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNotIn(FieldHostAliasRequestsJSON, vs...))
+}
+
+// HostAliasRequestsJSONGT applies the GT predicate on the "host_alias_requests_json" field.
+func HostAliasRequestsJSONGT(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldGT(FieldHostAliasRequestsJSON, v))
+}
+
+// HostAliasRequestsJSONGTE applies the GTE predicate on the "host_alias_requests_json" field.
+func HostAliasRequestsJSONGTE(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldGTE(FieldHostAliasRequestsJSON, v))
+}
+
+// HostAliasRequestsJSONLT applies the LT predicate on the "host_alias_requests_json" field.
+func HostAliasRequestsJSONLT(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldLT(FieldHostAliasRequestsJSON, v))
+}
+
+// HostAliasRequestsJSONLTE applies the LTE predicate on the "host_alias_requests_json" field.
+func HostAliasRequestsJSONLTE(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldLTE(FieldHostAliasRequestsJSON, v))
+}
+
+// HostAliasRequestsJSONContains applies the Contains predicate on the "host_alias_requests_json" field.
+func HostAliasRequestsJSONContains(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldContains(FieldHostAliasRequestsJSON, v))
+}
+
+// HostAliasRequestsJSONHasPrefix applies the HasPrefix predicate on the "host_alias_requests_json" field.
+func HostAliasRequestsJSONHasPrefix(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldHasPrefix(FieldHostAliasRequestsJSON, v))
+}
+
+// HostAliasRequestsJSONHasSuffix applies the HasSuffix predicate on the "host_alias_requests_json" field.
+func HostAliasRequestsJSONHasSuffix(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldHasSuffix(FieldHostAliasRequestsJSON, v))
+}
+
+// HostAliasRequestsJSONEqualFold applies the EqualFold predicate on the "host_alias_requests_json" field.
+func HostAliasRequestsJSONEqualFold(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEqualFold(FieldHostAliasRequestsJSON, v))
+}
+
+// HostAliasRequestsJSONContainsFold applies the ContainsFold predicate on the "host_alias_requests_json" field.
+func HostAliasRequestsJSONContainsFold(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldContainsFold(FieldHostAliasRequestsJSON, v))
+}
+
+// ApprovedAliasHostsJSONEQ applies the EQ predicate on the "approved_alias_hosts_json" field.
+func ApprovedAliasHostsJSONEQ(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEQ(FieldApprovedAliasHostsJSON, v))
+}
+
+// ApprovedAliasHostsJSONNEQ applies the NEQ predicate on the "approved_alias_hosts_json" field.
+func ApprovedAliasHostsJSONNEQ(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNEQ(FieldApprovedAliasHostsJSON, v))
+}
+
+// ApprovedAliasHostsJSONIn applies the In predicate on the "approved_alias_hosts_json" field.
+func ApprovedAliasHostsJSONIn(vs ...string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldIn(FieldApprovedAliasHostsJSON, vs...))
+}
+
+// ApprovedAliasHostsJSONNotIn applies the NotIn predicate on the "approved_alias_hosts_json" field.
+func ApprovedAliasHostsJSONNotIn(vs ...string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldNotIn(FieldApprovedAliasHostsJSON, vs...))
+}
+
+// ApprovedAliasHostsJSONGT applies the GT predicate on the "approved_alias_hosts_json" field.
+func ApprovedAliasHostsJSONGT(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldGT(FieldApprovedAliasHostsJSON, v))
+}
+
+// ApprovedAliasHostsJSONGTE applies the GTE predicate on the "approved_alias_hosts_json" field.
+func ApprovedAliasHostsJSONGTE(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldGTE(FieldApprovedAliasHostsJSON, v))
+}
+
+// ApprovedAliasHostsJSONLT applies the LT predicate on the "approved_alias_hosts_json" field.
+func ApprovedAliasHostsJSONLT(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldLT(FieldApprovedAliasHostsJSON, v))
+}
+
+// ApprovedAliasHostsJSONLTE applies the LTE predicate on the "approved_alias_hosts_json" field.
+func ApprovedAliasHostsJSONLTE(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldLTE(FieldApprovedAliasHostsJSON, v))
+}
+
+// ApprovedAliasHostsJSONContains applies the Contains predicate on the "approved_alias_hosts_json" field.
+func ApprovedAliasHostsJSONContains(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldContains(FieldApprovedAliasHostsJSON, v))
+}
+
+// ApprovedAliasHostsJSONHasPrefix applies the HasPrefix predicate on the "approved_alias_hosts_json" field.
+func ApprovedAliasHostsJSONHasPrefix(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldHasPrefix(FieldApprovedAliasHostsJSON, v))
+}
+
+// ApprovedAliasHostsJSONHasSuffix applies the HasSuffix predicate on the "approved_alias_hosts_json" field.
+func ApprovedAliasHostsJSONHasSuffix(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldHasSuffix(FieldApprovedAliasHostsJSON, v))
+}
+
+// ApprovedAliasHostsJSONEqualFold applies the EqualFold predicate on the "approved_alias_hosts_json" field.
+func ApprovedAliasHostsJSONEqualFold(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldEqualFold(FieldApprovedAliasHostsJSON, v))
+}
+
+// ApprovedAliasHostsJSONContainsFold applies the ContainsFold predicate on the "approved_alias_hosts_json" field.
+func ApprovedAliasHostsJSONContainsFold(v string) predicate.MeshNode {
+	return predicate.MeshNode(sql.FieldContainsFold(FieldApprovedAliasHostsJSON, v))
 }
 
 // AliasedRoutesJSONEQ applies the EQ predicate on the "aliased_routes_json" field.

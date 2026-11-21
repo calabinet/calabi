@@ -482,6 +482,7 @@
     "meshDatapathPendingTip": "中繼位址已確定，組網資料面還在啟動。"
   },
   "tunnels": {
+    "manageElsewhere": "請到使用者後台管理，或先接管到本機。",
     "awaitingApproval": "待審核",
     "awaitingApprovalTip": "該組織要求審核成員新建的端點。需要管理員在控制台通過後，這個端點才會對外提供服務。",
     "rejected": "已拒絕",
@@ -1049,7 +1050,16 @@
       "noForward": "本機正在廣播這些角色，但無法轉發——子網路由和出口裝置只在 Linux 上自動設定，對端送過來的流量會被丟棄。請關掉它們，或把路由器換到 Linux 裝置上。",
       "noForwardLocked": "本機不可用：子網路由和出口裝置需要系統轉發，只在 Linux 上自動設定。在這裡廣播只會把對端的流量引進死路。",
       "alias": "替身位址",
-      "aliasHelp": "每條發布的子網都會自動分到一段唯一的替身位址，末段不變：.222 仍然是 .222。對端從替身位址存取，所以區域網路位址和這裡撞車的對端也能存取。需要管理員批准該路由。",
+      "requestHostAlias": "申請單一 IP 替身",
+      "hostAliasSteps": "填寫本機宣告子網內的 IPv4 位址，按一下「新增」後儲存，再由管理員審核。",
+      "hostAliasNeedsSubnet": "啟用「發布子網」並新增網段後，即可填寫申請。",
+      "hostAliasUpgrade": "請更新 Calabi 核心以申請替身位址。",
+      "reconnecting": "正在重新連線到組網",
+      "syncingApprovals": "正在同步核准狀態",
+      "lastSyncedResults": "清單顯示上次同步結果。",
+      "hostAliasOutsideSubnet": "請輸入上方已列出的子網內的單一 IPv4 位址。",
+      "hostAliasInvalid": "請輸入單一 IPv4 位址，支援 /32 寫法。",
+      "aliasHelp": "新宣告的子網預設使用實際位址。需要替身時，請輸入單一 IPv4 位址。",
       "aliasAssigned": "對端存取這些網段的位址：",
       "aliasPending": "等待協調器分配位址。",
       "aliasRefused": "部分網段沒能分配到位址",
@@ -1094,7 +1104,7 @@
       "pendingWhere": "請在網頁控制台操作：在「子網」頁籤的操作欄批准或撤銷子網；在「裝置」頁的操作欄審批出口或管理出口授權。",
       "pendingWhereSelfHosted": "由伺服器的管理員批准。",
       "pendingDevice": "這台裝置本身還在等批准入網，裝置獲批後才會生效。",
-      "aliasAfterApproval": "子網批准後分配。"
+      "aliasAfterApproval": "單一 IP 替身申請正在等待管理員審核。"
     },
     "detecting": "正在偵測組網狀態…",
     "pausedDesc": "本機組網已停止。",

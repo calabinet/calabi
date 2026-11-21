@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/calabinet/calabi/apps/client/internal/creds"
@@ -71,15 +72,104 @@ func TestAgentMode_AllowsTunnelManagementThroughGate(t *testing.T) {
 		{"DELETE", "/v1/tunnels/7"},
 		{"PUT", "/v1/tunnels/7"},
 		{"POST", "/v1/tunnels/7/security"},
+		{"POST", "/v1/tunnels/7/status"},
 		{"POST", "/v1/config/import"},
 	}
 	for _, w := range writes {
 		req := httptest.NewRequest(w.method, w.path, nil) // no X-Local-Token
 		rr := httptest.NewRecorder()
 		h.ServeHTTP(rr, req)
-		if rr.Code == http.StatusForbidden {
-			t.Errorf("%s %s in agent mode must not be 403 (identity gate); got 403",
-				w.method, w.path)
+		if rr.Code != http.StatusUnauthorized {
+			t.Errorf("%s %s without local token: got %d, want 401", w.method, w.path, rr.Code)
+		}
+	}
+}
+
+func TestAgentMode_TunnelStatusKeepsUpstreamWriteGate(t *testing.T) {
+	token := isolateCreds(t)
+	if err := creds.Save(&creds.Config{DeviceID: 42}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CALABI_API_KEY", "tk_readonly_fixture")
+	t.Setenv("CALABI_TOKEN", "")
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/v1/tunnels/7" {
+			_, _ = w.Write([]byte(`{"client_id":42}`))
+			return
+		}
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/tunnels/7/status" ||
+			r.Header.Get("Authorization") != "Bearer tk_readonly_fixture" {
+			t.Error("unexpected upstream status request")
+		}
+		http.Error(w, "missing tunnel.write", http.StatusForbidden)
+	}))
+	defer upstream.Close()
+	s := New(nil, Config{AgentMode: true, BFFConsoleURL: upstream.URL})
+	mux := http.NewServeMux()
+	s.Register(mux)
+	for _, tc := range []struct {
+		body string
+		want int
+	}{
+		{`{}`, http.StatusBadRequest},
+		{`{"enabled":null}`, http.StatusBadRequest},
+		{`{"enabled":false}`, http.StatusForbidden},
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/v1/tunnels/7/status", strings.NewReader(tc.body))
+		req.Header.Set("X-Local-Token", token)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Errorf("body %s got %d, want %d", tc.body, rec.Code, tc.want)
+		}
+	}
+}
+
+func TestTunnelWritesRequireCurrentDeviceBinding(t *testing.T) {
+	token := isolateCreds(t)
+	if err := creds.Save(&creds.Config{DeviceID: 42}); err != nil {
+		t.Fatal(err)
+	}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			switch r.URL.Path {
+			case "/v1/tunnels/7":
+				_, _ = w.Write([]byte(`{"client_id":43}`))
+			case "/v1/tunnels/8":
+				_, _ = w.Write([]byte(`{"client_id":42}`))
+			case "/v1/tunnels/9":
+				_, _ = w.Write([]byte(`{"client_id":0}`))
+			}
+			return
+		}
+		if r.Method != http.MethodPut || (r.URL.Path != "/v1/tunnels/7" && r.URL.Path != "/v1/tunnels/8") {
+			t.Errorf("unexpected upstream write: %s %s", r.Method, r.URL.Path)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstream.Close()
+	s := New(nil, Config{BFFConsoleURL: upstream.URL})
+	mux := http.NewServeMux()
+	s.Register(mux)
+	for _, tc := range []struct {
+		method, url, body string
+		status            int
+	}{
+		{"PUT", "/v1/tunnels/7", `{"name":"remote"}`, 403},
+		{"DELETE", "/v1/tunnels/7", "", 403},
+		{"POST", "/v1/tunnels/7/security", `{}`, 403},
+		{"POST", "/v1/tunnels/7/status", `{"enabled":false}`, 403},
+		{"PUT", "/v1/tunnels/9", `{"name":"unbound"}`, 403},
+		{"PUT", "/v1/tunnels/8", `{"name":"local"}`, 204},
+		{"PUT", "/v1/tunnels/8", `{"client_id":43}`, 400},
+		{"POST", "/v1/tunnels/7/takeover", `{"local_addr":"127.0.0.1:8080"}`, 204},
+	} {
+		req := httptest.NewRequest(tc.method, tc.url, strings.NewReader(tc.body))
+		req.Header.Set("X-Local-Token", token)
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, req)
+		if rr.Code != tc.status || (tc.status == 403 && !strings.Contains(rr.Body.String(), "endpoint_not_local")) {
+			t.Errorf("%s %s: got %d, want %d, body %s", tc.method, tc.url, rr.Code, tc.status, rr.Body.String())
 		}
 	}
 }

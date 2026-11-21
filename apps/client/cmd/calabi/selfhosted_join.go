@@ -17,12 +17,14 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc/codes"
 
 	"github.com/calabinet/calabi/apps/client/internal/creds"
 	"github.com/calabinet/calabi/apps/client/internal/mesh"
+	"github.com/calabinet/calabi/apps/client/internal/platform/bffclient"
 	"github.com/calabinet/calabi/apps/client/internal/selfhosted"
 	"github.com/calabinet/calabi/apps/client/internal/trust"
 	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
@@ -188,6 +190,7 @@ func (j *meshJoin) enroll(ctx context.Context, cur meshConfig) (meshConfig, *joi
 	}
 	reg, err := mesh.NewCoordClient(conn).Register(ctx, mesh.RegisterParams{
 		AuthKey: inv.Key, NodeKey: priv.Public(), NodePrivate: priv, Name: name,
+		DisableFileTransfer: daemonSocketPath() != "",
 	})
 	if err != nil {
 		switch grpcCode(err) {
@@ -226,13 +229,22 @@ func (j *meshJoin) enroll(ctx context.Context, cur meshConfig) (meshConfig, *joi
 // platformSelfHosted serves /v1/selfhosted on the calabi.net daemon: the way
 // from its sign-in page to a self-hosted server.
 type platformSelfHosted struct {
-	logger    *slog.Logger
-	agentMode bool
+	logger        *slog.Logger
+	agentMode     bool
+	socketBFF     *bffclient.Client
+	provisionMu   sync.Mutex
+	switchPending bool
 }
 
 func (h *platformSelfHosted) register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/selfhosted", h.handleStatus)
 	mux.HandleFunc("POST /v1/selfhosted/join", h.handleJoin)
+	if h.socketBFF != nil {
+		mux.HandleFunc("GET /v1/platform/identity", h.handlePlatformIdentity)
+		mux.HandleFunc("POST /v1/platform/setup", h.handlePlatformSetup)
+		mux.HandleFunc("POST /v1/platform/replace", h.handlePlatformReplace)
+		mux.HandleFunc("POST /v1/platform/clear", h.handlePlatformClear)
+	}
 }
 
 // canJoin: nothing pins this daemon to calabi.net. An api-key service is an
@@ -266,6 +278,14 @@ func (h *platformSelfHosted) handleJoin(w http.ResponseWriter, r *http.Request) 
 	if !creds.CompareLocalToken(got) {
 		shError(w, http.StatusUnauthorized, "local_token", "local-token mismatch (fetch /v1/local-token)", nil)
 		return
+	}
+	if h.socketBFF != nil {
+		h.provisionMu.Lock()
+		defer h.provisionMu.Unlock()
+		if h.switchPending {
+			shError(w, http.StatusConflict, "switching", "wait for the daemon to restart", nil)
+			return
+		}
 	}
 	if ok, why := h.canJoin(); !ok {
 		shError(w, http.StatusForbidden, why, "this daemon cannot be switched to a self-hosted server from the console", nil)
@@ -302,6 +322,9 @@ func (h *platformSelfHosted) handleJoin(w http.ResponseWriter, r *http.Request) 
 	if err := setClientMode(clientModeStandalone); err != nil {
 		shError(w, http.StatusInternalServerError, "save", "save the mode: "+err.Error(), nil)
 		return
+	}
+	if h.socketBFF != nil {
+		h.switchPending = true
 	}
 	h.logger.Info("connected to a self-hosted server from the console; starting again as the local daemon",
 		"coord", next.Mesh.Coord)

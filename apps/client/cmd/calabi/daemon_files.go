@@ -42,8 +42,8 @@ func (l *runnerLease) fileRunner() *meshRunner { return l.r }
 
 func startFileControl(ctx context.Context, logger *slog.Logger, source any, console string) func() {
 	noop := func() {}
-	if console == "" {
-		return noop // The console is disabled or has not started.
+	if console == "" || daemonSocketPath() != "" {
+		return noop
 	}
 	current := func() (*meshRunner, int64) {
 		switch s := source.(type) {

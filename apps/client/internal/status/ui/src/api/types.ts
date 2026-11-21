@@ -711,6 +711,7 @@ export interface MeshServiceDecl {
 // /v1/mesh/advertise). forwarding_supported is false off Linux — the node then
 // advertises but doesn't actually forward.
 export interface MeshAdvertise {
+  alias_hosts?: string[];
   routes: string[]; // subnet-router CIDRs this node advertises
   advertise_exit_node: boolean; // advertise this node AS an exit node
   exit_node: string; // route THIS node's default traffic through this peer

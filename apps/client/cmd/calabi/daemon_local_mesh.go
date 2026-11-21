@@ -52,12 +52,9 @@ type meshConfig struct {
 	// AdvertiseRoutes are subnet-router CIDRs this node offers to forward,
 	// e.g. ["192.168.1.0/24"]. Enables local forwarding + NAT on Linux.
 	AdvertiseRoutes []string `yaml:"advertise_routes,omitempty"`
-	// AliasRoutes is IGNORED. Every advertised route is now published under a
-	// stand-in prefix wherever the host can install the rewrite, so there is no
-	// subset to pick (see mesh.AliasRequest). The field is kept only so a config
-	// file written when this WAS a choice still parses instead of failing the
-	// daemon on an unknown key.
+	// AliasRoutes is accepted for compatibility with older config files.
 	AliasRoutes []string `yaml:"alias_routes,omitempty"`
+	AliasHosts  []string `yaml:"alias_hosts,omitempty"`
 	// MTU overrides the tun MTU (mesh.DefaultMTU when unset or unusable). A
 	// diagnostic knob: a path whose real MTU is below the default black-holes
 	// every full-size packet while pings sail through, and lowering this is how
@@ -258,12 +255,13 @@ const (
 // connection bound to the overlay address dies with it. A coordinator blip would
 // take out the very remote desktop the meshnet exists to carry.
 type meshDataPlane struct {
-	dp      *mesh.WGDatapath
-	dns     mesh.DNSSink
-	key     mesh.PrivateKey
-	routes  []netip.Prefix
-	aliases []netip.Prefix
-	stop    func()
+	dp                   *mesh.WGDatapath
+	dns                  mesh.DNSSink
+	key                  mesh.PrivateKey
+	routes               []netip.Prefix
+	aliasHosts           []netip.Prefix
+	hostAliasesSupported bool
+	stop                 func()
 }
 
 // meshLoopTuning is the retry loop's knobs and its two steps. The zero value is
@@ -390,10 +388,16 @@ func (r *meshRunner) startDataPlane() (*meshDataPlane, error) {
 		r.logger.Warn("mesh: ignoring unusable subnet routes from the config",
 			"advertise_routes", mesh.ProblemStrings(badRoutes))
 	}
-	// EVERY published route is aliased — this is not a setting. The one open
-	// question, whether this host can install the rewrite, is probed in
-	// mesh.AliasRequest, which `calabi mesh up` asks too.
-	aliasRoutes := mesh.AliasRequest(routes, r.logger)
+	var aliasHosts []netip.Prefix
+	hostAliasesSupported := mesh.SupportsSubnetAliases(routes, r.logger)
+	if hostAliasesSupported {
+		parsed, err := mesh.ParseAliasHosts(r.cfg.AliasHosts, routes)
+		if err == nil {
+			aliasHosts = parsed
+		} else {
+			r.logger.Warn("mesh: ignoring unusable host alias requests", "err", err)
+		}
+	}
 	if r.cfg.AdvertiseExitNode {
 		routes = append(routes, netip.PrefixFrom(netip.IPv4Unspecified(), 0)) // 0.0.0.0/0
 	}
@@ -432,7 +436,7 @@ func (r *meshRunner) startDataPlane() (*meshDataPlane, error) {
 		dp.SetExitBypassHosts([]string{r.cfg.Coord, r.cfg.Relay})
 	}
 
-	return &meshDataPlane{dp: dp, dns: dnsSink, key: priv, routes: routes, aliases: aliasRoutes, stop: func() {
+	return &meshDataPlane{dp: dp, dns: dnsSink, key: priv, routes: routes, aliasHosts: aliasHosts, hostAliasesSupported: hostAliasesSupported, stop: func() {
 		for i := len(stops) - 1; i >= 0; i-- {
 			stops[i]()
 		}
@@ -473,14 +477,16 @@ func (r *meshRunner) runControlPlane(ctx context.Context, data *meshDataPlane) e
 		Reauth:   r.reauth,
 		Tunnels:  r.tunnels,
 		Params: mesh.RegisterParams{
-			AuthKey:           authKey,
-			NodeKey:           data.key.Public(),
-			NodePrivate:       data.key,
-			Name:              name,
-			AdvertiseRoutes:   data.routes,
-			AliasRoutes:       data.aliases,
-			DeviceFingerprint: resolveFingerprint(r.logger),
-			Services:          declaredServices(r.cfg.Services),
+			AuthKey:              authKey,
+			NodeKey:              data.key.Public(),
+			NodePrivate:          data.key,
+			Name:                 name,
+			AdvertiseRoutes:      data.routes,
+			HostAliasRequests:    data.aliasHosts,
+			HostAliasesSupported: &data.hostAliasesSupported,
+			DeviceFingerprint:    resolveFingerprint(r.logger),
+			Services:             declaredServices(r.cfg.Services),
+			DisableFileTransfer:  daemonSocketPath() != "",
 		},
 		ExitNode:      r.cfg.ExitNode,
 		Routes:        r.routePolicy(),

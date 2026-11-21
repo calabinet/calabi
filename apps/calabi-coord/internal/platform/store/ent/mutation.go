@@ -3479,44 +3479,46 @@ func (m *MeshConnRecordMutation) ResetEdge(name string) error {
 // MeshNodeMutation represents an operation that mutates the MeshNode nodes in the graph.
 type MeshNodeMutation struct {
 	config
-	op                     Op
-	typ                    string
-	id                     *int
-	meshnet_id             *int64
-	addmeshnet_id          *int64
-	node_key               *string
-	name                   *string
-	host_name              *string
-	name_pinned            *bool
-	disco_key              *string
-	overlay                *string
-	derp_home              *string
-	endpoints_json         *string
-	advertised_routes_json *string
-	approved_routes_json   *string
-	real_routes_json       *string
-	aliased_routes_json    *string
-	route_aliases_json     *string
-	routes_reviewed        *bool
-	owner_user_id          *int64
-	addowner_user_id       *int64
-	device_fingerprint     *string
-	os                     *string
-	block_incoming         *bool
-	tags_pinned            *bool
-	acl_portless           *bool
-	acl_icmp               *bool
-	tags_json              *string
-	approved               *bool
-	disabled               *bool
-	enrolled_by            *string
-	signed_out             *bool
-	created_at             *time.Time
-	last_seen              *time.Time
-	clearedFields          map[string]struct{}
-	done                   bool
-	oldValue               func(context.Context) (*MeshNode, error)
-	predicates             []predicate.MeshNode
+	op                        Op
+	typ                       string
+	id                        *int
+	meshnet_id                *int64
+	addmeshnet_id             *int64
+	node_key                  *string
+	name                      *string
+	host_name                 *string
+	name_pinned               *bool
+	disco_key                 *string
+	overlay                   *string
+	derp_home                 *string
+	endpoints_json            *string
+	advertised_routes_json    *string
+	approved_routes_json      *string
+	real_routes_json          *string
+	host_alias_requests_json  *string
+	approved_alias_hosts_json *string
+	aliased_routes_json       *string
+	route_aliases_json        *string
+	routes_reviewed           *bool
+	owner_user_id             *int64
+	addowner_user_id          *int64
+	device_fingerprint        *string
+	os                        *string
+	block_incoming            *bool
+	tags_pinned               *bool
+	acl_portless              *bool
+	acl_icmp                  *bool
+	tags_json                 *string
+	approved                  *bool
+	disabled                  *bool
+	enrolled_by               *string
+	signed_out                *bool
+	created_at                *time.Time
+	last_seen                 *time.Time
+	clearedFields             map[string]struct{}
+	done                      bool
+	oldValue                  func(context.Context) (*MeshNode, error)
+	predicates                []predicate.MeshNode
 }
 
 var _ ent.Mutation = (*MeshNodeMutation)(nil)
@@ -4067,6 +4069,78 @@ func (m *MeshNodeMutation) OldRealRoutesJSON(ctx context.Context) (v string, err
 // ResetRealRoutesJSON resets all changes to the "real_routes_json" field.
 func (m *MeshNodeMutation) ResetRealRoutesJSON() {
 	m.real_routes_json = nil
+}
+
+// SetHostAliasRequestsJSON sets the "host_alias_requests_json" field.
+func (m *MeshNodeMutation) SetHostAliasRequestsJSON(s string) {
+	m.host_alias_requests_json = &s
+}
+
+// HostAliasRequestsJSON returns the value of the "host_alias_requests_json" field in the mutation.
+func (m *MeshNodeMutation) HostAliasRequestsJSON() (r string, exists bool) {
+	v := m.host_alias_requests_json
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHostAliasRequestsJSON returns the old "host_alias_requests_json" field's value of the MeshNode entity.
+// If the MeshNode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshNodeMutation) OldHostAliasRequestsJSON(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHostAliasRequestsJSON is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHostAliasRequestsJSON requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHostAliasRequestsJSON: %w", err)
+	}
+	return oldValue.HostAliasRequestsJSON, nil
+}
+
+// ResetHostAliasRequestsJSON resets all changes to the "host_alias_requests_json" field.
+func (m *MeshNodeMutation) ResetHostAliasRequestsJSON() {
+	m.host_alias_requests_json = nil
+}
+
+// SetApprovedAliasHostsJSON sets the "approved_alias_hosts_json" field.
+func (m *MeshNodeMutation) SetApprovedAliasHostsJSON(s string) {
+	m.approved_alias_hosts_json = &s
+}
+
+// ApprovedAliasHostsJSON returns the value of the "approved_alias_hosts_json" field in the mutation.
+func (m *MeshNodeMutation) ApprovedAliasHostsJSON() (r string, exists bool) {
+	v := m.approved_alias_hosts_json
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldApprovedAliasHostsJSON returns the old "approved_alias_hosts_json" field's value of the MeshNode entity.
+// If the MeshNode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeshNodeMutation) OldApprovedAliasHostsJSON(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldApprovedAliasHostsJSON is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldApprovedAliasHostsJSON requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldApprovedAliasHostsJSON: %w", err)
+	}
+	return oldValue.ApprovedAliasHostsJSON, nil
+}
+
+// ResetApprovedAliasHostsJSON resets all changes to the "approved_alias_hosts_json" field.
+func (m *MeshNodeMutation) ResetApprovedAliasHostsJSON() {
+	m.approved_alias_hosts_json = nil
 }
 
 // SetAliasedRoutesJSON sets the "aliased_routes_json" field.
@@ -4748,7 +4822,7 @@ func (m *MeshNodeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *MeshNodeMutation) Fields() []string {
-	fields := make([]string, 0, 29)
+	fields := make([]string, 0, 31)
 	if m.meshnet_id != nil {
 		fields = append(fields, meshnode.FieldMeshnetID)
 	}
@@ -4784,6 +4858,12 @@ func (m *MeshNodeMutation) Fields() []string {
 	}
 	if m.real_routes_json != nil {
 		fields = append(fields, meshnode.FieldRealRoutesJSON)
+	}
+	if m.host_alias_requests_json != nil {
+		fields = append(fields, meshnode.FieldHostAliasRequestsJSON)
+	}
+	if m.approved_alias_hosts_json != nil {
+		fields = append(fields, meshnode.FieldApprovedAliasHostsJSON)
 	}
 	if m.aliased_routes_json != nil {
 		fields = append(fields, meshnode.FieldAliasedRoutesJSON)
@@ -4868,6 +4948,10 @@ func (m *MeshNodeMutation) Field(name string) (ent.Value, bool) {
 		return m.ApprovedRoutesJSON()
 	case meshnode.FieldRealRoutesJSON:
 		return m.RealRoutesJSON()
+	case meshnode.FieldHostAliasRequestsJSON:
+		return m.HostAliasRequestsJSON()
+	case meshnode.FieldApprovedAliasHostsJSON:
+		return m.ApprovedAliasHostsJSON()
 	case meshnode.FieldAliasedRoutesJSON:
 		return m.AliasedRoutesJSON()
 	case meshnode.FieldRouteAliasesJSON:
@@ -4935,6 +5019,10 @@ func (m *MeshNodeMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldApprovedRoutesJSON(ctx)
 	case meshnode.FieldRealRoutesJSON:
 		return m.OldRealRoutesJSON(ctx)
+	case meshnode.FieldHostAliasRequestsJSON:
+		return m.OldHostAliasRequestsJSON(ctx)
+	case meshnode.FieldApprovedAliasHostsJSON:
+		return m.OldApprovedAliasHostsJSON(ctx)
 	case meshnode.FieldAliasedRoutesJSON:
 		return m.OldAliasedRoutesJSON(ctx)
 	case meshnode.FieldRouteAliasesJSON:
@@ -5061,6 +5149,20 @@ func (m *MeshNodeMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRealRoutesJSON(v)
+		return nil
+	case meshnode.FieldHostAliasRequestsJSON:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHostAliasRequestsJSON(v)
+		return nil
+	case meshnode.FieldApprovedAliasHostsJSON:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetApprovedAliasHostsJSON(v)
 		return nil
 	case meshnode.FieldAliasedRoutesJSON:
 		v, ok := value.(string)
@@ -5301,6 +5403,12 @@ func (m *MeshNodeMutation) ResetField(name string) error {
 		return nil
 	case meshnode.FieldRealRoutesJSON:
 		m.ResetRealRoutesJSON()
+		return nil
+	case meshnode.FieldHostAliasRequestsJSON:
+		m.ResetHostAliasRequestsJSON()
+		return nil
+	case meshnode.FieldApprovedAliasHostsJSON:
+		m.ResetApprovedAliasHostsJSON()
 		return nil
 	case meshnode.FieldAliasedRoutesJSON:
 		m.ResetAliasedRoutesJSON()

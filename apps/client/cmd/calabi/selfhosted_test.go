@@ -513,7 +513,10 @@ func TestDaemonConsoleReleasesItsPort(t *testing.T) {
 		addr := freePort(t)
 		t.Setenv("CALABI_STATUS_ADDR", addr)
 		ctx, cancel := context.WithCancel(context.Background())
-		url, done := startDaemonConsole(ctx, quietTestLogger(), status.New("test", ""), func(*http.ServeMux) {})
+		url, done, err := startDaemonConsole(ctx, quietTestLogger(), status.New("test", ""), func(*http.ServeMux) {})
+		if err != nil {
+			t.Fatal(err)
+		}
 		if url != "http://"+addr {
 			t.Fatalf("console at %q, want %s", url, addr)
 		}

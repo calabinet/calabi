@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
 	"github.com/calabinet/calabi/apps/client/internal/platform/clientreg"
 	"github.com/calabinet/calabi/apps/client/internal/platform/edgepicker"
 	"github.com/calabinet/calabi/apps/client/internal/platform/statusapi"
@@ -237,7 +238,7 @@ func runDaemon(args []string) int {
 		if !takeDaemonRestart() {
 			return code
 		}
-		slog.Info("daemon: starting again for the other mode", "was_local", local, "now_local", daemonIsLocal(args))
+		slog.Info("daemon: restarting after configuration change", "was_local", local, "now_local", daemonIsLocal(args))
 	}
 }
 
@@ -265,7 +266,9 @@ func runPlatformDaemon(args []string) int {
 	meshAdvertiseRoutes := fs.String("advertise-routes", envOr("CALABI_MESH_ADVERTISE_ROUTES", ""),
 		"mesh: comma-separated subnets to advertise as a subnet router, /24 or smaller (e.g. 192.168.1.0/24). A bare address is a single host: 192.168.1.22")
 	meshAliasRoutes := fs.String("alias-routes", envOr("CALABI_MESH_ALIAS_ROUTES", ""),
-		"mesh: DEPRECATED and ignored: every advertised route is aliased where the host supports it")
+		"mesh: DEPRECATED and ignored; use --alias-hosts")
+	meshAliasHosts := fs.String("alias-hosts", envOr("CALABI_MESH_ALIAS_HOSTS", ""),
+		"mesh: comma-separated IPv4 hosts to request stand-in addresses for")
 	meshServices := fs.String("mesh-service", envOr("CALABI_MESH_SERVICES", ""),
 		"declare services this machine offers on the mesh, e.g. \"db:tcp:5432,web:443\" (proto defaults to tcp). A DECLARATION: each entry lands in the console as pending until an admin confirms it")
 	meshAdvertiseExit := fs.Bool("advertise-exit-node", envBool("CALABI_MESH_ADVERTISE_EXIT_NODE", false),
@@ -398,13 +401,28 @@ func runPlatformDaemon(args []string) int {
 	// back to creds — so ops can force it at install and it still sticks.
 	meshAdv := meshAdvertise{}
 	if c, err := creds.Load(); err == nil && c != nil {
-		meshAdv = meshAdvertise{Routes: c.MeshAdvertiseRoutes, ExitNode: c.MeshAdvertiseExitNode, ExitPeer: c.MeshExitNode, AliasRoutes: c.MeshAliasRoutes}
+		meshAdv = meshAdvertise{Routes: c.MeshAdvertiseRoutes, ExitNode: c.MeshAdvertiseExitNode, ExitPeer: c.MeshExitNode, AliasRoutes: c.MeshAliasRoutes, AliasHosts: c.MeshAliasHosts}
 	}
-	if *meshAdvertiseRoutes != "" || *meshAdvertiseExit || *meshExitNode != "" || *meshAliasRoutes != "" {
-		meshAdv = meshAdvertise{Routes: splitCSV(*meshAdvertiseRoutes), ExitNode: *meshAdvertiseExit, ExitPeer: *meshExitNode, AliasRoutes: splitCSV(*meshAliasRoutes)}
+	forceMeshRoutes := *meshAdvertiseRoutes != "" || *meshAdvertiseExit || *meshExitNode != "" || *meshAliasRoutes != ""
+	if forceMeshRoutes {
+		meshAdv.Routes, meshAdv.ExitNode, meshAdv.ExitPeer = splitCSV(*meshAdvertiseRoutes), *meshAdvertiseExit, *meshExitNode
+		meshAdv.AliasRoutes = splitCSV(*meshAliasRoutes)
+	}
+	if forceMeshRoutes || *meshAliasHosts != "" {
+		var requested []string
+		if *meshAliasHosts != "" {
+			requested = splitCSV(*meshAliasHosts)
+		}
+		hosts, err := mesh.AliasHostConfig(requested, meshAdv.AliasHosts, meshAdv.Routes)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "calabi daemon: --alias-hosts:", err)
+			return 2
+		}
+		meshAdv.AliasHosts = hosts
 		if c, err := creds.Load(); err == nil && c != nil {
 			c.MeshAdvertiseRoutes, c.MeshAdvertiseExitNode, c.MeshExitNode = meshAdv.Routes, meshAdv.ExitNode, meshAdv.ExitPeer
 			c.MeshAliasRoutes = meshAdv.AliasRoutes
+			c.MeshAliasHosts = meshAdv.AliasHosts
 			if serr := creds.Save(c); serr != nil {
 				logger.Warn("persist mesh advertise flags failed", "err", serr)
 			}
@@ -445,11 +463,12 @@ func runPlatformDaemon(args []string) int {
 		updateSrc = updateAgent
 	}
 	apiServer := statusapi.New(logger, statusapi.Config{
-		Update:        updateSrc,
-		DesktopUpdate: desktopSrc,
-		BFFConsoleURL: bffConsoleURL,
-		ConsoleWebURL: consoleWebURL,
-		AgentMode:     agentMode,
+		Update:                 updateSrc,
+		DesktopUpdate:          desktopSrc,
+		BFFConsoleURL:          bffConsoleURL,
+		ConsoleWebURL:          consoleWebURL,
+		AgentMode:              agentMode,
+		DisableInteractiveAuth: daemonSocketPath() != "",
 		// The console's OS-service advice does not apply in a container; see
 		// statusapi.Config.Container.
 		Container:     runningInContainer(),
@@ -632,6 +651,9 @@ func runPlatformDaemon(args []string) int {
 	meshMeter := newMeshUsageMeter(filepath.Join(filepath.Dir(lock.Path()), "mesh-usage.json"))
 	// The way from the sign-in page to a self-hosted server.
 	selfHosted := &platformSelfHosted{logger: logger, agentMode: agentMode}
+	if daemonSocketPath() != "" {
+		selfHosted.socketBFF = newPlatformSetupClient(bffConsoleURL)
+	}
 	attachAPI := func(mux *http.ServeMux) {
 		apiServer.Register(mux)
 		mux.HandleFunc("/v1/usage/mesh", meshMeter.handleMeshUsage)
@@ -639,7 +661,11 @@ func runPlatformDaemon(args []string) int {
 	}
 	ctx, cancel := withSignalContext()
 	defer cancel()
-	consoleURL, consoleDone := startDaemonConsole(ctx, logger, state, attachAPI)
+	consoleURL, consoleDone, err := startDaemonConsole(ctx, logger, state, attachAPI)
+	if err != nil {
+		logger.Error("daemon management startup failed", "err", err)
+		return 1
+	}
 	stopFiles := startFileControl(ctx, logger, meshCtl, consoleURL)
 	defer stopFiles()
 	// Registered after cancel's defer, so it runs first: cancel, then wait for

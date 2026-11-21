@@ -25,6 +25,9 @@ type MeshnetID int64
 type RouteAlias struct {
 	Real  netip.Prefix `json:"real"`
 	Alias netip.Prefix `json:"alias"`
+	// Host records an individually allocated IPv4 address. Older rows omit it
+	// and retain the original prefix or grouped /24 reservation.
+	Host bool `json:"host,omitempty"`
 }
 
 // Node is a device enrolled in a meshnet.
@@ -56,6 +59,8 @@ type Node struct {
 	// Each target is forwarded by this node, and need not run a mesh client.
 	// Only administrators may set this; clients still apply local-network protection.
 	RealRoutes []netip.Prefix
+	// SuppressedRealRoutes is computed for the netmap and is never stored.
+	SuppressedRealRoutes []netip.Prefix
 	// RoutesReviewed records that an admin has managed this node's routes at
 	// least once. Until then the node keeps the pre-approval behaviour (claims
 	// are honoured), so shipping approval doesn't cut every subnet router that
@@ -72,7 +77,9 @@ type Node struct {
 	// aliases only what is asked for, because the request doubles as the signal
 	// that the node CAN rewrite: 1.7.1 and older never send it and cannot install
 	// the rule, so aliasing their routes unasked would black-hole every one.
-	AliasedRoutes []netip.Prefix
+	AliasedRoutes      []netip.Prefix
+	HostAliasRequests  []netip.Prefix
+	ApprovedAliasHosts []netip.Prefix
 	// RouteAliases is the allocation: the stand-in prefix this coordinator gave
 	// each aliased route. Assigned when the route is both approved and requested,
 	// released when either stops being true. Consumers receive the alias, plus

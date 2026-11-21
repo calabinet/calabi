@@ -47,6 +47,10 @@ func iptablesOwnerComment(node meshproto.NodeKey) string { return "calabi-mesh-"
 // older kernels allow a table name.
 func nftTableFor(node meshproto.NodeKey) string { return "calabi_mesh_" + natOwner(node) }
 
+// Alias rules follow the netmap lifetime. Keep them separate from the
+// postrouting table so replacing an alias cannot remove MASQUERADE.
+func nftAliasTableFor(node meshproto.NodeKey) string { return "calabi_alias_" + natOwner(node) }
+
 // nftLegacyTable is the one table every node shared before tables had owners.
 // Those releases deleted it at every start whoever had created it, so removing
 // it here takes nothing from anyone that they did not already lose.
@@ -99,6 +103,19 @@ func nftMasqueradeRules(routes []netip.Prefix) []string {
 		} else {
 			rules = append(rules, fmt.Sprintf("ip saddr %s ip daddr %s masquerade", meshOverlayCIDR, r.String()))
 		}
+	}
+	return rules
+}
+
+func nftAliasRules(aliases []SubnetAlias) []string {
+	var rules []string
+	for _, a := range aliases {
+		if !a.Alias.Addr().Is4() || !a.Real.Addr().Is4() || a.Alias.Bits() <= 0 || a.Alias.Bits() != a.Real.Bits() {
+			continue
+		}
+		alias, real := a.Alias.Masked(), a.Real.Masked()
+		rules = append(rules, fmt.Sprintf("ip saddr %s ip daddr %s dnat ip prefix to ip daddr map { %s : %s }",
+			meshOverlayCIDR, alias, alias, real))
 	}
 	return rules
 }
@@ -293,25 +310,30 @@ type nftRunner func(args ...string) ([]byte, error)
 type nftNAT struct{ run nftRunner }
 
 func (b nftNAT) masquerade(node meshproto.NodeKey, routes []netip.Prefix) (func(), int, error) {
-	rules := nftMasqueradeRules(routes)
+	return b.install(nftTableFor(node), "postrouting", "100", nftMasqueradeRules(routes), nftLegacyTable)
+}
+
+func (b nftNAT) aliasRewrite(node meshproto.NodeKey, aliases []SubnetAlias) (func(), int, error) {
+	return b.install(nftAliasTableFor(node), "prerouting", "-100", nftAliasRules(aliases))
+}
+
+func (b nftNAT) install(table, hook, priority string, rules []string, legacyTables ...string) (func(), int, error) {
 	if len(rules) == 0 {
 		return func() {}, 0, nil
 	}
-	table := nftTableFor(node)
-	// Fresh table each session: delete this node's leftover and the pre-owner
-	// shared one (an error just means there was none), then create.
+	// Reclaim rules left by an earlier process before creating the table.
 	reclaimed := 0
-	for _, t := range []string{table, nftLegacyTable} {
+	for _, t := range append([]string{table}, legacyTables...) {
 		if _, err := b.run("delete", "table", "ip", t); err == nil {
 			reclaimed++
 		}
 	}
 	setup := [][]string{
 		{"add", "table", "ip", table},
-		{"add", "chain", "ip", table, "postrouting", "{", "type", "nat", "hook", "postrouting", "priority", "100", ";", "}"},
+		{"add", "chain", "ip", table, hook, "{", "type", "nat", "hook", hook, "priority", priority, ";", "}"},
 	}
 	for _, r := range rules {
-		setup = append(setup, append([]string{"add", "rule", "ip", table, "postrouting"}, strings.Fields(r)...))
+		setup = append(setup, append([]string{"add", "rule", "ip", table, hook}, strings.Fields(r)...))
 	}
 	for _, args := range setup {
 		if out, err := b.run(args...); err != nil {
@@ -320,17 +342,4 @@ func (b nftNAT) masquerade(node meshproto.NodeKey, routes []netip.Prefix) (func(
 		}
 	}
 	return func() { _, _ = b.run("delete", "table", "ip", table) }, reclaimed, nil
-}
-
-// aliasRewrite is not implemented on the nft backend. A 1:1 block rewrite is
-// what iptables spells NETMAP; nft expresses it differently and the translation
-// is not one this has been tested against, so it says so rather than installing
-// rules that might mean something else. iptables is the preferred backend
-// anyway (pickNATBackend tries it first, and on a modern system it is the
-// nft-compat shim, which programs nftables regardless).
-func (nftNAT) aliasRewrite(_ meshproto.NodeKey, aliases []SubnetAlias) (func(), int, error) {
-	if len(aliases) == 0 {
-		return func() {}, 0, nil
-	}
-	return nil, 0, fmt.Errorf("subnet aliases need the `iptables` NAT backend (NETMAP target); this host has only `nft` — install iptables (e.g. `apt install iptables`) and restart the daemon")
 }

@@ -4,7 +4,6 @@ import (
 	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
 	meshpb "github.com/calabinet/calabi/pkg/mesh-proto/meshpb"
 	"google.golang.org/protobuf/proto"
-	"net/netip"
 )
 
 // toProtoNetMap maps a core.NetMap onto the wire type. Peers already come
@@ -56,16 +55,7 @@ func toProtoNetMapWithRDP(nm *core.NetMap, peer func(*core.Node) *meshpb.Peer, s
 	// The node's OWN alias mapping, sent only to itself. Peers see the alias in
 	// this node's allowed_ips and nothing else; the node needs both halves to
 	// install the 1:1 rewrite between them.
-	approved := make(map[netip.Prefix]bool, len(nm.Self.ApprovedRoutes))
-	for _, route := range nm.Self.ApprovedRoutes {
-		approved[route.Masked()] = true
-	}
-	for _, ra := range nm.Self.RouteAliases {
-		// A partial route withdrawal can leave an orphaned alias row. Never
-		// instruct the router to keep rewriting a route no longer approved.
-		if !approved[ra.Real.Masked()] {
-			continue
-		}
+	for _, ra := range core.ActiveRouteAliases(&nm.Self) {
 		out.SubnetAliases = append(out.SubnetAliases, &meshpb.SubnetAlias{
 			Alias: ra.Alias.String(), Real: ra.Real.String(),
 		})

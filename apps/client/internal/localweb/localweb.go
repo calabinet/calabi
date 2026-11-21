@@ -57,6 +57,7 @@ type Writer interface {
 	CreateTunnel(spec TunnelSpec) (int64, error)
 	DeleteTunnel(id int64) error
 	UpdateSecurity(id int64, configJSON string) error
+	SetTunnelEnabled(id int64, enabled bool) error
 	// UpdateTunnel edits a tunnel's mutable core fields. An empty string means
 	// "leave unchanged"; the supervisor re-homes the tunnel when local_addr
 	// changes so new connections dial the new upstream.
@@ -219,6 +220,7 @@ type TunnelSpec struct {
 	Subdomain  string // http/https prefix → resolved to <Subdomain>.<edge base_domain>
 	RemotePort uint32
 	ConfigJSON string
+	Disabled   bool // retained when restoring an exported configuration
 }
 
 // ConfiguredTunnel is one tunnel projected for the /v1/tunnels list. ID must
@@ -234,6 +236,7 @@ type ConfiguredTunnel struct {
 	RemotePort uint32 // edge-ASSIGNED remote port once live (TCP/UDP)
 	ConfigJSON string
 	EdgeNodeID int64 // SelfHostedEdgeID once live; 0 = not registered (SPA shows "—")
+	Disabled   bool
 }
 
 // SelfHostedEdgeID is the synthetic edge_node_id the local daemon reports for
@@ -272,8 +275,8 @@ func New(cfg Config) *Server {
 func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/v1/me", s.handleMe)
 	mux.HandleFunc("/v1/local-token", s.handleLocalToken)
-	mux.HandleFunc("/v1/tunnels", s.handleTunnels)     // GET list; POST create
-	mux.HandleFunc("/v1/tunnels/", s.handleTunnelItem) // GET {id}; DELETE; {id}/security POST
+	mux.HandleFunc("/v1/tunnels", s.handleTunnels) // GET list; POST create
+	mux.HandleFunc("/v1/tunnels/", s.handleTunnelItem)
 	mux.HandleFunc("/v1/orgs", s.handleOrgs)
 	mux.HandleFunc("/v1/orgs/switch", notSupported)
 	// Org-level tunnel governance is a control-plane concept; a standalone
@@ -373,12 +376,16 @@ type remoteTunnel struct {
 // toRemote is the row the console reads. config_json goes out with the OAuth
 // client secret replaced by client_secret_set (see redactConfigJSON).
 func toRemote(t ConfiguredTunnel) remoteTunnel {
+	status := "enabled"
+	if t.Disabled {
+		status = "disabled"
+	}
 	return remoteTunnel{
 		ID: t.ID, Name: t.Name, Type: t.Type, LocalAddr: t.LocalAddr,
 		Domain: t.Domain, RemotePort: t.RemotePort, EdgeNodeID: t.EdgeNodeID,
 		// "enabled" = the configured intent; the SPA overlays live/offline from
 		// the /tunnels snapshot.
-		Status: "enabled", ConfigJSON: redactConfigJSON(t.ConfigJSON),
+		Status: status, ConfigJSON: redactConfigJSON(t.ConfigJSON),
 	}
 }
 
@@ -446,21 +453,24 @@ func (s *Server) createTunnel(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTunnelItem(w http.ResponseWriter, r *http.Request) {
 	rest := strings.TrimPrefix(r.URL.Path, "/v1/tunnels/")
-	idStr := rest
-	isSecurity := false
-	if i := strings.IndexByte(rest, '/'); i >= 0 {
-		idStr = rest[:i]
-		isSecurity = strings.TrimPrefix(rest[i:], "/") == "security"
+	idStr, action, _ := strings.Cut(rest, "/")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 || (action != "" && action != "security" && action != "status") {
+		writeError(w, http.StatusNotFound, "no such tunnel")
+		return
 	}
-	id, _ := strconv.ParseInt(idStr, 10, 64)
 
 	switch {
-	case isSecurity && r.Method == http.MethodPost:
+	case action != "" && r.Method == http.MethodPost:
 		if !s.requireWriter(w) || !checkLocalToken(w, r) {
 			return
 		}
-		s.updateSecurity(w, r, id)
-	case !isSecurity && r.Method == http.MethodGet:
+		if action == "status" {
+			s.updateTunnelStatus(w, r, id)
+		} else {
+			s.updateSecurity(w, r, id)
+		}
+	case action == "" && r.Method == http.MethodGet:
 		for _, t := range s.list() {
 			if t.ID == id {
 				writeJSON(w, http.StatusOK, toRemote(t))
@@ -468,12 +478,12 @@ func (s *Server) handleTunnelItem(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		writeError(w, http.StatusNotFound, "no such tunnel")
-	case !isSecurity && r.Method == http.MethodPut:
+	case action == "" && r.Method == http.MethodPut:
 		if !s.requireWriter(w) || !checkLocalToken(w, r) {
 			return
 		}
 		s.updateTunnel(w, r, id)
-	case !isSecurity && r.Method == http.MethodDelete:
+	case action == "" && r.Method == http.MethodDelete:
 		if !s.requireWriter(w) || !checkLocalToken(w, r) {
 			return
 		}
@@ -485,6 +495,32 @@ func (s *Server) handleTunnelItem(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
+}
+
+func (s *Server) updateTunnelStatus(w http.ResponseWriter, r *http.Request, id int64) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1024))
+	var in struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if err != nil || json.Unmarshal(body, &in) != nil || in.Enabled == nil {
+		writeError(w, http.StatusBadRequest, "enabled must be a boolean")
+		return
+	}
+	if err := s.cfg.Writer.SetTunnelEnabled(id, *in.Enabled); err != nil {
+		if errors.Is(err, ErrTunnelNotFound) {
+			writeWriterErr(w, err)
+		} else {
+			writeError(w, http.StatusInternalServerError, "could not save tunnel status")
+		}
+		return
+	}
+	for _, t := range s.list() {
+		if t.ID == id {
+			writeJSON(w, http.StatusOK, toRemote(t))
+			return
+		}
+	}
+	writeError(w, http.StatusNotFound, "no such tunnel")
 }
 
 // updateTunnel edits a tunnel's name + local_addr (PUT /v1/tunnels/{id}). The
@@ -557,7 +593,15 @@ func (s *Server) updateSecurity(w http.ResponseWriter, r *http.Request, id int64
 		writeWriterErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "status": "enabled", "config_json": redactConfigJSON(cfgJSON)})
+	for _, t := range s.list() {
+		if t.ID == id {
+			out := toRemote(t)
+			out.ConfigJSON = redactConfigJSON(cfgJSON)
+			writeJSON(w, http.StatusOK, out)
+			return
+		}
+	}
+	writeError(w, http.StatusNotFound, "no such tunnel")
 }
 
 // --- platform-shaped stubs (benign empties so SPA pages render) ------------
@@ -706,6 +750,7 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 			if _, err := s.cfg.Writer.CreateTunnel(TunnelSpec{
 				Name: t.Name, Type: t.Type, LocalAddr: t.LocalAddr,
 				Domain: t.Domain, RemotePort: t.RemotePort, ConfigJSON: t.ConfigJSON,
+				Disabled: t.Status == "disabled" || t.Status == "admin_disabled",
 			}); err != nil {
 				it.Error = err.Error()
 			} else {

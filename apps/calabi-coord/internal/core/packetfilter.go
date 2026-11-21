@@ -339,14 +339,21 @@ func sourceCIDRs(sels []string, peers []*Node, groups map[string][]string, admit
 				continue
 			}
 			// Replies may use the alias or an explicitly enabled real CIDR.
-			if alias, ok := aliasFor(peer.RouteAliases, r); ok {
+			if alias, ok := legacyAliasFor(peer.RouteAliases, r); ok {
 				add(alias.String())
 				continue
 			}
-			add(r.String())
+			if !containsPrefix(peer.SuppressedRealRoutes, r) {
+				add(r.String())
+			}
 		}
 		for _, target := range SelectedRealRoutes(peer.RealRoutes, peer.ApprovedRoutes) {
 			add(target.String())
+		}
+		for _, ra := range ActiveRouteAliases(peer) {
+			if ra.Host {
+				add(ra.Alias.String())
+			}
 		}
 	}
 	sort.Strings(out)

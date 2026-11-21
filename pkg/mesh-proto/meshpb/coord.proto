@@ -259,6 +259,10 @@ message RegisterNodeRequest {
   // enrolled with; nothing is taken from the request that an auth key would
   // have decided.
   int64 node_id = 15;
+  // Whether this publisher can install IPv4 alias rewrites. This also lets
+  // newer clients retain existing legacy aliases without requesting new ones.
+  optional bool host_aliases_supported = 16;
+  repeated string host_alias_requests = 17; // IPv4 /32 within advertised routes
 }
 
 // DeclaredService is one entry of RegisterNodeRequest.declared_services.

@@ -48,6 +48,9 @@ type RegisterParams struct {
 	NodePrivate PrivateKey
 	DiscoKey    meshproto.DiscoKey // optional
 	Name        string
+	// DisableFileTransfer omits file-transfer negotiation on devices that
+	// run without the file control agent.
+	DisableFileTransfer bool
 	// AdvertiseRoutes are subnet-router CIDRs this node offers to forward.
 	AdvertiseRoutes []netip.Prefix
 	// AliasRoutes are the AdvertiseRoutes this node asks to be published under a
@@ -55,7 +58,9 @@ type RegisterParams struct {
 	// the rewrite. Fill it from AliasRequest, never by hand: left nil beside a
 	// subnet advertisement, it publishes those subnets under their real CIDRs. A
 	// request: it takes route approval to be granted.
-	AliasRoutes []netip.Prefix
+	AliasRoutes          []netip.Prefix
+	HostAliasesSupported *bool
+	HostAliasRequests    []netip.Prefix
 	// DeviceFingerprint is this install's Publish-side device id. Sent so the
 	// console can link this mesh device to its client record; empty when the
 	// install never registered a device. Display only — the coordinator does
@@ -108,7 +113,7 @@ type Registration struct {
 }
 
 // clientCapabilities is what this client asks the coordinator for.
-var clientCapabilities = []string{string(meshproto.CapNodeReauth), string(meshproto.CapFileTransfer), string(meshproto.CapACLPortless), string(meshproto.CapACLICMP)}
+var clientCapabilities = []string{string(meshproto.CapNodeReauth), string(meshproto.CapACLPortless), string(meshproto.CapACLICMP)}
 
 // Register enrolls the node and returns its mesh identity (id + overlay addr).
 //
@@ -136,12 +141,16 @@ func (c *CoordClient) register(ctx context.Context, p RegisterParams, reauth boo
 	if p.NodePrivate == (PrivateKey{}) || p.NodePrivate.Public() != p.NodeKey {
 		return Registration{}, errors.New("mesh: register: NodePrivate is missing or does not match NodeKey")
 	}
+	capabilities := clientCapabilities
+	if !p.DisableFileTransfer {
+		capabilities = append(append([]string(nil), clientCapabilities...), string(meshproto.CapFileTransfer))
+	}
 	req := &meshpb.RegisterNodeRequest{
 		AuthKey:           p.AuthKey,
 		NodeKey:           p.NodeKey.String(),
 		Name:              p.Name,
 		ProtocolVersion:   meshproto.ProtocolVersion,
-		Capabilities:      clientCapabilities,
+		Capabilities:      capabilities,
 		DeviceFingerprint: p.DeviceFingerprint,
 		// runtime.GOOS, not a config field: this has to be the truth about the
 		// running binary, and a value an operator could set would only ever be
@@ -150,7 +159,8 @@ func (c *CoordClient) register(ctx context.Context, p RegisterParams, reauth boo
 		// Always sent (a pointer to a real bool, never nil), so "off" is a
 		// statement rather than silence. Only a daemon too old to know the field
 		// leaves it absent, which is the state the console renders as nothing.
-		BlockIncoming: &p.BlockIncoming,
+		BlockIncoming:        &p.BlockIncoming,
+		HostAliasesSupported: p.HostAliasesSupported,
 	}
 	if !p.DiscoKey.IsZero() {
 		req.DiscoKey = p.DiscoKey.String()
@@ -160,6 +170,9 @@ func (c *CoordClient) register(ctx context.Context, p RegisterParams, reauth boo
 	}
 	for _, r := range p.AliasRoutes {
 		req.AliasedRoutes = append(req.AliasedRoutes, r.String())
+	}
+	for _, r := range p.HostAliasRequests {
+		req.HostAliasRequests = append(req.HostAliasRequests, r.String())
 	}
 	for _, s := range p.Services {
 		req.DeclaredServices = append(req.DeclaredServices, &meshpb.DeclaredService{

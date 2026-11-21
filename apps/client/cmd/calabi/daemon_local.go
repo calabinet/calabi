@@ -171,6 +171,7 @@ type localTunnelConfig struct {
 	Domain     string               `yaml:"domain"`              // http / sni (full host; wins over subdomain)
 	Subdomain  string               `yaml:"subdomain,omitempty"` // http/https prefix → <subdomain>.<edge base_domain>
 	RemotePort uint32               `yaml:"remote_port"`         // tcp / udp
+	Disabled   bool                 `yaml:"disabled,omitempty"`
 	Security   *localSecurityConfig `yaml:"security,omitempty"`
 	// SecurityConfigJSON is a raw {"security":{…}} blob (bcrypt'd). The local
 	// console writes this form when it edits a tunnel's policy (round-trip-safe:
@@ -337,12 +338,16 @@ func runLocalDaemon(args []string) int {
 	updates := statusapi.New(logger, updateConfig)
 	ctx, cancel := withSignalContext()
 	defer cancel()
-	console, consoleDone := startDaemonConsole(ctx, logger, state, func(mux *http.ServeMux) {
+	console, consoleDone, err := startDaemonConsole(ctx, logger, state, func(mux *http.ServeMux) {
 		lw.Register(mux)
 		updates.RegisterUpdates(mux)
 		mux.HandleFunc("/v1/usage/mesh", meshMeter.handleMeshUsage)
 		sh.register(mux)
 	})
+	if err != nil {
+		logger.Error("daemon management startup failed", "err", err)
+		return 1
+	}
 	stopFiles := startFileControl(ctx, logger, meshL, console)
 	defer stopFiles()
 	// Registered after cancel's defer, so it runs first: cancel, then wait for
@@ -561,7 +566,7 @@ func runLocalSession(ctx context.Context, logger *slog.Logger, sv *localSupervis
 
 	// Initial registration: reg is empty, so every planned tunnel is "new".
 	sv.reconcile(sctx, logger, cli, reg, state)
-	planned := len(sv.snapshot())
+	planned := len(sv.activePlan())
 	if planned > 0 && reg.count() == 0 && sctx.Err() == nil {
 		// Had tunnels to register and every one failed — drop and back off
 		// rather than hold a useless session. An EMPTY plan is fine: keep the
@@ -578,8 +583,9 @@ func runLocalSession(ctx context.Context, logger *slog.Logger, sv *localSupervis
 			// drop should reconnect promptly (reset backoff), not be treated as a
 			// connect failure.
 			established := planned == 0 || reg.count() > 0
-			for _, pid := range reg.proxyIDs() {
-				state.RemoveTunnel(pid)
+			for id, entry := range reg.liveIDs() {
+				sv.markDead(id)
+				state.RemoveTunnel(entry.proxyID)
 			}
 			return established, runErr
 		case <-sv.reconcileCh:
@@ -665,16 +671,6 @@ func (r *localRegistry) count() int {
 	n := len(r.byID)
 	r.mu.RUnlock()
 	return n
-}
-
-func (r *localRegistry) proxyIDs() []string {
-	r.mu.RLock()
-	out := make([]string, 0, len(r.byProxyID))
-	for pid := range r.byProxyID {
-		out = append(out, pid)
-	}
-	r.mu.RUnlock()
-	return out
 }
 
 // loadLocalConfig reads + parses the YAML config (strict: unknown keys error

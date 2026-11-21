@@ -65,6 +65,7 @@ import {
   formatRoute,
   parseRoute,
   routeStanding,
+  subnetCoversHost,
   type RouteReport,
   type RouteStanding,
 } from "../lib/cidr";
@@ -1052,6 +1053,9 @@ function CidrListEditor({
   placeholder,
   enforceWidth = true,
   rowExtra,
+  hostOnly = false,
+  inputLabel,
+  validate,
 }: {
   value: string[];
   onChange: (v: string[]) => void;
@@ -1060,13 +1064,16 @@ function CidrListEditor({
   enforceWidth?: boolean;
   /** Rendered on each row, before its delete button. */
   rowExtra?: (cidr: string) => React.ReactNode;
+  hostOnly?: boolean;
+  inputLabel?: string;
+  validate?: (cidr: string) => string | undefined;
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState("");
   const [err, setErr] = useState("");
 
   const add = () => {
-    const parsed = parseRoute(draft, enforceWidth);
+    const parsed = parseRoute(draft, enforceWidth && !hostOnly);
     if (!parsed.ok) {
       // "too broad" gets its own message naming a /24 to use instead: the
       // generic "invalid" would leave the reader retyping the same thing.
@@ -1078,6 +1085,15 @@ function CidrListEditor({
       return;
     }
     const norm = parsed.cidr;
+    if (hostOnly && (!norm.endsWith("/32") || norm.includes(":"))) {
+      setErr(t("mesh.adv.hostAliasInvalid"));
+      return;
+    }
+    const issue = validate?.(norm);
+    if (issue) {
+      setErr(issue);
+      return;
+    }
     if (value.includes(norm)) {
       setErr(t("mesh.adv.dupCidr"));
       return;
@@ -1092,6 +1108,7 @@ function CidrListEditor({
       <Space.Compact style={{ width: "100%", maxWidth: 420 }}>
         <Input
           value={draft}
+          aria-label={inputLabel}
           placeholder={placeholder}
           status={err ? "error" : undefined}
           onChange={(e) => {
@@ -1192,19 +1209,13 @@ function MeshAdvertiseCard({ snapshot, assistSupported, receptionPending, onRece
   // The ASSIGNED mapping, as opposed to the request above: the coordinator picks
   // the stand-in prefix, so it can only be read back from live status. Same query
   // key the page already polls, so this costs no extra fetch.
-  const { data: live } = useQuery<MeshStatus>({
+  const { data: live, dataUpdatedAt: statusAt, isError: statusError } = useQuery<MeshStatus>({
     queryKey: ["mesh"],
     queryFn: api.mesh,
     retry: false,
   });
-  const assignedAliases = live?.subnet_aliases || [];
-  // A capability of this machine, not a setting: every advertised route is
-  // aliased where the host can install the rewrite. undefined = an older daemon
-  // that does not report it, which must not render as "unsupported".
+  // Older daemons may omit the machine's rewrite capability.
   const aliasSupported = data?.alias_supported;
-  const refusedAliases = live?.unaliased_routes || [];
-  const aliasBudget = live?.alias_budget_addrs || 0;
-  const aliasUsed = live?.alias_used_addrs || 0;
   // Already cached by the Layout under the same key. Used for one thing: saying
   // WHERE a waiting route gets approved — a self-hosted server has no web console.
   const { data: me } = useQuery<AccountMe>({
@@ -1213,6 +1224,9 @@ function MeshAdvertiseCard({ snapshot, assistSupported, receptionPending, onRece
     retry: false,
   });
   const standalone = me?.plan?.code === "standalone";
+  const activeOrg = me?.org?.id;
+  const meshScope = `${standalone ? "self-hosted" : "platform"}:${activeOrg ?? ""}`;
+  const orgMatches = !live?.org_id || !activeOrg || live.org_id === activeOrg;
   // The org's device list, for one fact about THIS machine: whether it has been
   // let in at all. An org can auto-approve routes and still review devices, and a
   // device waiting for that review is in nobody's netmap — so a route the
@@ -1232,11 +1246,25 @@ function MeshAdvertiseCard({ snapshot, assistSupported, receptionPending, onRece
     refetchInterval: (q) => (selfPendingIn(q.state.data?.items) ? 5_000 : false),
   });
   const devicePending = selfPendingIn(orgNodes?.items);
+  const [savedAt, setSavedAt] = useState(0);
+  const [lastSynced, setLastSynced] = useState<{
+    scope: string;
+    mesh: MeshStatus;
+    settings: MeshAdvertise;
+    devicePending: boolean;
+  }>();
+  const waitingAfterSave = savedAt > 0 && statusAt <= savedAt;
+  const statusSynced = orgMatches && !statusError && !waitingAfterSave && !!live?.up && !!live.netmap_seen;
+  useEffect(() => {
+    if (statusSynced && live && data)
+      setLastSynced({ scope: meshScope, mesh: live, settings: data, devicePending });
+  }, [statusSynced, live, data, meshScope, devicePending]);
 
   // Each switch gates its own inputs; the values persist while a switch is off
   // so toggling back doesn't lose what you typed.
   const [routesOn, setRoutesOn] = useState(false);
   const [routes, setRoutes] = useState<string[]>([]);
+  const [aliasHosts, setAliasHosts] = useState<string[]>([]);
   const [exitNodeOn, setExitNodeOn] = useState(false);
   const [useExitOn, setUseExitOn] = useState(false);
   const [exitPeer, setExitPeer] = useState("");
@@ -1246,6 +1274,7 @@ function MeshAdvertiseCard({ snapshot, assistSupported, receptionPending, onRece
   useEffect(() => {
     if (!data) return;
     setRoutes(data.routes || []);
+    setAliasHosts(data.alias_hosts || []);
     setRoutesOn((data.routes || []).length > 0);
     setExitNodeOn(data.advertise_exit_node);
     setExitPeer(data.exit_node || "");
@@ -1255,8 +1284,14 @@ function MeshAdvertiseCard({ snapshot, assistSupported, receptionPending, onRece
     setBlockIncoming(!!data.block_incoming);
   }, [data]);
 
+  function changeRoutes(next: string[]) {
+    setRoutes(next);
+    setAliasHosts((hosts) => hosts.filter((host) => next.some((route) => subnetCoversHost(route, host))));
+  }
+
   const payload = {
     routes: routesOn ? routes : [],
+    alias_hosts: data?.alias_hosts === undefined ? undefined : routesOn ? aliasHosts : [],
     advertise_exit_node: exitNodeOn,
     exit_node: useExitOn ? exitPeer.trim() : "",
     accept_routes: acceptOn,
@@ -1272,12 +1307,14 @@ function MeshAdvertiseCard({ snapshot, assistSupported, receptionPending, onRece
 
   const save = useMutation({
     mutationFn: () => api.setMeshAdvertise(payload),
-    onSuccess: () => {
-      message.success(t("mesh.adv.saved"));
-      qc.invalidateQueries({ queryKey: ["mesh-advertise"] });
-      qc.invalidateQueries({ queryKey: ["mesh"] });
+    onSuccess: async () => {
+      setSavedAt(Date.now());
+      await qc.cancelQueries({ queryKey: ["mesh"], exact: true });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["mesh-advertise"] }),
+        qc.invalidateQueries({ queryKey: ["mesh"], exact: true }),
+      ]);
     },
-    onError: (e) => message.error((e as Error).message),
   });
 
   const target = location.pathname.startsWith("/mesh/routing") ? location.hash.slice(1) : "";
@@ -1346,6 +1383,7 @@ function MeshAdvertiseCard({ snapshot, assistSupported, receptionPending, onRece
     norm(payload.route_excludes) !== norm(data.route_excludes || []);
   const offerDirty =
     norm(payload.routes) !== norm(data.routes || []) ||
+    norm(payload.alias_hosts || []) !== norm(data.alias_hosts || []) ||
     payload.advertise_exit_node !== data.advertise_exit_node;
   const egressDirty = payload.exit_node !== (data.exit_node || "");
   const dirty = acceptDirty || offerDirty || egressDirty;
@@ -1370,17 +1408,29 @@ function MeshAdvertiseCard({ snapshot, assistSupported, receptionPending, onRece
   // Where each offer stands with the coordinator. Saving is only the request:
   // on the platform a route takes effect once an admin approves it, and this
   // page reads the same before and after unless it says which is which.
+  const previous = lastSynced?.scope === meshScope && orgMatches &&
+    (!live?.overlay || live.overlay === lastSynced.mesh.overlay) ? lastSynced : undefined;
+  const synced = statusSynced && live ? { mesh: live, settings: data, devicePending } : previous;
   const report: RouteReport = {
-    up: !!live?.up,
-    netmapSeen: !!live?.netmap_seen,
-    // A device that is itself waiting to be let in publishes nothing, whatever
-    // the coordinator has approved for it.
-    published: devicePending ? [] : live?.published_routes || [],
+    up: Boolean(synced),
+    netmapSeen: Boolean(synced),
+    published: synced?.devicePending ? [] : synced?.mesh.published_routes || [],
   };
-  const standingOf = (cidr: string) => routeStanding(cidr, data.routes || [], report);
+  const standingOf = (cidr: string) => {
+    if (!(data.routes || []).includes(cidr)) return routeStanding(cidr, data.routes || [], report);
+    if (!synced?.settings.routes?.includes(cidr)) return undefined;
+    return routeStanding(cidr, synced.settings.routes, report);
+  };
   const pendingCount = routesOn ? routes.filter((r) => standingOf(r) === "pending").length : 0;
-  const anyPublished = routesOn && routes.some((r) => standingOf(r) === "published");
-  const exitState = exitStanding(data.advertise_exit_node, report);
+  const exitState = !data.advertise_exit_node || synced?.settings.advertise_exit_node
+    ? exitStanding(data.advertise_exit_node, report) : undefined;
+  const assignedAliases = synced?.mesh.subnet_aliases || [];
+  const refusedAliases = synced?.mesh.unaliased_routes || [];
+  const aliasBudget = synced?.mesh.alias_budget_addrs || 0;
+  const aliasUsed = synced?.mesh.alias_used_addrs || 0;
+  const syncingMessage = statusError ? t("mesh.adv.stateOffline") : live?.paused ? t("mesh.paused") :
+    !live?.up || waitingAfterSave ? t(Date.now() - savedAt < 20_000 ? "mesh.adv.reconnecting" : "mesh.adv.stateOffline") :
+      t("mesh.adv.syncingApprovals");
   const pendingWhere = devicePending
     ? t("mesh.adv.pendingDevice")
     : t(standalone ? "mesh.adv.pendingWhereSelfHosted" : "mesh.adv.pendingWhere");
@@ -1410,6 +1460,10 @@ function MeshAdvertiseCard({ snapshot, assistSupported, receptionPending, onRece
   // No card title: the 路由 tab above already names it.
   return (
     <Card size="small">
+      {!statusSynced && (savedAt > 0 || alreadyAdvertising || (data.alias_hosts?.length ?? 0) > 0) && (
+        <Alert type="info" showIcon message={syncingMessage}
+          description={previous ? t("mesh.adv.lastSyncedResults") : undefined} />
+      )}
       <Tabs
         size="small"
         activeKey={settingsTab}
@@ -1481,9 +1535,12 @@ function MeshAdvertiseCard({ snapshot, assistSupported, receptionPending, onRece
                 >
                   <CidrListEditor
                     value={routes}
-                    onChange={setRoutes}
+                    onChange={changeRoutes}
                     placeholder="192.168.1.0/24 · 192.168.1.22"
-                    rowExtra={(cidr) => <StandingTag standing={standingOf(cidr)} />}
+                    rowExtra={(cidr) => {
+                      const standing = standingOf(cidr);
+                      return standing && <StandingTag standing={standing} />;
+                    }}
                   />
                   {pendingCount > 0 && (
                     <Alert
@@ -1494,83 +1551,64 @@ function MeshAdvertiseCard({ snapshot, assistSupported, receptionPending, onRece
                       description={pendingWhere}
                     />
                   )}
-                  {routesOn && routes.length > 0 && (
-                    <div style={{ marginTop: 12 }}>
-                      <Text strong style={{ fontSize: 13 }}>
-                        {t("mesh.adv.alias")}
-                      </Text>
-                      <div style={{ marginTop: 2 }}>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          {t("mesh.adv.aliasHelp")}
-                        </Text>
-                      </div>
-                      {/* The capability warning and the assigned mapping are
-                          INDEPENDENT, not an either/or. They used to be branches of
-                          one ternary, so a host reported as incapable had its
-                          mapping hidden — and when that report was wrong (see the
-                          daemon-side tri-state in mesh/aliassupport.go) the operator
-                          lost sight of a rewrite that was working. When it is right,
-                          seeing "the coordinator assigned 100.96.0.0/24" next to
-                          "this machine cannot install it" is the whole diagnosis. */}
-                      {aliasSupported === false && (
-                        <Alert
-                          type="warning"
-                          showIcon
-                          style={{ marginTop: 8 }}
-                          message={t("mesh.adv.aliasUnsupported")}
-                          description={t("mesh.adv.aliasUnsupportedHelp")}
-                        />
-                      )}
-                      {assignedAliases.length > 0 ? (
-                        <div style={{ marginTop: 8 }}>
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            {t("mesh.adv.aliasAssigned")}
-                          </Text>
-                          <div style={{ marginTop: 4 }}>
-                            {assignedAliases.map((a) => (
-                              <div key={a.alias} style={{ fontFamily: "monospace", fontSize: 12 }}>
-                                {formatRoute(a.real)} → {formatRoute(a.alias)}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : aliasSupported !== false &&
-                        refusedAliases.length === 0 &&
-                        (anyPublished || pendingCount > 0) ? (
-                        // "waiting for an address" is only true while one is
-                        // coming. A host that cannot install the rewrite is not
-                        // waiting for anything — and neither is a route no admin
-                        // has approved: the coordinator assigns nothing until
-                        // then, so that line used to name the wrong party.
-                        <div style={{ marginTop: 8 }}>
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            {t(anyPublished ? "mesh.adv.aliasPending" : "mesh.adv.aliasAfterApproval")}
-                          </Text>
-                        </div>
-                      ) : null}
-                      {refusedAliases.length > 0 && (
-                        <Alert
-                          type="warning"
-                          showIcon
-                          style={{ marginTop: 8 }}
-                          message={t("mesh.adv.aliasRefused")}
-                          description={
-                            <div>
-                              <div style={{ fontFamily: "monospace", fontSize: 12 }}>
-                                {refusedAliases.map(formatRoute).join("  ")}
-                              </div>
-                              {aliasBudget > 0 && (
-                                <div style={{ marginTop: 6, fontSize: 12 }}>
-                                  {t("mesh.adv.aliasBudget", { used: aliasUsed, total: aliasBudget })}
-                                </div>
-                              )}
-                            </div>
-                          }
-                        />
-                      )}
-                    </div>
-                  )}
                 </SettingRow>
+                <div>
+                  <Text strong>{t("mesh.adv.requestHostAlias")}</Text>
+                  <div style={{ marginTop: 4, marginBottom: 8 }}>
+                    <Text type="secondary">{t("mesh.adv.hostAliasSteps")}</Text>
+                  </div>
+                  {data.alias_hosts === undefined ? (
+                    <Text type="secondary">{t("mesh.adv.hostAliasUpgrade")}</Text>
+                  ) : aliasSupported === false && !aliasHosts.length ? (
+                    <Text type="secondary">{t("mesh.adv.aliasUnsupported")}</Text>
+                  ) : !routesOn || routes.length === 0 ? (
+                    <Text type="secondary">{t("mesh.adv.hostAliasNeedsSubnet")}</Text>
+                  ) : (
+                    <CidrListEditor value={aliasHosts} onChange={setAliasHosts} placeholder="192.168.1.50"
+                      hostOnly inputLabel={t("mesh.adv.requestHostAlias")}
+                      validate={(host) => routes.some((route) => subnetCoversHost(route, host))
+                        ? undefined : t("mesh.adv.hostAliasOutsideSubnet")} />
+                  )}
+                  {synced?.settings.alias_hosts?.some((host) =>
+                    data.alias_hosts?.includes(host) &&
+                    !assignedAliases.some((a) => a.real === host) && !refusedAliases.includes(host)) && (
+                    <Text type="secondary">{t("mesh.adv.aliasAfterApproval")}</Text>
+                  )}
+                  {assignedAliases.length > 0 ? (
+                    <div style={{ marginTop: 8 }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {t("mesh.adv.aliasAssigned")}
+                      </Text>
+                      <div style={{ marginTop: 4 }}>
+                        {assignedAliases.map((a) => (
+                          <div key={a.alias} style={{ fontFamily: "monospace", fontSize: 12 }}>
+                            {formatRoute(a.real)} → {formatRoute(a.alias)}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {refusedAliases.length > 0 && (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      style={{ marginTop: 8 }}
+                      message={t("mesh.adv.aliasRefused")}
+                      description={
+                        <div>
+                          <div style={{ fontFamily: "monospace", fontSize: 12 }}>
+                            {refusedAliases.map(formatRoute).join("  ")}
+                          </div>
+                          {aliasBudget > 0 && (
+                            <div style={{ marginTop: 6, fontSize: 12 }}>
+                              {t("mesh.adv.aliasBudget", { used: aliasUsed, total: aliasBudget })}
+                            </div>
+                          )}
+                        </div>
+                      }
+                    />
+                  )}
+                </div>
                 <SettingRow
                   title={t("mesh.adv.exitNode")}
                   desc={t("mesh.adv.exitNodeHelp")}
@@ -1579,7 +1617,7 @@ function MeshAdvertiseCard({ snapshot, assistSupported, receptionPending, onRece
                   disabled={exitNodeLocked}
                 >
                   <Space size={8} align="start">
-                    <StandingTag standing={exitState} exit />
+                    {exitState && <StandingTag standing={exitState} exit />}
                     {exitState === "pending" && (
                       <Text type="secondary" style={{ fontSize: 12 }}>
                         {pendingWhere}
@@ -1612,7 +1650,7 @@ function MeshAdvertiseCard({ snapshot, assistSupported, receptionPending, onRece
           },
         ]}
       />
-      <div style={{ marginTop: 8 }}>
+      <Space wrap style={{ marginTop: 8 }}>
         <Button
           type="primary"
           size="small"
@@ -1622,7 +1660,9 @@ function MeshAdvertiseCard({ snapshot, assistSupported, receptionPending, onRece
         >
           {t("mesh.adv.save")}
         </Button>
-      </div>
+        {save.isSuccess && !dirty && <Text type="success" role="status">{t("mesh.adv.saved")}</Text>}
+        {save.error && <Text type="danger" role="alert">{save.error.message}</Text>}
+      </Space>
     </Card>
   );
 }

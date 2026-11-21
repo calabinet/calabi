@@ -312,6 +312,7 @@
     "meshDatapathPendingTip": "中继地址已确定，组网数据面还在启动。"
   },
   "tunnels": {
+    "manageElsewhere": "请到用户后台管理，或先接管到本机。",
     "awaitingApproval": "待审核",
     "awaitingApprovalTip": "该组织要求审核成员新建的端点。需要管理员在控制台通过后，这个端点才会对外提供服务。",
     "rejected": "已拒绝",
@@ -880,10 +881,19 @@
       "noForward": "本机正在广播这些角色，但无法转发——子网路由和出口设备只在 Linux 上自动配置，对端发过来的流量会被丢弃。请关掉它们，或把路由器换到 Linux 设备上。",
       "noForwardLocked": "本机不可用：子网路由和出口设备需要系统转发，只在 Linux 上自动配置。在这里广播只会把对端的流量引进死路。",
       "alias": "替身地址",
-      "aliasHelp": "每条发布的子网都会自动分到一段唯一的替身地址，末段不变：.222 仍然是 .222。对端从替身地址访问，所以局域网地址和这里撞车的对端也能访问。需要管理员批准该子网。",
+      "requestHostAlias": "申请单 IP 替身",
+      "hostAliasSteps": "填写本机声明子网内的 IPv4 地址，点击「添加」后保存。平台组织管理员在用户后台审批，自建由服务器管理员审批。",
+      "hostAliasNeedsSubnet": "启用「发布子网」并添加网段后，即可填写申请。",
+      "hostAliasUpgrade": "更新 Calabi 核心后即可申请替身地址。",
+      "reconnecting": "正在重新连接组网",
+      "syncingApprovals": "正在同步审批状态",
+      "lastSyncedResults": "列表显示上次同步结果。",
+      "hostAliasOutsideSubnet": "请输入上方已列出的子网内的单个 IPv4 地址。",
+      "hostAliasInvalid": "请填写单个 IPv4 地址，支持 /32 写法。",
+      "aliasHelp": "新声明的子网默认使用真实地址。需要替身时，填写要访问的单个 IPv4 地址。",
       "aliasAssigned": "对端访问这些网段的地址：",
       "aliasPending": "等待协调器分配地址。",
-      "aliasRefused": "部分网段没能分配到地址",
+      "aliasRefused": "部分替身地址未能分配",
       "aliasBudget": "本组织已用 {{used}}/{{total}} 个别名地址。这些路由对局域网不撞车的对端仍然可用；撞车的对端访问不到。可以联系管理员提高上限。",
       "acceptSection": "本机接收",
       "accept": "接收子网",
@@ -918,7 +928,7 @@
       "pendingWhere": "请在网页控制台操作：在「子网」页签的操作列批准或撤销子网；在「设备」页的操作列审批出口或管理出口授权。",
       "pendingWhereSelfHosted": "由服务器的管理员批准。",
       "pendingDevice": "这台设备本身还在等批准入网，设备获批后才会生效。",
-      "aliasAfterApproval": "子网批准后分配。"
+      "aliasAfterApproval": "单 IP 替身申请正在等待管理员审批。"
     },
     "org": "所属组织",
     "orgPersonal": "个人空间",

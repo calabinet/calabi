@@ -19,6 +19,7 @@ import (
 var (
 	restartMu     sync.Mutex
 	restartWanted bool
+	restartCommit func()
 	// restartCh wakes withSignalContext, which ends the running daemon.
 	restartCh = make(chan struct{}, 1)
 )
@@ -26,8 +27,13 @@ var (
 // requestDaemonRestart ends the running daemon so runDaemon starts it again,
 // reading the mode afresh. after gives an HTTP handler time to finish its answer.
 func requestDaemonRestart(after time.Duration) {
+	requestDaemonRestartWithCommit(after, nil)
+}
+
+func requestDaemonRestartWithCommit(after time.Duration, commit func()) {
 	restartMu.Lock()
 	restartWanted = true
+	restartCommit = commit
 	restartMu.Unlock()
 	time.AfterFunc(after, func() {
 		select {
@@ -41,15 +47,19 @@ func requestDaemonRestart(after time.Duration) {
 // restart, and clears the request.
 func takeDaemonRestart() bool {
 	restartMu.Lock()
-	defer restartMu.Unlock()
 	want := restartWanted
-	restartWanted = false
+	commit := restartCommit
+	restartWanted, restartCommit = false, nil
 	if want {
 		// A signal still in flight belongs to this restart, not the next daemon.
 		select {
 		case <-restartCh:
 		default:
 		}
+	}
+	restartMu.Unlock()
+	if commit != nil {
+		commit()
 	}
 	return want
 }

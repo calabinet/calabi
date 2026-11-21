@@ -34,7 +34,10 @@ func TestLinuxWildcardDaemonFileControl(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	bound, done := startDaemonConsole(ctx, logger, status.New("test", ""), nil)
+	bound, done, err := startDaemonConsole(ctx, logger, status.New("test", ""), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer func() { cancel(); <-done }()
 	u, err := url.Parse(bound)
 	if err != nil || u.Port() == "" || u.Port() == "0" {

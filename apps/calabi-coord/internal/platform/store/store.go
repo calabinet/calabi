@@ -70,6 +70,14 @@ func (s *Store) Upsert(ctx context.Context, n *core.Node) (*core.Node, error) {
 	if err != nil {
 		return nil, err
 	}
+	hostRequests, err := marshalStrings(prefixesToStrings(n.HostAliasRequests))
+	if err != nil {
+		return nil, err
+	}
+	approvedHosts, err := marshalStrings(prefixesToStrings(n.ApprovedAliasHosts))
+	if err != nil {
+		return nil, err
+	}
 
 	if n.ID == 0 {
 		row, err := s.client.MeshNode.Create().
@@ -86,6 +94,8 @@ func (s *Store) Upsert(ctx context.Context, n *core.Node) (*core.Node, error) {
 			SetApprovedRoutesJSON(approved).
 			SetRealRoutesJSON(realRoutes).
 			SetAliasedRoutesJSON(aliasReq).
+			SetHostAliasRequestsJSON(hostRequests).
+			SetApprovedAliasHostsJSON(approvedHosts).
 			SetRouteAliasesJSON(aliases).
 			SetRoutesReviewed(n.RoutesReviewed).
 			SetOwnerUserID(n.OwnerUserID).
@@ -124,6 +134,8 @@ func (s *Store) Upsert(ctx context.Context, n *core.Node) (*core.Node, error) {
 		SetAdvertisedRoutesJSON(routes).
 		SetApprovedRoutesJSON(approved).
 		SetAliasedRoutesJSON(aliasReq).
+		SetHostAliasRequestsJSON(hostRequests).
+		SetApprovedAliasHostsJSON(approvedHosts).
 		SetRouteAliasesJSON(aliases).
 		SetRoutesReviewed(n.RoutesReviewed).
 		SetOwnerUserID(n.OwnerUserID).
@@ -213,7 +225,8 @@ func (s *Store) ListRegistrationNames(ctx context.Context, t core.MeshnetID, exc
 func (s *Store) ListRegistrationPeers(ctx context.Context, t core.MeshnetID) ([]*core.Node, error) {
 	rows, err := s.client.MeshNode.Query().Where(meshnode.MeshnetID(int64(t))).
 		Select(meshnode.FieldID, meshnode.FieldName, meshnode.FieldDisabled, meshnode.FieldOwnerUserID,
-			meshnode.FieldApprovedRoutesJSON, meshnode.FieldRealRoutesJSON, meshnode.FieldRouteAliasesJSON).
+			meshnode.FieldApprovedRoutesJSON, meshnode.FieldRealRoutesJSON, meshnode.FieldRouteAliasesJSON,
+			meshnode.FieldHostAliasRequestsJSON, meshnode.FieldApprovedAliasHostsJSON).
 		Order(ent.Asc(meshnode.FieldID)).All(ctx)
 	if err != nil {
 		return nil, err
@@ -228,6 +241,12 @@ func (s *Store) ListRegistrationPeers(ctx context.Context, t core.MeshnetID) ([]
 			return nil, err
 		}
 		if n.RouteAliases, err = parseRouteAliases(row.RouteAliasesJSON); err != nil {
+			return nil, err
+		}
+		if n.HostAliasRequests, err = parsePrefixes(row.HostAliasRequestsJSON); err != nil {
+			return nil, err
+		}
+		if n.ApprovedAliasHosts, err = parsePrefixes(row.ApprovedAliasHostsJSON); err != nil {
 			return nil, err
 		}
 		out = append(out, n)
@@ -309,7 +328,7 @@ func (s *Store) AllRouteAliases(ctx context.Context) ([]netip.Prefix, error) {
 			continue // a node whose blob won't parse holds no alias we can honour
 		}
 		for _, a := range as {
-			out = append(out, a.Alias)
+			out = append(out, core.AliasAllocationUnit(a))
 		}
 	}
 	return out, nil
@@ -613,6 +632,20 @@ func (s *Store) UpdateApprovedRoutes(ctx context.Context, id int64, routes []net
 		}
 		update.SetRealRoutesJSON(real)
 	}
+	if len(realRoutes) > 1 {
+		hosts, err := marshalStrings(prefixesToStrings(realRoutes[1]))
+		if err != nil {
+			return err
+		}
+		update.SetApprovedAliasHostsJSON(hosts)
+	}
+	if len(realRoutes) > 2 {
+		legacy, err := marshalStrings(prefixesToStrings(realRoutes[2]))
+		if err != nil {
+			return err
+		}
+		update.SetAliasedRoutesJSON(legacy)
+	}
 	err = update.Exec(ctx)
 	if ent.IsNotFound(err) {
 		return core.ErrNodeNotFound
@@ -692,6 +725,12 @@ func toNode(m *ent.MeshNode) (*core.Node, error) {
 		return nil, err
 	}
 	if n.RouteAliases, err = parseRouteAliases(m.RouteAliasesJSON); err != nil {
+		return nil, err
+	}
+	if n.HostAliasRequests, err = parsePrefixes(m.HostAliasRequestsJSON); err != nil {
+		return nil, err
+	}
+	if n.ApprovedAliasHosts, err = parsePrefixes(m.ApprovedAliasHostsJSON); err != nil {
 		return nil, err
 	}
 	if n.RealRoutes, err = parsePrefixes(m.RealRoutesJSON); err != nil {
@@ -804,12 +843,13 @@ func unmarshalStrings(blob string) ([]string, error) {
 type routeAliasRow struct {
 	Real  string `json:"real"`
 	Alias string `json:"alias"`
+	Host  bool   `json:"host,omitempty"`
 }
 
 func marshalRouteAliases(as []core.RouteAlias) (string, error) {
 	rows := make([]routeAliasRow, 0, len(as))
 	for _, a := range as {
-		rows = append(rows, routeAliasRow{Real: a.Real.String(), Alias: a.Alias.String()})
+		rows = append(rows, routeAliasRow{Real: a.Real.String(), Alias: a.Alias.String(), Host: a.Host})
 	}
 	b, err := json.Marshal(rows)
 	if err != nil {
@@ -840,7 +880,10 @@ func parseRouteAliases(blob string) ([]core.RouteAlias, error) {
 		if err != nil {
 			continue
 		}
-		out = append(out, core.RouteAlias{Real: real.Masked(), Alias: alias.Masked()})
+		if r.Host && (!real.Addr().Is4() || real.Bits() != 32 || !alias.Addr().Is4() || alias.Bits() != 32) {
+			continue
+		}
+		out = append(out, core.RouteAlias{Real: real.Masked(), Alias: alias.Masked(), Host: r.Host})
 	}
 	return out, nil
 }

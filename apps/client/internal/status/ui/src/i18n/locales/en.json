@@ -312,6 +312,7 @@
     "meshDatapathPendingTip": "The relay is known; the mesh datapath is still coming up."
   },
   "tunnels": {
+    "manageElsewhere": "Manage in the web console or take over first.",
     "awaitingApproval": "Awaiting approval",
     "awaitingApprovalTip": "This organization reviews the endpoints its members create. An admin has to approve this one in the console before it serves anything.",
     "rejected": "Rejected",
@@ -880,10 +881,19 @@
       "noForward": "This device is advertising these but cannot forward - subnet routing and exit devices are automated on Linux only, so traffic peers send here is dropped. Turn them off, or run the router on a Linux device.",
       "noForwardLocked": "Unavailable on this device: subnet routing and exit devices need packet forwarding, which is automated on Linux only. Advertising without it would send peers' traffic to a dead end.",
       "alias": "Stand-in addresses",
-      "aliasHelp": "Every published subnet is automatically given a unique stand-in prefix, with the last part unchanged: .222 stays .222. Peers reach it there, so a peer whose own LAN uses the same addresses can still get through. Takes an admin approving the route.",
+      "requestHostAlias": "Request a host stand-in address",
+      "hostAliasSteps": "Enter an IPv4 address within a subnet offered by this device, select Add, then save. An administrator approves the request.",
+      "hostAliasNeedsSubnet": "Enable subnet publishing and add a subnet to enter a request.",
+      "hostAliasUpgrade": "Update the Calabi core to request stand-in addresses.",
+      "reconnecting": "Reconnecting to the mesh",
+      "syncingApprovals": "Synchronizing approval status",
+      "lastSyncedResults": "Showing the last synchronized results.",
+      "hostAliasOutsideSubnet": "Enter an IPv4 address within a subnet listed above.",
+      "hostAliasInvalid": "Enter a single IPv4 address or an IPv4 /32.",
+      "aliasHelp": "New subnets use their real addresses. Enter individual IPv4 addresses to request stand-in addresses.",
       "aliasAssigned": "Peers reach these subnets at:",
       "aliasPending": "Waiting for the coordinator to assign addresses.",
-      "aliasRefused": "Some subnets could not be given an address",
+      "aliasRefused": "Some stand-in addresses could not be assigned",
       "aliasBudget": "Your organisation is using {{used}} of {{total}} alias addresses. These routes still work for peers whose own network does not clash with them; the ones that clash cannot reach them. Ask an administrator to raise the limit.",
       "acceptSection": "Receive on this device",
       "accept": "Receive subnets",
@@ -918,7 +928,7 @@
       "pendingWhere": "In the web console: Approve or revoke subnets in the Subnets tab action column; review or manage exit authorization in the Devices tab action column.",
       "pendingWhereSelfHosted": "The server's administrator approves it.",
       "pendingDevice": "This device itself is still waiting to be approved; nothing it offers takes effect until then.",
-      "aliasAfterApproval": "Assigned once the route is approved."
+      "aliasAfterApproval": "Host stand-in requests are waiting for approval."
     },
     "org": "Organization",
     "orgPersonal": "Personal space",

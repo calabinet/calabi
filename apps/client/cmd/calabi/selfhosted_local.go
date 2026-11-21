@@ -379,6 +379,7 @@ func (m *localMesh) enroll(ctx context.Context) error {
 	defer conn.Close()
 	reg, err := mesh.NewCoordClient(conn).Register(ctx, mesh.RegisterParams{
 		AuthKey: cfg.AuthKey, NodeKey: priv.Public(), NodePrivate: priv, Name: meshNodeName(cfg),
+		DisableFileTransfer: daemonSocketPath() != "",
 	})
 	if err != nil {
 		return err
@@ -460,6 +461,7 @@ func coordSignOut(ctx context.Context, cfg meshConfig, rec meshReauthRecord) err
 	if _, err := cc.Register(ctx, mesh.RegisterParams{
 		AuthKey: cfg.AuthKey, NodeKey: priv.Public(), NodePrivate: priv, Name: meshNodeName(cfg),
 		NodeID: rec.NodeID, Reauth: rec.canRejoin(),
+		DisableFileTransfer: daemonSocketPath() != "",
 	}); err != nil {
 		return err
 	}
@@ -834,6 +836,7 @@ func (h *localSelfHosted) advertise(cfg meshConfig) map[string]any {
 	}
 	out := map[string]any{
 		"routes":               nonNil(cfg.AdvertiseRoutes),
+		"alias_hosts":          nonNil(cfg.AliasHosts),
 		"advertise_exit_node":  cfg.AdvertiseExitNode,
 		"exit_node":            cfg.ExitNode,
 		"forwarding_supported": mesh.SubnetRouterSupported(),
@@ -857,6 +860,7 @@ func (h *localSelfHosted) handleAdvertiseSet(w http.ResponseWriter, r *http.Requ
 	}
 	var in struct {
 		Routes        []string  `json:"routes"`
+		AliasHosts    []string  `json:"alias_hosts"`
 		ExitNode      bool      `json:"advertise_exit_node"`
 		ExitPeer      string    `json:"exit_node"`
 		AcceptRoutes  *bool     `json:"accept_routes"`
@@ -895,6 +899,11 @@ func (h *localSelfHosted) handleAdvertiseSet(w http.ResponseWriter, r *http.Requ
 		}
 	}
 	cur := h.mesh.meshCfg()
+	aliasHosts, err := mesh.AliasHostConfig(in.AliasHosts, cur.AliasHosts, routes)
+	if err != nil {
+		shError(w, http.StatusBadRequest, "bad_input", err.Error(), nil)
+		return
+	}
 	// No NEW forwarding role where this host cannot forward: peers would route
 	// into a dead end. Giving one up, or saving with it unchanged, always works.
 	if !mesh.SubnetRouterSupported() {
@@ -917,6 +926,7 @@ func (h *localSelfHosted) handleAdvertiseSet(w http.ResponseWriter, r *http.Requ
 	}
 	if err := h.sv.updateBase(func(c *localConfig) {
 		c.Mesh.AdvertiseRoutes, c.Mesh.AdvertiseExitNode, c.Mesh.ExitNode = routes, in.ExitNode, strings.TrimSpace(in.ExitPeer)
+		c.Mesh.AliasHosts = aliasHosts
 		if in.AcceptRoutes != nil {
 			v := *in.AcceptRoutes
 			c.Mesh.AcceptRoutes = &v

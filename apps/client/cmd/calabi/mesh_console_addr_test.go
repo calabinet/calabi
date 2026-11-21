@@ -125,7 +125,10 @@ func TestOnlyTheDaemonConsoleRecordsItsAddress(t *testing.T) {
 	daemon := freeLoopbackAddr(t)
 	t.Setenv("CALABI_STATUS_ADDR", daemon)
 	ctx, cancel := context.WithCancel(context.Background())
-	url, done := startDaemonConsole(ctx, quietTestLogger(), status.New("test", ""), func(*http.ServeMux) {})
+	url, done, err := startDaemonConsole(ctx, quietTestLogger(), status.New("test", ""), func(*http.ServeMux) {})
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { cancel(); <-done })
 	if got := readConsoleURLFile(file); got == "" || got != url {
 		t.Fatalf("console.url = %q, want the daemon's %q", got, url)

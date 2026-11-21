@@ -20,6 +20,7 @@ package adminhttp
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/netip"
@@ -170,10 +171,12 @@ type nodeView struct {
 	// AdvertisedRoutes is what the node CLAIMS; ApprovedRoutes is what an admin
 	// allowed (and therefore what the mesh actually routes here). RoutesReviewed
 	// false means nobody has managed them yet, and claims are being honoured.
-	AdvertisedRoutes []string `json:"advertised_routes"`
-	ApprovedRoutes   []string `json:"approved_routes"`
-	RealRoutes       []string `json:"real_routes,omitempty"`
-	RoutesReviewed   bool     `json:"routes_reviewed"`
+	AdvertisedRoutes   []string `json:"advertised_routes"`
+	ApprovedRoutes     []string `json:"approved_routes"`
+	RealRoutes         []string `json:"real_routes,omitempty"`
+	HostAliasRequests  []string `json:"host_alias_requests,omitempty"`
+	ApprovedAliasHosts []string `json:"approved_alias_hosts,omitempty"`
+	RoutesReviewed     bool     `json:"routes_reviewed"`
 	// RouteAliases is the stand-in prefix each approved route is actually
 	// PUBLISHED as. Peers reach the subnet there and not at its real address, so
 	// without this the console shows the one address that does not work — it
@@ -198,6 +201,7 @@ type nodeView struct {
 type routeAliasView struct {
 	Real  string `json:"real"`
 	Alias string `json:"alias"`
+	Host  bool   `json:"host,omitempty"`
 }
 
 func (h *handler) listNodes(w http.ResponseWriter, r *http.Request) {
@@ -754,6 +758,7 @@ func (h *handler) approveRoutes(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Approved   []string  `json:"approved"`
 		RealRoutes *[]string `json:"real_routes,omitempty"`
+		AliasHosts *[]string `json:"approved_alias_hosts,omitempty"`
 	}
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32*1024))
 	dec.DisallowUnknownFields()
@@ -770,21 +775,33 @@ func (h *handler) approveRoutes(w http.ResponseWriter, r *http.Request) {
 		}
 		routes = append(routes, pfx)
 	}
-	var real [][]netip.Prefix
-	if body.RealRoutes != nil {
-		real = append(real, []netip.Prefix{})
-		for _, raw := range *body.RealRoutes {
+	parseTargets := func(input *[]string) (*[]netip.Prefix, error) {
+		if input == nil {
+			return nil, nil
+		}
+		parsed := make([]netip.Prefix, 0, len(*input))
+		for _, raw := range *input {
 			p, err := netip.ParsePrefix(raw)
 			if err != nil {
-				http.Error(w, "invalid real route: "+raw, http.StatusBadRequest)
-				return
+				return nil, fmt.Errorf("invalid route target: %s", raw)
 			}
-			real[0] = append(real[0], p.Masked())
+			parsed = append(parsed, p.Masked())
 		}
+		return &parsed, nil
+	}
+	real, err := parseTargets(body.RealRoutes)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	hosts, err := parseTargets(body.AliasHosts)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 	// The store can commit approved_routes before alias persistence fails.
 	// Invalidate even on error so cached permission cannot outlive that write.
-	node, err := h.coord.ApproveRoutes(r.Context(), core.MeshnetID(meshnet), nodeID, routes, real...)
+	node, err := h.coord.ReviewRoutes(r.Context(), core.MeshnetID(meshnet), nodeID, routes, real, hosts)
 	h.notif.Bump(core.MeshnetID(meshnet))
 	switch {
 	case errors.Is(err, core.ErrNodeNotFound):
@@ -969,8 +986,14 @@ func toView(n *core.Node, online bool) nodeView {
 	if v.ApprovedRoutes == nil {
 		v.ApprovedRoutes = []string{}
 	}
-	for _, ra := range n.RouteAliases {
-		v.RouteAliases = append(v.RouteAliases, routeAliasView{Real: ra.Real.String(), Alias: ra.Alias.String()})
+	for _, host := range n.HostAliasRequests {
+		v.HostAliasRequests = append(v.HostAliasRequests, host.String())
+	}
+	for _, host := range n.ApprovedAliasHosts {
+		v.ApprovedAliasHosts = append(v.ApprovedAliasHosts, host.String())
+	}
+	for _, ra := range core.ActiveRouteAliases(n) {
+		v.RouteAliases = append(v.RouteAliases, routeAliasView{Real: ra.Real.String(), Alias: ra.Alias.String(), Host: ra.Host})
 	}
 	v.AliasAddrs = core.AliasSpend(n.RouteAliases)
 	v.RoutesReviewed = n.RoutesReviewed

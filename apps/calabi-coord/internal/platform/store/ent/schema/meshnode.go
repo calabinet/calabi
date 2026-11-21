@@ -57,6 +57,10 @@ func (MeshNode) Fields() []ent.Field {
 		field.String("real_routes_json").
 			Default("[]").
 			Comment("Admin-selected approved CIDRs also published under their real addresses"),
+		field.String("host_alias_requests_json").Default("[]").
+			Comment("IPv4 hosts requested for individual stand-in addresses"),
+		field.String("approved_alias_hosts_json").Default("[]").
+			Comment("Requested hosts approved for individual stand-in addresses"),
 		field.String("aliased_routes_json").
 			Default("[]").
 			Comment("JSON array of advertised CIDRs the node ASKS to publish under a unique stand-in prefix (overlapping-LAN case; see mesh-subnet-alias-nat-plan.md)"),

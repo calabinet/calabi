@@ -103,7 +103,14 @@ func (p *MemAliasIPAM) Allocate(_ context.Context, _ MeshnetID, real netip.Prefi
 	if want > aliasGroupBits {
 		want = aliasGroupBits
 	}
+	return p.allocateUnit(want)
+}
 
+func (p *MemAliasIPAM) AllocateHost(_ context.Context) (netip.Prefix, error) {
+	return p.allocateUnit(32)
+}
+
+func (p *MemAliasIPAM) allocateUnit(want int) (netip.Prefix, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -145,8 +152,12 @@ func (p *MemAliasIPAM) Allocate(_ context.Context, _ MeshnetID, real netip.Prefi
 // a programming error. Releasing something already free is a no-op — handing the
 // same block to two nodes is the one outcome that must not be possible, and two
 // host routes out of one /24 legitimately release the same unit twice.
-func (p *MemAliasIPAM) Release(_ context.Context, alias netip.Prefix) error {
-	unit := aliasAllocUnit(alias)
+func (p *MemAliasIPAM) Release(ctx context.Context, alias netip.Prefix) error {
+	return p.ReleaseUnit(ctx, aliasAllocUnit(alias))
+}
+
+func (p *MemAliasIPAM) ReleaseUnit(_ context.Context, unit netip.Prefix) error {
+	unit = unit.Masked()
 	if !unit.IsValid() || !unit.Addr().Is4() || !overlayAliasPool.Contains(unit.Addr()) {
 		return nil
 	}
@@ -169,10 +180,18 @@ func (p *MemAliasIPAM) Release(_ context.Context, alias netip.Prefix) error {
 // what is out. That is what makes a restart reclaim the blocks released before
 // it instead of losing them — see the type comment.
 func (p *MemAliasIPAM) Warm(used []netip.Prefix) {
+	units := make([]netip.Prefix, 0, len(used))
+	for _, a := range used {
+		units = append(units, aliasAllocUnit(a))
+	}
+	p.WarmUnits(units)
+}
+
+func (p *MemAliasIPAM) WarmUnits(used []netip.Prefix) {
 	held := make([]netip.Prefix, 0, len(used))
 	seen := map[netip.Prefix]bool{}
 	for _, a := range used {
-		u := aliasAllocUnit(a)
+		u := a.Masked()
 		if !u.IsValid() || !u.Addr().Is4() || !overlayAliasPool.Contains(u.Addr()) || seen[u] {
 			continue
 		}

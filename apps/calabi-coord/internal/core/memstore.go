@@ -109,6 +109,12 @@ func (s *MemNodeStore) UpdateApprovedRoutes(_ context.Context, id int64, routes 
 	if len(realRoutes) > 0 {
 		n.RealRoutes = append([]netip.Prefix(nil), realRoutes[0]...)
 	}
+	if len(realRoutes) > 1 {
+		n.ApprovedAliasHosts = append([]netip.Prefix(nil), realRoutes[1]...)
+	}
+	if len(realRoutes) > 2 {
+		n.AliasedRoutes = append([]netip.Prefix(nil), realRoutes[2]...)
+	}
 	n.RoutesReviewed = true
 	return nil
 }

@@ -298,9 +298,13 @@ type RegisterNodeRequest struct {
 	// be one issued for this node. The node keeps the meshnet, tags and owner it
 	// enrolled with; nothing is taken from the request that an auth key would
 	// have decided.
-	NodeId        int64 `protobuf:"varint,15,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	NodeId int64 `protobuf:"varint,15,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	// Whether this publisher can install IPv4 alias rewrites. This also lets
+	// newer clients retain existing legacy aliases without requesting new ones.
+	HostAliasesSupported *bool    `protobuf:"varint,16,opt,name=host_aliases_supported,json=hostAliasesSupported,proto3,oneof" json:"host_aliases_supported,omitempty"`
+	HostAliasRequests    []string `protobuf:"bytes,17,rep,name=host_alias_requests,json=hostAliasRequests,proto3" json:"host_alias_requests,omitempty"` // IPv4 /32 within advertised routes
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *RegisterNodeRequest) Reset() {
@@ -436,6 +440,20 @@ func (x *RegisterNodeRequest) GetNodeId() int64 {
 		return x.NodeId
 	}
 	return 0
+}
+
+func (x *RegisterNodeRequest) GetHostAliasesSupported() bool {
+	if x != nil && x.HostAliasesSupported != nil {
+		return *x.HostAliasesSupported
+	}
+	return false
+}
+
+func (x *RegisterNodeRequest) GetHostAliasRequests() []string {
+	if x != nil {
+		return x.HostAliasRequests
+	}
+	return nil
 }
 
 // DeclaredService is one entry of RegisterNodeRequest.declared_services.
@@ -3755,7 +3773,7 @@ const file_meshpb_coord_proto_rawDesc = "" +
 	"\x19UpdateFileTransferRequest\x12#\n" +
 	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x124\n" +
 	"\x04info\x18\x02 \x01(\v2 .calabi.mesh.v1.FileTransferInfoR\x04info\"\x1c\n" +
-	"\x1aUpdateFileTransferResponse\"\xce\x04\n" +
+	"\x1aUpdateFileTransferResponse\"\xd4\x05\n" +
 	"\x13RegisterNodeRequest\x12\x19\n" +
 	"\bnode_key\x18\x01 \x01(\tR\anodeKey\x12\x1b\n" +
 	"\tdisco_key\x18\x02 \x01(\tR\bdiscoKey\x12\x12\n" +
@@ -3772,8 +3790,11 @@ const file_meshpb_coord_proto_rawDesc = "" +
 	"\x0eregister_proof\x18\f \x01(\fR\rregisterProof\x12\x0e\n" +
 	"\x02os\x18\r \x01(\tR\x02os\x12*\n" +
 	"\x0eblock_incoming\x18\x0e \x01(\bH\x00R\rblockIncoming\x88\x01\x01\x12\x17\n" +
-	"\anode_id\x18\x0f \x01(\x03R\x06nodeIdB\x11\n" +
-	"\x0f_block_incoming\"{\n" +
+	"\anode_id\x18\x0f \x01(\x03R\x06nodeId\x129\n" +
+	"\x16host_aliases_supported\x18\x10 \x01(\bH\x01R\x14hostAliasesSupported\x88\x01\x01\x12.\n" +
+	"\x13host_alias_requests\x18\x11 \x03(\tR\x11hostAliasRequestsB\x11\n" +
+	"\x0f_block_incomingB\x19\n" +
+	"\x17_host_aliases_supported\"{\n" +
 	"\x0fDeclaredService\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05proto\x18\x02 \x01(\tR\x05proto\x12\x12\n" +

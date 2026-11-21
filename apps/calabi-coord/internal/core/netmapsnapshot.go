@@ -190,6 +190,8 @@ func cloneMapNode(n Node) Node {
 	n.ApprovedRoutes = append([]netip.Prefix(nil), n.ApprovedRoutes...)
 	n.RealRoutes = append([]netip.Prefix(nil), n.RealRoutes...)
 	n.AliasedRoutes = append([]netip.Prefix(nil), n.AliasedRoutes...)
+	n.HostAliasRequests = append([]netip.Prefix(nil), n.HostAliasRequests...)
+	n.ApprovedAliasHosts = append([]netip.Prefix(nil), n.ApprovedAliasHosts...)
 	n.RouteAliases = append([]RouteAlias(nil), n.RouteAliases...)
 	n.Services = append([]Service(nil), n.Services...)
 	n.Tags = append([]string(nil), n.Tags...)

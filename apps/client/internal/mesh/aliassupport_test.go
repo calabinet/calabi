@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/netip"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -149,72 +148,48 @@ func TestANoIsRetriedSoInstallingIptablesTakesEffect(t *testing.T) {
 	}
 }
 
-// THE BUG AliasRequest EXISTS FOR. `calabi mesh up --advertise-routes
-// 192.168.1.0/24` asked for no alias at all, because it read the retired
-// --alias-routes flag instead of applying the rule, so the subnet went out under
-// its real CIDR, and every peer whose own LAN is also 192.168.1.0/24 dropped the
-// route (local wins; see localSubnetWins). The request is the whole
-// advertisement minus the exit route, with no flag anywhere in it.
-func TestAliasRequestAsksForEverySubnetButTheExitRoute(t *testing.T) {
+func TestSupportsSubnetAliasesWithAdvertisedSubnet(t *testing.T) {
 	resetAliasSupport(t)
 	probeAliasSupport = func() (AliasSupport, string) { return AliasSupportYes, "installed cleanly" }
-
-	adv := []netip.Prefix{pfx("192.168.1.0/24"), pfx("10.9.1.22/32"), pfx("0.0.0.0/0"), pfx("::/0")}
-	got := AliasRequest(adv, nil)
-
-	want := []netip.Prefix{pfx("192.168.1.0/24"), pfx("10.9.1.22/32")}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("AliasRequest(%v) = %v, want %v", adv, got, want)
+	if !SupportsSubnetAliases([]netip.Prefix{pfx("192.168.1.0/24"), pfx("0.0.0.0/0")}, nil) {
+		t.Fatal("subnet aliases are supported")
 	}
 }
 
-// Not-a-no is enough. A probe that could not run (the daemon's own iptables work
-// holding the xtables lock) has said nothing about the kernel, and dropping back
-// to real CIDRs on its account is a silent, lasting failure: nothing would ask
-// again until the next restart.
-func TestAliasRequestStillAsksWhenTheProbeIsInconclusive(t *testing.T) {
+func TestSupportsSubnetAliasesWhenProbeIsInconclusive(t *testing.T) {
 	resetAliasSupport(t)
 	probeAliasSupport = func() (AliasSupport, string) {
 		return AliasSupportUnknown, "could not install a NETMAP rule: xtables lock"
 	}
-
-	adv := []netip.Prefix{pfx("192.168.1.0/24")}
-	if got := AliasRequest(adv, nil); !reflect.DeepEqual(got, adv) {
-		t.Fatalf("AliasRequest = %v on an inconclusive probe, want %v", got, adv)
+	if !SupportsSubnetAliases([]netip.Prefix{pfx("192.168.1.0/24")}, nil) {
+		t.Fatal("inconclusive probe withdrew subnet aliases")
 	}
 }
 
-// A host that genuinely cannot install the rewrite publishes real CIDRs, as
-// before aliases existed, and says so: that sentence is the only way an operator
-// learns why a colliding peer cannot reach the subnet.
-func TestAliasRequestDeclinesOnlyWhenTheHostCannotAndSaysWhy(t *testing.T) {
+func TestSupportsSubnetAliasesDeclinesAndSaysWhy(t *testing.T) {
 	resetAliasSupport(t)
 	probeAliasSupport = func() (AliasSupport, string) {
 		return AliasSupportNo, "subnet alias rewrites are Linux-only"
 	}
 	var out bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&out, nil))
-
-	if got := AliasRequest([]netip.Prefix{pfx("192.168.1.0/24")}, logger); got != nil {
-		t.Fatalf("AliasRequest = %v on a host that cannot rewrite, want nil", got)
+	if SupportsSubnetAliases([]netip.Prefix{pfx("192.168.1.0/24")}, logger) {
+		t.Fatal("reported alias capability on unsupported host")
 	}
 	if log := out.String(); !strings.Contains(log, "level=WARN") || !strings.Contains(log, "Linux-only") {
 		t.Fatalf("no warning naming the reason; logged:\n%s", log)
 	}
 }
 
-// Advertising no subnet asks for nothing and probes nothing. The probe runs
-// iptables; a plain member node, or an exit device with no subnets, has no reason
-// to be touching the NAT table.
-func TestAliasRequestDoesNotProbeWithoutASubnet(t *testing.T) {
+func TestSupportsSubnetAliasesDoesNotProbeWithoutASubnet(t *testing.T) {
 	resetAliasSupport(t)
 	probeAliasSupport = func() (AliasSupport, string) {
 		t.Error("probed a host that advertises no subnet")
 		return AliasSupportYes, ""
 	}
-	for _, adv := range [][]netip.Prefix{nil, {pfx("0.0.0.0/0")}} {
-		if got := AliasRequest(adv, nil); got != nil {
-			t.Errorf("AliasRequest(%v) = %v, want nil", adv, got)
+	for _, adv := range [][]netip.Prefix{nil, {pfx("0.0.0.0/0"), pfx("::/0")}} {
+		if SupportsSubnetAliases(adv, nil) {
+			t.Errorf("reported subnet alias capability without a subnet: %v", adv)
 		}
 	}
 }

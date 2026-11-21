@@ -172,6 +172,34 @@ func (mnc *MeshNodeCreate) SetNillableRealRoutesJSON(s *string) *MeshNodeCreate 
 	return mnc
 }
 
+// SetHostAliasRequestsJSON sets the "host_alias_requests_json" field.
+func (mnc *MeshNodeCreate) SetHostAliasRequestsJSON(s string) *MeshNodeCreate {
+	mnc.mutation.SetHostAliasRequestsJSON(s)
+	return mnc
+}
+
+// SetNillableHostAliasRequestsJSON sets the "host_alias_requests_json" field if the given value is not nil.
+func (mnc *MeshNodeCreate) SetNillableHostAliasRequestsJSON(s *string) *MeshNodeCreate {
+	if s != nil {
+		mnc.SetHostAliasRequestsJSON(*s)
+	}
+	return mnc
+}
+
+// SetApprovedAliasHostsJSON sets the "approved_alias_hosts_json" field.
+func (mnc *MeshNodeCreate) SetApprovedAliasHostsJSON(s string) *MeshNodeCreate {
+	mnc.mutation.SetApprovedAliasHostsJSON(s)
+	return mnc
+}
+
+// SetNillableApprovedAliasHostsJSON sets the "approved_alias_hosts_json" field if the given value is not nil.
+func (mnc *MeshNodeCreate) SetNillableApprovedAliasHostsJSON(s *string) *MeshNodeCreate {
+	if s != nil {
+		mnc.SetApprovedAliasHostsJSON(*s)
+	}
+	return mnc
+}
+
 // SetAliasedRoutesJSON sets the "aliased_routes_json" field.
 func (mnc *MeshNodeCreate) SetAliasedRoutesJSON(s string) *MeshNodeCreate {
 	mnc.mutation.SetAliasedRoutesJSON(s)
@@ -485,6 +513,14 @@ func (mnc *MeshNodeCreate) defaults() {
 		v := meshnode.DefaultRealRoutesJSON
 		mnc.mutation.SetRealRoutesJSON(v)
 	}
+	if _, ok := mnc.mutation.HostAliasRequestsJSON(); !ok {
+		v := meshnode.DefaultHostAliasRequestsJSON
+		mnc.mutation.SetHostAliasRequestsJSON(v)
+	}
+	if _, ok := mnc.mutation.ApprovedAliasHostsJSON(); !ok {
+		v := meshnode.DefaultApprovedAliasHostsJSON
+		mnc.mutation.SetApprovedAliasHostsJSON(v)
+	}
 	if _, ok := mnc.mutation.AliasedRoutesJSON(); !ok {
 		v := meshnode.DefaultAliasedRoutesJSON
 		mnc.mutation.SetAliasedRoutesJSON(v)
@@ -593,6 +629,12 @@ func (mnc *MeshNodeCreate) check() error {
 	}
 	if _, ok := mnc.mutation.RealRoutesJSON(); !ok {
 		return &ValidationError{Name: "real_routes_json", err: errors.New(`ent: missing required field "MeshNode.real_routes_json"`)}
+	}
+	if _, ok := mnc.mutation.HostAliasRequestsJSON(); !ok {
+		return &ValidationError{Name: "host_alias_requests_json", err: errors.New(`ent: missing required field "MeshNode.host_alias_requests_json"`)}
+	}
+	if _, ok := mnc.mutation.ApprovedAliasHostsJSON(); !ok {
+		return &ValidationError{Name: "approved_alias_hosts_json", err: errors.New(`ent: missing required field "MeshNode.approved_alias_hosts_json"`)}
 	}
 	if _, ok := mnc.mutation.AliasedRoutesJSON(); !ok {
 		return &ValidationError{Name: "aliased_routes_json", err: errors.New(`ent: missing required field "MeshNode.aliased_routes_json"`)}
@@ -715,6 +757,14 @@ func (mnc *MeshNodeCreate) createSpec() (*MeshNode, *sqlgraph.CreateSpec) {
 	if value, ok := mnc.mutation.RealRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldRealRoutesJSON, field.TypeString, value)
 		_node.RealRoutesJSON = value
+	}
+	if value, ok := mnc.mutation.HostAliasRequestsJSON(); ok {
+		_spec.SetField(meshnode.FieldHostAliasRequestsJSON, field.TypeString, value)
+		_node.HostAliasRequestsJSON = value
+	}
+	if value, ok := mnc.mutation.ApprovedAliasHostsJSON(); ok {
+		_spec.SetField(meshnode.FieldApprovedAliasHostsJSON, field.TypeString, value)
+		_node.ApprovedAliasHostsJSON = value
 	}
 	if value, ok := mnc.mutation.AliasedRoutesJSON(); ok {
 		_spec.SetField(meshnode.FieldAliasedRoutesJSON, field.TypeString, value)

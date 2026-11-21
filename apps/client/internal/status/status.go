@@ -969,6 +969,24 @@ func (s *Server) Run(ctx context.Context) error {
 	default:
 	}
 
+	return s.serve(ctx, ln)
+}
+
+// RunLocalAPI serves the management API on a Unix socket opened by the daemon.
+// The caller controls local access through ownership and file permissions.
+func (s *Server) RunLocalAPI(ctx context.Context, ln *net.UnixListener) error {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", s.handleHealthz)
+	mux.HandleFunc("GET /tunnels", s.handleTunnels)
+	if s.apiRegister != nil {
+		s.apiRegister(mux)
+	}
+	s.srv = &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	return s.serve(ctx, ln)
+}
+
+func (s *Server) serve(ctx context.Context, ln net.Listener) error {
+	defer ln.Close()
 	errCh := make(chan error, 1)
 	go func() {
 		err := s.srv.Serve(ln)
@@ -983,7 +1001,9 @@ func (s *Server) Run(ctx context.Context) error {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		_ = s.srv.Shutdown(shutdownCtx)
+		if err := s.srv.Shutdown(shutdownCtx); err != nil {
+			_ = s.srv.Close()
+		}
 		return nil
 	case err := <-errCh:
 		return err

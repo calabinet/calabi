@@ -68,6 +68,9 @@ func newDesktopUpdateAgent(logger *slog.Logger, bffConsoleURL string, busy func(
 }
 
 func newProductUpdateAgent(logger *slog.Logger, version, bffConsoleURL string, busy func() bool, desktop bool) *selfupdate.Agent {
+	if daemonSocketPath() != "" {
+		return nil
+	}
 	manifest := envOr("CALABI_UPDATE_MANIFEST", defaultUpdateManifest)
 	stateDir := "updates-core"
 	if desktop {

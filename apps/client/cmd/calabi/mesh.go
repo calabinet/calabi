@@ -75,9 +75,8 @@ func runMeshUp(args []string) int {
 	keyFile := fs.String("key-file", defaultMeshKeyPath(), "path to this device's WireGuard private key (created if absent)")
 	magicDNS := fs.Bool("magic-dns", false, "resolve mesh device names by REWRITING this machine's /etc/resolv.conf (Linux only; off by default — an ungraceful exit leaves the host with no DNS)")
 	advertise := fs.String("advertise-routes", "", "comma-separated subnets to advertise as a subnet router, /24 or smaller (e.g. 192.168.1.0/24). A bare address is a single host: 192.168.1.22")
-	// Registered so scripts written when aliasing was a choice still parse, and
-	// never read: what to alias is mesh.AliasRequest's decision, below.
-	fs.String("alias-routes", "", "DEPRECATED and ignored: every advertised route is aliased where the host supports it")
+	fs.String("alias-routes", "", "DEPRECATED and ignored; use --alias-hosts")
+	aliasHosts := fs.String("alias-hosts", "", "comma-separated IPv4 hosts to request stand-in addresses for")
 	advertiseExit := fs.Bool("advertise-exit-node", false, "advertise this device as an exit device (offer to forward peers' default route to the internet)")
 	exitNode := fs.String("exit-node", "", "route this device's default traffic through the named exit device (name or overlay IP)")
 	trustMode := fs.String("trust", "", "how to check the coordinator's certificate: system, pin, ca, plaintext or platform. Default: platform for a tk_ key, otherwise system (CALABI_EDGE_CA_FILE = ca, CALABI_INSECURE=1 = plaintext)")
@@ -113,11 +112,15 @@ func runMeshUp(args []string) int {
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-	// Every advertised subnet asks for a stand-in prefix unless this host cannot
-	// install the rewrite: the daemon's rule, from the same function. Asking for
-	// none would publish them under their real CIDRs, where a peer whose own LAN
-	// uses the same range cannot reach them.
-	aliased := mesh.AliasRequest(routes, logger)
+	hostRequests, err := mesh.ParseAliasHosts(splitCSV(*aliasHosts), routes)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "calabi mesh up: --alias-hosts:", err)
+		return 2
+	}
+	hostAliasesSupported := mesh.SupportsSubnetAliases(routes, logger)
+	if !hostAliasesSupported {
+		hostRequests = nil
+	}
 
 	priv, err := mesh.LoadOrCreateKey(*keyFile)
 	if err != nil {
@@ -186,13 +189,14 @@ func runMeshUp(args []string) int {
 		Datapath: dp,
 		DNS:      dnsSink,
 		Params: mesh.RegisterParams{
-			AuthKey:           *authKey,
-			NodeKey:           priv.Public(),
-			NodePrivate:       priv,
-			Name:              *name,
-			AdvertiseRoutes:   routes,
-			AliasRoutes:       aliased,
-			DeviceFingerprint: resolveFingerprint(logger),
+			AuthKey:              *authKey,
+			NodeKey:              priv.Public(),
+			NodePrivate:          priv,
+			Name:                 *name,
+			AdvertiseRoutes:      routes,
+			HostAliasRequests:    hostRequests,
+			HostAliasesSupported: &hostAliasesSupported,
+			DeviceFingerprint:    resolveFingerprint(logger),
 		},
 		ExitNode:       *exitNode,
 		PlatformRelays: coordT.Mode == trust.Platform,

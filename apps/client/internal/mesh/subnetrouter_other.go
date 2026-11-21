@@ -43,9 +43,9 @@ func EnableSubnetAliases(_ meshproto.NodeKey, aliases []SubnetAlias, _ *slog.Log
 }
 
 // probeSubnetAlias is a definite "no" off Linux, for the same reason
-// EnableSubnetAliases is unavailable: the rewrite is an iptables NETMAP rule.
+// EnableSubnetAliases is unavailable: the rewrite uses Linux netfilter.
 // Definite, not unknown — there is nothing here that could later turn out to
 // work, so this is an answer rather than a failure to look.
 func probeSubnetAlias() (AliasSupport, string) {
-	return AliasSupportNo, "subnet alias rewrites are Linux-only (they are `iptables` NETMAP rules)"
+	return AliasSupportNo, "subnet alias rewrites require Linux netfilter"
 }

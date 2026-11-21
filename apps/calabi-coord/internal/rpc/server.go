@@ -408,6 +408,19 @@ func (s *Server) RegisterNode(ctx context.Context, req *meshpb.RegisterNodeReque
 		}
 		in.AliasedRoutes = append(in.AliasedRoutes, pfx.Masked())
 	}
+	in.HostAliasesSupported = req.HostAliasesSupported
+	if req.GetHostAliasesSupported() {
+		if len(req.GetHostAliasRequests()) > 256 {
+			return nil, status.Error(codes.InvalidArgument, "too many host alias requests")
+		}
+		for _, raw := range req.GetHostAliasRequests() {
+			p, err := netip.ParsePrefix(raw)
+			if err != nil || !p.Addr().Is4() || p.Bits() != 32 {
+				return nil, status.Errorf(codes.InvalidArgument, "host alias request %q must be an IPv4 /32", raw)
+			}
+			in.HostAliasRequests = append(in.HostAliasRequests, p)
+		}
+	}
 
 	ver, caps := negotiate(req.GetProtocolVersion(), req.GetCapabilities())
 	in.ACLPortless = slices.Contains(caps, string(meshproto.CapACLPortless))

@@ -59,7 +59,7 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 		if err != nil {
 			return nil, nil, fmt.Errorf("warm alias ipam: %w", err)
 		}
-		aliasIPAM.Warm(used)
+		aliasIPAM.WarmUnits(used)
 		// Log the LEVEL, not just the count. The pool is a /11 shared by every
 		// meshnet on the platform and nothing else reports on it: a leak here
 		// shows up as "some org's routes stopped getting aliases", months later
@@ -103,8 +103,9 @@ func wire(logger *slog.Logger) (*core.Coordinator, core.Authenticator, error) {
 		}
 	}
 	coord := &core.Coordinator{
-		AliasIPAM: aliasIPAM,
-		Nodes:     nodes,
+		AliasIPAM:               aliasIPAM,
+		RetainLegacyAliasesOnly: true,
+		Nodes:                   nodes,
 		// Per-org ACL: the meshnet's stored doc governs its netmap;
 		// a meshnet with no doc falls back to the global default (allow-all, or
 		// CALABI_COORD_POLICY_FILE if set — preserving the file behavior).

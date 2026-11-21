@@ -17,6 +17,35 @@ func prefixes(t *testing.T, ss ...string) []netip.Prefix {
 	return out
 }
 
+func TestSeatUsageCountsReservedAliasBlocks(t *testing.T) {
+	ctx := context.Background()
+	nodes := NewMemNodeStore()
+	settings := NewMemSettingsStore()
+	if err := settings.SetSettings(ctx, 1, MeshnetSettings{AliasAddrBudget: 512}); err != nil {
+		t.Fatal(err)
+	}
+	// Two host routes in the same alias block still reserve one /24, even
+	// when their owner is disabled. Other organizations are excluded.
+	for _, n := range []*Node{
+		{Meshnet: 1, Disabled: true, RouteAliases: []RouteAlias{
+			{Real: pfx(t, "192.168.1.1/32"), Alias: pfx(t, "100.96.1.1/32")},
+			{Real: pfx(t, "192.168.1.2/32"), Alias: pfx(t, "100.96.1.2/32")},
+		}},
+		{Meshnet: 2, RouteAliases: []RouteAlias{
+			{Real: pfx(t, "192.168.1.0/24"), Alias: pfx(t, "100.96.2.0/24")},
+		}},
+	} {
+		if _, err := nodes.Upsert(ctx, n); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c := &Coordinator{Nodes: nodes, Settings: settings}
+	u, err := c.SeatUsage(ctx, 1)
+	if err != nil || u.AliasUsedAddrs != 256 || u.AliasBudgetAddrs != 512 {
+		t.Fatalf("alias usage = %+v, err = %v; want 256/512", u, err)
+	}
+}
+
 // An alias needs BOTH halves: the node asked, and an admin approved. Either one
 // missing and the route publishes under its real CIDR.
 func TestReconcileAliasesNeedsRequestAndApproval(t *testing.T) {
@@ -541,6 +570,127 @@ func TestRealRouteAccessKeepsAliasesAndAdminDecision(t *testing.T) {
 	}
 	if _, err = c.ApproveRoutes(ctx, 1, n.ID, nil, []netip.Prefix{lan}); !errors.Is(err, ErrRouteNotAdvertised) {
 		t.Fatalf("unapproved real route: %v", err)
+	}
+}
+
+func TestHostAliasApprovalAllocatesAndReleasesExactlyOneAddress(t *testing.T) {
+	ctx := context.Background()
+	c := newTestCoord()
+	pool := NewMemAliasIPAM()
+	c.AliasIPAM = pool
+	c.RetainLegacyAliasesOnly = true
+	free := pool.FreeAddrs()
+	lan := pfx(t, "192.168.4.0/24")
+	host := pfx(t, "192.168.4.50/32")
+	in := RegisterInput{
+		Meshnet: 1, Name: "router", NodeKey: key(1),
+		AdvertisedRoutes: []netip.Prefix{lan}, AliasedRoutes: []netip.Prefix{lan},
+	}
+	n, err := c.Register(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parents, targets := []netip.Prefix{lan}, []netip.Prefix{host}
+	if _, err := c.ReviewRoutes(ctx, 1, n.ID, parents, nil, &targets); !errors.Is(err, ErrRouteNotAdvertised) {
+		t.Fatalf("accepted an unrequested host: %v", err)
+	}
+	n, err = c.ApproveRoutes(ctx, 1, n.ID, parents)
+	if err != nil || len(n.RouteAliases) != 0 || !containsPrefix(PublishedRoutes(n), lan) || free != pool.FreeAddrs() {
+		t.Fatalf("default publication issued an alias or lost the real route: %+v, %v", n, err)
+	}
+	in.HostAliasRequests = targets
+	n, err = c.Register(ctx, in)
+	if err != nil || len(n.RouteAliases) != 0 {
+		t.Fatalf("device request granted without approval: %+v, %v", n, err)
+	}
+	n, err = c.ReviewRoutes(ctx, 1, n.ID, parents, nil, &targets)
+	if err != nil || len(n.RouteAliases) != 1 {
+		t.Fatalf("host approval: %+v, %v", n, err)
+	}
+	mapping := n.RouteAliases[0]
+	if mapping.Real != host || !mapping.Host || mapping.Alias.Bits() != 32 ||
+		AliasSpend(n.RouteAliases) != 1 || pool.FreeAddrs() != free-1 ||
+		!containsPrefix(PublishedRoutes(n), lan) || !containsPrefix(PublishedRoutes(n), mapping.Alias) {
+		t.Fatalf("incorrect allocation or publication: %+v", n)
+	}
+	restored := NewMemAliasIPAM()
+	restored.WarmUnits([]netip.Prefix{AliasAllocationUnit(mapping)})
+	if restored.FreeAddrs() != free-1 {
+		t.Fatal("restart did not retain the exact allocation")
+	}
+	other, err := restored.AllocateHost(ctx)
+	if err != nil || other == mapping.Alias {
+		t.Fatalf("reused a live host alias: %s, %v", other, err)
+	}
+	n, err = c.ApproveRoutes(ctx, 1, n.ID, nil)
+	if err != nil || len(n.RouteAliases) != 0 || pool.FreeAddrs() != free {
+		t.Fatalf("withdrawing the subnet did not release the host: %+v, %v", n, err)
+	}
+}
+
+func TestLegacyUpgradePreservesAssignedAliasesAndLeavesNewApprovalsNative(t *testing.T) {
+	ctx := context.Background()
+	c := newTestCoord()
+	pool := NewMemAliasIPAM()
+	c.AliasIPAM = pool
+	legacy := pfx(t, "192.168.4.0/24")
+	pending := pfx(t, "192.168.5.0/24")
+	in := RegisterInput{
+		Meshnet: 1, Name: "router", NodeKey: key(1),
+		AdvertisedRoutes: []netip.Prefix{legacy, pending},
+		AliasedRoutes:    []netip.Prefix{legacy, pending},
+	}
+	n, err := c.Register(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err = c.ApproveRoutes(ctx, 1, n.ID, []netip.Prefix{legacy})
+	if err != nil || len(n.RouteAliases) != 1 {
+		t.Fatalf("legacy setup: %+v, %v", n, err)
+	}
+	assigned := n.RouteAliases[0]
+	free := pool.FreeAddrs()
+	c.RetainLegacyAliasesOnly = true
+	approval := []netip.Prefix{legacy, pending}
+	// An admin can approve a request persisted by the old coordinator before
+	// the old client re-registers.
+	n, err = c.ApproveRoutes(ctx, 1, n.ID, approval)
+	if err != nil || len(n.RouteAliases) != 1 || n.RouteAliases[0] != assigned || pool.FreeAddrs() != free {
+		t.Fatalf("upgrade changed existing reservations: %+v, %v", n, err)
+	}
+	// The upgraded client reports its capability without re-requesting ranges.
+	in.AliasedRoutes = nil
+	supported := true
+	in.HostAliasesSupported = &supported
+	n, err = c.Register(ctx, in)
+	if err != nil || len(n.RouteAliases) != 1 || n.RouteAliases[0] != assigned {
+		t.Fatalf("upgraded client lost a legacy alias: %+v, %v", n, err)
+	}
+	n, err = c.ApproveRoutes(ctx, 1, n.ID, []netip.Prefix{pending})
+	if err != nil || len(n.RouteAliases) != 0 || pool.FreeAddrs() != free+256 {
+		t.Fatalf("revocation did not return the legacy block: %+v, %v", n, err)
+	}
+	n, err = c.ApproveRoutes(ctx, 1, n.ID, approval)
+	if err != nil || len(n.RouteAliases) != 0 || !containsPrefix(PublishedRoutes(n), legacy) {
+		t.Fatalf("reapproval did not publish the real subnet: %+v, %v", n, err)
+	}
+}
+
+func TestOverlappingRealSubnetsPublishOnlyDistinctAliases(t *testing.T) {
+	lan, host := pfx(t, "192.168.1.0/24"), pfx(t, "192.168.1.50/32")
+	alias := pfx(t, "100.96.3.1/32")
+	routers := []*Node{
+		{ID: 1, Approved: true, ApprovedRoutes: []netip.Prefix{lan},
+			HostAliasRequests: []netip.Prefix{host}, ApprovedAliasHosts: []netip.Prefix{host},
+			RouteAliases: []RouteAlias{{Real: host, Alias: alias, Host: true}}},
+		{ID: 2, Approved: true, ApprovedRoutes: []netip.Prefix{lan}},
+	}
+	got := safeRealRoutes(routers)
+	if p := PublishedRoutes(got[0]); len(p) != 1 || p[0] != alias {
+		t.Fatalf("ambiguous route displaced its host alias: %v", p)
+	}
+	if p := PublishedRoutes(got[1]); len(p) != 0 {
+		t.Fatalf("ambiguous native route published: %v", p)
 	}
 }
 

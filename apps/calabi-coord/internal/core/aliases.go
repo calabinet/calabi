@@ -66,11 +66,19 @@ var ErrAliasBudgetExhausted = errors.New("core: meshnet is at its subnet-alias b
 // /32 a full block would price a normal subnet router out of the default budget
 // for space it never took.
 func aliasBlockOf(ra RouteAlias) (netip.Prefix, int) {
+	if ra.Host {
+		return ra.Alias, 1
+	}
 	if _, isHost := aliasGroupOf(ra.Real); isHost {
 		b := containingBlock(ra.Alias)
 		return b, int(blockSize(b.Bits()))
 	}
 	return ra.Alias, int(blockSize(ra.Alias.Bits()))
+}
+
+func AliasAllocationUnit(ra RouteAlias) netip.Prefix {
+	unit, _ := aliasBlockOf(ra)
+	return unit
 }
 
 // AliasSpend is the pool space a set of aliases occupies, in addresses. Exported
@@ -96,14 +104,15 @@ func AliasSpend(as []RouteAlias) int {
 func reconcileAliases(ctx context.Context, pool AliasIPAM, t MeshnetID, node *Node, budgetAddrs int) (keep []RouteAlias, release []netip.Prefix, err error) {
 	held := make(map[netip.Prefix]RouteAlias, len(node.RouteAliases))
 	for _, ra := range node.RouteAliases {
-		held[ra.Real.Masked()] = RouteAlias{Real: ra.Real.Masked(), Alias: ra.Alias}
+		ra.Real = ra.Real.Masked()
+		held[ra.Real] = ra
 	}
 	// Alias blocks already in use by this node's host routes, keyed by the real
 	// /24 they serve. Seeded from what is held so a re-registration reuses the
 	// block instead of drawing a second one for the same LAN.
 	blocks := map[netip.Prefix]netip.Prefix{}
 	for _, ra := range held {
-		if g, ok := aliasGroupOf(ra.Real); ok {
+		if g, ok := aliasGroupOf(ra.Real); ok && !ra.Host {
 			blocks[g] = containingBlock(ra.Alias)
 		}
 	}
@@ -124,7 +133,7 @@ func reconcileAliases(ctx context.Context, pool AliasIPAM, t MeshnetID, node *No
 	}
 
 	for _, real := range wantedAliases(node) {
-		if ra, ok := held[real]; ok {
+		if ra, ok := held[real]; ok && !ra.Host {
 			keep = append(keep, ra)
 			charge(ra)
 			delete(held, real)
@@ -149,6 +158,37 @@ func reconcileAliases(ctx context.Context, pool AliasIPAM, t MeshnetID, node *No
 			continue
 		}
 		ra := RouteAlias{Real: real, Alias: alias}
+		keep = append(keep, ra)
+		charge(ra)
+	}
+
+	for _, real := range wantedAliasHosts(node) {
+		if ra, ok := held[real]; ok && ra.Host {
+			keep = append(keep, ra)
+			charge(ra)
+			delete(held, real)
+			continue
+		}
+		// A live legacy mapping for this exact target already supplies access.
+		if _, ok := aliasFor(keep, real); ok {
+			continue
+		}
+		allocator, ok := pool.(interface {
+			AllocateHost(context.Context) (netip.Prefix, error)
+		})
+		if !ok {
+			continue
+		}
+		if spendTotal() >= budgetAddrs {
+			err = ErrAliasBudgetExhausted
+			continue
+		}
+		alias, aerr := allocator.AllocateHost(ctx)
+		if aerr != nil {
+			err = aerr
+			continue
+		}
+		ra := RouteAlias{Real: real, Alias: alias, Host: true}
 		keep = append(keep, ra)
 		charge(ra)
 	}
@@ -206,22 +246,13 @@ func containingBlock(alias netip.Prefix) netip.Prefix {
 func releasable(keep []RouteAlias, dropped map[netip.Prefix]RouteAlias) []netip.Prefix {
 	stillUsed := map[netip.Prefix]bool{}
 	for _, ra := range keep {
-		if _, isHost := aliasGroupOf(ra.Real); isHost {
-			stillUsed[containingBlock(ra.Alias)] = true
-		}
+		stillUsed[AliasAllocationUnit(ra)] = true
 	}
 	seen := map[netip.Prefix]bool{}
 	var out []netip.Prefix
 	for _, ra := range dropped {
-		free := ra.Alias
-		if _, isHost := aliasGroupOf(ra.Real); isHost {
-			block := containingBlock(ra.Alias)
-			if stillUsed[block] {
-				continue // a sibling host route still lives in it
-			}
-			free = block
-		}
-		if seen[free] {
+		free := AliasAllocationUnit(ra)
+		if seen[free] || stillUsed[free] {
 			continue
 		}
 		seen[free] = true
@@ -251,6 +282,43 @@ func wantedAliases(node *Node) []netip.Prefix {
 	return out
 }
 
+// AliasHostTargets accepts only individual IPv4 addresses within a published
+// non-default subnet. Use advertised routes for requests and approved routes
+// for activation.
+func AliasHostTargets(targets, routes []netip.Prefix) []netip.Prefix {
+	var hosts []netip.Prefix
+	for _, p := range SelectedRealRoutes(targets, routes) {
+		if p.Addr().Is4() && p.Bits() == 32 {
+			hosts = append(hosts, p)
+		}
+	}
+	return hosts
+}
+
+func wantedAliasHosts(node *Node) []netip.Prefix {
+	return AliasHostTargets(intersectPrefixes(node.HostAliasRequests, node.ApprovedAliasHosts), node.ApprovedRoutes)
+}
+
+// ActiveRouteAliases includes host mappings covered by an approved subnet.
+func ActiveRouteAliases(node *Node) []RouteAlias {
+	var out []RouteAlias
+	var hosts []netip.Prefix
+	if len(node.ApprovedAliasHosts) > 0 {
+		hosts = wantedAliasHosts(node)
+	}
+	for _, ra := range node.RouteAliases {
+		if ra.Host {
+			if !containsPrefix(hosts, ra.Real) {
+				continue
+			}
+		} else if !containsPrefix(node.ApprovedRoutes, ra.Real) {
+			continue
+		}
+		out = append(out, ra)
+	}
+	return out
+}
+
 // aliasFor returns the stand-in prefix published for real, if one was allocated.
 func aliasFor(aliases []RouteAlias, real netip.Prefix) (netip.Prefix, bool) {
 	m := real.Masked()
@@ -262,18 +330,33 @@ func aliasFor(aliases []RouteAlias, real netip.Prefix) (netip.Prefix, bool) {
 	return netip.Prefix{}, false
 }
 
+func legacyAliasFor(aliases []RouteAlias, real netip.Prefix) (netip.Prefix, bool) {
+	for _, ra := range aliases {
+		if !ra.Host && ra.Real.Masked() == real.Masked() {
+			return ra.Alias, true
+		}
+	}
+	return netip.Prefix{}, false
+}
+
 // PublishedRoutes is what a node's PEERS are told to route here: the alias where
 // one exists, the real CIDR otherwise.
 //
 // Administrators can additionally publish a real CIDR; aliases remain stable.
 func PublishedRoutes(node *Node) []netip.Prefix {
+	active := ActiveRouteAliases(node)
 	out := make([]netip.Prefix, 0, len(node.ApprovedRoutes))
 	for _, r := range node.ApprovedRoutes {
-		if alias, ok := aliasFor(node.RouteAliases, r); ok {
+		if alias, ok := legacyAliasFor(active, r); ok {
 			out = append(out, alias)
-			continue
+		} else if !containsPrefix(node.SuppressedRealRoutes, r) {
+			out = append(out, r)
 		}
-		out = append(out, r)
+	}
+	for _, ra := range active {
+		if ra.Host && !containsPrefix(out, ra.Alias) {
+			out = append(out, ra.Alias)
+		}
 	}
 	for _, r := range SelectedRealRoutes(node.RealRoutes, node.ApprovedRoutes) {
 		if !containsPrefix(out, r) {
@@ -324,15 +407,12 @@ func aliasCostOf(real netip.Prefix, blocks map[netip.Prefix]netip.Prefix) (cost 
 // are already on the node, and a stored copy is one more thing that can drift
 // from the allocation it describes.
 func unaliasedRoutes(node *Node) []netip.Prefix {
-	if len(node.AliasedRoutes) == 0 {
-		return nil
-	}
 	got := make(map[netip.Prefix]bool, len(node.RouteAliases))
 	for _, ra := range node.RouteAliases {
 		got[ra.Real.Masked()] = true
 	}
 	var out []netip.Prefix
-	for _, real := range wantedAliases(node) {
+	for _, real := range append(wantedAliases(node), wantedAliasHosts(node)...) {
 		if !got[real] {
 			out = append(out, real)
 		}
@@ -360,12 +440,43 @@ func realRouteConflict(nodes []*Node, selfID int64, route netip.Prefix) bool {
 // filtering. Recheck every map: another site's routes may have changed since
 // approval. Ambiguous opt-in real routes are suppressed; aliases remain usable.
 func safeRealRoutes(nodes []*Node) []*Node {
+	type publication struct {
+		id    int64
+		route netip.Prefix
+	}
+	var published []publication
+	for _, n := range nodes {
+		if n.Disabled || !n.Approved {
+			continue
+		}
+		cp := *n
+		cp.SuppressedRealRoutes = nil
+		for _, r := range PublishedRoutes(&cp) {
+			if !isExitRoute(r) {
+				published = append(published, publication{n.ID, r})
+			}
+		}
+	}
+	conflicts := func(id int64, route netip.Prefix) bool {
+		for _, peer := range published {
+			if peer.id != id && route.Overlaps(peer.route) {
+				return true
+			}
+		}
+		return false
+	}
 	out := make([]*Node, 0, len(nodes))
 	for _, n := range nodes {
 		cp := *n
 		cp.RealRoutes = nil
+		cp.SuppressedRealRoutes = nil
+		for _, r := range n.ApprovedRoutes {
+			if _, aliased := legacyAliasFor(n.RouteAliases, r); !aliased && !isExitRoute(r) && conflicts(n.ID, r) {
+				cp.SuppressedRealRoutes = append(cp.SuppressedRealRoutes, r)
+			}
+		}
 		for _, r := range SelectedRealRoutes(n.RealRoutes, n.ApprovedRoutes) {
-			if !realRouteConflict(nodes, n.ID, r) {
+			if !conflicts(n.ID, r) {
 				cp.RealRoutes = append(cp.RealRoutes, r)
 			}
 		}

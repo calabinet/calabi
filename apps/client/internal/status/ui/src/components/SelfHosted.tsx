@@ -24,7 +24,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../api/client";
 import type { SelfHostedEdgeState, SelfHostedPart, SelfHostedStatus, SelfHostedTunnel, SelfHostedUsage } from "../api/types";
-import { dayLabel } from "../lib/usageDays";
+import { dayLabel, WIDE_HISTORY_DAYS } from "../lib/usageDays";
 import { typeLabel } from "../lib/tunnelType";
 import ChartFrame from "./ChartFrame";
 
@@ -427,15 +427,14 @@ export function SelfHostedTunnelsCard({ search = "" }: { search?: string }) {
 // ---- the network's usage, on Overview ---------------------------------------
 //
 // What the coordinator keeps for the whole network: this month's traffic
-// (tunnels plus relay, in this browser's calendar), each of the last seven
-// days, and the devices. A self-hosted server has no limit.
+// (tunnels plus relay, in this browser's calendar), the daily history, and
+// the devices. A self-hosted server has no limit.
 //
 // It is shown in one of two ways, and never as a block of its own above the
 // page's bottom row — the desktop shell is 720px tall and that block is what
 // made a self-hosted console open with a scrollbar every time:
 //
-//   "chart"  the figures, with the seven days as a real chart, in the slot
-//            where a calabi.net console draws this machine's own seven days;
+//   "chart"  the network history, in the same slot as the platform history;
 //   "note"   one line, when there are no figures to chart: the coordinator has
 //            no database and keeps no traffic, or it could not be asked. This
 //            machine's own chart then stays where it is.
@@ -448,7 +447,7 @@ export function useSelfHostedUsage(enabled = true) {
   const hasMesh = enabled && st?.mode === "self_hosted" && !!st.mesh;
   const { data, error } = useQuery<SelfHostedUsage>({
     queryKey: ["selfhosted-usage"],
-    queryFn: () => api.selfHostedUsage(7),
+    queryFn: () => api.selfHostedUsage(WIDE_HISTORY_DAYS),
     enabled: hasMesh,
     retry: false,
     refetchInterval: 60_000,
@@ -470,18 +469,19 @@ const usageLine: React.CSSProperties = { display: "block", fontSize: 12, lineHei
 // SelfHostedUsageChart fills a slot of Overview's bottom row the way the other
 // chart cards do: the card stretches to the slot and the chart follows the
 // card (see ChartFrame).
-export function SelfHostedUsageChart({ data }: { data?: SelfHostedUsage }) {
+export function SelfHostedUsageChart({ data, days }: { data?: SelfHostedUsage; days: number }) {
   const { t } = useTranslation();
   const month = data?.month;
-  const rows = (data?.days ?? []).map((d) => ({ label: dayLabel(d.start), bytes: d.bytes }));
+  const rows = (data?.days ?? []).slice(-days).map((d) => ({ label: dayLabel(d.start), bytes: d.bytes }));
   return (
     <Card
       size="small"
       title={t("selfHosted.usageTitle")}
       style={{ width: "100%", display: "flex", flexDirection: "column" }}
-      bodyStyle={{ padding: 12, flex: 1, minHeight: 0, display: "flex", gap: 16 }}
+      classNames={{ body: "overview-network-usage" }}
+      bodyStyle={{ padding: 12, flex: 1, minHeight: 0 }}
     >
-      <div style={{ flex: "0 0 auto", minWidth: 148, whiteSpace: "nowrap" }}>
+      <div className="overview-network-summary">
         <Text style={{ display: "block", fontSize: 24, fontWeight: 600, lineHeight: "32px" }}>
           {month ? fmtBytes(month.tunnel_bytes + month.relay_bytes) : "—"}
         </Text>
@@ -508,7 +508,7 @@ export function SelfHostedUsageChart({ data }: { data?: SelfHostedUsage }) {
       </div>
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         <Text type="secondary" style={usageLine}>
-          {t("selfHosted.week")}
+          {t("dailyChart.title", { n: days })}
         </Text>
         <div style={{ flex: 1, display: "flex" }}>
           {/* 96 + the label's 18 = the summary column's 114: the card is no
@@ -525,7 +525,7 @@ export function SelfHostedUsageChart({ data }: { data?: SelfHostedUsage }) {
                 nowhere to break whatever the measurement says. */}
             <BarChart key={rows.length ? "days" : "empty"} data={rows} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--c-line)" />
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--c-muted)" }} />
+              <XAxis dataKey="label" interval="preserveStartEnd" minTickGap={days > 7 ? 22 : 8} tick={{ fontSize: 11, fill: "var(--c-muted)" }} />
               <YAxis
                 tickFormatter={(v: number) => fmtBytes(v).replace(" ", " ")}
                 width={72}
@@ -538,7 +538,7 @@ export function SelfHostedUsageChart({ data }: { data?: SelfHostedUsage }) {
                 labelStyle={{ color: "var(--c-muted)" }}
                 itemStyle={{ color: "var(--c-ink)" }}
               />
-              <Bar dataKey="bytes" fill="var(--c-brand)" radius={[3, 3, 0, 0]} maxBarSize={40} />
+              <Bar dataKey="bytes" fill="var(--c-brand)" radius={[3, 3, 0, 0]} maxBarSize={40} isAnimationActive={false} />
             </BarChart>
           </ChartFrame>
         </div>

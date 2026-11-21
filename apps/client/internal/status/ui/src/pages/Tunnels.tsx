@@ -55,6 +55,7 @@ import type {
   TunnelList,
 } from "../api/types";
 import { SelfHostedTunnelsCard } from "../components/SelfHosted";
+import { LocalCheckLine } from "../components/LocalServiceCheck";
 import ListSearch from "../components/ListSearch";
 import InspectorDrawer from "../components/InspectorDrawer";
 import { notify } from "../hooks/use-notifications";
@@ -204,6 +205,8 @@ export default function Tunnels() {
   // "this edition doesn't have it" — there's no plan to upgrade — so the editor
   // hides those sections rather than showing the managed "upgrade" prompt.
   const standalone = me?.plan?.code === "standalone";
+  const canEditHere = (r: RemoteTunnel) =>
+    canManage && (standalone || (myDeviceId > 0 && r.client_id === myDeviceId));
   // 隐藏商业化入口 (运营设置, proxied through /v1/me). Distinct from
   // standalone: standalone has no plan at all (the sections are hidden),
   // whereas this is a managed platform that HAS plans but shows no way to
@@ -641,78 +644,77 @@ export default function Tunnels() {
     {
       title: t("common.actions"),
       width: 210,
-      render: (_v, r) => (
-        <Space size={4}>
-          {r.proxy_id && (
-            <Tooltip title={t("tunnels.inspectTip")}>
-              <Button
-                size="small"
-                icon={<CodeOutlined />}
-                onClick={() => setDrawerProxy({ id: r.proxy_id!, name: r.name })}
-              />
-            </Tooltip>
-          )}
-          {isOffMachine(r) && canManage && r.created_by_me && (() => {
-            // The public address is bound to the tunnel's edge: an http/https
-            // subdomain is DNS-pinned to its issuing edge, and a tcp/udp port is
-            // allocated by that edge. So taking the tunnel over to a client on a
-            // DIFFERENT edge/region changes (or breaks) the public address — for
-            // a subdomain the new edge can't even serve it (the tunnel ends up
-            // stuck). Grey out takeover whenever this daemon's current edge
-            // differs from the tunnel's, regardless of type.
-            const crossEdge =
-              !!r.edge_node_id &&
-              !!snap?.edge_node_id &&
-              r.edge_node_id !== snap.edge_node_id;
-            return (
-              <Tooltip
-                title={crossEdge ? t("tunnels.takeover.crossEdgeTip") : t("tunnels.takeover.tip")}
-              >
+      render: (_v, r) => {
+        const canEdit = canEditHere(r);
+        const blockedTip = canManage ? t("tunnels.manageElsewhere") : t("serviceMode.tunnelsReadonly");
+        const disabledButtonStyle = canEdit ? undefined : { pointerEvents: "none" as const };
+        return (
+          <Space size={4} wrap>
+            {r.proxy_id && (
+              <Tooltip title={t("tunnels.inspectTip")}>
                 <Button
                   size="small"
-                  icon={<ImportOutlined />}
-                  disabled={crossEdge}
-                  onClick={() => setTakeoverRow(r)}
-                >
-                  {t("tunnels.takeover.btn")}
-                </Button>
+                  icon={<CodeOutlined />}
+                  onClick={() => setDrawerProxy({ id: r.proxy_id!, name: r.name })}
+                />
               </Tooltip>
-            );
-          })()}
-          <Tooltip title={canManage ? t("tunnels.edit.title") : t("serviceMode.tunnelsReadonly")}>
-            <Button
-              size="small"
-              icon={<EditOutlined />}
-              disabled={!canManage}
-              onClick={() => setEditRow(r)}
-            />
-          </Tooltip>
-          <Tooltip title={canManage ? t("tunnels.security.title") : t("serviceMode.tunnelsReadonly")}>
-            <Button
-              size="small"
-              icon={<SafetyCertificateOutlined />}
-              disabled={!canManage}
-              onClick={() => setSecRow(r)}
-            />
-          </Tooltip>
-          {!canManage ? (
-            <Tooltip title={t("serviceMode.tunnelsReadonly")}>
-              <Button danger size="small" icon={<DeleteOutlined />} disabled />
+            )}
+            {isOffMachine(r) && canManage && r.created_by_me && (() => {
+              // The public address is bound to the tunnel's edge: an http/https
+              // subdomain is DNS-pinned to its issuing edge, and a tcp/udp port is
+              // allocated by that edge. So taking the tunnel over to a client on a
+              // DIFFERENT edge/region changes (or breaks) the public address — for
+              // a subdomain the new edge can't even serve it (the tunnel ends up
+              // stuck). Grey out takeover whenever this daemon's current edge
+              // differs from the tunnel's, regardless of type.
+              const crossEdge =
+                !!r.edge_node_id &&
+                !!snap?.edge_node_id &&
+                r.edge_node_id !== snap.edge_node_id;
+              return (
+                <Tooltip
+                  title={crossEdge ? t("tunnels.takeover.crossEdgeTip") : t("tunnels.takeover.tip")}
+                >
+                  <Button
+                    size="small"
+                    icon={<ImportOutlined />}
+                    disabled={crossEdge}
+                    onClick={() => setTakeoverRow(r)}
+                  >
+                    {t("tunnels.takeover.btn")}
+                  </Button>
+                </Tooltip>
+              );
+            })()}
+            <Tooltip title={canEdit ? t("tunnels.edit.title") : blockedTip}>
+              <span>
+                <Button size="small" icon={<EditOutlined />} disabled={!canEdit} style={disabledButtonStyle} onClick={() => setEditRow(r)} />
+              </span>
             </Tooltip>
-          ) : (
-            <Popconfirm
-              title={t("tunnels.deleteConfirmTitle")}
-              description={t("tunnels.deleteConfirmDesc")}
-              okText={t("common.delete")}
-              okButtonProps={{ danger: true }}
-              cancelText={t("common.cancel")}
-              onConfirm={() => del.mutate(r.id)}
-            >
-              <Button danger size="small" icon={<DeleteOutlined />} />
-            </Popconfirm>
-          )}
-        </Space>
-      ),
+            <Tooltip title={canEdit ? t("tunnels.security.title") : blockedTip}>
+              <span>
+                <Button size="small" icon={<SafetyCertificateOutlined />} disabled={!canEdit} style={disabledButtonStyle} onClick={() => setSecRow(r)} />
+              </span>
+            </Tooltip>
+            {canEdit ? (
+              <Popconfirm
+                title={t("tunnels.deleteConfirmTitle")}
+                description={t("tunnels.deleteConfirmDesc")}
+                okText={t("common.delete")}
+                okButtonProps={{ danger: true }}
+                cancelText={t("common.cancel")}
+                onConfirm={() => del.mutate(r.id)}
+              >
+                <Button danger size="small" icon={<DeleteOutlined />} />
+              </Popconfirm>
+            ) : (
+              <Tooltip title={blockedTip}>
+                <span><Button danger size="small" icon={<DeleteOutlined />} disabled style={disabledButtonStyle} /></span>
+              </Tooltip>
+            )}
+          </Space>
+        );
+      },
     },
   ];
 
@@ -870,7 +872,6 @@ export default function Tunnels() {
 
       <EditTunnelModal
         tunnel={editRow}
-        offMachine={editRow ? isOffMachine(editRow) : false}
         onClose={() => setEditRow(null)}
       />
 
@@ -922,20 +923,31 @@ function localAddrIssue(addr: string): "" | "format" | "public" {
 // but changing it would re-allocate the public address (delete + recreate).
 function EditTunnelModal({
   tunnel,
-  offMachine,
   onClose,
 }: {
   tunnel: RemoteTunnel | null;
-  // offMachine = this tunnel runs on ANOTHER client (you created it, but a
-  // different machine serves it). Name + security apply remotely just fine, but
-  // local_addr names an upstream on THAT machine — so we annotate the field
-  // instead of silently letting the user point it at the wrong host.
-  offMachine: boolean;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [form] = Form.useForm<{ name: string; local_addr: string }>();
+  const localAddr = Form.useWatch("local_addr", form);
+  const probe = useMutation({
+    mutationFn: ({ type, address }: { tunnelID: number; type: string; address: string }) =>
+      api.probeCheck(type, address),
+  });
+  const probeMatches = tunnel != null && probe.variables?.tunnelID === tunnel.id &&
+    probe.variables.address === localAddr?.trim();
+
+  async function checkTarget() {
+    if (!tunnel) return;
+    try {
+      const { local_addr } = await form.validateFields(["local_addr"]);
+      probe.mutate({ tunnelID: tunnel.id, type: tunnel.type, address: local_addr.trim() });
+    } catch {
+      // The address field displays the validation result.
+    }
+  }
 
   useEffect(() => {
     if (tunnel) {
@@ -956,31 +968,27 @@ function EditTunnelModal({
       message.success(t("tunnels.edit.saved"));
       qc.invalidateQueries({ queryKey: ["tunnels"] });
       qc.invalidateQueries({ queryKey: ["snapshot"] });
-      onClose();
+      closeEditor();
     },
-    onError: (e: any) => message.error(e?.message || t("tunnels.edit.failed")),
   });
+
+  function closeEditor() {
+    probe.reset();
+    save.reset();
+    onClose();
+  }
 
   return (
     <Modal
       open={!!tunnel}
       title={tunnel ? t("tunnels.edit.titleNamed", { name: tunnel.name }) : t("tunnels.edit.title")}
-      onCancel={onClose}
+      onCancel={closeEditor}
       okText={t("tunnels.edit.save")}
       cancelText={t("common.cancel")}
       confirmLoading={save.isPending}
       onOk={() => form.submit()}
       destroyOnClose
     >
-      {offMachine && (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message={t("tunnels.edit.offMachineTitle")}
-          description={t("tunnels.edit.offMachineDesc")}
-        />
-      )}
       <Form layout="vertical" form={form} onFinish={(v) => save.mutate(v)}>
         <Form.Item label={t("tunnels.colType")}>
           <Tag>{typeLabel(tunnel?.type)}</Tag>
@@ -999,13 +1007,6 @@ function EditTunnelModal({
           label={t("wizard.localAddrLabel")}
           name="local_addr"
           tooltip={t("wizard.localAddrTip")}
-          extra={
-            offMachine ? (
-              <Typography.Text type="warning" style={{ fontSize: 12 }}>
-                {t("tunnels.edit.offMachineLocalHint")}
-              </Typography.Text>
-            ) : undefined
-          }
           rules={[
             { required: true, message: t("wizard.localAddrFormat") },
             {
@@ -1020,8 +1021,19 @@ function EditTunnelModal({
             },
           ]}
         >
-          <Input placeholder="127.0.0.1:8080" />
+          <Input placeholder="127.0.0.1:8080" onChange={() => probe.reset()} />
         </Form.Item>
+        <Space direction="vertical" size={6}>
+          <Button size="small" loading={probeMatches && probe.isPending} onClick={() => void checkTarget()}>
+            {t("wizard.checkBtn")}
+          </Button>
+          <LocalCheckLine checking={probeMatches && probe.isPending} showCreateHint={false} result={
+            probeMatches ? (probe.error ? {
+              healthy: false, latency_ms: 0, checked_at: "", error: probe.error.message,
+            } : probe.data ?? null) : null
+          } />
+          {save.error && <Alert type="error" showIcon message={save.error.message || t("tunnels.edit.failed")} />}
+        </Space>
       </Form>
     </Modal>
   );

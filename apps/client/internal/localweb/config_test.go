@@ -21,6 +21,7 @@ func (f *fakeStore) Tunnels() []ConfiguredTunnel              { return f.tunnels
 func (f *fakeStore) DeleteTunnel(int64) error                 { return nil }
 func (f *fakeStore) UpdateSecurity(int64, string) error       { return nil }
 func (f *fakeStore) UpdateTunnel(int64, string, string) error { return nil }
+func (f *fakeStore) SetTunnelEnabled(int64, bool) error       { return nil }
 func (f *fakeStore) CreateTunnel(spec TunnelSpec) (int64, error) {
 	f.created = append(f.created, spec)
 	return int64(len(f.created)), nil
@@ -106,11 +107,11 @@ func TestConfigExportImport(t *testing.T) {
 	}
 
 	// --- import a NEW tunnel → created ---
-	newDoc := []byte(`{"schema_version":1,"tunnels":[{"name":"api","type":"http","local_addr":"127.0.0.1:9000"}]}`)
+	newDoc := []byte(`{"schema_version":1,"tunnels":[{"name":"api","type":"http","local_addr":"127.0.0.1:9000","status":"disabled"}]}`)
 	if r := do(http.MethodPost, "/v1/config/import", tok, newDoc); r.Code != http.StatusOK {
 		t.Fatalf("new import status = %d, body=%s", r.Code, r.Body.String())
 	}
-	if len(store.created) != 1 || store.created[0].Name != "api" {
+	if len(store.created) != 1 || store.created[0].Name != "api" || !store.created[0].Disabled {
 		t.Fatalf("new tunnel not created: %+v", store.created)
 	}
 

@@ -13,6 +13,8 @@
 // today on the left, and it read the bare date as UTC midnight, so west of
 // Greenwich every bar was labelled with the day before.
 
+export const WIDE_HISTORY_DAYS = 30;
+
 // dayTime reads a bucket ts as a moment; NaN when it is neither form. A bare
 // date is built from its parts so that it is midnight HERE — new Date() would
 // take "2026-06-14" for midnight UTC, which is still the 13th in the Americas.

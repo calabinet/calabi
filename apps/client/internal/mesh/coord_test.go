@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -133,6 +134,27 @@ func TestCoordRegister(t *testing.T) {
 	f.mu.Unlock()
 	if !proved {
 		t.Fatal("the registration carried no proof of possession the coordinator could open")
+	}
+}
+
+func TestCoordRegisterFileTransferOptOut(t *testing.T) {
+	f := &fakeCoord{reg: &meshpb.RegisterNodeResponse{NodeId: 7, OverlayAddr: "100.64.0.7"}}
+	c := dialFake(t, f)
+	for _, disabled := range []bool{true, false} {
+		_, err := c.Register(context.Background(), RegisterParams{
+			AuthKey: "tk_x", NodeKey: testKey(1).Public(), NodePrivate: testKey(1),
+			DisableFileTransfer: disabled,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.mu.Lock()
+		caps := f.lastReg.GetCapabilities()
+		f.mu.Unlock()
+		if slices.Contains(caps, string(meshproto.CapFileTransfer)) == disabled ||
+			!slices.Contains(caps, string(meshproto.CapNodeReauth)) {
+			t.Fatalf("disabled=%v: offered capabilities %v", disabled, caps)
+		}
 	}
 }
 

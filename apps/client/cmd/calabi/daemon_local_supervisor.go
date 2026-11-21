@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 
@@ -173,6 +174,10 @@ func (sv *localSupervisor) snapshot() []plannedTunnel {
 	return append([]plannedTunnel(nil), sv.planned...)
 }
 
+func (sv *localSupervisor) activePlan() []plannedTunnel {
+	return slices.DeleteFunc(sv.snapshot(), func(p plannedTunnel) bool { return p.yaml.Disabled })
+}
+
 // signalReconcile nudges the session loop to re-reconcile (non-blocking; a
 // pending signal coalesces). When no session is live the buffered signal is
 // harmlessly consumed by the next session's initial reconcile.
@@ -189,7 +194,7 @@ func (sv *localSupervisor) signalReconcile() {
 // to the ordered control stream before its replacement NEW_PROXY, so the edge
 // frees the domain before re-registering it (no CodeProxyDuplicate).
 func (sv *localSupervisor) reconcile(sctx context.Context, logger *slog.Logger, cli *session.Client, reg *localRegistry, state *status.State) {
-	plan := sv.snapshot()
+	plan := sv.activePlan()
 	planByID := make(map[int64]plannedTunnel, len(plan))
 	for _, p := range plan {
 		planByID[p.id] = p
@@ -200,7 +205,7 @@ func (sv *localSupervisor) reconcile(sctx context.Context, logger *slog.Logger, 
 		p, ok := planByID[id]
 		switch {
 		case !ok:
-			_ = cli.CloseTunnel(e.proxyID, "console_delete")
+			_ = cli.CloseTunnel(e.proxyID, "console_remove")
 			reg.removeID(id)
 			sv.markDead(id)
 			state.RemoveTunnel(e.proxyID)
@@ -297,7 +302,7 @@ func (sv *localSupervisor) Tunnels() []localweb.ConfiguredTunnel {
 		// column resolves instead of showing "—").
 		domain, remotePort := p.tun.Domain, p.tun.RemotePort
 		var edgeID int64
-		if la, ok := live[p.id]; ok {
+		if la, ok := live[p.id]; ok && !p.yaml.Disabled {
 			if la.domain != "" {
 				domain = la.domain
 			}
@@ -315,9 +320,34 @@ func (sv *localSupervisor) Tunnels() []localweb.ConfiguredTunnel {
 			RemotePort: remotePort,
 			ConfigJSON: p.tun.SecurityConfigJSON,
 			EdgeNodeID: edgeID,
+			Disabled:   p.yaml.Disabled,
 		})
 	}
 	return out
+}
+
+func (sv *localSupervisor) SetTunnelEnabled(id int64, enabled bool) error {
+	sv.mu.Lock()
+	defer sv.mu.Unlock()
+	for i := range sv.planned {
+		p := &sv.planned[i]
+		if p.id != id {
+			continue
+		}
+		previous := p.yaml.Disabled
+		if previous == !enabled {
+			return nil
+		}
+		p.yaml.Disabled = !enabled
+		if err := writeLocalConfig(sv.configPath, sv.configLocked()); err != nil {
+			p.yaml.Disabled = previous
+			sv.logger.Warn("could not persist tunnel status", "id", id, "err", err)
+			return err
+		}
+		sv.signalReconcile()
+		return nil
+	}
+	return localweb.ErrTunnelNotFound
 }
 
 // --- localweb.Writer --------------------------------------------------------
@@ -336,6 +366,7 @@ func (sv *localSupervisor) CreateTunnel(spec localweb.TunnelSpec) (int64, error)
 		Subdomain:          spec.Subdomain,
 		RemotePort:         spec.RemotePort,
 		SecurityConfigJSON: spec.ConfigJSON,
+		Disabled:           spec.Disabled,
 	}
 	tun, err := toSessionTunnel(tc)
 	if err != nil {
@@ -466,10 +497,8 @@ func (sv *localSupervisor) persistBestEffort(op string) {
 // rebuilds the document); a header flags the file as console-managed.
 func (sv *localSupervisor) persist() error {
 	sv.mu.Lock()
-	out := sv.configLocked()
-	path := sv.configPath
-	sv.mu.Unlock()
-	return writeLocalConfig(path, out)
+	defer sv.mu.Unlock()
+	return writeLocalConfig(sv.configPath, sv.configLocked())
 }
 
 // configLocked is the whole config as it would be written: the top-level

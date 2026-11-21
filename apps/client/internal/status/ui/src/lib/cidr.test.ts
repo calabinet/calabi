@@ -1,7 +1,16 @@
 // Run with: node --test src/lib/cidr.test.ts   (node >= 22 strips the types)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { exitStanding, isExitRoute, routeStanding, type RouteReport } from "./cidr.ts";
+import { exitStanding, isExitRoute, routeStanding, subnetCoversHost, type RouteReport } from "./cidr.ts";
+
+test("an individual alias must stay inside a non-default IPv4 subnet", () => {
+  assert.equal(subnetCoversHost("192.168.11.0/24", "192.168.11.25"), true);
+  assert.equal(subnetCoversHost("192.168.11.25/32", "192.168.11.25/32"), true);
+  assert.equal(subnetCoversHost("192.168.11.25/32", "192.168.11.26"), false);
+  assert.equal(subnetCoversHost("192.168.11.0/24", "192.168.11.0/25"), false);
+  assert.equal(subnetCoversHost("0.0.0.0/0", "192.168.11.25"), false);
+  assert.equal(subnetCoversHost("2001:db8::/32", "2001:db8::1"), false);
+});
 
 const report = (over: Partial<RouteReport> = {}): RouteReport => ({
   up: true,

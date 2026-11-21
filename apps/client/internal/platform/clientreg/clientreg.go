@@ -54,11 +54,16 @@ type registerRequest struct {
 // builds leave it empty; the core version never identifies an app release.
 var DesktopVersion string
 
-func productType() string {
-	if DesktopVersion != "" {
-		return "desktop"
+func productMetadata() (kind, appVersion string) {
+	// The OpenWrt init script reads this value from the installed calabi
+	// package. The package revision can change independently of the core.
+	if version := strings.TrimSpace(os.Getenv("CALABI_OPENWRT_VERSION")); version != "" {
+		return "openwrt", version
 	}
-	return "cli"
+	if DesktopVersion != "" {
+		return "desktop", DesktopVersion
+	}
+	return "cli", ""
 }
 
 // registerResponse mirrors the JSON returned by bff-console.
@@ -97,13 +102,14 @@ func Ensure(cfg *creds.Config, bffConsoleURL, version string) error {
 		label = h
 	}
 
+	kind, appVersion := productMetadata()
 	body, err := json.Marshal(registerRequest{
 		Fingerprint:   fp,
 		DisplayName:   label,
 		OsInfo:        runtime.GOOS + "/" + runtime.GOARCH,
 		ClientVersion: version,
-		ClientType:    productType(),
-		AppVersion:    DesktopVersion,
+		ClientType:    kind,
+		AppVersion:    appVersion,
 		CoreVersion:   version,
 	})
 	if err != nil {
@@ -184,12 +190,14 @@ func EnsureAgent(cfg *creds.Config, bffConsoleURL, version, apiKey string) error
 	if h, _ := os.Hostname(); h != "" {
 		label = h
 	}
+	kind, appVersion := productMetadata()
 	body, err := json.Marshal(registerRequest{
 		Fingerprint:   fp,
 		DisplayName:   label,
 		OsInfo:        runtime.GOOS + "/" + runtime.GOARCH,
 		ClientVersion: version,
-		ClientType:    "agent",
+		ClientType:    kind,
+		AppVersion:    appVersion,
 		CoreVersion:   version,
 	})
 	if err != nil {

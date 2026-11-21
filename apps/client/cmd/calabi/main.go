@@ -135,12 +135,28 @@ func publishConsoleURLLate(srv *status.Server, already string) {
 // port when the console switches between calabi.net and a self-hosted server
 // (daemon_restart.go) — bound while the old one still held it, it would fall
 // back to the next port and the open page would lose its daemon.
-func startDaemonConsole(ctx context.Context, logger *slog.Logger, state *status.State, attachAPI func(mux *http.ServeMux)) (string, <-chan struct{}) {
+func startDaemonConsole(ctx context.Context, logger *slog.Logger, state *status.State, attachAPI func(mux *http.ServeMux)) (string, <-chan struct{}, error) {
+	if path := daemonSocketPath(); path != "" {
+		ln, err := listenDaemonSocket(path)
+		if err != nil {
+			return "", nil, fmt.Errorf("listen on management socket: %w", err)
+		}
+		srv := status.NewServer(logger, state, "")
+		srv.AttachAPI(attachAPI)
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			if err := srv.RunLocalAPI(ctx, ln); err != nil {
+				logger.Error("management socket stopped", "err", err)
+			}
+		}()
+		return "unix:" + path, done, nil
+	}
 	done := make(chan struct{})
 	addr := envOr("CALABI_STATUS_ADDR", defaultStatusAddr)
 	if strings.EqualFold(addr, "disabled") || addr == "off" {
 		close(done)
-		return "", done
+		return "", done, nil
 	}
 	srv := status.NewServer(logger, state, addr)
 	srv.AllowBrowser()
@@ -155,8 +171,10 @@ func startDaemonConsole(ctx context.Context, logger *slog.Logger, state *status.
 	url := waitConsoleURL(srv)
 	publishConsoleURL(url)
 	publishConsoleURLLate(srv, url)
-	return url, done
+	return url, done, nil
 }
+
+func daemonSocketPath() string { return os.Getenv("CALABI_DAEMON_SOCKET") }
 
 // loggingHub is a thin accessor so the daemon command can defer Close() on the
 // log hub without importing the logging package itself (keeps the cmd
@@ -368,6 +386,8 @@ Environment:
   CALABI_INSECURE      "1" to skip TLS verification (dev)
   CALABI_DEBUG        "1" for verbose logging
   CALABI_CONFIG        path to credentials file (default: per-OS config dir)
+  CALABI_DAEMON_SOCKET Linux daemon management socket in a private directory;
+                       serves the local API for system integration
   CALABI_MODE          platform | standalone -- standalone: this client uses
                        the self-hosted server it joined, not calabi.net
                        (see "calabi mode")
@@ -404,7 +424,7 @@ func setupLogger() *slog.Logger {
 // the daemon won't connect). When running under the service manager we instead
 // pin the log next to the executable — predictable and readable.
 func setupDaemonLogger() *slog.Logger {
-	opts := logging.Options{}
+	opts := logging.Options{DisableFile: daemonSocketPath() != ""}
 	if inServiceManager {
 		if p := serviceLogPath(); p != "" {
 			opts.FilePath = p

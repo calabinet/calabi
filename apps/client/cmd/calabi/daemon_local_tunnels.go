@@ -53,7 +53,7 @@ func (sv *localSupervisor) tunnelStates(state *status.State) []mesh.TunnelState 
 		if row, ok := rows[p.id]; ok {
 			st.Instance, st.BytesIn, st.BytesOut = row.ProxyID, row.BytesIn, row.BytesOut
 			switch {
-			case !snap.Connected:
+			case !snap.Connected || p.yaml.Disabled:
 			case row.Pending:
 				st.Status = "pending"
 			default:

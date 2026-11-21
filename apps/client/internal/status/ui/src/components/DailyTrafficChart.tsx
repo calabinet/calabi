@@ -33,7 +33,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api } from "../api/client";
 import type { MeshUsageDay, UsageBucket, UsageHistory } from "../api/types";
-import { dayLabel, oldestFirst } from "../lib/usageDays";
+import { dayLabel, oldestFirst, WIDE_HISTORY_DAYS } from "../lib/usageDays";
 import ChartFrame from "./ChartFrame";
 
 const { Text } = Typography;
@@ -95,16 +95,15 @@ export default function DailyTrafficChart({
 }) {
   const { t } = useTranslation();
   const { data } = useQuery<UsageHistory>({
-    queryKey: ["usage-daily", days],
-    queryFn: () => api.usageDaily(days),
+    queryKey: ["usage-daily", WIDE_HISTORY_DAYS],
+    queryFn: () => api.usageDaily(WIDE_HISTORY_DAYS),
     refetchInterval: 60_000,
     retry: false,
   });
 
   // A bar chart reads left→right, so render oldest→newest — the two daemons
   // that answer this path disagree about the order they send (lib/usageDays).
-  // The endpoint always returns exactly `days` buckets (gaps zero-filled), so a
-  // slice keeps the window even if it ever returns more.
+  // Keep the full range in cache so resizing only changes the visible slice.
   const relayByDate = new Map((localRelay ?? []).map((d) => [d.date, d.relay]));
   const rows = oldestFirst(data?.buckets ?? [])
     .slice(-days)
@@ -135,8 +134,8 @@ export default function DailyTrafficChart({
       <ChartFrame>
         <BarChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--c-line)" />
-          <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--c-muted)" }} />
-          <YAxis tickFormatter={fmtBytes} width={64} tick={{ fontSize: 11, fill: "var(--c-muted)" }} />
+          <XAxis dataKey="label" interval="preserveStartEnd" minTickGap={days > 7 ? 30 : 8} tick={{ fontSize: 11, fill: "var(--c-muted)" }} />
+          <YAxis tickFormatter={(v: number) => fmtBytes(v).replace(" ", "\u00a0")} width={74} tick={{ fontSize: 11, fill: "var(--c-muted)" }} />
           <Tooltip
             cursor={{ fill: "var(--c-fill)" }}
             formatter={(v: number) => fmtBytes(Number(v))}
@@ -156,6 +155,7 @@ export default function DailyTrafficChart({
             name={t("dailyChart.tunnel")}
             fill="var(--c-brand)"
             maxBarSize={40}
+            isAnimationActive={false}
           />
           <Bar
             dataKey="relay"
@@ -164,6 +164,7 @@ export default function DailyTrafficChart({
             fill="var(--c-ok)"
             radius={[3, 3, 0, 0]}
             maxBarSize={40}
+            isAnimationActive={false}
           />
         </BarChart>
       </ChartFrame>

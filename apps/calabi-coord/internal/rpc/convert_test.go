@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"net/netip"
+	"slices"
 	"testing"
 
 	"github.com/calabinet/calabi/apps/calabi-coord/internal/core"
@@ -117,6 +118,33 @@ func TestNetMapSendsPeersTheAliasAndTheRouterBothHalves(t *testing.T) {
 	}
 	if as[0].GetAlias() != alias.String() || as[0].GetReal() != real.String() {
 		t.Errorf("subnet_alias = %s -> %s, want %s -> %s", as[0].GetAlias(), as[0].GetReal(), alias, real)
+	}
+}
+
+func TestNetMapPublishesHostAliasAlongsideItsRealSubnet(t *testing.T) {
+	subnet := netip.MustParsePrefix("192.168.4.0/24")
+	host := netip.MustParsePrefix("192.168.4.50/32")
+	alias := netip.MustParsePrefix("100.96.0.3/32")
+	router := core.Node{
+		Overlay:            netip.MustParseAddr("100.64.0.4"),
+		ApprovedRoutes:     []netip.Prefix{subnet},
+		HostAliasRequests:  []netip.Prefix{host},
+		ApprovedAliasHosts: []netip.Prefix{host},
+		RouteAliases:       []core.RouteAlias{{Real: host, Alias: alias, Host: true}},
+	}
+	out := toProtoNetMap(&core.NetMap{Peers: []core.Node{router}})
+	allowed := out.GetPeers()[0].GetAllowedIps()
+	if !slices.Contains(allowed, subnet.String()) || !slices.Contains(allowed, alias.String()) ||
+		slices.Contains(allowed, host.String()) {
+		t.Fatalf("unexpected peer routes: %v", allowed)
+	}
+	self := toProtoNetMap(&core.NetMap{Self: router}).GetSubnetAliases()
+	if len(self) != 1 || self[0].GetReal() != host.String() || self[0].GetAlias() != alias.String() {
+		t.Fatalf("router received wrong mapping: %v", self)
+	}
+	router.ApprovedAliasHosts = nil
+	if stale := toProtoNetMap(&core.NetMap{Self: router}).GetSubnetAliases(); len(stale) != 0 {
+		t.Fatalf("revoked mapping is still live: %v", stale)
 	}
 }
 

@@ -429,7 +429,7 @@ func TestSubnetRouterNATRollsBackAPartialInstall(t *testing.T) {
 
 // --- nft backend ----------------------------------------------------------------
 
-// fakeNft models tables holding nat postrouting rules.
+// fakeNft models tables holding NAT rules.
 type fakeNft struct{ tables map[string][]string }
 
 func (f *fakeNft) run(args ...string) ([]byte, error) {
@@ -494,5 +494,45 @@ func TestNftNATPerNodeTables(t *testing.T) {
 	cleanupB()
 	if len(f.tables) != 0 {
 		t.Errorf("tables left after both stopped: %v", f.tables)
+	}
+}
+
+func TestNftAliasPreroutingAndCleanup(t *testing.T) {
+	router, other := testNode(1), testNode(2)
+	aliasTable := nftAliasTableFor(router)
+	masqTable := nftTableFor(router)
+	otherTable := nftAliasTableFor(other)
+	f := &fakeNft{tables: map[string][]string{
+		aliasTable: {"stale own rule"},
+		masqTable:  {"own masquerade rule"},
+		otherTable: {"other node rule"},
+	}}
+	var chain []string
+	be := nftNAT{run: func(args ...string) ([]byte, error) {
+		if args[0] == "add" && args[1] == "chain" {
+			chain = args[4:]
+		}
+		return f.run(args...)
+	}}
+	cleanup, reclaimed, err := be.aliasRewrite(router, []SubnetAlias{
+		{Alias: mustPfx("100.96.5.7/24"), Real: mustPfx("192.0.2.7/24")},
+		{Alias: mustPfx("100.96.6.0/24"), Real: mustPfx("198.51.100.0/25")},
+	})
+	if err != nil || reclaimed != 1 {
+		t.Fatalf("reclaimed %d, err = %v", reclaimed, err)
+	}
+	if got := strings.Join(chain, " "); got != "prerouting { type nat hook prerouting priority -100 ; }" {
+		t.Fatalf("wrong chain: %s", got)
+	}
+	want := "ip saddr 100.64.0.0/10 ip daddr 100.96.5.0/24 dnat ip prefix to ip daddr map { 100.96.5.0/24 : 192.0.2.0/24 }"
+	if got := f.tables[aliasTable]; len(got) != 1 || got[0] != want {
+		t.Fatalf("alias rules = %v, want %s", got, want)
+	}
+	cleanup()
+	if _, exists := f.tables[aliasTable]; exists {
+		t.Error("alias table survived cleanup")
+	}
+	if len(f.tables[masqTable]) != 1 || len(f.tables[otherTable]) != 1 {
+		t.Fatalf("alias cleanup touched other rules: %v", f.tables)
 	}
 }

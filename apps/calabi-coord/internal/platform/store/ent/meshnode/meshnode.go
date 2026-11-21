@@ -37,6 +37,10 @@ const (
 	FieldApprovedRoutesJSON = "approved_routes_json"
 	// FieldRealRoutesJSON holds the string denoting the real_routes_json field in the database.
 	FieldRealRoutesJSON = "real_routes_json"
+	// FieldHostAliasRequestsJSON holds the string denoting the host_alias_requests_json field in the database.
+	FieldHostAliasRequestsJSON = "host_alias_requests_json"
+	// FieldApprovedAliasHostsJSON holds the string denoting the approved_alias_hosts_json field in the database.
+	FieldApprovedAliasHostsJSON = "approved_alias_hosts_json"
 	// FieldAliasedRoutesJSON holds the string denoting the aliased_routes_json field in the database.
 	FieldAliasedRoutesJSON = "aliased_routes_json"
 	// FieldRouteAliasesJSON holds the string denoting the route_aliases_json field in the database.
@@ -90,6 +94,8 @@ var Columns = []string{
 	FieldAdvertisedRoutesJSON,
 	FieldApprovedRoutesJSON,
 	FieldRealRoutesJSON,
+	FieldHostAliasRequestsJSON,
+	FieldApprovedAliasHostsJSON,
 	FieldAliasedRoutesJSON,
 	FieldRouteAliasesJSON,
 	FieldRoutesReviewed,
@@ -142,6 +148,10 @@ var (
 	DefaultApprovedRoutesJSON string
 	// DefaultRealRoutesJSON holds the default value on creation for the "real_routes_json" field.
 	DefaultRealRoutesJSON string
+	// DefaultHostAliasRequestsJSON holds the default value on creation for the "host_alias_requests_json" field.
+	DefaultHostAliasRequestsJSON string
+	// DefaultApprovedAliasHostsJSON holds the default value on creation for the "approved_alias_hosts_json" field.
+	DefaultApprovedAliasHostsJSON string
 	// DefaultAliasedRoutesJSON holds the default value on creation for the "aliased_routes_json" field.
 	DefaultAliasedRoutesJSON string
 	// DefaultRouteAliasesJSON holds the default value on creation for the "route_aliases_json" field.
@@ -244,6 +254,16 @@ func ByApprovedRoutesJSON(opts ...sql.OrderTermOption) OrderOption {
 // ByRealRoutesJSON orders the results by the real_routes_json field.
 func ByRealRoutesJSON(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRealRoutesJSON, opts...).ToFunc()
+}
+
+// ByHostAliasRequestsJSON orders the results by the host_alias_requests_json field.
+func ByHostAliasRequestsJSON(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHostAliasRequestsJSON, opts...).ToFunc()
+}
+
+// ByApprovedAliasHostsJSON orders the results by the approved_alias_hosts_json field.
+func ByApprovedAliasHostsJSON(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldApprovedAliasHostsJSON, opts...).ToFunc()
 }
 
 // ByAliasedRoutesJSON orders the results by the aliased_routes_json field.

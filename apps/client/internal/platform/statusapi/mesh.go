@@ -67,11 +67,9 @@ type MeshStatusSource interface {
 // traffic through the named exit peer.
 type MeshAdvertise struct {
 	Routes []string `json:"routes"`
-	// AliasRoutes is IGNORED. Every advertised route is now published under a
-	// stand-in prefix wherever the host can install the rewrite, so there is no
-	// subset to choose: POST /v1/mesh/advertise decodes the field and drops it
-	// (see handleMeshAdvertiseSet), and neither GET nor the POST reply sends it.
+	// AliasRoutes accepts the retired field sent by older settings forms.
 	AliasRoutes []string `json:"alias_routes,omitempty"`
+	AliasHosts  []string `json:"alias_hosts,omitempty"`
 	ExitNode    bool     `json:"advertise_exit_node"`
 	ExitPeer    string   `json:"exit_node"`
 	// --- the CONSUMER side: what this node accepts FROM peers ---
@@ -155,13 +153,9 @@ type MeshStatus struct {
 	// operator most needs to see it.
 	OrgID int64      `json:"org_id,omitempty"`
 	Peers []MeshPeer `json:"peers"`
-	// SubnetAliases is the stand-in mapping for this node's OWN subnet routes:
-	// every route the coordinator granted an alias. The daemon asks for one on
-	// every subnet it advertises, so this is not limited to LANs that collide.
+	// SubnetAliases contains active legacy and individual host mappings.
 	SubnetAliases []MeshSubnetAlias `json:"subnet_aliases,omitempty"`
-	// UnaliasedRoutes are routes that asked for a stand-in prefix and did not get
-	// one. They still work for consumers that do not collide with them; the ones
-	// that DO collide cannot reach them, silently — which is why this is shown.
+	// UnaliasedRoutes contains approved requests waiting for an address.
 	UnaliasedRoutes []string `json:"unaliased_routes,omitempty"`
 	// AliasBudgetAddrs / AliasUsedAddrs explain WHY, in addresses (a /24 is 256).
 	AliasBudgetAddrs int `json:"alias_budget_addrs,omitempty"`
@@ -372,6 +366,7 @@ func (s *Server) handleMeshAdvertiseGet(w http.ResponseWriter, _ *http.Request) 
 	}
 	out := map[string]any{
 		"routes":              adv.Routes,
+		"alias_hosts":         append([]string{}, adv.AliasHosts...),
 		"advertise_exit_node": adv.ExitNode,
 		"exit_node":           adv.ExitPeer,
 		// Two capabilities, not two settings. forwarding_supported is whether this
@@ -438,11 +433,12 @@ func (s *Server) handleMeshAdvertiseSet(w http.ResponseWriter, r *http.Request) 
 		}
 		routes = append(routes, p.String())
 	}
-	// in.AliasRoutes is accepted by the decoder and deliberately DROPPED: which
-	// routes get a stand-in prefix is no longer anyone's choice (every advertised
-	// route does, where the host can install the rewrite), so honouring a subset
-	// posted by an older console would silently un-alias the rest.
 	adv := MeshAdvertise{Routes: routes, ExitNode: in.ExitNode, ExitPeer: strings.TrimSpace(in.ExitPeer)}
+	adv.AliasHosts, err = mesh.AliasHostConfig(in.AliasHosts, s.cfg.Mesh.Advertise().AliasHosts, routes)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	// Refuse to take on a forwarding role this platform cannot honour. Checked
 	// here and not only in the SPA: the switch being greyed out is a courtesy to
@@ -458,6 +454,7 @@ func (s *Server) handleMeshAdvertiseSet(w http.ResponseWriter, r *http.Request) 
 		cfg = &creds.Config{}
 	}
 	cfg.MeshAdvertiseRoutes = routes
+	cfg.MeshAliasHosts = adv.AliasHosts
 	cfg.MeshAdvertiseExitNode = adv.ExitNode
 	cfg.MeshExitNode = adv.ExitPeer
 	// Consumer side. Both are "leave unchanged" when omitted, so a save from a

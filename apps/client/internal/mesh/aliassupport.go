@@ -1,8 +1,10 @@
 package mesh
 
 import (
+	"fmt"
 	"log/slog"
 	"net/netip"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -66,9 +68,8 @@ var aliasSupportState struct {
 // with the reason behind the answer.
 //
 // It prefers what we have already observed (see noteAliasInstall) over probing,
-// and probes only when nothing is known. The probe is not free — it shells out
-// to iptables three times — and it is also the only one of the two that can be
-// wrong.
+// and probes only when nothing is known. Probing runs a firewall command and
+// tests a sample rule, while an observed installation tests the real rules.
 func SubnetAliasSupport(logger *slog.Logger) (AliasSupport, string) {
 	aliasSupportState.mu.Lock()
 	defer aliasSupportState.mu.Unlock()
@@ -91,52 +92,69 @@ func SubnetAliasSupport(logger *slog.Logger) (AliasSupport, string) {
 	return v, reason
 }
 
-// AliasRequest is what a node asks the coordinator to publish under a stand-in
-// prefix (RegisterParams.AliasRoutes): every subnet route it advertises, unless
-// this host cannot install the rewrite. Pass the whole advertisement; the exit
-// route is left out here, because a default route is not a subnet anyone's LAN
-// can collide with.
-//
-// EVERY route, and not a setting. A route published under its real CIDR is
-// unreachable from any peer whose own LAN happens to use the same addresses, and
-// neither the publisher nor the coordinator can see whose does. Leaving it as a
-// switch meant the person who had to predict the collision was the one who could
-// not observe it, and the default (off) was the answer that breaks. Aliasing
-// everything costs one NAT hop and makes the rule uniform: peers always reach a
-// subnet at its stand-in prefix.
-//
-// The only open question is whether THIS machine can install the rewrite, which
-// is a fact about the host rather than a preference, so it is probed rather than
-// configured. A host that cannot keeps publishing real CIDRs, exactly as before
-// aliases existed. Not-a-no rather than a yes: an inconclusive probe (iptables
-// could not run just now) must not quietly drop the node back to real CIDRs.
-// Asking for the alias and failing to install it logs a warning naming the
-// reason; declining to ask logs nothing and looks like a deliberate choice.
-//
-// One definition for every entry point that advertises routes. The foreground
-// `calabi mesh up` used to decide this on its own, and when aliasing stopped
-// being a choice it went on sending only what the retired --alias-routes flag
-// named: nothing, so its subnets were published under their real CIDRs.
-func AliasRequest(routes []netip.Prefix, logger *slog.Logger) []netip.Prefix {
-	var subnets []netip.Prefix
-	for _, r := range routes {
-		if !isDefaultRoute(r) {
-			subnets = append(subnets, r)
-		}
-	}
-	// Nothing to alias, so nothing to probe: the probe runs iptables, which a
-	// machine that routes no subnet has no business doing.
-	if len(subnets) == 0 {
-		return nil
+// SupportsSubnetAliases checks whether the node can keep rewriting existing aliases
+// and request individual host aliases. A transient probe failure leaves support
+// enabled so that a busy firewall does not withdraw live routes.
+func SupportsSubnetAliases(routes []netip.Prefix, logger *slog.Logger) bool {
+	if !slices.ContainsFunc(routes, func(route netip.Prefix) bool { return !isDefaultRoute(route) }) {
+		return false
 	}
 	if support, why := SubnetAliasSupport(logger); support == AliasSupportNo {
 		if logger != nil {
-			logger.Warn("mesh: this host cannot install subnet-alias rules; subnets are published under their "+
-				"real addresses, so peers whose own LAN collides with them cannot reach them", "why", why)
+			logger.Warn("mesh: this host cannot install subnet alias rules", "why", why)
 		}
-		return nil
+		return false
 	}
-	return subnets
+	return true
+}
+
+// ParseAliasHosts normalizes individual IPv4 addresses and ensures each is
+// contained in an advertised subnet. An exit route is not a subnet grant.
+func ParseAliasHosts(raw []string, routes []netip.Prefix) ([]netip.Prefix, error) {
+	if len(raw) > 256 {
+		return nil, fmt.Errorf("at most 256 host alias requests are allowed")
+	}
+	seen := map[netip.Prefix]bool{}
+	var out []netip.Prefix
+	for _, value := range raw {
+		host, err := ParseRoute(value)
+		if err != nil || !host.Addr().Is4() || host.Bits() != 32 {
+			return nil, fmt.Errorf("alias target %q must be a single IPv4 address", value)
+		}
+		if !slices.ContainsFunc(routes, func(route netip.Prefix) bool {
+			return route.Bits() > 0 && route.Contains(host.Addr())
+		}) {
+			return nil, fmt.Errorf("alias target %s must be inside an advertised subnet", host.Addr())
+		}
+		if !seen[host] {
+			seen[host] = true
+			out = append(out, host)
+		}
+	}
+	return out, nil
+}
+
+// AliasHostConfig validates an explicit edit; an older settings form may omit
+// the field and still withdraw a subnet and its corresponding requests.
+func AliasHostConfig(requested, existing, advertised []string) ([]string, error) {
+	routes, _ := SplitRouteList(advertised)
+	result := []string{}
+	if requested == nil {
+		for _, current := range existing {
+			if hosts, err := ParseAliasHosts([]string{current}, routes); err == nil {
+				result = append(result, hosts[0].String())
+			}
+		}
+		return result, nil
+	}
+	hosts, err := ParseAliasHosts(requested, routes)
+	if err != nil {
+		return nil, err
+	}
+	for _, host := range hosts {
+		result = append(result, host.String())
+	}
+	return result, nil
 }
 
 // noteAliasInstall records what happened when the rewrite was ACTUALLY

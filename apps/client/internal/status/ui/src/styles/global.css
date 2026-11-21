@@ -18,12 +18,52 @@ html, body, #root {
   overflow: hidden;
 }
 
+.overview-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(230px, 29%, 320px);
+  gap: 12px;
+  flex: 1;
+}
+
+.overview-chart-stack {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.overview-chart-slot { display: flex; flex: 1; min-width: 0; }
+.overview-info-slot { display: flex; min-width: 0; }
+.overview-info { min-width: 0; }
+.overview-network-usage { display: flex; gap: 16px; }
+.overview-network-summary { flex: 0 0 auto; min-width: 148px; }
+
+@media (min-width: 1180px) {
+  .overview-info-slot { align-self: start; }
+}
+
+@media (min-height: 820px) {
+  @container (min-width: 680px) {
+    .overview-chart-slot { min-height: clamp(208px, 24cqi, 290px); }
+  }
+}
+
+@media (max-width: 760px) {
+  .overview-detail { grid-template-columns: minmax(0, 1fr); }
+}
+
+@container (max-width: 400px) {
+  .overview-network-usage { flex-direction: column; gap: 8px; }
+  .overview-network-summary { min-width: 0; }
+}
+
 /* Windows text scaling also reduces the WebView's effective CSS viewport.
    Spend less space on chrome before asking enlarged text/charts to scroll.
    Keep the chart's readable minimum and the Content scroll fallback. */
 @media (max-height: 700px) {
   .overview-content { padding: 10px !important; }
-  .overview-page, .overview-chart-stack { gap: 8px !important; }
+  .overview-page, .overview-detail, .overview-chart-stack { gap: 8px !important; }
   .overview-page .ant-card-body { padding: 8px !important; }
   .overview-info > .ant-card-body > .ant-row { row-gap: 4px !important; }
 }

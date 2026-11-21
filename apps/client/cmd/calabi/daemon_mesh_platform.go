@@ -72,11 +72,9 @@ type meshAdvertise struct {
 	Routes   []string // subnet-router CIDRs this node advertises
 	ExitNode bool     // advertise this node AS an exit node
 	ExitPeer string   // route THIS node's default traffic through this exit peer
-	// AliasRoutes is IGNORED, as is the meshConfig.AliasRoutes it is copied into:
-	// every advertised subnet is published under a stand-in prefix wherever the
-	// host can install the rewrite (see mesh.AliasRequest). It only carries the
-	// deprecated --alias-routes / creds value along; nothing acts on it.
+	// AliasRoutes carries the deprecated flag and credential field for compatibility.
 	AliasRoutes []string
+	AliasHosts  []string
 }
 
 // platformMeshController polls bff-console for the node's enrollment and keeps a
@@ -371,6 +369,7 @@ func (c *platformMeshController) reconcile(ctx context.Context, enr meshenroll.E
 		Name:              name,
 		AdvertiseRoutes:   c.adv.Routes,
 		AliasRoutes:       c.adv.AliasRoutes,
+		AliasHosts:        c.adv.AliasHosts,
 		AdvertiseExitNode: c.adv.ExitNode,
 		ExitNode:          c.adv.ExitPeer,
 		Services:          c.declaredServices(),
@@ -712,6 +711,7 @@ func (c *platformMeshController) Advertise() statusapi.MeshAdvertise {
 	return statusapi.MeshAdvertise{
 		Routes:      append([]string(nil), c.adv.Routes...),
 		AliasRoutes: append([]string(nil), c.adv.AliasRoutes...),
+		AliasHosts:  append([]string(nil), c.adv.AliasHosts...),
 		ExitNode:    c.adv.ExitNode,
 		ExitPeer:    c.adv.ExitPeer,
 	}
@@ -726,6 +726,7 @@ func (c *platformMeshController) SetAdvertise(a statusapi.MeshAdvertise) error {
 	c.adv = meshAdvertise{
 		Routes:      append([]string(nil), a.Routes...),
 		AliasRoutes: append([]string(nil), a.AliasRoutes...),
+		AliasHosts:  append([]string(nil), a.AliasHosts...),
 		ExitNode:    a.ExitNode,
 		ExitPeer:    a.ExitPeer,
 	}

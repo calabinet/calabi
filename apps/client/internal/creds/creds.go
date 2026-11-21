@@ -143,6 +143,7 @@ type Config struct {
 	// where the host supports it, not to a chosen subset. Kept so an existing
 	// creds file still loads.
 	MeshAliasRoutes       []string `json:"mesh_alias_routes,omitempty"`
+	MeshAliasHosts        []string `json:"mesh_alias_hosts,omitempty"`
 	MeshAdvertiseExitNode bool     `json:"mesh_advertise_exit_node,omitempty"` // advertise AS an exit node
 	MeshExitNode          string   `json:"mesh_exit_node,omitempty"`           // route THIS node's default via this peer
 	// MeshServices are services DECLARED from the local console (:7400). They

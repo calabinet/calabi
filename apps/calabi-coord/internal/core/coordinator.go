@@ -37,7 +37,9 @@ type Coordinator struct {
 	// requests are simply not granted and routes publish under their real CIDRs,
 	// exactly as before the feature existed.
 	AliasIPAM AliasIPAM
-	DERP      DERPMapSource
+	// RetainLegacyAliasesOnly preserves allocated legacy ranges while preventing new ones.
+	RetainLegacyAliasesOnly bool
+	DERP                    DERPMapSource
 	// Quota caps how many nodes a meshnet may enroll. Nil = unlimited
 	// (dev/tests). Checked only when admitting a genuinely NEW node.
 	Quota NodeQuota
@@ -197,7 +199,9 @@ type RegisterInput struct {
 	// unique stand-in prefix — from a current client, every advertised subnet
 	// unless its host cannot install the rewrite. A request, like the claim
 	// above; see Node.AliasedRoutes.
-	AliasedRoutes []netip.Prefix
+	AliasedRoutes        []netip.Prefix
+	HostAliasRequests    []netip.Prefix
+	HostAliasesSupported *bool
 	// EnrolledBy is Identity.Principal of the auth key this enrollment used.
 	EnrolledBy string
 	// Reauth marks a re-registration by proof of the node key alone
@@ -241,6 +245,7 @@ func (c *Coordinator) register(ctx context.Context, in RegisterInput, changed *b
 	keptRoutes, refusedRoutes := splitAdvertised(in.AdvertisedRoutes)
 	in.AdvertisedRoutes = keptRoutes
 	in.AliasedRoutes, _ = splitAdvertised(in.AliasedRoutes)
+	in.HostAliasRequests = AliasHostTargets(in.HostAliasRequests, in.AdvertisedRoutes)
 	if len(refusedRoutes) > 0 && c.Logger != nil {
 		c.Logger.Warn("refusing subnet routes: not publishable (wider than the maximum, or inside the mesh's own address space)",
 			"meshnet", in.Meshnet, "refused", refusedRoutes,
@@ -369,7 +374,9 @@ func (c *Coordinator) register(ctx context.Context, in RegisterInput, changed *b
 		// A daemon restart with an edited config is how an alias request changes,
 		// so reconcile on the re-enrollment path too — and AFTER the approval
 		// lines above, because an alias needs both halves.
-		existing.AliasedRoutes = in.AliasedRoutes
+		existing.AliasedRoutes = c.legacyAliasRequests(in, existing)
+		existing.HostAliasRequests = in.HostAliasRequests
+		existing.ApprovedAliasHosts = AliasHostTargets(existing.ApprovedAliasHosts, in.HostAliasRequests)
 		_, releaseAliases := c.planAliases(ctx, existing)
 		if existing.DERPHome == "" {
 			// enrolled before nodes had homes: backfill one
@@ -494,7 +501,8 @@ func (c *Coordinator) register(ctx context.Context, in RegisterInput, changed *b
 		// Nothing approved unless the meshnet auto-approves, and even then not
 		// what a peer already publishes — that waits for an admin.
 		ApprovedRoutes:    newNodeApprovals(routeMode, in.AdvertisedRoutes, peers, c.Logger, in.Meshnet),
-		AliasedRoutes:     in.AliasedRoutes,
+		AliasedRoutes:     c.legacyAliasRequests(in, nil),
+		HostAliasRequests: in.HostAliasRequests,
 		Overlay:           addr,
 		DeviceFingerprint: in.DeviceFingerprint,
 		OS:                in.OS,
@@ -862,6 +870,11 @@ func (c *Coordinator) UpdateSettings(ctx context.Context, t MeshnetID, in Meshne
 // lands in "pending" instead. Disable is what keeps a device out; delete is for
 // clearing away machines that are gone. The console says so at the confirm.
 func (c *Coordinator) DeleteNode(ctx context.Context, t MeshnetID, nodeID int64) error {
+	unlock, err := c.lockMeshnet(ctx, t)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	node, err := c.Nodes.Get(ctx, nodeID)
 	if err != nil {
 		return err
@@ -906,12 +919,11 @@ func (c *Coordinator) DeleteNode(ctx context.Context, t MeshnetID, nodeID int64)
 		}
 	}
 	if c.AliasIPAM != nil {
+		dropped := make(map[netip.Prefix]RouteAlias, len(node.RouteAliases))
 		for _, ra := range node.RouteAliases {
-			if err := c.AliasIPAM.Release(ctx, ra.Alias); err != nil && c.Logger != nil {
-				c.Logger.Warn("node deleted but releasing its subnet alias failed",
-					"node_id", nodeID, "alias", ra.Alias, "real", ra.Real, "err", err)
-			}
+			dropped[ra.Real] = ra
 		}
+		c.releaseAliases(ctx, nodeID, releasable(nil, dropped))
 	}
 	if c.Logger != nil {
 		c.Logger.Info("node deleted", "node_id", nodeID, "meshnet", t, "name", node.Name, "overlay", node.Overlay)
@@ -943,6 +955,19 @@ func (c *Coordinator) SetNodeApproved(ctx context.Context, t MeshnetID, nodeID i
 // automatically from then on). Approving a route the node doesn't claim is
 // refused: the list is a decision about claims, not a way to invent them.
 func (c *Coordinator) ApproveRoutes(ctx context.Context, t MeshnetID, nodeID int64, approved []netip.Prefix, realRoutes ...[]netip.Prefix) (*Node, error) {
+	var real *[]netip.Prefix
+	if len(realRoutes) > 0 {
+		real = &realRoutes[0]
+	}
+	return c.ReviewRoutes(ctx, t, nodeID, approved, real, nil)
+}
+
+func (c *Coordinator) ReviewRoutes(ctx context.Context, t MeshnetID, nodeID int64, approved []netip.Prefix, realRoutes, aliasHosts *[]netip.Prefix) (*Node, error) {
+	unlock, err := c.lockMeshnet(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
 	node, err := c.Nodes.Get(ctx, nodeID)
 	if err != nil {
 		return nil, err
@@ -956,15 +981,15 @@ func (c *Coordinator) ApproveRoutes(ctx context.Context, t MeshnetID, nodeID int
 		}
 	}
 	real := SelectedRealRoutes(node.RealRoutes, approved)
-	if len(realRoutes) > 0 {
-		for _, r := range realRoutes[0] {
+	if realRoutes != nil {
+		for _, r := range *realRoutes {
 			if len(SelectedRealRoutes([]netip.Prefix{r}, approved)) == 0 {
 				return nil, fmt.Errorf("%w: real target %s must be inside an approved subnet", ErrRouteNotAdvertised, r)
 			}
 		}
-		real = SelectedRealRoutes(realRoutes[0], approved)
+		real = SelectedRealRoutes(*realRoutes, approved)
 	}
-	if len(realRoutes) > 0 && len(real) > 0 {
+	if realRoutes != nil && len(real) > 0 {
 		peers, err := c.Nodes.ListMeshnet(ctx, t)
 		if err != nil {
 			return nil, err
@@ -975,11 +1000,32 @@ func (c *Coordinator) ApproveRoutes(ctx context.Context, t MeshnetID, nodeID int
 			}
 		}
 	}
-	if err := c.Nodes.UpdateApprovedRoutes(ctx, nodeID, approved, real); err != nil {
+	hosts := AliasHostTargets(node.ApprovedAliasHosts, approved)
+	if aliasHosts != nil {
+		hosts = AliasHostTargets(*aliasHosts, approved)
+		for _, host := range *aliasHosts {
+			if !containsPrefix(hosts, host) || !containsPrefix(node.HostAliasRequests, host) {
+				return nil, fmt.Errorf("%w: alias target %s must be requested and inside an approved subnet", ErrRouteNotAdvertised, host)
+			}
+		}
+	}
+	var legacy []netip.Prefix
+	for _, route := range node.AliasedRoutes {
+		_, allocated := legacyAliasFor(node.RouteAliases, route)
+		if c.RetainLegacyAliasesOnly && !allocated {
+			continue
+		}
+		if !containsPrefix(node.ApprovedRoutes, route) || containsPrefix(approved, route) {
+			legacy = append(legacy, route)
+		}
+	}
+	if err := c.Nodes.UpdateApprovedRoutes(ctx, nodeID, approved, real, hosts, legacy); err != nil {
 		return nil, fmt.Errorf("core: approve routes: %w", err)
 	}
 	node.ApprovedRoutes = approved
 	node.RealRoutes = real
+	node.ApprovedAliasHosts = hosts
+	node.AliasedRoutes = legacy
 	node.RoutesReviewed = true
 	// Withdrawing approval must also take the alias back: it is an address other
 	// nodes hold routes for, and leaving it allocated to a route nobody may use
@@ -995,6 +1041,25 @@ func (c *Coordinator) ApproveRoutes(ctx context.Context, t MeshnetID, nodeID int
 		c.Logger.Info("node routes reviewed", "node_id", nodeID, "meshnet", t, "approved", len(approved), "advertised", len(node.AdvertisedRoutes))
 	}
 	return node, nil
+}
+
+func (c *Coordinator) legacyAliasRequests(in RegisterInput, existing *Node) []netip.Prefix {
+	if !c.RetainLegacyAliasesOnly {
+		return in.AliasedRoutes
+	}
+	if existing == nil {
+		return nil
+	}
+	var retained []netip.Prefix
+	for _, ra := range existing.RouteAliases {
+		if ra.Host || !containsPrefix(in.AdvertisedRoutes, ra.Real) {
+			continue
+		}
+		if (in.HostAliasesSupported != nil && *in.HostAliasesSupported) || containsPrefix(in.AliasedRoutes, ra.Real) {
+			retained = append(retained, ra.Real)
+		}
+	}
+	return retained
 }
 
 // ErrRouteNotAdvertised is returned when an approval names a CIDR the node never
@@ -1070,11 +1135,13 @@ func (c *Coordinator) SetDERPHome(ctx context.Context, nodeID int64, region stri
 // (Disabled, not consuming a seat), the total, and the plan's seat allowance
 // (Limit; -1 = unlimited). It's the source the account/billing view reflects.
 type SeatUsage struct {
-	Meshnet  MeshnetID `json:"meshnet"`
-	Total    int       `json:"nodes_total"`
-	Active   int       `json:"seats_used"`
-	Disabled int       `json:"seats_disabled"`
-	Limit    int       `json:"seats_limit"`
+	Meshnet          MeshnetID `json:"meshnet"`
+	Total            int       `json:"nodes_total"`
+	Active           int       `json:"seats_used"`
+	Disabled         int       `json:"seats_disabled"`
+	Limit            int       `json:"seats_limit"`
+	AliasBudgetAddrs int       `json:"alias_budget_addrs"`
+	AliasUsedAddrs   int       `json:"alias_used_addrs"`
 }
 
 // SeatUsage reports a meshnet's seat accounting. Limit comes from the quota
@@ -1093,7 +1160,14 @@ func (c *Coordinator) SeatUsage(ctx context.Context, t MeshnetID) (SeatUsage, er
 			limit = lim
 		}
 	}
-	return SeatUsage{Meshnet: t, Total: len(nodes), Active: active, Disabled: disabled, Limit: limit}, nil
+	aliasUsed := 0
+	for _, node := range nodes {
+		aliasUsed += AliasSpend(node.RouteAliases)
+	}
+	return SeatUsage{
+		Meshnet: t, Total: len(nodes), Active: active, Disabled: disabled, Limit: limit,
+		AliasBudgetAddrs: c.aliasBudgetOf(ctx, t), AliasUsedAddrs: aliasUsed,
+	}, nil
 }
 
 // ownerSeatCount counts the ACTIVE nodes belonging to one person. Disabled
@@ -1205,16 +1279,15 @@ func (c *Coordinator) UpdateDeclarations(ctx context.Context, in UpdateDeclarati
 // planAliases brings node.RouteAliases in line with what the node asks for and
 // an admin approved. It reports retired reservations without releasing them.
 //
-// Failures are logged, never returned: a subnet too large to alias, or an
-// exhausted pool, must not keep a node off the mesh. That route simply publishes
-// under its real CIDR — which is where it was before this feature existed.
+// Allocation failures leave the request unassigned and are logged without
+// interrupting the node's mesh session.
 // Plan allocation changes without freeing previously published addresses. A
 // caller which persists the node must save first, then release; failed writes
 // conservatively retain reservations rather than allowing premature reuse.
 func (c *Coordinator) planAliases(ctx context.Context, node *Node) (bool, []netip.Prefix) {
 	keep, release, err := reconcileAliases(ctx, c.AliasIPAM, node.Meshnet, node, c.aliasBudgetFor(ctx, node))
 	if err != nil && c.Logger != nil {
-		c.Logger.Warn("could not alias every requested subnet; those routes publish under their real CIDR",
+		c.Logger.Warn("could not allocate all requested subnet aliases",
 			"node_id", node.ID, "meshnet", node.Meshnet, "err", err)
 	}
 	changed := len(release) > 0 || !sameAliases(node.RouteAliases, keep)
@@ -1227,7 +1300,13 @@ func (c *Coordinator) releaseAliases(ctx context.Context, nodeID int64, release 
 		if c.AliasIPAM == nil {
 			break
 		}
-		if rerr := c.AliasIPAM.Release(ctx, alias); rerr != nil && c.Logger != nil {
+		releaseUnit := c.AliasIPAM.Release
+		if pool, ok := c.AliasIPAM.(interface {
+			ReleaseUnit(context.Context, netip.Prefix) error
+		}); ok {
+			releaseUnit = pool.ReleaseUnit
+		}
+		if rerr := releaseUnit(ctx, alias); rerr != nil && c.Logger != nil {
 			c.Logger.Warn("releasing a subnet alias failed", "node_id", nodeID, "alias", alias, "err", rerr)
 		}
 	}
@@ -1287,7 +1366,7 @@ func needsNewAlias(node *Node) bool {
 	for _, ra := range node.RouteAliases {
 		held[ra.Real.Masked()] = true
 	}
-	for _, real := range wantedAliases(node) {
+	for _, real := range append(wantedAliases(node), wantedAliasHosts(node)...) {
 		if !held[real] {
 			return true
 		}

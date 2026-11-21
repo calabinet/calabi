@@ -130,6 +130,17 @@ export function normalizeCidr(input: string): string | null {
   return `${masked.join(".")}/${bits}`;
 }
 
+/** Does a declared, non-default IPv4 subnet cover this individual host? */
+export function subnetCoversHost(route: string, host: string): boolean {
+  const subnet = parseRoute(route, false);
+  const target = parseRoute(host, false);
+  if (!subnet.ok || !target.ok || subnet.cidr.includes(":") ||
+      subnet.cidr.endsWith("/0") || !target.cidr.endsWith("/32") || target.cidr.includes(":"))
+    return false;
+  const mask = subnet.cidr.split("/")[1];
+  return normalizeCidr(`${formatRoute(target.cidr)}/${mask}`) === subnet.cidr;
+}
+
 /**
  * Where one of this node's own advertised routes stands with the coordinator.
  *

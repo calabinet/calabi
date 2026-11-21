@@ -162,13 +162,14 @@ func pickNATBackend() (natBackend, error) {
 }
 
 func runNft(args ...string) ([]byte, error) {
-	return exec.Command("nft", args...).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return exec.CommandContext(ctx, "nft", args...).CombinedOutput()
 }
 
-// probeSubnetAlias answers "can this host install the 1:1 alias rewrite" by
-// TRYING it, in a chain of our own that nothing jumps to. It is a property of
-// the machine, not a preference: aliasing is applied to every published route,
-// so there is nothing for an operator to choose.
+// probeSubnetAlias checks whether the selected backend can install a 1:1
+// rewrite. iptables tries NETMAP in an unreferenced chain. nft validates
+// prefix DNAT without committing its transaction.
 //
 // The cheaper tests are all wrong. `iptables` being on PATH says nothing about
 // the xt_NETMAP module, which is packaged separately on several distributions
@@ -183,19 +184,38 @@ func runNft(args ...string) ([]byte, error) {
 // this through SubnetAliasSupport, which prefers an observed install over a
 // probe and caches the verdict.
 //
-// The probe chain is never hooked into PREROUTING, and both addresses are
-// RFC 5737 documentation space, so a leftover chain from a killed daemon
-// forwards nothing.
+// The iptables probe chain is never hooked into PREROUTING. Both probes use
+// RFC 5737 documentation space.
 func probeSubnetAlias() (AliasSupport, string) {
 	be, err := pickNATBackend()
 	if err != nil {
 		return AliasSupportNo, err.Error()
 	}
-	ipt, ok := be.(iptablesNAT)
-	if !ok {
-		return AliasSupportNo, "only the `nft` backend is available; the 1:1 rewrite needs `iptables` with the NETMAP target"
+	if ipt, ok := be.(iptablesNAT); ok {
+		return ipt.netmapUsable()
 	}
-	return ipt.netmapUsable()
+	return probeNftSubnetAlias()
+}
+
+func probeNftSubnetAlias() (AliasSupport, string) {
+	// Check a real prefix rule in a transaction that is never committed.
+	table := fmt.Sprintf("calabi_alias_probe_%d", os.Getpid())
+	probe := nftAliasRules([]SubnetAlias{{
+		Alias: netip.MustParsePrefix("192.0.2.0/24"),
+		Real:  netip.MustParsePrefix("198.51.100.0/24"),
+	}})[0]
+	input := "create table ip " + table + "\n" +
+		"add chain ip " + table + " prerouting { type nat hook prerouting priority -100; }\n" +
+		"add rule ip " + table + " prerouting " + probe + "\n"
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "nft", "-c", "-f", "-")
+	cmd.Stdin = strings.NewReader(input)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return aliasProbeVerdict("check an nft prefix DNAT rule", out, err)
+	}
+	return AliasSupportYes, "nft accepted a prefix DNAT rule in check mode"
 }
 
 // aliasProbeChain is a nat-table chain with no jump into it: creating and

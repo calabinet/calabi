@@ -123,6 +123,36 @@ func TestSupervisor_PersistOmitsUnsetFields(t *testing.T) {
 	}
 }
 
+func TestSupervisor_TunnelStatusPersistsAndSkipsRegistration(t *testing.T) {
+	sv, path := testSupervisor(t)
+	if err := sv.SetTunnelEnabled(1, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := sv.Tunnels(); len(got) != 1 || !got[0].Disabled || len(sv.activePlan()) != 0 {
+		t.Fatalf("disabled tunnel must be listed but inactive: %+v", got)
+	}
+	cfg, err := loadLocalConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored := newLocalSupervisor(sv.logger, *cfg, path, planTunnels(sv.logger, cfg.Tunnels))
+	if len(restored.activePlan()) != 0 {
+		t.Fatal("disabled tunnel became active at startup")
+	}
+	if err := restored.SetTunnelEnabled(1, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(restored.activePlan()) != 1 {
+		t.Fatal("re-enabled tunnel did not become active")
+	}
+	// Force the atomic write to fail. The live plan must keep the previous
+	// state rather than reporting a disable that would be lost on restart.
+	restored.configPath = filepath.Join(path, "cannot-write.yaml")
+	if err := restored.SetTunnelEnabled(1, false); err == nil || len(restored.activePlan()) != 1 {
+		t.Fatal("failed write changed the active plan")
+	}
+}
+
 // Create assigns a fresh id beyond the boot tunnels, appears in the list, and
 // persists to YAML.
 func TestSupervisor_CreatePersists(t *testing.T) {
