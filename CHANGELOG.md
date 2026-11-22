@@ -10,19 +10,24 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
-## Unreleased
+## 2.9.0 — 2026-11-21
 
-### Changes after Desktop 3.0.1
+### Mesh
 
-- **Added:** Self-hosted RDP access for approved devices in the same mesh, independently of platform user ownership. Upgrade the self-hosted coordinator and both desktop endpoints; Windows credentials, listener certificate verification and access rules still apply.
+- **Changed:** Published IPv4 subnets use their real addresses by default. Request a substitute address for a specific host when you need one. Upgrade the coordinator and clients to use per-host requests.
+- **Added:** The local console lists published routes and individual substitute-address requests separately, with their approval and publication status.
+- **Added:** Approved devices can use self-hosted desktop RDP without a platform account. Upgrade the coordinator and both desktop endpoints. Windows credentials, certificate checks and access rules still apply.
 
-### Bundled with Desktop 3.0.1
+### Client console
 
-- **Added:** Light, dark and system appearance options in the local console, with more compact navigation and an overview that adapts to larger Windows text settings.
-- **Changed:** Console scrollbars are thinner and appear while scrolling.
-- **Fixed:** Re-registering a device republishes its remote desktop certificate so peers can discover it again.
+- **Changed:** The overview charts adapt to wider screens and show 30-day traffic history when space allows.
+- **Changed:** Edit locally proxied endpoints from the client. Take over an endpoint owned by another device before editing it from this client.
+- **Added:** The client can check local target reachability while you enter the address in the endpoint form.
+- **Added:** A separate OpenWrt integration provides native LuCI configuration for mesh, subnet routing and endpoints. See [Calabi for OpenWrt](https://github.com/calabinet/calabi-openwrt) for packages and supported firmware.
 
-These source changes are bundled with Desktop 3.0.1. The standalone core release remains 2.8.0.
+### Packages and upgrades
+
+The core release includes the standalone client, edge and coordinator. Desktop, Android and OpenWrt packages carry their own product version and source lock. Verify the archives against the published checksums and signed build manifest.
 
 ## 2.8.0 — 2026-11-11
 
