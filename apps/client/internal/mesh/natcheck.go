@@ -77,9 +77,9 @@ type NATCheckOptions struct {
 	AllowPublicSTUN bool
 	// AttemptTimeout overrides the per-UDP-attempt timeout (default 750ms).
 	AttemptTimeout time.Duration
-	// allowSameIPOther relaxes the distinct-IP requirement on OTHER-ADDRESS for
-	// loopback unit tests on platforms without 127.0.0.2.
-	allowSameIPOther bool
+	// allowSameIPForTest relaxes distinct-IP requirements for loopback unit
+	// tests on platforms (like macOS) where only 127.0.0.1 is bound on lo0.
+	allowSameIPForTest bool
 }
 
 // DefaultPublicRFC5780Servers are public dual-IP STUN servers used ONLY in
@@ -131,7 +131,7 @@ func CheckNAT(ctx context.Context, opts NATCheckOptions) (report NATReport) {
 		report.HolePunch = verdictForNAT(report.NATType)
 	}()
 
-	edgeEndpoints := resolveUniqueIPv4Endpoints(ctx, opts.STUNServers, 3)
+	edgeEndpoints := resolveUniqueIPv4Endpoints(ctx, opts.STUNServers, 3, opts.allowSameIPForTest)
 
 	var hintIP netip.Addr
 	if len(edgeEndpoints) > 0 {
@@ -201,8 +201,8 @@ func CheckNAT(ctx context.Context, opts NATCheckOptions) (report NATReport) {
 		}
 		// If this single Edge STUN server itself advertises RFC 5780 OTHER-ADDRESS,
 		// run Stage 2 directly against it without touching any third-party server.
-		if hasDistinctOther(stage1Servers[0], stage1Mapped[0].Other, opts.allowSameIPOther) {
-			if refined, ok := runRFC5780Server(ctx, stage1Servers[0], localV4, attemptTimeout, opts.allowSameIPOther, nil); ok {
+		if hasDistinctOther(stage1Servers[0], stage1Mapped[0].Other, opts.allowSameIPForTest) {
+			if refined, ok := runRFC5780Server(ctx, stage1Servers[0], localV4, attemptTimeout, opts.allowSameIPForTest, nil); ok {
 				mergeRFC5780(&report, refined, "calabi_rfc5780")
 				return report
 			}
@@ -275,17 +275,28 @@ func CheckNAT(ctx context.Context, opts NATCheckOptions) (report NATReport) {
 	}
 	resolvedAny := false
 	seenStage2IP := make(map[netip.Addr]bool)
+	seenStage2EP := make(map[netip.AddrPort]bool)
 	for _, cand := range candidates {
 		if ctx.Err() != nil {
 			break
 		}
-		eps := resolveUniqueIPv4Endpoints(ctx, []string{cand.addr}, 1)
-		if len(eps) == 0 || seenStage2IP[eps[0].Addr()] {
+		eps := resolveUniqueIPv4Endpoints(ctx, []string{cand.addr}, 1, opts.allowSameIPForTest)
+		if len(eps) == 0 {
 			continue
 		}
-		seenStage2IP[eps[0].Addr()] = true
+		if opts.allowSameIPForTest {
+			if seenStage2EP[eps[0]] {
+				continue
+			}
+			seenStage2EP[eps[0]] = true
+		} else {
+			if seenStage2IP[eps[0].Addr()] {
+				continue
+			}
+			seenStage2IP[eps[0].Addr()] = true
+		}
 		resolvedAny = true
-		refined, ok := runRFC5780Server(ctx, eps[0], localV4, attemptTimeout, opts.allowSameIPOther, knownVaries)
+		refined, ok := runRFC5780Server(ctx, eps[0], localV4, attemptTimeout, opts.allowSameIPForTest, knownVaries)
 		if ok {
 			mergeRFC5780(&report, refined, cand.source)
 			return report
@@ -482,8 +493,9 @@ func verdictForNAT(t NATType) HolePunchVerdict {
 	}
 }
 
-func resolveUniqueIPv4Endpoints(ctx context.Context, servers []string, limit int) []netip.AddrPort {
+func resolveUniqueIPv4Endpoints(ctx context.Context, servers []string, limit int, allowSameIP bool) []netip.AddrPort {
 	seenIP := make(map[netip.Addr]bool)
+	seenEP := make(map[netip.AddrPort]bool)
 	var out []netip.AddrPort
 	for _, raw := range servers {
 		if len(out) >= limit || ctx.Err() != nil {
@@ -517,11 +529,22 @@ func resolveUniqueIPv4Endpoints(ctx context.Context, servers []string, limit int
 				}
 			}
 		}
-		if !ip.IsValid() || seenIP[ip] {
+		if !ip.IsValid() {
 			continue
 		}
-		seenIP[ip] = true
-		out = append(out, netip.AddrPortFrom(ip, uint16(port)))
+		ep := netip.AddrPortFrom(ip, uint16(port))
+		if allowSameIP {
+			if seenEP[ep] {
+				continue
+			}
+			seenEP[ep] = true
+		} else {
+			if seenIP[ip] {
+				continue
+			}
+			seenIP[ip] = true
+		}
+		out = append(out, ep)
 	}
 	return out
 }

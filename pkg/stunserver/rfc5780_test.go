@@ -10,10 +10,48 @@ import (
 	"github.com/calabinet/calabi/pkg/mesh-proto/stun"
 )
 
+func pickSecondBindableIPv4(primary netip.Addr) (netip.Addr, bool) {
+	tryBind := func(ip netip.Addr) bool {
+		c, err := net.ListenUDP("udp4", net.UDPAddrFromAddrPort(netip.AddrPortFrom(ip, 0)))
+		if err != nil {
+			return false
+		}
+		_ = c.Close()
+		return true
+	}
+	if cand := netip.MustParseAddr("127.0.0.2"); cand != primary && tryBind(cand) {
+		return cand, true
+	}
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return netip.Addr{}, false
+	}
+	for _, a := range addrs {
+		ipNet, ok := a.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		ip, ok := netip.AddrFromSlice(ipNet.IP)
+		if !ok {
+			continue
+		}
+		ip = ip.Unmap()
+		if ip.Is4() && ip != primary && !ip.IsLinkLocalUnicast() && tryBind(ip) {
+			return ip, true
+		}
+	}
+	return netip.Addr{}, false
+}
+
 func TestRFC5780Server_AllFourSocketResponses(t *testing.T) {
+	ip1 := netip.MustParseAddr("127.0.0.1")
+	ip2, ok := pickSecondBindableIPv4(ip1)
+	if !ok {
+		t.Skip("host has only one bindable IPv4 address")
+	}
 	srv, err := ListenRFC5780(RFC5780Config{
-		PrimaryIP:   netip.MustParseAddr("127.0.0.1"),
-		SecondaryIP: netip.MustParseAddr("127.0.0.2"),
+		PrimaryIP:   ip1,
+		SecondaryIP: ip2,
 	})
 	if err != nil {
 		t.Fatalf("ListenRFC5780: %v", err)
@@ -29,7 +67,7 @@ func TestRFC5780Server_AllFourSocketResponses(t *testing.T) {
 		<-done
 	})
 
-	pc, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
+	pc, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 	if err != nil {
 		t.Fatalf("listen client udp4: %v", err)
 	}
