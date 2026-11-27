@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/calabinet/calabi/apps/client/internal/creds"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
 	"github.com/calabinet/calabi/pkg/protocol/usererror"
 )
 
@@ -43,6 +44,7 @@ func (c *Core) routes() http.Handler {
 	mux.HandleFunc("POST /v1/orgs/switch", c.onPlatform(c.handleOrgSwitch, notOnSelfHosted))
 	mux.HandleFunc("GET /v1/mesh/nodes", c.onPlatform(c.proxyTo("/v1/mesh/nodes"), c.handleSelfHostedNodes))
 	mux.HandleFunc("GET /v1/mesh", c.handleMesh)
+	mux.HandleFunc("GET /v1/netcheck", c.handleNetCheck)
 	mux.HandleFunc("GET /v1/mesh/replaceable", c.onPlatform(c.handleReplaceable, jsonBody(`{"items":[]}`)))
 	mux.HandleFunc("POST /v1/mesh/replace", c.onPlatform(c.handleReplace, notOnSelfHosted))
 	mux.HandleFunc("GET /v1/usage/overview", c.onPlatform(c.handleUsageOverview, c.handleSelfHostedUsage))
@@ -543,4 +545,28 @@ func writeRaw(w http.ResponseWriter, status int, body []byte) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_, _ = w.Write(usererror.JSON(status, body))
+}
+
+// handleNetCheck is GET /v1/netcheck: on-demand NAT type and local/public IP
+// diagnostic. Self-hosted profiles strictly disable public RFC 5780 STUN
+// fallback (AllowPublicSTUN: false).
+func (c *Core) handleNetCheck(w http.ResponseWriter, r *http.Request) {
+	var overlay string
+	var stunServers []string
+	var natStunServers []string
+	if e := c.currentEngine(); e != nil {
+		st := e.status()
+		overlay = st.Overlay
+		if overlay == "" {
+			overlay = st.SelfOverlay
+		}
+		stunServers = e.stunServers()
+		natStunServers = e.natStunServers()
+	}
+	writeJSON(w, http.StatusOK, mesh.CheckNAT(r.Context(), mesh.NATCheckOptions{
+		OverlayIP:       overlay,
+		STUNServers:     stunServers,
+		RFC5780Servers:  natStunServers,
+		AllowPublicSTUN: c.selfHosted() == nil,
+	}))
 }

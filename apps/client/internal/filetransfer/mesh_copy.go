@@ -30,7 +30,7 @@ var (
 	ErrCopySourceRead       = errors.New("copy source changed or could not be read")
 )
 
-type copyFile struct {
+type CopyFile struct {
 	Name string `json:"name"`
 	Size int64  `json:"size"`
 }
@@ -38,15 +38,26 @@ type copyMessage struct {
 	Op      string     `json:"op"`
 	Session string     `json:"session"`
 	Offer   string     `json:"offer,omitempty"`
-	Files   []copyFile `json:"files,omitempty"`
+	Files   []CopyFile `json:"files,omitempty"`
 	Index   int        `json:"index,omitempty"`
 	Offset  int64      `json:"offset,omitempty"`
 	Count   int        `json:"count,omitempty"`
+	RDPPort uint16     `json:"rdp_port,omitempty"`
+	Binding string     `json:"binding,omitempty"`
 }
 type copySource struct {
-	file *os.File
-	stat os.FileInfo
+	file   *os.File
+	stat   os.FileInfo
+	staged string
 }
+
+func (s copySource) close() {
+	s.file.Close()
+	if s.staged != "" {
+		_ = os.Remove(s.staged)
+	}
+}
+
 type copyPending struct {
 	key    copyMessage
 	data   []byte
@@ -58,6 +69,8 @@ type meshCopySession struct {
 	id       string
 	grant    Grant
 	host     bool
+	rdpPort  uint16
+	binding  string
 	until    time.Time
 	ctx      context.Context
 	cancel   context.CancelFunc
@@ -65,13 +78,14 @@ type meshCopySession struct {
 	sourceID string
 	sources  []copySource
 	incoming string
-	files    []copyFile
+	files    []CopyFile
 	pending  *copyPending
 }
 type CopySnapshot struct {
 	Session, PeerIP, Offer string
 	Host                   bool
 	Manifest               []byte
+	Files                  []CopyFile
 }
 
 func copyID() string {
@@ -93,7 +107,7 @@ func (a *Agent) dropCopyLocked() {
 		s.pending.cancel()
 	}
 	for _, f := range s.sources {
-		f.file.Close()
+		f.close()
 	}
 }
 func (a *Agent) copyLiveLocked(id string) *meshCopySession {
@@ -102,7 +116,13 @@ func (a *Agent) copyLiveLocked(id string) *meshCopySession {
 		return nil
 	}
 	now, ok := a.cfg.Resolve(s.grant.Peer.IP)
-	if a.closed.Load() || s.ctx.Err() != nil || !time.Now().Before(s.until) || !ok || now.DeviceKey != s.grant.DeviceKey || now.Peer.Fingerprint != s.grant.Peer.Fingerprint || a.cfg.ClipboardPeer == nil || !a.cfg.ClipboardPeer(now) || (a.cfg.Authority != nil && !a.cfg.Authority()) {
+	if a.closed.Load() || s.ctx.Err() != nil || !time.Now().Before(s.until) || !ok ||
+		now.DeviceKey != s.grant.DeviceKey || now.Peer.Fingerprint != s.grant.Peer.Fingerprint ||
+		(a.cfg.Authority != nil && !a.cfg.Authority()) {
+		a.dropCopyLocked()
+		return nil
+	}
+	if allowed, bind := a.meshCopyAllowed(now, s.host, s.rdpPort); !allowed || bind && s.binding == "" {
 		a.dropCopyLocked()
 		return nil
 	}
@@ -111,7 +131,14 @@ func (a *Agent) copyLiveLocked(id string) *meshCopySession {
 	}
 	return s
 }
-func (a *Agent) newCopyLocked(g Grant, id string, host bool) (*meshCopySession, error) {
+func (a *Agent) meshCopyAllowed(g Grant, host bool, port uint16) (bool, bool) {
+	if a.cfg.MeshCopyPeer != nil {
+		return a.cfg.MeshCopyPeer(g, host, port)
+	}
+	return a.cfg.ClipboardPeer != nil && a.cfg.ClipboardPeer(g), false
+}
+
+func (a *Agent) newCopyLocked(g Grant, id string, host bool, port uint16, binding string) (*meshCopySession, error) {
 	if a.copyLiveLocked("") != nil {
 		return nil, errors.New("another remote file-copy session is active")
 	}
@@ -121,7 +148,8 @@ func (a *Agent) newCopyLocked(g Grant, id string, host bool) (*meshCopySession, 
 	}
 	sender.base = "https://" + netJoin(g.Peer.IP, int(g.Port)) + "/rdp-copy/v2"
 	ctx, cancel := context.WithCancel(a.ctx)
-	s := &meshCopySession{id: id, grant: g, host: host, until: time.Now().Add(copyLease), ctx: ctx, cancel: cancel, sender: sender}
+	s := &meshCopySession{id: id, grant: g, host: host, rdpPort: port, binding: binding,
+		until: time.Now().Add(copyLease), ctx: ctx, cancel: cancel, sender: sender}
 	a.copySession = s
 	go func() {
 		ticker := time.NewTicker(time.Second)
@@ -176,22 +204,29 @@ func copyCall(ctx context.Context, s *meshCopySession, m copyMessage) ([]byte, e
 	}
 	return data, nil
 }
-func (a *Agent) CopyStart(ctx context.Context, ip netip.Addr) (string, error) {
+func (a *Agent) CopyStart(ctx context.Context, ip netip.Addr, port uint16, binding string) (string, error) {
 	g, ok := a.cfg.Resolve(ip)
-	if !ok || a.cfg.ClipboardPeer == nil || !a.cfg.ClipboardPeer(g) {
-		return "", errors.New("owned online copy peer required")
+	if !ok {
+		return "", errors.New("online copy peer required")
+	}
+	allowed, bind := a.meshCopyAllowed(g, false, port)
+	if !allowed || bind && !validID(binding) {
+		return "", errors.New("authorized RDP clipboard peer required")
+	}
+	if !bind {
+		binding = ""
 	}
 	id := copyID()
 	if id == "" {
 		return "", errors.New("cannot create copy session")
 	}
 	a.copyMu.Lock()
-	s, e := a.newCopyLocked(g, id, false)
+	s, e := a.newCopyLocked(g, id, false, port, binding)
 	a.copyMu.Unlock()
 	if e != nil {
 		return "", e
 	}
-	if _, e = copyCall(ctx, s, copyMessage{Op: "start", Session: id}); e != nil {
+	if _, e = copyCall(ctx, s, copyMessage{Op: "start", Session: id, RDPPort: port, Binding: binding}); e != nil {
 		a.copyMu.Lock()
 		if a.copySession == s {
 			a.dropCopyLocked()
@@ -236,7 +271,7 @@ func (a *Agent) CopyClose(ctx context.Context, id string) {
 		s.sender.Close()
 	}
 }
-func copyManifest(files []copyFile) []byte {
+func copyManifest(files []CopyFile) []byte {
 	data := make([]byte, 4+592*len(files))
 	binary.LittleEndian.PutUint32(data, uint32(len(files)))
 	for i, f := range files {
@@ -251,7 +286,7 @@ func copyManifest(files []copyFile) []byte {
 	}
 	return data
 }
-func validateCopyFiles(files []copyFile) bool {
+func validateCopyFiles(files []CopyFile) bool {
 	if len(files) < 1 || len(files) > 32 {
 		return false
 	}
@@ -278,20 +313,18 @@ func (a *Agent) CopySnapshot() CopySnapshot {
 	if s == nil {
 		return CopySnapshot{}
 	}
-	return CopySnapshot{Session: s.id, PeerIP: s.grant.Peer.IP.String(), Host: s.host, Offer: s.incoming, Manifest: copyManifest(s.files)}
+	return CopySnapshot{Session: s.id, PeerIP: s.grant.Peer.IP.String(), Host: s.host, Offer: s.incoming, Manifest: copyManifest(s.files),
+		Files: append([]CopyFile(nil), s.files...)}
 }
 func (a *Agent) CopyOffer(ctx context.Context, id string, paths []string) error {
 	if len(paths) < 1 || len(paths) > 32 {
 		return errors.New("invalid copy selection")
 	}
 	var sources []copySource
-	var files []copyFile
-	keep := false
+	var files []CopyFile
 	defer func() {
-		if !keep {
-			for _, f := range sources {
-				f.file.Close()
-			}
+		for _, f := range sources {
+			f.close()
 		}
 	}()
 	for _, path := range paths {
@@ -308,9 +341,59 @@ func (a *Agent) CopyOffer(ctx context.Context, id string, paths []string) error 
 			f.Close()
 			return errors.New("source changed")
 		}
-		sources = append(sources, copySource{f, now})
-		files = append(files, copyFile{filepath.Base(path), now.Size()})
+		sources = append(sources, copySource{file: f, stat: now})
+		files = append(files, CopyFile{filepath.Base(path), now.Size()})
 	}
+	owned := sources
+	sources = nil
+	return a.copyOffer(ctx, id, owned, files)
+}
+
+// CopyOfferDocument spools one user-selected document so the peer can read it by offset.
+func (a *Agent) CopyOfferDocument(ctx context.Context, id, name string, src io.Reader) error {
+	if !validateCopyFiles([]CopyFile{{Name: name}}) {
+		return errors.New("invalid copy file name")
+	}
+	f, err := os.CreateTemp(a.cfg.Directory, "rdp-copy-")
+	if err != nil {
+		return err
+	}
+	source := copySource{file: f, staged: f.Name()}
+	// The open descriptor is sufficient on Android. Unlink it immediately so
+	// a process death cannot leave a private clipboard document on disk.
+	if os.Remove(source.staged) == nil {
+		source.staged = ""
+	}
+	owned := false
+	defer func() {
+		if !owned {
+			source.close()
+		}
+	}()
+	size, err := io.Copy(f, io.LimitReader(&contextReader{ctx: ctx, r: src}, ShellPasteLimit+1))
+	if err != nil {
+		return err
+	}
+	if size > ShellPasteLimit {
+		return errors.New("copy file too large")
+	}
+	source.stat, err = f.Stat()
+	if err != nil {
+		return err
+	}
+	owned = true
+	return a.copyOffer(ctx, id, []copySource{source}, []CopyFile{{Name: name, Size: size}})
+}
+
+func (a *Agent) copyOffer(ctx context.Context, id string, sources []copySource, files []CopyFile) error {
+	keep := false
+	defer func() {
+		if !keep {
+			for _, f := range sources {
+				f.close()
+			}
+		}
+	}()
 	if !validateCopyFiles(files) {
 		return errors.New("invalid copy manifest")
 	}
@@ -325,7 +408,7 @@ func (a *Agent) CopyOffer(ctx context.Context, id string, paths []string) error 
 		return errors.New("copy session ended")
 	}
 	for _, f := range s.sources {
-		f.file.Close()
+		f.close()
 	}
 	s.sources = sources
 	s.sourceID = offer
@@ -336,7 +419,7 @@ func (a *Agent) CopyOffer(ctx context.Context, id string, paths []string) error 
 		a.copyMu.Lock()
 		if a.copySession == s && s.sourceID == offer {
 			for _, f := range s.sources {
-				f.file.Close()
+				f.close()
 			}
 			s.sources = nil
 			s.sourceID = ""
@@ -409,7 +492,7 @@ func (a *Agent) CopyClear(ctx context.Context, id string) {
 	}
 	offer := s.sourceID
 	for _, f := range s.sources {
-		f.file.Close()
+		f.close()
 	}
 	s.sources = nil
 	s.sourceID = ""
@@ -428,14 +511,44 @@ func (a *Agent) serveMeshCopy(g Grant, w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "invalid copy request")
 		return
 	}
+	if m.Op == "start" {
+		allowed, bind := a.meshCopyAllowed(g, true, m.RDPPort)
+		if !allowed || bind && (!validID(m.Binding) || a.cfg.MeshCopyBinding == nil) {
+			fail(w, 403, "remote copy unavailable")
+			return
+		}
+		if bind {
+			a.copyMu.Lock()
+			current := a.copyLiveLocked("")
+			busy := current != nil && (current.id != m.Session || current.grant.DeviceKey != g.DeviceKey ||
+				!current.host || current.rdpPort != m.RDPPort || current.binding != m.Binding)
+			a.copyMu.Unlock()
+			if busy {
+				fail(w, 409, "copy session busy")
+				return
+			}
+			if !a.cfg.MeshCopyBinding(m.RDPPort, m.Binding) {
+				fail(w, 403, "remote copy unavailable")
+				return
+			}
+		} else {
+			m.Binding = ""
+		}
+	}
 	a.copyMu.Lock()
 	s := a.copyLiveLocked(m.Session)
 	if m.Op == "start" {
-		if s != nil && s.grant.DeviceKey == g.DeviceKey && s.host {
+		if allowed, bind := a.meshCopyAllowed(g, true, m.RDPPort); !allowed || bind && m.Binding == "" {
+			a.copyMu.Unlock()
+			fail(w, 403, "remote copy unavailable")
+			return
+		}
+		if s != nil && s.grant.DeviceKey == g.DeviceKey && s.grant.Peer.IP == g.Peer.IP &&
+			s.host && s.rdpPort == m.RDPPort && s.binding == m.Binding {
 			s.until = time.Now().Add(copyLease)
 		} else {
 			var e error
-			s, e = a.newCopyLocked(g, m.Session, true)
+			s, e = a.newCopyLocked(g, m.Session, true, m.RDPPort, m.Binding)
 			if e != nil {
 				a.copyMu.Unlock()
 				fail(w, 409, "copy session busy")
@@ -458,6 +571,24 @@ func (a *Agent) serveMeshCopy(g Grant, w http.ResponseWriter, r *http.Request) {
 			fail(w, 403, "not a host session")
 			return
 		}
+		if s.binding != "" {
+			a.copyMu.Unlock()
+			if a.cfg.MeshCopyBinding == nil || !a.cfg.MeshCopyBinding(s.rdpPort, s.binding) {
+				a.copyMu.Lock()
+				if a.copySession == s {
+					a.dropCopyLocked()
+				}
+				a.copyMu.Unlock()
+				fail(w, 403, "remote copy session changed")
+				return
+			}
+			a.copyMu.Lock()
+			if a.copyLiveLocked(m.Session) != s {
+				a.copyMu.Unlock()
+				fail(w, 403, "copy session unavailable")
+				return
+			}
+		}
 		s.until = time.Now().Add(copyLease)
 	case "close":
 		a.dropCopyLocked()
@@ -476,7 +607,7 @@ func (a *Agent) serveMeshCopy(g Grant, w http.ResponseWriter, r *http.Request) {
 	case "cancel":
 		if s.sourceID == m.Offer {
 			for _, f := range s.sources {
-				f.file.Close()
+				f.close()
 			}
 			s.sources = nil
 			s.sourceID = ""

@@ -286,7 +286,7 @@ func (s *Server) sendNetMap(stream meshpb.Coordinator_PullNetMapServer, self *co
 			out := toProtoNetMapWithRDP(nm, wire.peer, s.selfHostedRDP())
 			out.Peers = make([]*meshpb.Peer, 0, len(peers))
 			for _, peer := range peers {
-				out.Peers = append(out.Peers, peerForRDP(&nm.Self, peer, wire.peer(peer), s.selfHostedRDP()))
+				out.Peers = append(out.Peers, peerForRemoteLogin(nm, peer, wire.peer(peer), s.selfHostedRDP()))
 			}
 			s.addFileTransfers(out)
 			if mapChanged(changed) {

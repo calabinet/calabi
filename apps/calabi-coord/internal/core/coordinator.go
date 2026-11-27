@@ -609,6 +609,7 @@ func (c *Coordinator) NetMapFor(ctx context.Context, nodeID int64) (result *NetM
 		Self:         *self,
 		DERP:         derp,
 		PacketFilter: c.packetFilterFor(self, peers, doc),
+		RemoteLogins: remoteLoginFor(self, peers, doc),
 		RelayGrant:   c.relayGrantFor(ctx, self),
 	}
 	// Alias accounting for Self. `all` is already in hand, so totalling the

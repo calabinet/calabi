@@ -78,7 +78,15 @@
     "busy": "現在のファイル操作が終わるまでお待ちください。",
     "failed": "ファイル操作に失敗しました。権限、空き容量、ネットワークを確認してください。"
   },
-  "remoteWorkspace": {"sessions": "リモートセッション", "failed": "リモートセッションを更新できませんでした。", "close": "「{{name}}」を切断しますか？", "desktop": "リモートデスクトップ", "controls": "リモートデスクトップの操作", "minimize": "最小化", "endRemote": "接続を終了"},
+  "remoteWorkspace": {
+    "sessions": "リモートセッション",
+    "failed": "リモートセッションを更新できませんでした。",
+    "close": "「{{name}}」を切断しますか？",
+    "desktop": "リモートデスクトップ",
+    "controls": "リモートデスクトップの操作",
+    "minimize": "最小化",
+    "endRemote": "接続を終了"
+  },
   "ssh": {
     "invalidPassword": "改行を含まない UTF-8 で 1000 バイト以内のパスワードを入力してください。",
     "authFailed": "SSH 認証に失敗しました。ユーザー名とパスワード、または SSH 鍵を確認してください。",
@@ -203,7 +211,8 @@
       "filename": "ファイル名",
       "saved": "Linux に保存済み"
     },
-    "errors": {"clock": "システムの日付と時刻を確認して再試行してください。",
+    "errors": {
+      "clock": "システムの日付と時刻を確認して再試行してください。",
       "sourceInUse": "送信タスクで使用中のファイルです。「ファイル転送」で関連する送信履歴を削除してください。実行中の場合は先に一時停止またはキャンセルしてください。",
       "authorization": "ファイル転送が許可されていません。両方のデバイスが接続され、受信が有効になっていることを確認してください。",
       "identity": "相手のデバイスを確認できません。デバイス一覧を更新して再試行してください。",
@@ -963,7 +972,63 @@
     "meshLoopbackOnly": "このホストのみ",
     "meshLoopbackOnlyTip": "このポートは 127.0.0.1 でしかリッスンしていないため、メッシュ上の他のデバイスからは到達できません。0.0.0.0 かこのマシンの overlay アドレスでリッスンさせてください。",
     "meshNotProbedTip": "このマシンは現在メッシュに参加していないため、到達性を確認できませんでした。",
-    "meshReachable": "到達可能"
+    "meshReachable": "到達可能",
+    "nat": {
+      "title": "ネットワーク・NAT 診断",
+      "recheck": "再チェック",
+      "quickEntry": "ネットワーク・NAT を診断 →",
+      "probing": "NAT タイプと IP アドレスを検出しています...",
+      "error": "ネットワーク診断に失敗しました",
+      "overlayIp": "メッシュ IP",
+      "localIp": "ローカル IP (LAN)",
+      "publicIp": "グローバル IP",
+      "ipv6": "グローバル IPv6",
+      "notConnected": "未接続",
+      "showPublicIp": "グローバル IP を表示",
+      "hidePublicIp": "グローバル IP を隠す",
+      "singleStunHint": "利用可能な STUN サーバーが 1 台のみのため、Cone NAT と Symmetric NAT を判別できません。",
+      "types": {
+        "open": "グローバル直結（NAT なし）",
+        "full_cone": "NAT1 · フルコーン",
+        "restricted_cone": "NAT2 · 制限付きコーン",
+        "port_restricted_cone": "NAT3 · ポート制限付きコーン",
+        "cone": "コーン型 NAT",
+        "symmetric": "NAT4 · 対称型 (Symmetric)",
+        "udp_blocked": "UDP ブロック",
+        "unknown": "判定不可"
+      },
+      "verdicts": {
+        "direct": "P2P 直接接続に最適です",
+        "supported": "P2P ホールパンチング対応",
+        "limited": "P2P 制限あり — 相手も対称型 NAT の場合はリレー経由になります",
+        "blocked": "UDP がブロックされています — リレー経由になります",
+        "unknown": "NAT タイプを判定できませんでした"
+      },
+      "typeDesc": {
+        "open": "NAT を経由しない直接到達可能なグローバル IPv4 アドレスを持っています。",
+        "full_cone": "外部ポートが固定され、任意の送信元からのパケットを受け入れます。",
+        "restricted_cone": "外部ポートが固定され、通信済み IP からの応答を受け入れます。",
+        "port_restricted_cone": "外部ポートが固定され、通信済み IP・ポートからの応答を受け入れます。",
+        "cone": "接続先が変わっても外部ポートが維持されるため、UDP ホールパンチングが可能です。",
+        "symmetric": "宛先ごとに外部ポートが変わります。相手がコーン型（NAT1–NAT3）なら直結できる場合がありますが、対称型同士はリレーを使用します。",
+        "udp_blocked": "STUN の UDP 応答がタイムアウトしました。ファイアウォールで UDP が制限されている可能性があります。",
+        "unknown": "NAT 判定に必要な STUN 応答が得られませんでした。"
+      },
+      "matrixTitle": "NAT1–NAT4 ホールパンチング早見表",
+      "matrix": {
+        "colType": "NAT タイプ",
+        "colPunch": "P2P ホールパンチング",
+        "colNote": "動作目安",
+        "nat1Punch": "最適",
+        "nat1Note": "全 NAT タイプと直結可能（NAT4 を含む）",
+        "nat2Punch": "良好",
+        "nat2Note": "NAT1–NAT3 および多くの NAT4 と直結可能",
+        "nat3Punch": "良好",
+        "nat3Note": "NAT1–NAT3 と直結可能；NAT4 とはリレーの場合あり",
+        "nat4Punch": "制限あり",
+        "nat4Note": "NAT1/NAT2 とは直結可能；NAT4 ↔ NAT4 はリレー"
+      }
+    }
   },
   "mesh": {
     "presence": {
@@ -1443,7 +1508,7 @@
     "coreVersion": "実行中のコアバージョン",
     "bundledCore": "同梱コアバージョン",
     "coreCommit": "同梱コアコミット"
-},
+  },
   "appearance": {
     "title": "外観",
     "mode": "配色モード",

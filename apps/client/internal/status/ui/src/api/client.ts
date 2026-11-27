@@ -51,6 +51,7 @@ import type {
   SelfHostedStatus,
   SelfHostedTunnel,
   SelfHostedUsage,
+  NetCheckReport,
 } from "./types";
 
 export class ApiError extends Error {
@@ -372,6 +373,9 @@ export const api = {
 
   probePorts: async (): Promise<{ items: ProbePort[] }> =>
     jsonOrThrow(await fetchResponse("/v1/probe/ports")),
+
+  netcheck: async (): Promise<NetCheckReport> =>
+    jsonOrThrow(await fetchResponse("/v1/netcheck")),
 
   probeHealth: async (): Promise<{ items: ProbeHealth[]; enabled: boolean }> =>
     jsonOrThrow(await fetchResponse("/v1/probe/health")),

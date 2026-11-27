@@ -29,27 +29,21 @@ func TestRegisterProductAndCoreVersions(t *testing.T) {
 	defer srv.Close()
 	cfg := &creds.Config{AccessToken: "token"}
 	cfg.User.ID = 7
-	for _, version := range []string{"", "3.1.0"} {
-		DesktopVersion = version
+	for _, product := range []struct{ desktopVersion, kind, appVersion string }{
+		{"", "cli", "2.8.0"},
+		{"3.1.0", "desktop", "3.1.0"},
+	} {
+		DesktopVersion = product.desktopVersion
 		if err := Ensure(cfg, srv.URL, "2.8.0"); err != nil {
 			t.Fatal(err)
 		}
-		want := "cli"
-		if version != "" {
-			want = "desktop"
-		}
-		if got.ClientType != want || got.AppVersion != version || got.CoreVersion != "2.8.0" || got.ClientVersion != "2.8.0" || cfg.DeviceID != 17 {
+		if got.ClientType != product.kind || got.AppVersion != product.appVersion || got.CoreVersion != "2.8.0" || got.ClientVersion != "2.8.0" || cfg.DeviceID != 17 {
 			t.Fatalf("request=%+v device=%d", got, cfg.DeviceID)
 		}
-	}
-	for _, mode := range []struct{ version, kind string }{
-		{"", "cli"}, {"3.1.0", "desktop"},
-	} {
-		DesktopVersion = mode.version
 		if err := EnsureAgent(cfg, srv.URL, "2.8.0", "token"); err != nil {
 			t.Fatal(err)
 		}
-		if got.ClientType != mode.kind || got.AppVersion != mode.version || got.CoreVersion != "2.8.0" {
+		if got.ClientType != product.kind || got.AppVersion != product.appVersion || got.CoreVersion != "2.8.0" {
 			t.Fatalf("API key registration: %+v", got)
 		}
 	}

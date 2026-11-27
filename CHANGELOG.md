@@ -10,6 +10,20 @@ build manifest that ties them to a source commit are on the
 This file starts at 1.8.0. Earlier releases have their artifacts and
 verification instructions on the releases page, but no written changelog.
 
+## 2.10.0 — 2026-11-26
+
+### Mesh and diagnostics
+
+- **Added:** On-demand Network and NAT diagnostics in the local console Tools page and `/v1/netcheck` API, classifying NAT1–NAT4 behavior, direct peer-to-peer hole-punching suitability, and local, mesh, and masked external IP addresses.
+- **Added:** Authorized cross-member remote login and file-copy grants across mesh devices, managed through coordinator rules and existing device credentials.
+- **Added:** Standalone `calabi-stun` dual-IP RFC 5780 STUN server (`pkg/stunserver/cmd/calabi-stun`) for optional self-hosted NAT diagnostics.
+- **Fixed:** File-transfer leases and short-lived certificates now tolerate up to ±5 minutes of clock skew between devices.
+- **Fixed:** Standalone clients consistently report their product type and application version during registration.
+
+### Packages and upgrades
+
+The core release includes the standalone client, edge and coordinator. Desktop (`3.3.0`) and Android (`3.2.0`) packages carry their own product version and lock this core release. Verify the archives against the published checksums and signed build manifest.
+
 ## 2.9.0 — 2026-11-21
 
 ### Mesh

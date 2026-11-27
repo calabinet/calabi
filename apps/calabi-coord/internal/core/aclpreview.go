@@ -32,6 +32,7 @@ type ACLDiff struct {
 	Removed             []ReachPair     `json:"removed"`   // cut by this edit
 	Unchanged           int             `json:"unchanged"` // pairs whose reachability is untouched
 	Traffic             *ACLTrafficDiff `json:"traffic,omitempty"`
+	RemoteLogin         *ACLTrafficDiff `json:"remote_login,omitempty"`
 	FirstConfiguration  bool            `json:"first_configuration,omitempty"`
 	Baseline            string          `json:"baseline"`
 	IncompatibleDevices []string        `json:"incompatible_devices,omitempty"`
@@ -150,6 +151,9 @@ func (c *Coordinator) PreviewACL(ctx context.Context, t MeshnetID, doc ACLPolicy
 		}
 	}
 	diff.Traffic, err = diffACLTraffic(ctx, nodes, before, &doc)
+	if err == nil {
+		diff.RemoteLogin, err = diffRemoteLogin(ctx, nodes, before, &doc)
+	}
 	return diff, err
 }
 

@@ -28,6 +28,7 @@ import (
 
 	"github.com/calabinet/calabi/apps/client/internal/creds"
 	"github.com/calabinet/calabi/apps/client/internal/inspect"
+	"github.com/calabinet/calabi/apps/client/internal/mesh"
 	"github.com/calabinet/calabi/apps/client/internal/probe"
 	"github.com/calabinet/calabi/pkg/protocol/usererror"
 	"golang.org/x/crypto/bcrypt"
@@ -300,6 +301,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/v1/probe/health", s.handleProbeHealth)
 	mux.HandleFunc("/v1/probe/ports", s.handleProbePorts)
 	mux.HandleFunc("/v1/probe/check", s.handleProbeCheck)
+	mux.HandleFunc("/v1/netcheck", s.handleNetCheck)
 	mux.HandleFunc("/v1/mesh", s.handleMesh)                       // GET status
 	mux.HandleFunc("/v1/mesh/inbound-check", s.handleInboundCheck) // GET current TCP rule decision
 	mux.HandleFunc("/v1/mesh/down", s.handleMeshDown)              // POST stop (local-token)
@@ -812,6 +814,31 @@ func (s *Server) handleProbePorts(w http.ResponseWriter, r *http.Request) {
 	// $CALABI_PROBE_PORTS). Same scanner the platform daemon uses; was a stub
 	// returning [] in standalone, so the Tools page looked broken.
 	writeJSON(w, http.StatusOK, map[string]any{"items": probe.Scan(r.Context(), s.meshOverlay())})
+}
+
+// handleNetCheck runs an on-demand NAT and local/public IP diagnostic.
+// Standalone / self-hosted daemons NEVER contact third-party public STUN
+// servers (AllowPublicSTUN: false): only the self-hosted DERP map's own STUN
+// endpoints are probed.
+func (s *Server) handleNetCheck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var overlay string
+	var stunServers []string
+	if s.cfg.Mesh != nil {
+		st := s.cfg.Mesh.MeshStatus()
+		overlay = st.Overlay
+		if src, ok := s.cfg.Mesh.(interface{ STUNServers() []string }); ok {
+			stunServers = src.STUNServers()
+		}
+	}
+	writeJSON(w, http.StatusOK, mesh.CheckNAT(r.Context(), mesh.NATCheckOptions{
+		OverlayIP:       overlay,
+		STUNServers:     stunServers,
+		AllowPublicSTUN: false,
+	}))
 }
 
 // handleProbeCheck probes ONE address on demand — the new-tunnel wizard's

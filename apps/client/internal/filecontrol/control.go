@@ -47,21 +47,27 @@ type Source struct {
 }
 
 type Member struct {
-	OS               string `json:"os,omitempty"`
-	RDPPin           string `json:"rdp_pin,omitempty"`
-	SameOwner        bool   `json:"same_owner,omitempty"`
-	OwnWindows       bool   `json:"own_windows,omitempty"`
-	RDPAccessAllowed bool   `json:"rdp_access_allowed,omitempty"`
-	DeclarationError string `json:"declaration_error,omitempty"`
-	IP               string `json:"ip"`
-	DeviceKey        string `json:"device_key"`
-	Incoming         bool   `json:"incoming"`
+	OS                       string   `json:"os,omitempty"`
+	RDPPin                   string   `json:"rdp_pin,omitempty"`
+	SameOwner                bool     `json:"same_owner,omitempty"`
+	OwnWindows               bool     `json:"own_windows,omitempty"`
+	RDPAccessAllowed         bool     `json:"rdp_access_allowed,omitempty"`
+	RemoteLoginPorts         []uint16 `json:"remote_login_ports,omitempty"`
+	IncomingRemoteLoginPorts []uint16 `json:"incoming_remote_login_ports,omitempty"`
+	DeclarationError         string   `json:"declaration_error,omitempty"`
+	IP                       string   `json:"ip"`
+	DeviceKey                string   `json:"device_key"`
+	Incoming                 bool     `json:"incoming"`
 }
 
-// CanRDPLogin accepts existing attributed targets and the coordinator's explicit
+// UnrestrictedRDPLogin accepts existing attributed targets and the coordinator's explicit
 // self-hosted authorization without changing the device's ownership assertion.
-func (m Member) CanRDPLogin() bool {
+func (m Member) UnrestrictedRDPLogin() bool {
 	return m.OwnWindows || m.OS == "windows" && m.RDPAccessAllowed
+}
+
+func (m Member) CanRDPLogin() bool {
+	return m.UnrestrictedRDPLogin() || m.OS == "windows" && len(m.RemoteLoginPorts) > 0
 }
 
 type Request struct {

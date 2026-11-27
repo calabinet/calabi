@@ -79,6 +79,38 @@ func TestPreviewACLReportsPortChangesWithUnchangedDevicePairs(t *testing.T) {
 	}
 }
 
+func TestPreviewACLReportsRemoteLoginGrantWithDefaultNetworkAccess(t *testing.T) {
+	ctx := context.Background()
+	c := newTestCoord()
+	store := NewMemACLStore()
+	c.ACL = store
+	if _, err := c.Register(ctx, RegisterInput{Meshnet: 1, Name: "laptop", NodeKey: key(1), OwnerUserID: 17, OS: "darwin"}); err != nil {
+		t.Fatal(err)
+	}
+	windows, err := c.Register(ctx, RegisterInput{Meshnet: 1, Name: "windows", NodeKey: key(2), OwnerUserID: 23, OS: "windows"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defaultAccess := ACLRule{Action: "accept", Src: []string{"*"}, Dst: []string{"*"}, Ports: []string{"*"}}
+	grant := ACLRule{Action: "accept", Src: []string{"user:17"}, Dst: []string{deviceSelector(windows)}, Ports: []string{"tcp:3389"}}
+	granted := ACLPolicy{ACLs: []ACLRule{defaultAccess, grant}}
+	want := []AccessChange{{Src: "laptop", Dst: "windows", PortRange: PortRange{First: 3389, Last: 3389, Proto: "tcp"}}}
+
+	added, err := c.PreviewACL(ctx, 1, granted)
+	if err != nil || added.Traffic == nil || added.Traffic.AddedCount+added.Traffic.RemovedCount != 0 ||
+		added.RemoteLogin == nil || added.RemoteLogin.AddedCount != 1 || !slices.Equal(added.RemoteLogin.Added, want) {
+		t.Fatalf("grant preview = %+v, traffic = %+v, grants = %+v, error = %v", added, added.Traffic, added.RemoteLogin, err)
+	}
+	if err := store.SetACL(ctx, 1, granted); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := c.PreviewACL(ctx, 1, ACLPolicy{ACLs: []ACLRule{defaultAccess}})
+	if err != nil || removed.Traffic == nil || removed.Traffic.AddedCount+removed.Traffic.RemovedCount != 0 ||
+		removed.RemoteLogin == nil || removed.RemoteLogin.RemovedCount != 1 || !slices.Equal(removed.RemoteLogin.Removed, want) {
+		t.Fatalf("revoke preview = %+v, traffic = %+v, grants = %+v, error = %v", removed, removed.Traffic, removed.RemoteLogin, err)
+	}
+}
+
 func TestCheckPortAccessOnlyResolvesConfirmedServices(t *testing.T) {
 	c, ctx := serviceCoord(t)
 	if _, err := c.Register(ctx, RegisterInput{Meshnet: 1, Name: "a", NodeKey: key(1)}); err != nil {

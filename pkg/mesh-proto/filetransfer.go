@@ -16,6 +16,10 @@ import (
 // advertised by its machine daemon, even if its last withdrawal was lost.
 const FileTransferLease = 90 * time.Second
 
+// FileTransferClockSkew tolerates realistic wall-clock drift between phones,
+// laptops and coordinators while keeping leases bounded to a few minutes.
+const FileTransferClockSkew = 5 * time.Minute
+
 func fileTransferMessage(node NodeKey, info *meshpb.FileTransferInfo) []byte {
 	b := append([]byte("calabi/file-transfer/v1\x00"), node[:]...)
 	b = binary.BigEndian.AppendUint32(b, info.Version)
@@ -62,7 +66,7 @@ func VerifyFileTransfer(node NodeKey, info *meshpb.FileTransferInfo, now time.Ti
 		return "", errors.New("invalid file transfer declaration")
 	}
 	expires := time.Unix(info.ExpiresUnix, 0)
-	if !now.Before(expires) || expires.After(now.Add(FileTransferLease+5*time.Second)) {
+	if !now.Before(expires.Add(FileTransferClockSkew)) || expires.After(now.Add(FileTransferLease+FileTransferClockSkew)) {
 		return "", errors.New("invalid file transfer lease")
 	}
 	cert, err := x509.ParseCertificate(info.Certificate)
@@ -70,7 +74,7 @@ func VerifyFileTransfer(node NodeKey, info *meshpb.FileTransferInfo, now time.Ti
 		return "", errors.New("invalid file transfer certificate")
 	}
 	key, ok := cert.PublicKey.(ed25519.PublicKey)
-	if !ok || now.Before(cert.NotBefore) || expires.After(cert.NotAfter) || cert.IsCA || cert.KeyUsage&x509.KeyUsageDigitalSignature == 0 {
+	if !ok || now.Add(FileTransferClockSkew).Before(cert.NotBefore) || expires.After(cert.NotAfter) || cert.IsCA || cert.KeyUsage&x509.KeyUsageDigitalSignature == 0 {
 		return "", errors.New("invalid file transfer certificate usage or lifetime")
 	}
 	client, server := false, false

@@ -331,6 +331,11 @@ func validateSelectors(where string, sels []string, groups map[string][]string, 
 			if err := validateUserSelector(where, s); err != nil {
 				return err
 			}
+		case strings.HasPrefix(s, devicePrefix):
+			id, err := strconv.ParseInt(strings.TrimPrefix(s, devicePrefix), 10, 64)
+			if err != nil || id <= 0 || s != devicePrefix+strconv.FormatInt(id, 10) {
+				return fmt.Errorf("%s: invalid device selector %q — write device:<id>", where, s)
+			}
 		default:
 			// bare node-name; nothing more to validate structurally (an unknown
 			// name is allowed — nodes come and go — it simply grants nothing).

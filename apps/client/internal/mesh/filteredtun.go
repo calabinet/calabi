@@ -10,6 +10,19 @@ import (
 	"golang.zx2c4.com/wireguard/tun"
 )
 
+type remoteLoginGrant struct {
+	source netip.Addr
+	port   uint16
+}
+
+type remoteLoginFilter struct {
+	local  netip.Addr
+	owners map[netip.Addr]bool
+	ports  map[uint16]bool
+	grants map[remoteLoginGrant]bool
+	rdp    bool
+}
+
 // filteredTUN wraps the real tun device and drops inbound packets the
 // coordinator's filter doesn't allow.
 //
@@ -24,13 +37,8 @@ import (
 // A dropped packet is simply not written. WireGuard counts the write as done,
 // which is correct: from its point of view the packet was delivered to the
 // device, and the device is what discarded it.
-type rdpOwnerFilter struct {
-	local  netip.Addr
-	owners map[netip.Addr]bool
-}
-
 type filteredTUN struct {
-	rdp atomic.Pointer[rdpOwnerFilter]
+	remoteLogin atomic.Pointer[remoteLoginFilter]
 	tun.Device
 	filter *PacketFilter
 	flows  *flowTable
@@ -91,17 +99,17 @@ func (t *filteredTUN) Read(bufs [][]byte, sizes []int, offset int) (int, error) 
 	return n, err
 }
 
-// allowInbound admits a packet that either answers a conversation this machine
-// started or that a rule names. The established check comes first and costs one
-// map lookup: it is the common case for anything the user actually initiated,
-// and without it a node that appears only as a rule's SOURCE would drop every
-// reply it ever gets.
+// allowInbound checks remote login first, then admits packets that answer a
+// connection this machine started or that match an inbound ACL rule.
 func (t *filteredTUN) allowInbound(pkt []byte) bool {
 	tp, ok := parseTuple(pkt)
 	if !ok {
 		return false // unparseable: we don't know its ports, so we don't guess
 	}
-	if guard := t.rdp.Load(); guard != nil && tp.dst == guard.local && (tp.proto == protoTCP || tp.proto == protoUDP) && tp.dstPort == 3389 && !guard.owners[tp.src] {
+	login := t.remoteLogin.Load()
+	if login != nil && tp.dst == login.local && login.ports[tp.dstPort] &&
+		(tp.proto == protoTCP || login.rdp && tp.proto == protoUDP) && !login.owners[tp.src] &&
+		(tp.proto != protoTCP || !login.grants[remoteLoginGrant{tp.src, tp.dstPort}]) {
 		return false
 	}
 	if !t.filter.Enabled() {
@@ -116,7 +124,7 @@ func (t *filteredTUN) allowInbound(pkt []byte) bool {
 // Write forwards only the allowed packets. It compacts the batch in place so a
 // dropped packet in the middle doesn't cost the ones after it.
 func (t *filteredTUN) Write(bufs [][]byte, offset int) (int, error) {
-	if !t.filter.Enabled() && t.rdp.Load() == nil {
+	if !t.filter.Enabled() && t.remoteLogin.Load() == nil {
 		t.observeInbound(bufs, offset)
 		return t.Device.Write(bufs, offset)
 	}

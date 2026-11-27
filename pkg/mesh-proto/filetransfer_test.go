@@ -86,8 +86,18 @@ func TestFileTransferBinding(t *testing.T) {
 	if _, err := VerifyFileTransfer(NodeKey{2}, info, now); err == nil {
 		t.Fatal("another node's proof accepted")
 	}
-	if _, err := VerifyFileTransfer(node, info, now.Add(FileTransferLease)); err == nil {
-		t.Fatal("expired lease accepted")
+	// Peer clock up to FileTransferClockSkew ahead or behind verifier is tolerated.
+	if _, err := VerifyFileTransfer(node, info, now.Add(-FileTransferClockSkew+time.Second)); err != nil {
+		t.Fatalf("peer clock ahead within skew rejected: %v", err)
+	}
+	if _, err := VerifyFileTransfer(node, info, now.Add(FileTransferLease+FileTransferClockSkew-time.Second)); err != nil {
+		t.Fatalf("peer clock behind within skew rejected: %v", err)
+	}
+	if _, err := VerifyFileTransfer(node, info, now.Add(FileTransferLease+FileTransferClockSkew)); err == nil {
+		t.Fatal("expired lease beyond clock skew accepted")
+	}
+	if _, err := VerifyFileTransfer(node, info, now.Add(-FileTransferClockSkew-2*time.Second)); err == nil {
+		t.Fatal("future lease beyond clock skew accepted")
 	}
 	info.ExpiresUnix = now.Add(10 * time.Minute).Unix()
 	if err := SignFileTransfer(node, info, key); err == nil {

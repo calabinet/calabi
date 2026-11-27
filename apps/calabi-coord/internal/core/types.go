@@ -163,6 +163,7 @@ type NetMap struct {
 	// from the meshnet's ACL for this node specifically. The peer list above is
 	// the host-level gate; this is the narrower port-level one behind it.
 	PacketFilter []FilterRule
+	RemoteLogins map[int64]RemoteLoginGrant
 	// RelayGrant is Self's signed authorization to use relays, opaque to
 	// everyone between here and the relay. Empty when this coordinator issues no
 	// grants — relays must then not require them. See relaygrant.go.

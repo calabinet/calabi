@@ -78,7 +78,15 @@
     "busy": "請等待目前的檔案操作完成。",
     "failed": "檔案操作失敗，請檢查權限、磁碟空間和網路後重試。"
   },
-  "remoteWorkspace": {"sessions": "遠端工作階段", "failed": "無法更新遠端工作階段。", "close": "中斷「{{name}}」？", "desktop": "遠端桌面", "controls": "遠端桌面控制", "minimize": "最小化", "endRemote": "結束遠端連線"},
+  "remoteWorkspace": {
+    "sessions": "遠端工作階段",
+    "failed": "無法更新遠端工作階段。",
+    "close": "中斷「{{name}}」？",
+    "desktop": "遠端桌面",
+    "controls": "遠端桌面控制",
+    "minimize": "最小化",
+    "endRemote": "結束遠端連線"
+  },
   "ssh": {
     "invalidPassword": "密碼不可包含換行，UTF-8 編碼不得超過 1000 位元組。",
     "authFailed": "SSH 驗證失敗，請檢查使用者名稱和密碼或 SSH 金鑰。",
@@ -203,7 +211,8 @@
       "filename": "檔案名稱",
       "saved": "已儲存至 Linux"
     },
-    "errors": {"clock": "請檢查系統日期和時間，然後重試。",
+    "errors": {
+      "clock": "請檢查系統日期和時間，然後重試。",
       "sourceInUse": "此檔案仍由傳送工作使用。請先在「檔案傳送」移除相關傳送記錄。若工作仍在執行，請先暫停或取消。",
       "authorization": "目前未授權檔案傳送。請確認雙方裝置均已連線，且已啟用接收。",
       "identity": "無法驗證對方裝置，請重新整理裝置清單後再試。",
@@ -963,7 +972,63 @@
     "meshLoopbackOnly": "僅本機",
     "meshLoopbackOnlyTip": "這個連接埠只監聽 127.0.0.1，組網內的其他裝置連不上。需要讓它監聽 0.0.0.0 或本機的 overlay 位址。",
     "meshNotProbedTip": "本機目前不在組網中，無法檢測組網可達性。",
-    "meshReachable": "可達"
+    "meshReachable": "可達",
+    "nat": {
+      "title": "網路與 NAT 檢測",
+      "recheck": "重新檢測",
+      "quickEntry": "查看網路與 NAT 類型 →",
+      "probing": "正在檢測 NAT 類型與內外網 IP...",
+      "error": "網路檢測失敗",
+      "overlayIp": "組網 IP",
+      "localIp": "本機內網 IP",
+      "publicIp": "公網外網 IP",
+      "ipv6": "公網 IPv6",
+      "notConnected": "未組網",
+      "showPublicIp": "顯示完整公網 IP",
+      "hidePublicIp": "隱藏公網 IP",
+      "singleStunHint": "目前環境僅偵測到 1 個 STUN 伺服器，無法區分圓錐型與對稱型 NAT。",
+      "types": {
+        "open": "公網直連（無 NAT）",
+        "full_cone": "NAT1 · 完全圓錐型",
+        "restricted_cone": "NAT2 · 受限圓錐型",
+        "port_restricted_cone": "NAT3 · 連接埠受限圓錐型",
+        "cone": "圓錐型 NAT",
+        "symmetric": "NAT4 · 對稱型",
+        "udp_blocked": "UDP 受阻",
+        "unknown": "暫無法判定"
+      },
+      "verdicts": {
+        "direct": "極佳，支援直接 P2P 打洞直連",
+        "supported": "支援 P2P 打洞直連",
+        "limited": "打洞受限，對端同為對稱型 NAT 時將自動走中繼",
+        "blocked": "UDP 探測逾時，將透過中繼連線",
+        "unknown": "暫無法判定 NAT 類型"
+      },
+      "typeDesc": {
+        "open": "本機直接擁有公網 IPv4 位址，無 NAT 轉換限制。",
+        "full_cone": "公網對應連接埠固定，且允許任意外部位址傳送封包，打洞成功率最高。",
+        "restricted_cone": "公網對應連接埠固定，允許已通訊過的外部 IP 回傳封包，支援正常打洞。",
+        "port_restricted_cone": "公網對應連接埠固定，僅允許已通訊過的外部 IP 與連接埠回傳封包，支援正常打洞。",
+        "cone": "對不同伺服器保持相同的公網對應連接埠，支援 UDP 打洞直連。",
+        "symmetric": "存取不同目標會指派不同公網連接埠；對端為圓錐型（NAT1–NAT3）時仍有機會直連，兩端皆為對稱型時自動走中繼。",
+        "udp_blocked": "STUN UDP 探測全部逾時，目前網路或防火牆可能封鎖了 UDP 流量。",
+        "unknown": "未取得足夠的 STUN 回應以判定 NAT 行為。"
+      },
+      "matrixTitle": "NAT1–NAT4 打洞能力速查",
+      "matrix": {
+        "colType": "NAT 類型",
+        "colPunch": "P2P 打洞能力",
+        "colNote": "說明",
+        "nat1Punch": "極佳",
+        "nat1Note": "可與所有 NAT 類型直連（含 NAT4）",
+        "nat2Punch": "良好",
+        "nat2Note": "可與 NAT1–NAT3 及多數 NAT4 直連",
+        "nat3Punch": "良好",
+        "nat3Note": "可與 NAT1–NAT3 直連；遇 NAT4 可能走中繼",
+        "nat4Punch": "受限",
+        "nat4Note": "遇 NAT1/NAT2 可嘗試直連；NAT4 ↔ NAT4 需走中繼"
+      }
+    }
   },
   "mesh": {
     "presence": {
@@ -1443,7 +1508,7 @@
     "coreVersion": "執行中的核心版本",
     "bundledCore": "隨附核心版本",
     "coreCommit": "隨附核心提交"
-},
+  },
   "appearance": {
     "title": "外觀",
     "mode": "配色模式",

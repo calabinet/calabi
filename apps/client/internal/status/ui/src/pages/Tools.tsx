@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { ProbePort } from "../api/types";
+import NatDiagnosticsCard from "../components/NatDiagnosticsCard";
 import { useTranslation } from "react-i18next";
 
 const { Title, Text } = Typography;
@@ -48,6 +49,8 @@ export default function Tools() {
       <Title level={4} style={{ margin: 0 }}>
         {t("tools.title")}
       </Title>
+
+      <NatDiagnosticsCard />
 
       <Card
         size="small"

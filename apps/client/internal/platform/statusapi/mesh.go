@@ -518,3 +518,29 @@ func (s *Server) handleMeshAdvertiseSet(w http.ResponseWriter, r *http.Request) 
 		"route_excludes":       excludesOut,
 	})
 }
+
+// handleNetCheck runs an on-demand NAT and local/public IP diagnostic for the
+// platform daemon. Stage 1 probes our own Edge STUN servers from the live DERP
+// map; Stage 2 may use public RFC 5780 STUN servers only on this explicit
+// user-triggered call to refine Cone NAT into NAT1/NAT2/NAT3.
+func (s *Server) handleNetCheck(w http.ResponseWriter, r *http.Request) {
+	var overlay string
+	var stunServers []string
+	var natStunServers []string
+	if s.cfg.Mesh != nil {
+		st := s.cfg.Mesh.MeshStatus()
+		overlay = st.Overlay
+		if src, ok := s.cfg.Mesh.(interface{ STUNServers() []string }); ok {
+			stunServers = src.STUNServers()
+		}
+		if src, ok := s.cfg.Mesh.(interface{ NATStunServers() []string }); ok {
+			natStunServers = src.NATStunServers()
+		}
+	}
+	writeJSON(w, http.StatusOK, mesh.CheckNAT(r.Context(), mesh.NATCheckOptions{
+		OverlayIP:       overlay,
+		STUNServers:     stunServers,
+		RFC5780Servers:  natStunServers,
+		AllowPublicSTUN: true,
+	}))
+}

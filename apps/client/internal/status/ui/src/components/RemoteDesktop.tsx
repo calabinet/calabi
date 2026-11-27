@@ -284,11 +284,17 @@ export default function RemoteDesktop({ id, active, native, compare, frameWait, 
       return;
     }
     if (mac && event.metaKey) {
-      if (["KeyC", "KeyV", "KeyX", "KeyA"].includes(event.code)) {
+      if (["KeyC", "KeyV", "KeyX", "KeyA", "KeyZ", "KeyF", "KeyS"].includes(event.code)) {
         event.preventDefault();
-        send(Input.KeyDown, 0x1d);
-        send(Input.Scan, code & 255);
-        send(Input.KeyUp, 0x1d);
+        const redo = event.code === "KeyZ" && event.shiftKey;
+        // Windows redo is Ctrl+Y. Temporarily release any forwarded Shift.
+        const heldShifts = redo ? [leftShift, rightShift].filter(shift => pressed.current.has(shift)) : [];
+        const needsControl = !pressed.current.has(0x1d) && !pressed.current.has(0x11d);
+        for (const shift of heldShifts) send(Input.KeyUp, shift);
+        if (needsControl) send(Input.KeyDown, 0x1d);
+        send(Input.Scan, redo ? 0x15 : code & 255);
+        if (needsControl) send(Input.KeyUp, 0x1d);
+        for (const shift of heldShifts) send(Input.KeyDown, shift);
       }
       return;
     }

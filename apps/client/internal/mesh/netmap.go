@@ -30,21 +30,22 @@ type PeerService struct {
 
 // Peer is one node the local node may reach, as resolved from a NetMap.
 type Peer struct {
-	RDPPin           string
-	SameOwner        bool
-	RDPAccessAllowed bool
-	DeclarationError string `json:"-"`
-	FileTransfer     *meshpb.FileTransferInfo
-	NodeID           int64
-	Name             string // MagicDNS label
-	Services         []PeerService
-	OS               string // "windows" / "linux" / "darwin"; "" from an older node
-	NodeKey          meshproto.NodeKey
-	DiscoKey         meshproto.DiscoKey
-	Overlay          netip.Addr
-	AllowedIPs       []netip.Prefix
-	Endpoints        []netip.AddrPort
-	DERPHome         string
+	RDPPin                                 string
+	SameOwner                              bool
+	RDPAccessAllowed                       bool
+	RemoteLoginToPeer, RemoteLoginFromPeer []uint16
+	DeclarationError                       string `json:"-"`
+	FileTransfer                           *meshpb.FileTransferInfo
+	NodeID                                 int64
+	Name                                   string // MagicDNS label
+	Services                               []PeerService
+	OS                                     string // "windows" / "linux" / "darwin"; "" from an older node
+	NodeKey                                meshproto.NodeKey
+	DiscoKey                               meshproto.DiscoKey
+	Overlay                                netip.Addr
+	AllowedIPs                             []netip.Prefix
+	Endpoints                              []netip.AddrPort
+	DERPHome                               string
 }
 
 // SubnetAlias is one real subnet behind this node and the unique prefix the mesh
@@ -108,13 +109,13 @@ type NetMap struct {
 	// that doesn't issue grants — relays must then not require them.
 	RelayGrant []byte
 	// SelfServices is the coordinator's registry of the services registered on
-	// THIS node, used only for the self-check. It exists because the
+	// THIS node, used for the self-check and to identify which custom
+	// SSH or RDP ports the inbound login guard must enforce. It exists because the
 	// registry is not only what this node declared: a manager can enter a
 	// service in the console, and nothing else pushes that back down, so
 	// without it such a service could never be observed at all.
 	//
-	// It grants nothing and configures nothing — see the field comment in
-	// coord.proto. Empty from a coordinator that predates the field, in which
+	// It grants nothing by itself. Empty from a coordinator that predates the field, in which
 	// case the node checks its own declarations exactly as before.
 	SelfServices []DeclaredService
 }
@@ -336,7 +337,17 @@ func peerFromProto(pp *meshpb.Peer) (Peer, error) {
 		return Peer{}, fmt.Errorf("node_key: %w", err)
 	}
 	p := Peer{SameOwner: pp.GetSameOwner(), RDPAccessAllowed: pp.GetRdpAccessAllowed(), NodeID: pp.GetNodeId(), Name: pp.GetName(), NodeKey: nk, DERPHome: pp.GetDerpHome(), OS: pp.GetOs()}
-	if (p.SameOwner || p.RDPAccessAllowed) && p.OS == "windows" && len(pp.GetRdpCertificateSha256()) == 32 {
+	for _, port := range pp.GetRemoteLoginToPeer() {
+		if port > 0 && port <= 65535 {
+			p.RemoteLoginToPeer = append(p.RemoteLoginToPeer, uint16(port))
+		}
+	}
+	for _, port := range pp.GetRemoteLoginFromPeer() {
+		if port > 0 && port <= 65535 {
+			p.RemoteLoginFromPeer = append(p.RemoteLoginFromPeer, uint16(port))
+		}
+	}
+	if (p.SameOwner || p.RDPAccessAllowed || len(p.RemoteLoginToPeer) > 0) && p.OS == "windows" && len(pp.GetRdpCertificateSha256()) == 32 {
 		p.RDPPin = hex.EncodeToString(pp.GetRdpCertificateSha256())
 	}
 	// A malformed optional declaration disables only file transfer, never mesh.

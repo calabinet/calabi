@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/netip"
+	"slices"
 	"strings"
 	"time"
 
@@ -20,11 +21,12 @@ import (
 var errRDPMeshRecovering = errors.New("mesh_reconnecting")
 
 type rdpTarget struct {
-	Key       string `json:"device_key"`
-	Name      string `json:"name"`
-	Overlay   string `json:"overlay"`
-	Available bool   `json:"available"`
-	Reason    string `json:"reason,omitempty"`
+	Key       string   `json:"device_key"`
+	Name      string   `json:"name"`
+	Overlay   string   `json:"overlay"`
+	Available bool     `json:"available"`
+	Reason    string   `json:"reason,omitempty"`
+	Ports     []uint16 `json:"login_ports,omitempty"`
 }
 
 type rdpTicket struct {
@@ -32,6 +34,12 @@ type rdpTicket struct {
 	context, key, local, peer, pin string
 	expires                        time.Time
 	port                           int
+	ports                          []uint16
+	copy                           *rdpCopyLease
+}
+
+func (t rdpTicket) permitsPort(port int) bool {
+	return port > 0 && port <= 65535 && (len(t.ports) == 0 || slices.Contains(t.ports, uint16(port)))
 }
 
 func (c *Core) rdpPeers() (*engine, string, []mesh.Peer, error) {
@@ -57,7 +65,7 @@ func (c *Core) rdpPeers() (*engine, string, []mesh.Peer, error) {
 }
 
 func rdpReason(p mesh.Peer) string {
-	if !p.SameOwner {
+	if !p.SameOwner && len(p.RemoteLoginToPeer) == 0 {
 		return "same_owner_required"
 	}
 	if p.OS != "windows" {
@@ -85,7 +93,7 @@ func (c *Core) resolveRDP(key string) (rdpTicket, error) {
 		if reason := rdpReason(p); reason != "" {
 			return rdpTicket{}, errors.New(reason)
 		}
-		return rdpTicket{engine: e, context: c.fileContext(), key: key, local: local, peer: p.Overlay.String(), pin: strings.ToLower(p.RDPPin)}, nil
+		return rdpTicket{engine: e, context: c.fileContext(), key: key, local: local, peer: p.Overlay.String(), pin: strings.ToLower(p.RDPPin), ports: p.RemoteLoginToPeer}, nil
 	}
 	return rdpTicket{}, errors.New("device_not_available")
 }
@@ -99,7 +107,7 @@ func (c *Core) handleRDPTargets(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			reason := rdpReason(p)
-			items = append(items, rdpTarget{p.NodeKey.String(), p.Name, p.Overlay.String(), reason == "", reason})
+			items = append(items, rdpTarget{p.NodeKey.String(), p.Name, p.Overlay.String(), reason == "", reason, p.RemoteLoginToPeer})
 		}
 	}
 	writeJSON(w, 200, map[string]any{"available": err == nil, "items": items})
@@ -120,8 +128,9 @@ func decodeRDP(r *http.Request, out any) error {
 
 func (c *Core) handleRDPPrepare(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Key  string `json:"device_key"`
-		Port *int   `json:"port"`
+		Key       string `json:"device_key"`
+		Port      *int   `json:"port"`
+		CopyFiles bool   `json:"copy_files"`
 	}
 	if err := decodeRDP(r, &in); err != nil {
 		writeError(w, 400, "invalid RDP request")
@@ -140,12 +149,26 @@ func (c *Core) handleRDPPrepare(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 403, err.Error())
 		return
 	}
+	if in.Port == nil && len(ticket.ports) > 0 {
+		port = int(ticket.ports[0])
+	}
+	if !ticket.permitsPort(port) {
+		writeError(w, 403, "remote_identity_changed")
+		return
+	}
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		writeError(w, 500, "could not prepare session")
 		return
 	}
 	token := hex.EncodeToString(b)
+	if in.CopyFiles && c.cfg.FileTransferV1 {
+		ticket.copy, err = newRDPCopyLease()
+		if err != nil {
+			writeError(w, 500, "could not prepare file copy")
+			return
+		}
+	}
 	ticket.port = port
 	ticket.expires = time.Now().Add(2 * time.Minute)
 	c.rdpMu.Lock()
@@ -155,16 +178,22 @@ func (c *Core) handleRDPPrepare(w http.ResponseWriter, r *http.Request) {
 	for k, t := range c.rdpTickets {
 		if time.Now().After(t.expires) {
 			delete(c.rdpTickets, k)
+			t.copy.close()
 		}
 	}
 	if len(c.rdpTickets) >= 8 {
 		c.rdpMu.Unlock()
+		ticket.copy.close()
 		writeError(w, 409, "close the previous remote session")
 		return
 	}
 	c.rdpTickets[token] = ticket
 	c.rdpMu.Unlock()
-	writeJSON(w, 200, map[string]any{"token": token, "host": ticket.peer, "local": ticket.local, "port": ticket.port, "certificate_sha256": ticket.pin})
+	result := map[string]any{"token": token, "host": ticket.peer, "local": ticket.local, "port": ticket.port, "certificate_sha256": ticket.pin}
+	if ticket.copy != nil {
+		result["copy_binding"] = ticket.copy.key
+	}
+	writeJSON(w, 200, result)
 }
 
 func (c *Core) handleRDPVerify(w http.ResponseWriter, r *http.Request) {
@@ -206,7 +235,7 @@ func (c *Core) handleRDPVerify(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "mesh_reconnecting", "reason": "mesh_reconnecting"})
 		return
 	}
-	valid := err == nil && current.engine == ticket.engine && current.context == ticket.context &&
+	valid := err == nil && current.permitsPort(port) && current.engine == ticket.engine && current.context == ticket.context &&
 		current.local == ticket.local && current.peer == ticket.peer && current.pin == ticket.pin &&
 		subtle.ConstantTimeCompare([]byte(strings.ToLower(in.Pin)), []byte(ticket.pin)) == 1
 	if !valid {
@@ -221,6 +250,9 @@ func (c *Core) handleRDPVerify(w http.ResponseWriter, r *http.Request) {
 	}
 	ticket.expires = time.Now().Add(30 * time.Second)
 	c.rdpTickets[in.Token] = ticket
+	if ticket.copy != nil {
+		ticket.copy.verified.Store(true)
+	}
 	c.rdpMu.Unlock()
 	writeJSON(w, 200, map[string]bool{"valid": true})
 }
@@ -234,7 +266,9 @@ func (c *Core) handleRDPClose(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c.rdpMu.Lock()
+	ticket := c.rdpTickets[in.Token]
 	delete(c.rdpTickets, in.Token)
 	c.rdpMu.Unlock()
+	ticket.copy.close()
 	writeJSON(w, 200, map[string]bool{"closed": true})
 }

@@ -149,7 +149,12 @@ const (
 	autogroupSelf   = "autogroup:self"
 	autogroupMember = "autogroup:member"
 	userPrefix      = "user:"
+	devicePrefix    = "device:"
 )
+
+func deviceSelector(n *Node) string {
+	return devicePrefix + strconv.FormatInt(n.ID, 10)
+}
 
 // matchDst reports whether dst is a destination of this rule for traffic coming
 // FROM src. Every selector except autogroup:self depends on dst alone — this
@@ -229,6 +234,8 @@ func matchSelector(sel string, n *Node, groups map[string][]string) bool {
 	case strings.HasPrefix(sel, userPrefix):
 		return n.OwnerUserID > 0 &&
 			strconv.FormatInt(n.OwnerUserID, 10) == strings.TrimPrefix(sel, userPrefix)
+	case strings.HasPrefix(sel, devicePrefix):
+		return n.ID > 0 && sel == deviceSelector(n)
 	case strings.HasPrefix(sel, "svc:"):
 		return hasService(n, strings.TrimPrefix(sel, "svc:"))
 	default:
@@ -251,7 +258,7 @@ func stripSelectorPort(sel string) string {
 	// only ever appears in LEGACY documents (the write path has refused it since
 	// ports moved to their own field), and "user:" did not exist back then. The
 	// two forms cannot co-occur in any document that was ever stored.
-	if strings.HasPrefix(sel, userPrefix) {
+	if strings.HasPrefix(sel, userPrefix) || strings.HasPrefix(sel, devicePrefix) {
 		return sel
 	}
 	i := strings.LastIndexByte(sel, ':')

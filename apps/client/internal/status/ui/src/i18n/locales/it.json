@@ -78,7 +78,15 @@
     "busy": "Attendi il completamento dell’operazione in corso.",
     "failed": "Operazione non riuscita. Controlla permessi, spazio su disco e rete."
   },
-  "remoteWorkspace": {"sessions": "Sessioni remote", "failed": "Impossibile aggiornare la sessione remota.", "close": "Disconnettere {{name}}?", "desktop": "Desktop remoto", "controls": "Controlli desktop remoto", "minimize": "Riduci a icona", "endRemote": "Termina sessione"},
+  "remoteWorkspace": {
+    "sessions": "Sessioni remote",
+    "failed": "Impossibile aggiornare la sessione remota.",
+    "close": "Disconnettere {{name}}?",
+    "desktop": "Desktop remoto",
+    "controls": "Controlli desktop remoto",
+    "minimize": "Riduci a icona",
+    "endRemote": "Termina sessione"
+  },
   "ssh": {
     "invalidPassword": "La password non può contenere ritorni a capo né superare 1000 byte UTF-8.",
     "authFailed": "Autenticazione SSH non riuscita. Controlla nome utente e password o chiave SSH.",
@@ -203,7 +211,8 @@
       "filename": "Nome del file",
       "saved": "Salvato su Linux"
     },
-    "errors": {"clock": "Controlla data e ora del sistema e riprova.",
+    "errors": {
+      "clock": "Controlla data e ora del sistema e riprova.",
       "sourceInUse": "Il file è ancora usato da un invio. Rimuovi prima la voce associata in Trasferimenti di file. Se l’invio è ancora in corso, mettilo in pausa o annullalo.",
       "authorization": "Il trasferimento non è autorizzato. Verifica che entrambi i dispositivi siano connessi e che la ricezione sia attiva.",
       "identity": "Impossibile verificare l’altro dispositivo. Aggiorna l’elenco e riprova.",
@@ -963,7 +972,63 @@
     "meshLoopbackOnly": "solo questo host",
     "meshLoopbackOnlyTip": "Questa porta è in ascolto solo su 127.0.0.1, quindi nessun altro dispositivo della Mesh può raggiungerla. Mettila in ascolto su 0.0.0.0 o sull'indirizzo overlay di questa macchina.",
     "meshNotProbedTip": "Questa macchina al momento non è nella Mesh, quindi non è stato possibile verificarne la raggiungibilità.",
-    "meshReachable": "raggiungibile"
+    "meshReachable": "raggiungibile",
+    "nat": {
+      "title": "Diagnostica rete e NAT",
+      "recheck": "Ricontrolla",
+      "quickEntry": "Verifica rete e NAT →",
+      "probing": "Rilevamento tipo NAT e indirizzi IP...",
+      "error": "Controllo rete non riuscito",
+      "overlayIp": "IP mesh overlay",
+      "localIp": "IP locale (LAN)",
+      "publicIp": "IP pubblico",
+      "ipv6": "IPv6 pubblico",
+      "notConnected": "Non connesso",
+      "showPublicIp": "Mostra IP pubblico completo",
+      "hidePublicIp": "Nascondi IP pubblico",
+      "singleStunHint": "È disponibile un solo server STUN; impossibile distinguere NAT Cone e Symmetric.",
+      "types": {
+        "open": "Pubblico diretto (Senza NAT)",
+        "full_cone": "NAT1 · Full Cone",
+        "restricted_cone": "NAT2 · Restricted Cone",
+        "port_restricted_cone": "NAT3 · Port-Restricted Cone",
+        "cone": "NAT Cone",
+        "symmetric": "NAT4 · Simmetrico",
+        "udp_blocked": "UDP bloccato",
+        "unknown": "Non determinato"
+      },
+      "verdicts": {
+        "direct": "Ottimale per connessioni dirette P2P",
+        "supported": "Hole punching P2P supportato",
+        "limited": "P2P limitato — usa relay con un altro NAT simmetrico",
+        "blocked": "UDP bloccato — relay necessario",
+        "unknown": "Impossibile determinare il tipo NAT"
+      },
+      "typeDesc": {
+        "open": "Questo dispositivo dispone di un IPv4 pubblico diretto senza NAT.",
+        "full_cone": "Porta esterna fissa; accetta pacchetti da qualsiasi peer remoto.",
+        "restricted_cone": "Porta esterna fissa; accetta pacchetti da IP remoti già contattati.",
+        "port_restricted_cone": "Porta esterna fissa; accetta pacchetti da coppie IP:porta già contattate.",
+        "cone": "La porta esterna resta coerente tra server diversi; lo hole punching UDP funziona.",
+        "symmetric": "La porta esterna cambia in base alla destinazione. Con un altro NAT simmetrico si usa il relay.",
+        "udp_blocked": "I pacchetti STUN UDP sono andati in timeout. Il firewall potrebbe bloccare UDP.",
+        "unknown": "Risposte STUN insufficienti per classificare il NAT."
+      },
+      "matrixTitle": "Riferimento hole punching NAT1–NAT4",
+      "matrix": {
+        "colType": "Tipo NAT",
+        "colPunch": "Hole punching P2P",
+        "colNote": "Dettagli",
+        "nat1Punch": "Ottimo",
+        "nat1Note": "Diretto con tutti i tipi NAT (incluso NAT4)",
+        "nat2Punch": "Buono",
+        "nat2Note": "Diretto con NAT1–NAT3 e gran parte dei NAT4",
+        "nat3Punch": "Buono",
+        "nat3Note": "Diretto con NAT1–NAT3; con NAT4 può usare relay",
+        "nat4Punch": "Limitato",
+        "nat4Note": "Diretto con NAT1/NAT2; NAT4 ↔ NAT4 usa relay"
+      }
+    }
   },
   "mesh": {
     "presence": {
@@ -1443,7 +1508,7 @@
     "coreVersion": "Versione del core in esecuzione",
     "bundledCore": "Versione del core incluso",
     "coreCommit": "Commit del core incluso"
-},
+  },
   "appearance": {
     "title": "Aspetto",
     "mode": "Tema",

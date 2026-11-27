@@ -30,7 +30,7 @@ func toProtoNetMapWithRDP(nm *core.NetMap, peer func(*core.Node) *meshpb.Peer, s
 		out.Peers = make([]*meshpb.Peer, 0, len(nm.Peers))
 	}
 	for i := range nm.Peers {
-		out.Peers = append(out.Peers, peerForRDP(&nm.Self, &nm.Peers[i], peer(&nm.Peers[i]), selfHosted))
+		out.Peers = append(out.Peers, peerForRemoteLogin(nm, &nm.Peers[i], peer(&nm.Peers[i]), selfHosted))
 	}
 	for _, r := range nm.PacketFilter {
 		fr := &meshpb.FilterRule{SrcCidrs: r.SrcCIDRs}
@@ -68,6 +68,20 @@ func toProtoNetMapWithRDP(nm *core.NetMap, peer func(*core.Node) *meshpb.Peer, s
 	out.RelayBandwidthBurstKbps = nm.RelayBandwidthBurstKbps
 	out.AliasUsedAddrs = uint32(nm.AliasUsedAddrs)
 	return out
+}
+
+func peerForRemoteLogin(nm *core.NetMap, node *core.Node, base *meshpb.Peer, selfHosted bool) *meshpb.Peer {
+	peer := peerForRDP(&nm.Self, node, base, selfHosted)
+	grant := nm.RemoteLogins[node.ID]
+	if len(grant.ToPeer)+len(grant.FromPeer) == 0 {
+		return peer
+	}
+	if peer == base {
+		peer = proto.Clone(peer).(*meshpb.Peer)
+	}
+	peer.RemoteLoginToPeer = grant.ToPeer
+	peer.RemoteLoginFromPeer = grant.FromPeer
+	return peer
 }
 
 // The base wire peer may be shared by different recipients of one snapshot.

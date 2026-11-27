@@ -66,6 +66,7 @@ function classifyLoginError(
 
 export default function Login() {
   const { t } = useTranslation();
+  const desktop = "__TAURI_INTERNALS__" in window;
   const [form] = Form.useForm<LoginForm>();
   const [credentials, setCredentials] = useState<LoginForm | null>(null);
   const qc = useQueryClient();
@@ -145,27 +146,28 @@ export default function Login() {
 
   return (
     <div
-      style={{
+      className={desktop ? "desktop-login" : undefined}
+      style={desktop ? undefined : {
         minHeight: "100vh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         padding: 16,
         boxSizing: "border-box",
-        background:
-          "var(--c-auth-bg)",
+        background: "var(--c-auth-bg)",
       }}
     >
       <Card
+        variant={desktop ? "borderless" : "outlined"}
         style={{
-          width: 380,
+          width: desktop ? "100%" : 380,
           maxWidth: "100%",
           flexShrink: 0,
           margin: "auto",
-          boxShadow: "0 4px 24px rgba(0, 0, 0, 0.08)",
-          borderRadius: 12,
+          boxShadow: desktop ? "none" : "0 4px 24px rgba(0, 0, 0, 0.08)",
+          borderRadius: desktop ? 0 : 12,
         }}
-        bodyStyle={{ padding: 32 }}
+        bodyStyle={desktop ? undefined : { padding: 32 }}
       >
         <Space direction="vertical" size="middle" style={{ width: "100%" }}>
           <div style={{ textAlign: "center", marginBottom: 8 }}>

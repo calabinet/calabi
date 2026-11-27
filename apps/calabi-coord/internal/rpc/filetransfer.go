@@ -102,7 +102,7 @@ func (s *Server) addFileTransfers(out *meshpb.NetMap) {
 		if err != nil || key != sess.nodeKey {
 			return peer
 		}
-		if (peer.SameOwner || peer.RdpAccessAllowed) && peer.Os == "windows" && sess.rdpPin != "" {
+		if (peer.SameOwner || peer.RdpAccessAllowed || len(peer.RemoteLoginToPeer) > 0) && peer.Os == "windows" && sess.rdpPin != "" {
 			peer = proto.Clone(peer).(*meshpb.Peer)
 			peer.RdpCertificateSha256 = []byte(sess.rdpPin)
 		}

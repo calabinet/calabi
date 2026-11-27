@@ -78,7 +78,15 @@
     "busy": "Warten Sie, bis der aktuelle Dateivorgang abgeschlossen ist.",
     "failed": "Dateivorgang fehlgeschlagen. Prüfen Sie Rechte, Speicherplatz und Netzwerk."
   },
-  "remoteWorkspace": {"sessions": "Remotesitzungen", "failed": "Die Remotesitzung konnte nicht aktualisiert werden.", "close": "Verbindung zu {{name}} trennen?", "desktop": "Remotedesktop", "controls": "Remotedesktop-Steuerung", "minimize": "Minimieren", "endRemote": "Verbindung trennen"},
+  "remoteWorkspace": {
+    "sessions": "Remotesitzungen",
+    "failed": "Die Remotesitzung konnte nicht aktualisiert werden.",
+    "close": "Verbindung zu {{name}} trennen?",
+    "desktop": "Remotedesktop",
+    "controls": "Remotedesktop-Steuerung",
+    "minimize": "Minimieren",
+    "endRemote": "Verbindung trennen"
+  },
   "ssh": {
     "invalidPassword": "Das Passwort darf keinen Zeilenumbruch enthalten und höchstens 1000 UTF-8-Bytes lang sein.",
     "authFailed": "SSH-Authentifizierung fehlgeschlagen. Prüfen Sie Benutzername und Passwort oder SSH-Schlüssel.",
@@ -203,7 +211,8 @@
       "filename": "Dateiname",
       "saved": "Unter Linux gespeichert"
     },
-    "errors": {"clock": "Prüfen Sie Datum und Uhrzeit des Systems und versuchen Sie es erneut.",
+    "errors": {
+      "clock": "Prüfen Sie Datum und Uhrzeit des Systems und versuchen Sie es erneut.",
       "sourceInUse": "Diese Datei wird noch von einem Sendevorgang verwendet. Entfernen Sie zuerst den zugehörigen Eintrag unter „Dateiübertragungen“. Laufende Vorgänge müssen Sie zuvor pausieren oder abbrechen.",
       "authorization": "Die Dateiübertragung ist derzeit nicht autorisiert. Prüfen Sie die Verbindung beider Geräte und ob der Empfang aktiviert ist.",
       "identity": "Das andere Gerät konnte nicht verifiziert werden. Aktualisieren Sie die Geräteliste und versuchen Sie es erneut.",
@@ -963,7 +972,63 @@
     "meshLoopbackOnly": "nur dieser Host",
     "meshLoopbackOnlyTip": "Dieser Port lauscht nur auf 127.0.0.1, daher kann ihn kein anderes Mesh-Gerät erreichen. Binde ihn an 0.0.0.0 oder an die Overlay-Adresse dieses Geräts.",
     "meshNotProbedTip": "Dieses Gerät ist derzeit nicht im Mesh, daher konnte die Erreichbarkeit nicht geprüft werden.",
-    "meshReachable": "erreichbar"
+    "meshReachable": "erreichbar",
+    "nat": {
+      "title": "Netzwerk- & NAT-Diagnose",
+      "recheck": "Erneut prüfen",
+      "quickEntry": "Netzwerk- & NAT-Prüfung →",
+      "probing": "NAT-Typ und IP-Adressen werden ermittelt...",
+      "error": "Netzwerkprüfung fehlgeschlagen",
+      "overlayIp": "Mesh-Overlay-IP",
+      "localIp": "Lokale LAN-IP",
+      "publicIp": "Öffentliche IP",
+      "ipv6": "Öffentliche IPv6",
+      "notConnected": "Nicht verbunden",
+      "showPublicIp": "Öffentliche IP anzeigen",
+      "hidePublicIp": "Öffentliche IP ausblenden",
+      "singleStunHint": "Es ist nur ein STUN-Server verfügbar, sodass Cone- und Symmetric-NAT nicht unterschieden werden können.",
+      "types": {
+        "open": "Direkt öffentlich (Kein NAT)",
+        "full_cone": "NAT1 · Full Cone",
+        "restricted_cone": "NAT2 · Restricted Cone",
+        "port_restricted_cone": "NAT3 · Port-Restricted Cone",
+        "cone": "Cone NAT",
+        "symmetric": "NAT4 · Symmetrisch",
+        "udp_blocked": "UDP blockiert",
+        "unknown": "Unbekannt"
+      },
+      "verdicts": {
+        "direct": "Optimal für direkte P2P-Verbindungen",
+        "supported": "P2P Hole Punching unterstützt",
+        "limited": "Eingeschränktes P2P — bei zwei symmetrischen NATs über Relay",
+        "blocked": "UDP blockiert — Relay erforderlich",
+        "unknown": "NAT-Typ konnte nicht ermittelt werden"
+      },
+      "typeDesc": {
+        "open": "Dieses Gerät besitzt eine direkt erreichbare öffentliche IPv4-Adresse ohne NAT.",
+        "full_cone": "Feste externe Portzuordnung, akzeptiert Pakete von beliebigen Gegenstellen.",
+        "restricted_cone": "Feste externe Portzuordnung, akzeptiert Pakete bekannter Gegenstellen-IPs.",
+        "port_restricted_cone": "Feste externe Portzuordnung, akzeptiert Pakete bekannter IP:Port-Paare.",
+        "cone": "Konsistente externe Portzuordnung über mehrere Server hinweg; UDP Hole Punching funktioniert.",
+        "symmetric": "Externer Port ändert sich je Ziel. Direktverbindung erfordert Cone NAT auf der Gegenseite, sonst Relay.",
+        "udp_blocked": "STUN-UDP-Anfragen liefen in ein Timeout. Eine Firewall blockiert möglicherweise UDP.",
+        "unknown": "Zu wenige STUN-Antworten für eine Klassifizierung."
+      },
+      "matrixTitle": "NAT1–NAT4 Hole-Punching-Übersicht",
+      "matrix": {
+        "colType": "NAT-Typ",
+        "colPunch": "P2P Hole Punching",
+        "colNote": "Hinweis",
+        "nat1Punch": "Sehr gut",
+        "nat1Note": "Direkt mit allen NAT-Typen (inkl. NAT4)",
+        "nat2Punch": "Gut",
+        "nat2Note": "Direkt mit NAT1–NAT3 und den meisten NAT4",
+        "nat3Punch": "Gut",
+        "nat3Note": "Direkt mit NAT1–NAT3; mit NAT4 ggf. Relay",
+        "nat4Punch": "Eingeschränkt",
+        "nat4Note": "Direkt mit NAT1/NAT2; NAT4 ↔ NAT4 nutzt Relay"
+      }
+    }
   },
   "mesh": {
     "presence": {
@@ -1443,7 +1508,7 @@
     "coreVersion": "Laufende Core-Version",
     "bundledCore": "Mitgelieferte Core-Version",
     "coreCommit": "Mitgelieferter Core-Commit"
-},
+  },
   "appearance": {
     "title": "Darstellung",
     "mode": "Farbschema",

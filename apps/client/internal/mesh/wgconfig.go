@@ -34,10 +34,13 @@ type WGPeer struct {
 type WGConfig struct {
 	// Legacy name: this is the 3389 source allow-set, including explicit
 	// self-hosted RDP grants. It must not be used as an ownership assertion.
-	RDPOwners   []netip.Addr
-	NodeKey     meshproto.NodeKey
-	OverlayAddr netip.Addr
-	Peers       []WGPeer
+	RDPOwners         []netip.Addr
+	SSHOwners         []netip.Addr
+	RemoteLoginPorts  []uint16
+	RemoteLoginGrants []remoteLoginGrant
+	NodeKey           meshproto.NodeKey
+	OverlayAddr       netip.Addr
+	Peers             []WGPeer
 	// ExitNode, when non-zero, is the peer this node routes its DEFAULT traffic
 	// through (full-tunnel). It's a LOCAL choice (never from the
 	// coordinator): the consumer opts in to one advertised exit node. Zero = no
@@ -112,9 +115,26 @@ type WGConfig struct {
 // once endpoints are present the first is taken as the direct-path hint.
 func BuildWGConfig(nm NetMap) WGConfig {
 	cfg := WGConfig{NodeKey: nm.Self.NodeKey, OverlayAddr: nm.Self.Overlay}
+	service, standard := meshproto.RemoteLoginService(nm.Self.OS)
+	if standard != 0 {
+		cfg.RemoteLoginPorts = append(cfg.RemoteLoginPorts, standard)
+		for _, declaration := range nm.SelfServices {
+			if declaration.Name == service && declaration.Proto == "tcp" && declaration.Port > 0 && declaration.Port <= 65535 {
+				cfg.RemoteLoginPorts = append(cfg.RemoteLoginPorts, uint16(declaration.Port))
+			}
+		}
+	}
 	for _, p := range nm.Peers {
 		if (p.SameOwner || p.RDPAccessAllowed) && p.Overlay.Is4() {
 			cfg.RDPOwners = append(cfg.RDPOwners, p.Overlay)
+		}
+		if p.SameOwner && p.Overlay.Is4() {
+			cfg.SSHOwners = append(cfg.SSHOwners, p.Overlay)
+		}
+		if p.Overlay.Is4() {
+			for _, port := range p.RemoteLoginFromPeer {
+				cfg.RemoteLoginGrants = append(cfg.RemoteLoginGrants, remoteLoginGrant{p.Overlay, port})
+			}
 		}
 	}
 	cfg.Filter, cfg.FilterEnabled = nm.Filter, nm.FilterEnabled

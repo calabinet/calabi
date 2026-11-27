@@ -78,7 +78,15 @@
     "busy": "Aguarde a conclusão da operação atual.",
     "failed": "A operação falhou. Verifique as permissões, o espaço em disco e a rede."
   },
-  "remoteWorkspace": {"sessions": "Sessões remotas", "failed": "Não foi possível atualizar a sessão remota.", "close": "Desconectar {{name}}?", "desktop": "Área de trabalho remota", "controls": "Controles da área de trabalho remota", "minimize": "Minimizar", "endRemote": "Encerrar sessão remota"},
+  "remoteWorkspace": {
+    "sessions": "Sessões remotas",
+    "failed": "Não foi possível atualizar a sessão remota.",
+    "close": "Desconectar {{name}}?",
+    "desktop": "Área de trabalho remota",
+    "controls": "Controles da área de trabalho remota",
+    "minimize": "Minimizar",
+    "endRemote": "Encerrar sessão remota"
+  },
   "ssh": {
     "invalidPassword": "A senha deve ter até 1000 bytes em UTF-8, sem quebras de linha.",
     "authFailed": "A autenticação SSH falhou. Confira o usuário e a senha ou a chave SSH.",
@@ -203,7 +211,8 @@
       "filename": "Nome do arquivo",
       "saved": "Salvo no Linux"
     },
-    "errors": {"clock": "Verifique a data e hora do sistema e tente novamente.",
+    "errors": {
+      "clock": "Verifique a data e hora do sistema e tente novamente.",
       "sourceInUse": "Este arquivo ainda é usado por um envio. Primeiro, remova o registro correspondente em Transferências de arquivos. Se o envio estiver em andamento, pause ou cancele antes.",
       "authorization": "A transferência não está autorizada no momento. Verifique se os dois dispositivos estão conectados e se o recebimento está ativado.",
       "identity": "Não foi possível verificar o outro dispositivo. Atualize a lista e tente novamente.",
@@ -963,7 +972,63 @@
     "meshLoopbackOnly": "apenas esta máquina",
     "meshLoopbackOnlyTip": "Esta porta só escuta em 127.0.0.1, então nenhum outro dispositivo da Malha consegue alcançá-la. Configure-a para escutar em 0.0.0.0 ou no endereço overlay desta máquina.",
     "meshNotProbedTip": "Esta máquina não está na Malha no momento, então não foi possível verificar a acessibilidade.",
-    "meshReachable": "acessível"
+    "meshReachable": "acessível",
+    "nat": {
+      "title": "Diagnóstico de rede e NAT",
+      "recheck": "Verificar novamente",
+      "quickEntry": "Verificar rede e NAT →",
+      "probing": "Detectando tipo de NAT e endereços IP...",
+      "error": "Falha na verificação de rede",
+      "overlayIp": "IP da rede mesh",
+      "localIp": "IP local (LAN)",
+      "publicIp": "IP público",
+      "ipv6": "IPv6 público",
+      "notConnected": "Desconectado",
+      "showPublicIp": "Mostrar IP público completo",
+      "hidePublicIp": "Ocultar IP público",
+      "singleStunHint": "Apenas um servidor STUN está disponível; não é possível diferenciar NAT Cone de Simétrico.",
+      "types": {
+        "open": "IP público direto (Sem NAT)",
+        "full_cone": "NAT1 · Cone completo",
+        "restricted_cone": "NAT2 · Cone restrito",
+        "port_restricted_cone": "NAT3 · Cone restrito por porta",
+        "cone": "NAT Cone",
+        "symmetric": "NAT4 · Simétrico",
+        "udp_blocked": "UDP bloqueado",
+        "unknown": "Indeterminado"
+      },
+      "verdicts": {
+        "direct": "Ótimo para conexões diretas P2P",
+        "supported": "Hole punching P2P suportado",
+        "limited": "P2P limitado — usa relay contra outro NAT simétrico",
+        "blocked": "UDP bloqueado — relay necessário",
+        "unknown": "Não foi possível determinar o tipo de NAT"
+      },
+      "typeDesc": {
+        "open": "Este dispositivo possui um endereço IPv4 público direto sem NAT.",
+        "full_cone": "Porta externa fixa; aceita pacotes de qualquer par remoto.",
+        "restricted_cone": "Porta externa fixa; aceita pacotes de IPs remotos já contatados.",
+        "port_restricted_cone": "Porta externa fixa; aceita pacotes de pares IP:porta já contatados.",
+        "cone": "O mapeamento de porta externa permanece igual entre servidores; o hole punching UDP funciona.",
+        "symmetric": "A porta externa muda por destino. Exige NAT Cone no outro lado para conexão direta; caso contrário usa relay.",
+        "udp_blocked": "As sondagens STUN UDP expiraram. Um firewall pode estar bloqueando UDP.",
+        "unknown": "Respostas STUN insuficientes para classificar o NAT."
+      },
+      "matrixTitle": "Referência de hole punching NAT1–NAT4",
+      "matrix": {
+        "colType": "Tipo de NAT",
+        "colPunch": "Hole punching P2P",
+        "colNote": "Comportamento",
+        "nat1Punch": "Excelente",
+        "nat1Note": "Direto com todos os tipos NAT (incluindo NAT4)",
+        "nat2Punch": "Bom",
+        "nat2Note": "Direto com NAT1–NAT3 e a maioria dos NAT4",
+        "nat3Punch": "Bom",
+        "nat3Note": "Direto com NAT1–NAT3; com NAT4 pode usar relay",
+        "nat4Punch": "Limitado",
+        "nat4Note": "Direto com NAT1/NAT2; NAT4 ↔ NAT4 usa relay"
+      }
+    }
   },
   "mesh": {
     "presence": {
@@ -1443,7 +1508,7 @@
     "coreVersion": "Versão do núcleo em execução",
     "bundledCore": "Versão do núcleo incluído",
     "coreCommit": "Commit do núcleo incluído"
-},
+  },
   "appearance": {
     "title": "Aparência",
     "mode": "Tema",

@@ -608,12 +608,27 @@ func (d *WGDatapath) applyPeerConfigLocked(cfg WGConfig) error {
 	)
 	// Access rules for INBOUND traffic. Applied before the peers go live so a
 	// packet can't slip in during the window between the two.
-	if runtime.GOOS == "windows" && d.ftun != nil {
-		owners := make(map[netip.Addr]bool, len(cfg.RDPOwners))
-		for _, ip := range cfg.RDPOwners {
-			owners[ip] = true
+	if _, standard := meshproto.RemoteLoginService(runtime.GOOS); standard != 0 && d.ftun != nil {
+		rdp := runtime.GOOS == "windows"
+		sources := cfg.SSHOwners
+		if rdp {
+			sources = cfg.RDPOwners
 		}
-		d.ftun.rdp.Store(&rdpOwnerFilter{cfg.OverlayAddr, owners})
+		guard := &remoteLoginFilter{local: cfg.OverlayAddr, rdp: rdp,
+			owners: make(map[netip.Addr]bool, len(sources)),
+			ports:  map[uint16]bool{standard: true},
+			grants: make(map[remoteLoginGrant]bool, len(cfg.RemoteLoginGrants)),
+		}
+		for _, ip := range sources {
+			guard.owners[ip] = true
+		}
+		for _, port := range cfg.RemoteLoginPorts {
+			guard.ports[port] = true
+		}
+		for _, grant := range cfg.RemoteLoginGrants {
+			guard.grants[grant] = true
+		}
+		d.ftun.remoteLogin.Store(guard)
 	}
 	if d.filter.SetRules(cfg.FilterEnabled, cfg.Filter) {
 		d.logger.Info("mesh access rules applied (inbound)",

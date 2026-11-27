@@ -80,6 +80,7 @@ type fileAction struct {
 	RDPPreview  string             `json:"rdp_preview,omitempty"`
 	SSHPort     uint16             `json:"ssh_port,omitempty"`
 	RDPPort     uint16             `json:"rdp_port,omitempty"`
+	CopyBinding string             `json:"copy_binding,omitempty"`
 	RDPProfile  string             `json:"rdp_profile,omitempty"`
 	RDPAccount  string             `json:"rdp_account,omitempty"`
 	RDPName     string             `json:"rdp_name,omitempty"`
@@ -398,7 +399,10 @@ func (d *desktopFileAgent) ensure() (*filetransfer.Workspace, error) {
 		}
 		host.Serve(ctx, g.DeviceKey, label, w, r)
 	}
-	w, err = filetransfer.NewWorkspace(filetransfer.AgentConfig{ClipboardPeer: d.clipboardPeer, AssistDenialLog: func(ip netip.Addr, reason string) { d.recordPeerEvent(ip, reason, "assist_http", "WARN") }, HandshakeLookup: lookup, HandshakeLog: d.recordHandshake, Assist: serveAssist, Authority: authority, Identity: d.identity, Directory: dir, Scope: scope, LocalIP: local, Port: 17401, Kbps: filetransfer.DefaultDeviceKbps, MaxBytes: 8 << 30, Resolve: resolve, Incoming: incoming})
+	w, err = filetransfer.NewWorkspace(filetransfer.AgentConfig{ClipboardPeer: d.clipboardPeer, MeshCopyPeer: d.meshCopyPeer,
+		MeshCopyBinding: verifyRDPCopyBinding, AssistDenialLog: func(ip netip.Addr, reason string) { d.recordPeerEvent(ip, reason, "assist_http", "WARN") },
+		HandshakeLookup: lookup, HandshakeLog: d.recordHandshake, Assist: serveAssist, Authority: authority, Identity: d.identity,
+		Directory: dir, Scope: scope, LocalIP: local, Port: 17401, Kbps: filetransfer.DefaultDeviceKbps, MaxBytes: 8 << 30, Resolve: resolve, Incoming: incoming})
 	if err != nil {
 		return nil, err
 	}
@@ -620,6 +624,10 @@ func (d *desktopFileAgent) handle(a fileAction) (any, error) {
 		}
 		if a.Action == "snapshot" || a.Action == "service_settings" {
 			state := d.identitySnapshot()
+			if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+				view, _ := d.metadata()
+				state["ssh_targets"] = sshTargetKeys(view)
+			}
 			state["unavailable_reason"] = err.Error()
 			state["service"] = d.managedSnapshot()
 			return state, nil
@@ -631,15 +639,19 @@ func (d *desktopFileAgent) handle(a fileAction) (any, error) {
 		d.stageMu.Lock()
 		preparing, preparationError := d.stageCancel != nil, d.stageError
 		d.stageMu.Unlock()
-		var owned []string
+		var rdpTargets, delegatedRDP, sshTargets []string
 		if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+			sshTargets = sshTargetKeys(v)
 			for _, m := range v.Members {
 				if m.CanRDPLogin() && m.IP != v.Overlay {
-					owned = append(owned, m.DeviceKey)
+					rdpTargets = append(rdpTargets, m.DeviceKey)
+					if !m.UnrestrictedRDPLogin() {
+						delegatedRDP = append(delegatedRDP, m.DeviceKey)
+					}
 				}
 			}
 		}
-		return map[string]any{"rdp_paste_marker": d.shellPasteMarker, "rdp_targets": owned, "available": true, "assist_supported": runtime.GOOS == "windows", "assist_receiving": w.Agent.Assisting(), "preparing": preparing, "preparation_error": preparationError, "receiving": w.Agent.Receiving(), "peers": v.Peers, "received": w.Agent.List(), "jobs": w.Jobs(), "sources": w.Staged(), "identity": filetransfer.ReadIdentityStatus(d.dir), "service": d.managedSnapshot()}
+		return map[string]any{"rdp_paste_marker": d.shellPasteMarker, "rdp_targets": rdpTargets, "rdp_delegated_targets": delegatedRDP, "ssh_targets": sshTargets, "available": true, "assist_supported": runtime.GOOS == "windows", "assist_receiving": w.Agent.Assisting(), "preparing": preparing, "preparation_error": preparationError, "receiving": w.Agent.Receiving(), "peers": v.Peers, "received": w.Agent.List(), "jobs": w.Jobs(), "sources": w.Staged(), "identity": filetransfer.ReadIdentityStatus(d.dir), "service": d.managedSnapshot()}
 	}
 	switch a.Action {
 	case "assist":
@@ -734,16 +746,16 @@ func (d *desktopFileAgent) handle(a fileAction) (any, error) {
 			return nil, errors.New("remote login profile changed")
 		}
 		for _, member := range v.Members {
-			if member.OwnWindows && member.DeviceKey == a.Peer && member.IP != v.Overlay {
+			if allowed, _ := permitsRDPCopy(member, false, a.RDPPort); allowed && member.DeviceKey == a.Peer && member.IP != v.Overlay {
 				ip, e := netip.ParseAddr(member.IP)
 				if e != nil {
 					return nil, e
 				}
-				id, e := w.Agent.CopyStart(d.ctx, ip)
+				id, e := w.Agent.CopyStart(d.ctx, ip, a.RDPPort, a.CopyBinding)
 				return map[string]string{"session": id}, e
 			}
 		}
-		return nil, errors.New("owned Windows target required")
+		return nil, errors.New("authorized Windows target required")
 	case "rdp_copy_send", "rdp_copy_status":
 		return d.rdpCopyAction(w, a)
 	case "pick":

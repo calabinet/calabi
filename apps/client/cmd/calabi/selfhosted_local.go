@@ -206,6 +206,15 @@ func (m *localMesh) ProbeRelayLeg(ctx context.Context, relay string, size int, r
 	return r.ProbeRelayLeg(ctx, relay, size, rateMbps, seconds, oneWay)
 }
 
+// STUNServers returns the live DERP map's STUN endpoints for GET /v1/netcheck.
+func (m *localMesh) STUNServers() []string {
+	r := m.runner()
+	if r == nil {
+		return nil
+	}
+	return r.STUNServers()
+}
+
 // MeshDown implements localweb.MeshSource: leave the meshnet — no network
 // interface, not a peer on the other devices — and stay joined, so tunnels keep
 // working. The console's own config remembers it across restarts; a

@@ -18,6 +18,35 @@ html, body, #root {
   overflow: hidden;
 }
 
+/* The native login window keeps a fixed frame through both login steps.
+   Windows text scaling can make its WebView viewport smaller. */
+.desktop-login {
+  height: 100%;
+  overflow-y: auto;
+}
+
+.desktop-login .ant-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  min-height: 100%;
+}
+
+.desktop-login .ant-card-body {
+  padding: clamp(14px, 4.71vh, 24px) clamp(16px, 8.43vw, 32px);
+  overflow-wrap: anywhere;
+}
+
+.desktop-login .ant-btn {
+  height: auto;
+  min-height: var(--ant-control-height, 36px);
+  white-space: normal;
+}
+
+.desktop-login .ant-btn-lg {
+  min-height: var(--ant-control-height-lg, 46px);
+}
+
 .overview-detail {
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(230px, 29%, 320px);

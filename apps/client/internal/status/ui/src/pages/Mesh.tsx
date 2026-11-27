@@ -324,6 +324,7 @@ export default function Mesh() {
   const rdpAvailable = nativeAssist() && files.data?.rdp_supported === true;
   const sshAvailable = nativeAssist() && files.data?.ssh_supported === true;
   const remoteAvailable = rdpAvailable || sshAvailable;
+  const sshTargets = files.data?.ssh_targets;
   const sshHistory = useQuery({
     queryKey: ["ssh-history", me?.user.id, meshOrgID, data?.overlay],
     queryFn: () => fileAction<SshRecent[]>({ action: "ssh_history" }),
@@ -367,7 +368,8 @@ export default function Mesh() {
 
   const remoteRecords = [
     ...(rdpAvailable ? history.data ?? [] : []).map(record => ({ kind: "rdp" as const, record })),
-    ...(sshAvailable ? sshHistory.data ?? [] : []).map(record => ({ kind: "ssh" as const, record })),
+    ...(sshAvailable ? sshHistory.data ?? [] : []).filter(record => sshTargets?.includes(record.peer))
+      .map(record => ({ kind: "ssh" as const, record })),
   ].sort((a, b) => (b.record.used_at ?? 0) - (a.record.used_at ?? 0));
   const remoteLoading = (rdpAvailable && history.isPending) || (sshAvailable && sshHistory.isPending);
   const remoteFailed = (rdpAvailable && history.isError) || (sshAvailable && sshHistory.isError);
@@ -761,6 +763,11 @@ export default function Mesh() {
           <Col xs={12} md={6}>
             <Card size="small">
               <Statistic title={t("mesh.overlay")} value={data.overlay || "—"} className="mesh-status-identity" />
+              <div style={{ marginTop: 4 }}>
+                <Button type="link" size="small" style={{ padding: 0, height: "auto", fontSize: 12 }} onClick={() => navigate("/tools")}>
+                  {t("tools.nat.quickEntry")}
+                </Button>
+              </div>
             </Card>
           </Col>
           <Col xs={12} md={6}>
@@ -799,14 +806,15 @@ export default function Mesh() {
             ...columns.filter(column => column.key === "traffic").map(column => ({ ...column, width: 150 })),
             { key: "actions", width: 48, render: (_, peer) => {
               const address = peerAddresses(peer.allowed_ips).overlay;
-              const ownWindows = files.data?.rdp_targets?.includes(peer.public_key);
+              const canLoginRDP = files.data?.rdp_targets?.includes(peer.public_key);
+              const delegatedRDP = files.data?.rdp_delegated_targets?.includes(peer.public_key);
               const receiver = receivers.find(target => target.key === peer.public_key);
               const ready = receiver?.status === "ready";
               return <Dropdown trigger={["click"]} menu={{ items: [
                 ...(fileSupport.data ? [{ key: "send", icon: <MeshGlyph name="send" />, label: <Tooltip trigger={["hover", "focus"]} title={!ready ? t(`files.targetStatus.${receiver?.status || "notReady"}`) : undefined}><span tabIndex={!ready ? 0 : undefined} className="mesh-send-menu-label">{t("files.send")}</span></Tooltip>, disabled: !ready, onClick: () => navigate(`/mesh/files?device=${encodeURIComponent(peer.public_key)}`, { state: { fileTarget: { key: peer.public_key, name: peer.name || "", ip: address } } }) }] : []),
-                ...(nativeAssist() && ownWindows ? [{key:"rdp", icon:<MeshGlyph name="network" />, label:t("assist.login"), disabled:presenceOf(peer)==="offline", onClick:()=>openRemote(peer.public_key,peer.name || address)}] : []),
-                ...(sshAvailable && peer.os === "linux" ? [{ key: "ssh", icon: <MeshGlyph name="terminal" />, label: t("assist.login"), disabled: !address || presenceOf(peer) === "offline", onClick: () => beginSshLogin(peer) }] : []),
-                ...(nativeAssist() && !ownWindows && peer.os?.toLowerCase() === "windows" ? [{ key: "assist", icon: <MeshGlyph name="network" />, label: t("assist.request"), disabled: !receiver?.assistance || presenceOf(peer) === "offline", onClick: () => void fileAction({action:"assist_open", peer:peer.public_key, name:peer.name || address}).catch(e=>message.error(e.message)) }] : []),
+                ...(nativeAssist() && canLoginRDP ? [{key:"rdp", icon:<MeshGlyph name="network" />, label:t("assist.login"), disabled:presenceOf(peer)==="offline", onClick:()=>openRemote(peer.public_key,peer.name || address)}] : []),
+                ...(sshAvailable && sshTargets?.includes(peer.public_key) ? [{ key: "ssh", icon: <MeshGlyph name="terminal" />, label: t("assist.login"), disabled: !address || presenceOf(peer) === "offline", onClick: () => beginSshLogin(peer) }] : []),
+                ...(nativeAssist() && (!canLoginRDP || delegatedRDP) && peer.os?.toLowerCase() === "windows" ? [{ key: "assist", icon: <MeshGlyph name="network" />, label: t("assist.request"), disabled: !receiver?.assistance || presenceOf(peer) === "offline", onClick: () => void fileAction({action:"assist_open", peer:peer.public_key, name:peer.name || address}).catch(e=>message.error(e.message)) }] : []),
                 { key: "details", icon: <MeshGlyph name="info" />, label: t("files.connectionDetails"), onClick: () => setConnectionKey(peer.public_key) },
               ] }}><Button type="text" icon={<MeshGlyph name="more" />} aria-label={t("files.deviceActions", { device: peer.name || address })} /></Dropdown>;
             } },
@@ -883,7 +891,7 @@ export default function Mesh() {
                       const ip = (peer && peerAddresses(peer.allowed_ips).overlay) || record.ip;
                       const name = peer?.name || record.name || ip;
                       const allowed = peer && presenceOf(peer) !== "offline" && (kind === "ssh"
-                        ? peer.os === "linux" : files.data?.rdp_targets?.includes(record.peer));
+                        ? sshTargets?.includes(record.peer) : files.data?.rdp_targets?.includes(record.peer));
                       const key = kind === "ssh" ? `${kind}/${record.peer}/${record.account}/${item.record.port}` : `${kind}/${record.peer}`;
                       return <button type="button" className="mesh-remote-card" key={key} disabled={!allowed}
                         aria-label={t("remote.connectDevice", { name })} onClick={() => {

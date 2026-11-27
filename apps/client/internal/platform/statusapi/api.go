@@ -320,6 +320,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	// probe + inspector. All open (read-only diagnostics).
 	mux.HandleFunc("GET /v1/probe/ports", s.handleProbePorts)
 	mux.HandleFunc("GET /v1/probe/health", s.handleProbeHealth)
+	mux.HandleFunc("GET /v1/netcheck", s.handleNetCheck)
 	// One-shot reachability check for the new-tunnel wizard. POST because it
 	// dials; open like the other probes because probe.CheckOnce refuses any
 	// target a tunnel would refuse to forward to.

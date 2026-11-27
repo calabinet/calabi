@@ -58,3 +58,28 @@ func TestClipboardPeerSelfHostedRDPDoesNotGrantFileAccess(t *testing.T) {
 		t.Fatal("clipboard switch bypassed")
 	}
 }
+
+func TestRDPCopyPermissionUsesDirectionAndPort(t *testing.T) {
+	windows := filecontrol.Member{OS: "windows", RemoteLoginPorts: []uint16{3389}}
+	mac := filecontrol.Member{OS: "darwin", IncomingRemoteLoginPorts: []uint16{3389}}
+	for _, test := range []struct {
+		member filecontrol.Member
+		host   bool
+		port   uint16
+		want   bool
+	}{
+		{windows, false, 3389, true},
+		{windows, true, 3389, false},
+		{windows, false, 3390, false},
+		{windows, false, 0, false},
+		{mac, true, 3389, true},
+		{mac, false, 3389, false},
+	} {
+		if allowed, bind := permitsRDPCopy(test.member, test.host, test.port); allowed != test.want || bind != test.want {
+			t.Fatalf("permission for %s, host=%t, port=%d: allowed=%t, bind=%t", test.member.OS, test.host, test.port, allowed, bind)
+		}
+	}
+	if allowed, bind := permitsRDPCopy(filecontrol.Member{OS: "windows", OwnWindows: true}, false, 0); !allowed || bind {
+		t.Fatal("older same-owner desktop lost clipboard access")
+	}
+}

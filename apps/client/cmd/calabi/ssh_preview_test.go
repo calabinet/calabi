@@ -32,7 +32,7 @@ func TestSSHPreviewAuthorizationAndLoginIsolation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var mu sync.Mutex
-	view := filecontrol.Snapshot{Ready: true, AccountID: 31, Scope: "ssh-preview-test", Overlay: "100.64.0.1", Members: []filecontrol.Member{{DeviceKey: "linux", IP: "100.64.0.2", OS: "linux"}}}
+	view := filecontrol.Snapshot{Ready: true, AccountID: 31, Scope: "ssh-preview-test", Overlay: "100.64.0.1", Members: []filecontrol.Member{{DeviceKey: "linux", IP: "100.64.0.2", OS: "linux", SameOwner: true}}}
 	ctl := &filecontrol.Control{Source: filecontrol.Source{View: func() (filecontrol.Snapshot, error) { mu.Lock(); defer mu.Unlock(); return view, nil }}}
 	console := fmt.Sprintf("http://127.0.0.1:%d", 31000+os.Getpid()%10000)
 	done, err := filecontrol.Serve(ctx, ctl, console)
@@ -62,11 +62,30 @@ func TestSSHPreviewAuthorizationAndLoginIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	records := history.(map[string]any)["records"].([]remoteRecent)
+	if len(records) != 3 {
+		t.Fatalf("owned SSH history = %v", records)
+	}
 	for _, r := range records {
 		if (r.Thumbnail != "") != (r.Account == "alice" && r.Port == 22) {
 			t.Fatalf("preview crossed login boundary: %#v", r)
 		}
 	}
+	mu.Lock()
+	owned := view.Members
+	view.Members = []filecontrol.Member{{DeviceKey: "linux", IP: "100.64.0.2", OS: "linux"}}
+	mu.Unlock()
+	for _, action := range []fileAction{{Action: "ssh_target", Peer: "linux"}, preview, {Action: "ssh_record", Peer: "linux", RDPProfile: profile, RDPAccount: "alice", SSHPort: 22}} {
+		if _, err := d.sshAction(action); err == nil {
+			t.Fatalf("%s accepted target without ownership", action.Action)
+		}
+	}
+	history, err = d.sshAction(fileAction{Action: "ssh_history"})
+	if err != nil || len(history.(map[string]any)["records"].([]remoteRecent)) != 0 {
+		t.Fatalf("SSH history exposed target without ownership: %v, %v", history, err)
+	}
+	mu.Lock()
+	view.Members = owned
+	mu.Unlock()
 	// Reconnecting the same login retains its last valid image.
 	if _, err := d.sshAction(fileAction{Action: "ssh_record", Peer: "linux", RDPProfile: profile, RDPAccount: "alice", SSHPort: 22}); err != nil {
 		t.Fatal(err)

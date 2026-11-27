@@ -638,6 +638,47 @@ func (c *Controller) getHome() string {
 // (returns the coordinator's default, or "").
 func (c *Controller) HomeRegion() string { return c.getHome() }
 
+// STUNServers returns deduplicated STUN host:port endpoints from the latest
+// DERP map, placing the node's home region first. Safe to call before the first
+// netmap arrives (returns nil).
+func (c *Controller) STUNServers() []string {
+	c.homeMu.Lock()
+	m := c.derpMap
+	home := c.homeRegion
+	c.homeMu.Unlock()
+	if len(m.Regions) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool)
+	var out []string
+	addRegion := func(r DERPRegion) {
+		for _, n := range r.Nodes {
+			if n.HostName == "" || n.STUNPort <= 0 {
+				continue
+			}
+			hp := net.JoinHostPort(n.HostName, strconv.Itoa(n.STUNPort))
+			if seen[hp] {
+				continue
+			}
+			seen[hp] = true
+			out = append(out, hp)
+		}
+	}
+	if home != "" {
+		for _, r := range m.Regions {
+			if r.Code == home {
+				addRegion(r)
+			}
+		}
+	}
+	for _, r := range m.Regions {
+		if r.Code != home {
+			addRegion(r)
+		}
+	}
+	return out
+}
+
 // Registered reports whether this session got as far as the coordinator
 // accepting its registration, so Coord can be read over.
 func (c *Controller) Registered() bool { return c.registered.Load() }

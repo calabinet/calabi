@@ -753,6 +753,9 @@ message Peer {
   // Windows credentials and packet-filter rules are still required.
   // This does not assert ownership or grant owner-only clipboard-file access.
   bool rdp_access_allowed = 14;
+  // Explicit, directional remote-login TCP ports, relative to the recipient.
+  repeated uint32 remote_login_to_peer = 15;
+  repeated uint32 remote_login_from_peer = 16;
   bytes rdp_certificate_sha256 = 13; // online, authorized Windows only
   // Only present for a current, approved, online device's unexpired declaration.
   FileTransferInfo file_transfer = 11;

@@ -47,6 +47,10 @@ type Enrollment struct {
 	// ONLY field that changes when the user switches org: coord/relay are
 	// platform-wide and NodeName is the device's. 0 from a bff that predates it.
 	OrgID int64 `json:"org_id"`
+	// NATStunAddr is the optional platform-owned RFC 5780 dual-IP STUN address
+	// (e.g. "stun.calabi.net:3490", comma-separated) for Stage 2 NAT diagnostics.
+	// Empty when not deployed yet — clients do not probe any hardcoded domain.
+	NATStunAddr string `json:"nat_stun_addr,omitempty"`
 }
 
 // WantsRun reports whether this enrollment should bring the datapath up.

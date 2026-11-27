@@ -6,6 +6,8 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -29,13 +31,17 @@ func (d *desktopFileAgent) sshAction(a fileAction) (any, error) {
 	case "ssh_history":
 		records, err := readRemoteRecent(d.dir, file)
 		if err == nil {
+			records = slices.DeleteFunc(records, func(record remoteRecent) bool {
+				_, err := sshLoginTarget(v, record.Peer, record.Port)
+				return err != nil
+			})
 			for i := range records {
 				records[i].Thumbnail = readRDPPreview(d.dir, "ssh-"+profile, sshPreviewID(records[i]))
 			}
 		}
 		return map[string]any{"records": records, "profile": profile}, err
 	case "ssh_preview":
-		if _, err := sshTarget(v, a.Peer); err != nil {
+		if _, err := sshLoginTarget(v, a.Peer, a.SSHPort); err != nil {
 			return nil, err
 		}
 		if a.RDPProfile != profile {
@@ -52,7 +58,7 @@ func (d *desktopFileAgent) sshAction(a fileAction) (any, error) {
 		}
 		return nil, errors.New("SSH login record no longer exists")
 	case "ssh_record":
-		target, err := sshTarget(v, a.Peer)
+		target, err := sshLoginTarget(v, a.Peer, a.SSHPort)
 		if err != nil {
 			return nil, err
 		}
@@ -95,25 +101,74 @@ func (d *desktopFileAgent) sshAction(a fileAction) (any, error) {
 	}
 }
 
-func sshTarget(view filecontrol.Snapshot, peer string) (map[string]string, error) {
+func sshLocalAddress(view filecontrol.Snapshot) netip.Addr {
 	local, err := netip.ParseAddr(view.Overlay)
 	if !view.Ready || view.Scope == "" || err != nil || !sshMeshIPv4.Contains(local) {
+		return netip.Addr{}
+	}
+	return local
+}
+
+func sshAddress(local netip.Addr, member filecontrol.Member) netip.Addr {
+	if !local.IsValid() || (!member.SameOwner && len(member.RemoteLoginPorts) == 0) || member.DeviceKey == "" || member.OS != "linux" {
+		return netip.Addr{}
+	}
+	host, err := netip.ParseAddr(member.IP)
+	if err != nil || host == local || !sshMeshIPv4.Contains(host) {
+		return netip.Addr{}
+	}
+	return host
+}
+
+func sshTargetKeys(view filecontrol.Snapshot) []string {
+	local := sshLocalAddress(view)
+	var keys []string
+	for _, member := range view.Members {
+		if sshAddress(local, member).IsValid() {
+			keys = append(keys, member.DeviceKey)
+		}
+	}
+	return keys
+}
+
+func sshTarget(view filecontrol.Snapshot, peer string) (map[string]string, error) {
+	return sshLoginTarget(view, peer, 0)
+}
+
+func remoteLoginPortsString(ports []uint16) string {
+	items := make([]string, 0, len(ports))
+	for _, port := range ports {
+		items = append(items, strconv.FormatUint(uint64(port), 10))
+	}
+	return strings.Join(items, ",")
+}
+
+func sshLoginTarget(view filecontrol.Snapshot, peer string, port uint16) (map[string]string, error) {
+	local := sshLocalAddress(view)
+	if !local.IsValid() {
 		return nil, errors.New("Mesh is not ready")
 	}
 	for _, member := range view.Members {
-		if peer == "" || member.DeviceKey != peer || member.OS != "linux" {
+		if member.DeviceKey != peer {
 			continue
 		}
-		host, err := netip.ParseAddr(member.IP)
-		if err == nil && host != local && sshMeshIPv4.Contains(host) {
+		if host := sshAddress(local, member); host.IsValid() {
+			var ports string
+			if !member.SameOwner {
+				if port != 0 && !slices.Contains(member.RemoteLoginPorts, port) {
+					break
+				}
+				ports = remoteLoginPortsString(member.RemoteLoginPorts)
+			}
 			profile := rdpProfile(view)
 			return map[string]string{
 				"host": host.String(), "local": local.String(), "profile": profile,
 				"host_key": rdpHash(profile + "\x00" + peer),
+				"ports":    ports,
 			}, nil
 		}
 	}
-	return nil, errors.New("Linux SSH target is no longer available in this mesh")
+	return nil, errors.New("SSH target or port is no longer authorized")
 }
 
 func sshPreviewID(record remoteRecent) string {

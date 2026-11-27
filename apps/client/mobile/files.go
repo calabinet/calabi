@@ -15,6 +15,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -118,7 +119,21 @@ func (c *Core) ensureFiles() (*mobileFiles, error) {
 		}
 		return filetransfer.Grant{Path: paths.Load().(map[string]string)[p.NodeKey.String()], Peer: filetransfer.Peer{IP: ip, Fingerprint: pin}, DeviceKey: p.NodeKey.String(), Port: uint16(p.FileTransfer.Port), Receiving: p.FileTransfer.Receiving}, true
 	}
-	w, err := filetransfer.NewWorkspace(filetransfer.AgentConfig{Identity: id, Directory: dir, Scope: scope, LocalIP: local, Port: 17401, Kbps: filetransfer.DefaultDeviceKbps, MaxBytes: 8 << 30, Resolve: resolve, Incoming: func(ip netip.Addr, port uint16) bool { return current() && dp.IncomingTCPAllowed(ip, port) }})
+	copyPeer := func(g filetransfer.Grant, host bool, port uint16) (bool, bool) {
+		if host || port == 0 || !current() {
+			return false, false
+		}
+		for _, peer := range ctrl.FileMembers() {
+			if peer.NodeKey.String() == g.DeviceKey && peer.Overlay == g.Peer.IP && rdpReason(peer) == "" {
+				if peer.SameOwner {
+					return true, false
+				}
+				return slices.Contains(peer.RemoteLoginToPeer, port), true
+			}
+		}
+		return false, false
+	}
+	w, err := filetransfer.NewWorkspace(filetransfer.AgentConfig{Identity: id, Directory: dir, Scope: scope, LocalIP: local, Port: 17401, Kbps: filetransfer.DefaultDeviceKbps, MaxBytes: 8 << 30, Resolve: resolve, Incoming: func(ip netip.Addr, port uint16) bool { return current() && dp.IncomingTCPAllowed(ip, port) }, MeshCopyPeer: copyPeer})
 	if err != nil {
 		return nil, err
 	}

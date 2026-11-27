@@ -72,6 +72,9 @@ func (d *WGDatapath) repairConfigLoop() {
 // change permissions while a retry is waiting.
 func cloneRepairConfig(c WGConfig) WGConfig {
 	c.RDPOwners = append([]netip.Addr(nil), c.RDPOwners...)
+	c.SSHOwners = append([]netip.Addr(nil), c.SSHOwners...)
+	c.RemoteLoginPorts = append([]uint16(nil), c.RemoteLoginPorts...)
+	c.RemoteLoginGrants = append([]remoteLoginGrant(nil), c.RemoteLoginGrants...)
 	c.Peers = append([]WGPeer(nil), c.Peers...)
 	for i := range c.Peers {
 		c.Peers[i].AllowedIPs = append([]netip.Prefix(nil), c.Peers[i].AllowedIPs...)

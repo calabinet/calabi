@@ -34,7 +34,9 @@ type Grant struct {
 	Assistance         bool   `json:"assistance,omitempty"`
 }
 type AgentConfig struct {
-	ClipboardPeer   func(Grant) bool // local desktop capability and current owned-device check
+	ClipboardPeer   func(Grant) bool // legacy clipboard transport
+	MeshCopyPeer    func(Grant, bool, uint16) (allowed, bindSession bool)
+	MeshCopyBinding func(port uint16, token string) bool // proof over the host's live RDP channel
 	AssistDenialLog func(netip.Addr, string)
 	HandshakeLookup func(netip.Addr) (Grant, error)
 	HandshakeLog    func(netip.Addr, string, bool)
@@ -296,10 +298,6 @@ func (a *Agent) Handler() http.Handler {
 			return
 		}
 		if req.URL.Path == "/rdp-copy/v2" {
-			if a.cfg.ClipboardPeer == nil || !a.cfg.ClipboardPeer(g) {
-				fail(w, 403, "remote copy unavailable")
-				return
-			}
 			a.serveMeshCopy(g, w, req)
 			return
 		}

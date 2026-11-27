@@ -16,6 +16,8 @@ import (
 	"net/netip"
 	"strings"
 	"time"
+
+	meshproto "github.com/calabinet/calabi/pkg/mesh-proto"
 )
 
 // Identity is a dedicated transfer identity, never a WireGuard key. NewIdentity
@@ -57,7 +59,7 @@ func identityWithKey(key ed25519.PrivateKey, lifetime time.Duration) (*Identity,
 	now := time.Now()
 	template := &x509.Certificate{
 		SerialNumber: serial, Subject: pkix.Name{CommonName: "Calabi file transfer"},
-		NotBefore: now.Add(-time.Minute), NotAfter: now.Add(lifetime),
+		NotBefore: now.Add(-meshproto.FileTransferClockSkew), NotAfter: now.Add(lifetime),
 		KeyUsage:    x509.KeyUsageDigitalSignature,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 	}
@@ -92,7 +94,7 @@ func checkCertificate(cs tls.ConnectionState, fingerprint string) error {
 	}
 	cert := cs.PeerCertificates[0]
 	now := time.Now()
-	if now.Before(cert.NotBefore) || now.After(cert.NotAfter) {
+	if now.Add(meshproto.FileTransferClockSkew).Before(cert.NotBefore) || now.After(cert.NotAfter.Add(meshproto.FileTransferClockSkew)) {
 		return errors.New("transfer certificate expired or not yet valid")
 	}
 	want, err := hex.DecodeString(fingerprint)

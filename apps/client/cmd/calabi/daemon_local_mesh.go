@@ -614,6 +614,18 @@ func (r *meshRunner) ServiceObservations() []mesh.ServiceObservation {
 	return ctrl.ServiceObservations()
 }
 
+// STUNServers returns the live DERP map's STUN endpoints (home region first),
+// or nil while the mesh is down. Used by GET /v1/netcheck.
+func (r *meshRunner) STUNServers() []string {
+	r.mu.Lock()
+	ctrl := r.ctrl
+	r.mu.Unlock()
+	if ctrl == nil {
+		return nil
+	}
+	return ctrl.STUNServers()
+}
+
 // UpdateDeclarations pushes revised declarations on the RUNNING session. Returns
 // mesh.ErrNotEnrolled when there is no session to push on, which is the same
 // answer the coordinator gives for an unknown node — so callers take one

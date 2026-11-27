@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -73,7 +74,11 @@ func (d *desktopFileAgent) rdpProfileAction(a fileAction) (any, error) {
 			continue
 		}
 		if a.Action == "rdp_target" {
-			return map[string]string{"host": member.IP, "local": v.Overlay, "scope": v.Scope, "pin": member.RDPPin,
+			var ports string
+			if !member.UnrestrictedRDPLogin() {
+				ports = remoteLoginPortsString(member.RemoteLoginPorts)
+			}
+			return map[string]string{"host": member.IP, "local": v.Overlay, "scope": v.Scope, "pin": member.RDPPin, "ports": ports,
 				"profile": profile, "credential_key": rdpHash(profile + "\x00" + member.DeviceKey)}, nil
 		}
 		if a.Action == "rdp_preview" {
@@ -94,6 +99,9 @@ func (d *desktopFileAgent) rdpProfileAction(a fileAction) (any, error) {
 		if a.RDPProfile != profile || a.RDPAccount == "" || len(a.RDPAccount) > 2047 ||
 			!utf8.ValidString(a.RDPAccount) || strings.ContainsFunc(a.RDPAccount, unicode.IsControl) {
 			return nil, errors.New("Invalid remote login record")
+		}
+		if !member.UnrestrictedRDPLogin() && !slices.Contains(member.RemoteLoginPorts, a.RDPPort) {
+			return nil, errors.New("RDP port is not authorized")
 		}
 		records, err := readRemoteRecent(d.dir, filename)
 		if err != nil {

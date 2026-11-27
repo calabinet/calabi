@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -528,6 +529,32 @@ type meshPeerService struct {
 	Name  string `json:"name"`
 	Proto string `json:"proto"`
 	Port  uint32 `json:"port"`
+}
+
+func (e *engine) stunServers() []string {
+	e.mu.Lock()
+	ctrl := e.ctrl
+	e.mu.Unlock()
+	if ctrl == nil {
+		return nil
+	}
+	return ctrl.STUNServers()
+}
+
+func (e *engine) natStunServers() []string {
+	e.mu.Lock()
+	raw := e.enr.NATStunAddr
+	e.mu.Unlock()
+	if raw == "" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		if s := strings.TrimSpace(part); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func (e *engine) status() meshStatus {

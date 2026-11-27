@@ -50,11 +50,11 @@ type registerRequest struct {
 	CoreVersion   string `json:"core_version,omitempty"`
 }
 
-// DesktopVersion is set by the desktop-bundled entry point. Standalone CLI
-// builds leave it empty; the core version never identifies an app release.
+// DesktopVersion is set by the desktop-bundled entry point. The standalone
+// client and its core are released as a single binary with one version.
 var DesktopVersion string
 
-func productMetadata() (kind, appVersion string) {
+func productMetadata(coreVersion string) (kind, appVersion string) {
 	// The OpenWrt init script reads this value from the installed calabi
 	// package. The package revision can change independently of the core.
 	if version := strings.TrimSpace(os.Getenv("CALABI_OPENWRT_VERSION")); version != "" {
@@ -63,7 +63,7 @@ func productMetadata() (kind, appVersion string) {
 	if DesktopVersion != "" {
 		return "desktop", DesktopVersion
 	}
-	return "cli", ""
+	return "cli", coreVersion
 }
 
 // registerResponse mirrors the JSON returned by bff-console.
@@ -102,7 +102,7 @@ func Ensure(cfg *creds.Config, bffConsoleURL, version string) error {
 		label = h
 	}
 
-	kind, appVersion := productMetadata()
+	kind, appVersion := productMetadata(version)
 	body, err := json.Marshal(registerRequest{
 		Fingerprint:   fp,
 		DisplayName:   label,
@@ -190,7 +190,7 @@ func EnsureAgent(cfg *creds.Config, bffConsoleURL, version, apiKey string) error
 	if h, _ := os.Hostname(); h != "" {
 		label = h
 	}
-	kind, appVersion := productMetadata()
+	kind, appVersion := productMetadata(version)
 	body, err := json.Marshal(registerRequest{
 		Fingerprint:   fp,
 		DisplayName:   label,

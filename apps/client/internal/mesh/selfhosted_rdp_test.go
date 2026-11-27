@@ -22,7 +22,7 @@ func TestSelfHostedRDPAuthorizationDecodeAndInbound(t *testing.T) {
 		t.Fatalf("missing inbound grant: %+v", cfg.RDPOwners)
 	}
 	tun := &filteredTUN{filter: &PacketFilter{}, flows: newFlowTable()}
-	tun.rdp.Store(&rdpOwnerFilter{local, map[netip.Addr]bool{p.Overlay: true}})
+	tun.remoteLogin.Store(&remoteLoginFilter{local: local, owners: map[netip.Addr]bool{p.Overlay: true}, ports: map[uint16]bool{3389: true}, rdp: true})
 	packet := ipv4(p.Overlay.String(), protoTCP, 3389, 0)
 	copy(packet[16:20], local.AsSlice())
 	if !tun.allowInbound(packet) {
@@ -38,7 +38,7 @@ func TestSelfHostedRDPAuthorizationDecodeAndInbound(t *testing.T) {
 	if err != nil || revoked.RDPPin != "" || len(BuildWGConfig(NetMap{Peers: []Peer{revoked}}).RDPOwners) != 0 {
 		t.Fatalf("untrusted pin survived revocation: %+v %v", revoked, err)
 	}
-	tun.rdp.Store(&rdpOwnerFilter{local, map[netip.Addr]bool{}})
+	tun.remoteLogin.Store(&remoteLoginFilter{local: local, ports: map[uint16]bool{3389: true}, rdp: true})
 	if tun.allowInbound(packet) {
 		t.Fatal("revoked peer still reaches 3389")
 	}

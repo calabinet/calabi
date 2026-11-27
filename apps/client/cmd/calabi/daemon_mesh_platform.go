@@ -782,6 +782,33 @@ func (l *runnerLease) status() statusapi.MeshStatus {
 	return toStatusapiMesh(l.r.MeshStatus())
 }
 
+func (l *runnerLease) stunServers() []string {
+	return l.r.STUNServers()
+}
+
+// STUNServers returns the live DERP map's STUN endpoints for GET /v1/netcheck.
+func (c *platformMeshController) STUNServers() []string {
+	c.mu.Lock()
+	lease := c.lease
+	c.mu.Unlock()
+	if src, ok := lease.(interface{ stunServers() []string }); ok {
+		return src.stunServers()
+	}
+	return nil
+}
+
+// NATStunServers returns optional platform-configured RFC 5780 STUN server(s)
+// advertised via GET /v1/mesh/enrollment (empty when not deployed yet).
+func (c *platformMeshController) NATStunServers() []string {
+	c.mu.Lock()
+	raw := c.cur.NATStunAddr
+	c.mu.Unlock()
+	if raw == "" {
+		return nil
+	}
+	return splitCSV(raw)
+}
+
 // toStatusapiMesh converts the localweb status shape (what meshRunner produces)
 // into the statusapi shape (what the platform daemon's /v1/mesh serves). The two
 // are field-identical; this keeps statusapi from importing localweb.

@@ -32,6 +32,7 @@ func TestRDPPreparationUsesAuthenticatedMeshIdentity(t *testing.T) {
 	})
 	c := newTestCore(t, &fakeBFF{enrollment: fmt.Sprintf(`{"enabled":true,"coord_addr":%q,"relay_addr":"127.0.0.1:1","org_id":7}`, address)}, &fakePlatform{})
 	c.cfg.RemoteDesktopP0 = true
+	c.cfg.FileTransferV1 = true
 	c.api = c.routes()
 	post := func(path string, value map[string]any) (int, map[string]any) {
 		b, _ := json.Marshal(value)
@@ -59,6 +60,15 @@ func TestRDPPreparationUsesAuthenticatedMeshIdentity(t *testing.T) {
 	if code != 200 || prepared["host"] != "100.64.0.8" || prepared["local"] != "100.64.0.7" || prepared["port"] != float64(3389) || prepared["certificate_sha256"] != strings.Repeat("ab", 32) {
 		t.Fatalf("prepared = %d %v", code, prepared)
 	}
+	if _, enabled := prepared["copy_binding"]; enabled {
+		t.Fatal("a ticket without file copy acquired a binding")
+	}
+	post("close", map[string]any{"token": prepared["token"]})
+	code, prepared = post("prepare", map[string]any{"device_key": key.String(), "copy_files": true})
+	binding, _ := prepared["copy_binding"].(string)
+	if code != 200 || len(binding) != 64 || binding == prepared["token"] {
+		t.Fatal("an enabled copy ticket needs its own binding")
+	}
 	for _, invalidPort := range []any{0, -1, 65536, 3390.5, "3390"} {
 		if code, _ := post("prepare", map[string]any{"device_key": key.String(), "port": invalidPort}); code != 400 {
 			t.Errorf("invalid port %v = %d", invalidPort, code)
@@ -75,12 +85,19 @@ func TestRDPPreparationUsesAuthenticatedMeshIdentity(t *testing.T) {
 		t.Fatal("custom ticket rejected its port")
 	}
 	post("close", map[string]any{"token": custom["token"]})
-	token := prepared["token"]
+	token := prepared["token"].(string)
+	if _, err := c.rdpCopyTicket(token); err == nil {
+		t.Fatal("unverified RDP ticket authorized file copy")
+	}
 	if code, _ := post("verify", map[string]any{"token": token, "certificate_sha256": strings.Repeat("0", 64)}); code != 403 {
 		t.Fatalf("wrong certificate accepted: %d", code)
 	}
 	if code, _ := post("verify", map[string]any{"token": token, "certificate_sha256": prepared["certificate_sha256"]}); code != 200 {
 		t.Fatalf("correct certificate rejected: %d", code)
+	}
+	copyTicket, err := c.rdpCopyTicket(token)
+	if err != nil || copyTicket.copy.key != binding {
+		t.Fatal("verified session could not retrieve its file copy lease")
 	}
 	e := c.currentEngine()
 	e.mu.Lock()
@@ -116,6 +133,9 @@ func TestRDPPreparationUsesAuthenticatedMeshIdentity(t *testing.T) {
 	}
 	if code, _ := post("close", map[string]any{"token": token}); code != 200 {
 		t.Fatal("close failed")
+	}
+	if _, err := c.rdpCopyTicket(token); err == nil || copyTicket.copy.ctx.Err() == nil {
+		t.Fatal("closing the RDP ticket did not cancel its file copy lease")
 	}
 	if code, _ := post("verify", map[string]any{"token": token, "certificate_sha256": prepared["certificate_sha256"]}); code != 403 {
 		t.Fatal("closed ticket remained usable")

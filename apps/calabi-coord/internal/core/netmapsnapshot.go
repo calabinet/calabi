@@ -166,6 +166,7 @@ func (s *NetMapSnapshot) forSelfView(ctx context.Context, self *Node, borrowed *
 		}
 	}
 	nm.PacketFilter = s.c.packetFilterFor(self, peers, s.doc)
+	nm.RemoteLogins = remoteLoginFor(self, peers, s.doc)
 	nm.UnaliasedRoutes = unaliasedRoutes(self)
 	nm.AliasBudgetAddrs, nm.AliasUsedAddrs = s.budget, s.used
 	nm.RelayBandwidthKbps, nm.RelayBandwidthBurstKbps = s.rate, s.burst

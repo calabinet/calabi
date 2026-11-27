@@ -18,7 +18,9 @@ func (c *Controller) FileMembers() []Peer {
 	defer c.peersMu.Unlock()
 	out := make([]Peer, 0, len(c.curPeers))
 	for _, p := range c.curPeers {
-		out = append(out, Peer{RDPPin: p.RDPPin, SameOwner: p.SameOwner, RDPAccessAllowed: p.RDPAccessAllowed, OS: p.OS, NodeKey: p.NodeKey, Overlay: p.Overlay, Name: p.Name, DeclarationError: p.DeclarationError, FileTransfer: cloneFileTransfer(p.FileTransfer)})
+		out = append(out, Peer{RDPPin: p.RDPPin, SameOwner: p.SameOwner, RDPAccessAllowed: p.RDPAccessAllowed,
+			RemoteLoginToPeer: append([]uint16(nil), p.RemoteLoginToPeer...), RemoteLoginFromPeer: append([]uint16(nil), p.RemoteLoginFromPeer...),
+			OS: p.OS, NodeKey: p.NodeKey, Overlay: p.Overlay, Name: p.Name, DeclarationError: p.DeclarationError, FileTransfer: cloneFileTransfer(p.FileTransfer)})
 	}
 	return out
 }

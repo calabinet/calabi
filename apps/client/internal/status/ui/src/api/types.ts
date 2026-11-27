@@ -873,3 +873,39 @@ export interface SelfHostedUsage {
   days: { start: string; bytes: number }[];
   devices: { used: number; disabled: number; limit: number };
 }
+
+// ---- Network & NAT diagnostics (GET /v1/netcheck) ---------------------------
+
+export type NatType =
+  | "open"
+  | "full_cone"
+  | "restricted_cone"
+  | "port_restricted_cone"
+  | "cone"
+  | "symmetric"
+  | "udp_blocked"
+  | "unknown";
+
+export type HolePunchVerdict =
+  | "direct"
+  | "supported"
+  | "limited"
+  | "blocked"
+  | "unknown";
+
+export interface NetCheckReport {
+  nat_type: NatType;
+  hole_punch: HolePunchVerdict;
+  overlay_ip?: string;
+  local_ip?: string;
+  local_ips?: string[];
+  public_ip?: string;
+  public_port?: number;
+  ipv6?: string;
+  port_varies?: boolean;
+  probe_source?: "edge" | "rfc5780" | "none" | string;
+  probed_at?: string;
+  duration_ms?: number;
+  servers_used?: number;
+  detail?: string;
+}
